@@ -1,0 +1,57 @@
+[Theme]
+help = "Theme to use"
+variants = ["Light", "Dark"]
+default = "Dark"
+
+[FilterMode]
+title = "Filter"
+help = "How to filter games"
+variants = ["Filter", "Search", "Regex"]
+default = "Search"
+
+[Show]
+help = "How to handle hidden games"
+variants = ["Apparent", "Hidden", "All"]
+default = "Apparent"
+
+[SortBy]
+help = "How to sort games"
+variants = ["Id", "Name", "Slug"]
+default = "Id"
+
+[SortDir]
+title = "Sort Direction"
+help = "Direction to sort in"
+variants = ["Forward", "Reverse"]
+default = "Forward"
+
+[Network]
+help = "Should network be enabled"
+variants = ["Disabled", "Enabled"]
+default = "Disabled"
+
+[LutrisExe]
+title = "Lutris Executable"
+help = "Path to lutris executable"
+path = "/usr/bin/lutris"
+
+[FirejailExe]
+title = "Firejail Executable"
+help = "Path to firejail executable"
+path = "/usr/bin/firejail"
+
+[LutrisDb]
+title = "Lutris Database"
+help = "Path to lutris game database"
+path = "{HOME}/.local/share/lutris/pga.db"
+
+[CoverartDir]
+title = "Coverart Directory"
+help = "Path to coverart directory"
+path = "{HOME}/.cache/lutris/coverart"
+
+[YmlDir]
+title = "Game Config Directory"
+help = "Path to lutris game yml config directory"
+path = "{HOME}/.config/lutris/games"
+
