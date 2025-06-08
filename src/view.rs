@@ -6,8 +6,6 @@ use ::iced::{
 use ::strum::VariantArray;
 use ::tap::Pipe;
 
-use crate::t;
-
 #[derive(Debug, Default, Clone, Copy, Display, PartialEq, Eq, IsVariant, VariantArray, Hash)]
 pub enum Pane {
     #[default]
@@ -120,13 +118,11 @@ impl State {
                     Pane::Settings => settings.view().map(crate::Message::from),
                     Pane::GameInfo => info.view(settings, games),
                 }
-                .pipe(widget::container)
-                .padding(3)
-                .style(t::box_border),
+                .pipe(widget::container),
             )
         })
-        .spacing(3)
-        .on_resize(5, |event| crate::Message::View(Message::Resized(event)))
+        .spacing(9)
+        .on_resize(3, |event| crate::Message::View(Message::Resized(event)))
         .into()
     }
 }

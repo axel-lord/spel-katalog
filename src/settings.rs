@@ -5,7 +5,7 @@ use ::iced::{
     Alignment, Element,
     Length::Fill,
     Task,
-    widget::{button, horizontal_rule, scrollable, text},
+    widget::{button, horizontal_rule, text},
 };
 use ::log::warn;
 use ::tap::Pipe;
@@ -116,7 +116,7 @@ impl State {
             .push(
                 w::row()
                     .width(Fill)
-                    .push(text("Settings").align_x(Alignment::Start).width(Fill))
+                    .push(text("Settings").align_x(Alignment::Center).width(Fill))
                     .push(
                         button("Save")
                             .padding(3)
@@ -147,7 +147,7 @@ impl State {
                 ])
                 .pipe(Element::from)
                 .map(Message::Delta)
-                .pipe(scrollable),
+                .pipe(w::scroll),
             )
             .into()
     }

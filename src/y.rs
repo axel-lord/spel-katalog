@@ -32,4 +32,3 @@ impl Game {
         common(exe, prefix)
     }
 }
-

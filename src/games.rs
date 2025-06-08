@@ -6,7 +6,7 @@ use ::iced::{
     Element,
     Length::Fill,
     Task,
-    widget::{self, container, image::Handle, scrollable, stack},
+    widget::{self, container, image::Handle, stack},
 };
 use ::itertools::Itertools;
 use ::tap::{Pipe, Tap};
@@ -183,7 +183,7 @@ impl State {
             let columns = ((size.width as usize - 1) / 153).clamp(1, 24);
             let width = ((size.width / columns as f32) - 3.0).clamp(150.0, 300.0);
 
-            scrollable(
+            w::scroll(
                 w::col().align_x(Alignment::Start).width(Fill).extend(
                     self.displayed()
                         .chunks(columns)

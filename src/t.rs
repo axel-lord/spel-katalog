@@ -7,4 +7,3 @@ pub fn box_border(theme: &::iced::Theme) -> widget::container::Style {
 
     base
 }
-

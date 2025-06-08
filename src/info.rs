@@ -228,41 +228,46 @@ impl State {
                     .push(
                         w::col()
                             .push(
-                                w::row()
-                                    .push(horizontal_space())
-                                    .push(widget::text(&game.name).width(Fill).align_x(Center))
-                                    .push(horizontal_space())
-                                    .push(
-                                        widget::button("Close")
-                                            .padding(3)
-                                            .style(widget::button::secondary)
-                                            .on_press_with(|| {
-                                                crate::Message::View(crate::view::Message::Info(
-                                                    false,
-                                                ))
-                                            }),
-                                    ),
+                                w::row().push(widget::text(&game.name).width(Fill).align_x(Center)),
                             )
                             .push(horizontal_rule(2))
                             .push(
                                 w::row()
                                     .push(widget::text("Runner").font(Font::MONOSPACE))
                                     .push(vertical_rule(2))
-                                    .push(widget::value(&game.runner).font(Font::MONOSPACE)),
+                                    .push(
+                                        widget::value(&game.runner)
+                                            .font(Font::MONOSPACE)
+                                            .align_x(Alignment::Start)
+                                            .width(Fill),
+                                    )
+                                    .push(vertical_rule(2)),
                             )
                             .push(horizontal_rule(2))
                             .push(
                                 w::row()
                                     .push(widget::text("Slug  ").font(Font::MONOSPACE))
                                     .push(vertical_rule(2))
-                                    .push(widget::value(&game.slug).font(Font::MONOSPACE)),
+                                    .push(
+                                        widget::value(&game.slug)
+                                            .font(Font::MONOSPACE)
+                                            .align_x(Alignment::Start)
+                                            .width(Fill),
+                                    )
+                                    .push(vertical_rule(2)),
                             )
                             .push(horizontal_rule(2))
                             .push(
                                 w::row()
                                     .push(widget::text("Id    ").font(Font::MONOSPACE))
                                     .push(vertical_rule(2))
-                                    .push(widget::value(&game.id).font(Font::MONOSPACE)),
+                                    .push(
+                                        widget::value(&game.id)
+                                            .font(Font::MONOSPACE)
+                                            .align_x(Alignment::Start)
+                                            .width(Fill),
+                                    )
+                                    .push(vertical_rule(2)),
                             ),
                     ),
             )
@@ -295,7 +300,15 @@ impl State {
                                 .then(|| Message::AddThumb(game.id).into()),
                         ),
                     )
-                    .push(horizontal_space()),
+                    .push(horizontal_space())
+                    .push(
+                        widget::button("Close")
+                            .padding(3)
+                            .style(widget::button::secondary)
+                            .on_press_with(|| {
+                                crate::Message::View(crate::view::Message::Info(false))
+                            }),
+                    ),
             )
             .push(horizontal_rule(2))
             .push("Directory")
@@ -305,7 +318,7 @@ impl State {
                     .padding(3)
                     .style(t::box_border),
             )
-            .push(widget::scrollable(
+            .push(w::scroll(
                 w::col().push(
                     widget::text_editor(&self.content)
                         .on_action(|action| action.conv::<Message>().conv::<crate::Message>()),

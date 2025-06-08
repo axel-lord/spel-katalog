@@ -7,7 +7,7 @@ use ::iced::{
     Element,
     Length::Fill,
     Task,
-    widget::{self, text, text_input, toggler},
+    widget::{self, horizontal_rule, text, text_input, toggler, vertical_space},
 };
 use ::log::info;
 use ::tap::{Pipe, TryConv};
@@ -270,7 +270,8 @@ impl App {
 
     pub fn view(&self) -> Element<Message> {
         w::col()
-            .padding(3)
+            .padding(5)
+            .spacing(0)
             .push(
                 text_input(
                     match self.settings.settings.filter_mode() {
@@ -284,7 +285,9 @@ impl App {
                 .padding(3)
                 .on_input(Message::Filter),
             )
+            .push(vertical_space().height(5))
             .push(self.view.view(&self.settings, &self.games, &self.info))
+            .push(horizontal_rule(2))
             .push(
                 w::row()
                     .push(text(&self.status).width(Fill))
