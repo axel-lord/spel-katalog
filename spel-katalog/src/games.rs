@@ -10,6 +10,7 @@ use ::iced::{
 };
 use ::itertools::Itertools;
 use ::rustc_hash::FxHashMap;
+use ::spel_katalog_common::{OrStatus, status};
 use ::tap::{Pipe, Tap};
 
 use crate::{Safety, settings::Settings, w};
@@ -51,14 +52,14 @@ impl State {
         msg: Message,
         settings: &Settings,
         filter: &str,
-    ) -> Task<crate::Message> {
+    ) -> Task<OrStatus<crate::Message>> {
         match msg {
             Message::LoadDb(path_buf) => Task::future(::tokio::task::spawn_blocking(
                 move || -> Result<Vec<Game>, LoadDbError> {
                     let db = ::sqlite::open(&path_buf)?;
 
                     let _cats = db
-                        .prepare("SELECT id, name FROM categories WHERE")?
+                        .prepare("SELECT id, name FROM categories")?
                         .into_iter()
                         .map(|cat| {
                             let cat = cat?;
@@ -135,16 +136,18 @@ impl State {
                     Ok(games) => games
                         .pipe(Message::SetGames)
                         .pipe(crate::Message::Games)
+                        .pipe(OrStatus::new)
                         .pipe(Task::done),
                     Err(err) => match err {
-                        LoadDbError::Sqlite(_error) => {
-                            Task::done(String::from("an sqlite error occurred").into())
+                        LoadDbError::Sqlite(error) => {
+                            ::log::error!("an sqlite error occurred\n{error}");
+                            Task::done(status!("an sqlite error occurred"))
                         }
                     },
                 },
                 Err(err) => {
                     ::log::error!("database thread did not finish\n{err}");
-                    Task::done(String::from("thread did not finish").into())
+                    Task::done(status!("thread did not finish"))
                 }
             }),
             Message::SetGames(games) => {
@@ -154,8 +157,8 @@ impl State {
 
                 Task::batch(
                     [
-                        "read games from database".to_owned().into(),
-                        crate::Message::FindImages { slugs },
+                        status!("read games from database"),
+                        OrStatus::new(crate::Message::FindImages { slugs }),
                     ]
                     .map(Task::done),
                 )
@@ -219,6 +222,6 @@ impl State {
             )
             .into()
         })
-        .into()
+        .pipe(Element::from)
     }
 }

@@ -8,6 +8,7 @@ use ::iced::{
     widget::{button, horizontal_rule, text},
 };
 use ::log::warn;
+use ::spel_katalog_common::{OrStatus, status};
 use ::tap::Pipe;
 
 use crate::{
@@ -85,7 +86,7 @@ async fn save(settings: Settings, path: PathBuf) -> Result<PathBuf, PathBuf> {
 }
 
 impl State {
-    pub fn update(&mut self, message: Message) -> Task<crate::Message> {
+    pub fn update(&mut self, message: Message) -> Task<OrStatus<crate::Message>> {
         match message {
             Message::Delta(delta) => {
                 delta.apply(&mut self.settings);
@@ -95,8 +96,8 @@ impl State {
                     return Task::future(save(self.settings.clone(), path.to_path_buf())).then(
                         |result| {
                             Task::done(match result {
-                                Ok(path) => format!("saved settings to {path:?}").into(),
-                                Err(path) => format!("could not save settings to {path:?}").into(),
+                                Ok(path) => status!("saved settings to {path:?}"),
+                                Err(path) => status!("could not save settings to {path:?}"),
                             })
                         },
                     );

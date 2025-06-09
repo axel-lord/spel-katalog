@@ -24,9 +24,9 @@ rustc-hash.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_yml.workspace = true
 shell-words.workspace = true
+spel-katalog-common.path = "../spel-katalog-common"
 sqlite.workspace = true
 strsim.workspace = true
-strum = { workspace = true, features = ["derive"] }
 tap.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["parking_lot"] }
@@ -35,15 +35,7 @@ toml.workspace = true
 xdg.workspace = true
 
 [build-dependencies]
-convert_case.workspace = true
-prettyplease.workspace = true
-quote.workspace = true
-regex.workspace = true
-rustc-hash.workspace = true
-serde = { workspace = true, features = ["derive"] }
-syn = { workspace = true, features = ["full"] }
-toml.workspace = true
-spel-katalog-build = { workspace = true }
+spel-katalog-build.workspace = true
 
 [lints.rust]
 missing_debug_implementations = "warn"

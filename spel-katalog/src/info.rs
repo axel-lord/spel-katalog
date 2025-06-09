@@ -9,7 +9,8 @@ use ::iced::{
     widget::{self, button, horizontal_rule, horizontal_space, vertical_rule},
 };
 use ::image::ImageError;
-use ::tap::{Conv, Pipe};
+use ::spel_katalog_common::{OrStatus, status};
+use ::tap::Pipe;
 
 use crate::{Safety, games::Games, image_buffer::ImageBuffer, settings::Settings, t, w, y};
 
@@ -48,7 +49,7 @@ impl State {
         message: Message,
         settings: &Settings,
         games: &Games,
-    ) -> Task<crate::Message> {
+    ) -> Task<OrStatus<crate::Message>> {
         match message {
             Message::SetId(id) => {
                 self.id = id;
@@ -66,12 +67,11 @@ impl State {
                         move |result| match result {
                             Ok(value) => Message::SetContent(id, value, path.clone())
                                 .pipe(crate::Message::from)
+                                .pipe(OrStatus::new)
                                 .pipe(Task::done),
                             Err(err) => {
                                 ::log::error!("failed to read yml {path:?}\n{err}");
-                                Task::done(
-                                    format!("could not read {path:?}").conv::<crate::Message>(),
-                                )
+                                Task::done(status!("could not read {path:?}"))
                             }
                         },
                     );
@@ -81,6 +81,7 @@ impl State {
 
                 let show_info = crate::view::Message::Info(true)
                     .pipe(crate::Message::from)
+                    .pipe(OrStatus::new)
                     .pipe(Task::done);
 
                 Task::batch([fill_content, show_info])
@@ -112,10 +113,10 @@ impl State {
                     let path = path.to_path_buf();
                     Task::future(::tokio::fs::write(path.clone(), self.content.text())).then(
                         move |result| match result {
-                            Ok(_) => Task::done(format!("wrote game config {path:?}").into()),
+                            Ok(_) => Task::done(status!("wrote game config {path:?}")),
                             Err(err) => {
                                 ::log::error!("could not write config {path:?}\n{err}");
-                                Task::done(format!("could not write config {path:?}").into())
+                                Task::done(status!("could not write config {path:?}"))
                             }
                         },
                     )
@@ -193,10 +194,10 @@ impl State {
                     };
 
                     Task::future(task).then(|result| match result {
-                        Ok(msg) => Task::done(msg),
+                        Ok(msg) => Task::done(OrStatus::new(msg)),
                         Err(err) => {
                             ::log::error!("{err}");
-                            Task::done("could not add thumbnail".to_owned().into())
+                            Task::done(status!("could not add thumbnail"))
                         }
                     })
                 }
@@ -321,7 +322,7 @@ impl State {
             .push(w::scroll(
                 w::col().push(
                     widget::text_editor(&self.content)
-                        .on_action(|action| action.conv::<Message>().conv::<crate::Message>()),
+                        .on_action(|action| action.pipe(Message::from).pipe(crate::Message::from)),
                 ),
             ))
             .into()

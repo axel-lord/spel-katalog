@@ -3,10 +3,9 @@ use ::iced::{
     Element, Task,
     widget::{self, pane_grid},
 };
-use ::strum::VariantArray;
 use ::tap::Pipe;
 
-#[derive(Debug, Default, Clone, Copy, Display, PartialEq, Eq, IsVariant, VariantArray, Hash)]
+#[derive(Debug, Default, Clone, Copy, Display, PartialEq, Eq, IsVariant, Hash)]
 pub enum Pane {
     #[default]
     Games,

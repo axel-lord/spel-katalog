@@ -8,7 +8,7 @@ use ::std::{
 
 use ::convert_case::{Case, Casing};
 use ::quote::{format_ident, quote};
-use ::syn::parse_quote;
+use ::syn::{Ident, parse_quote};
 
 use crate::{
     expr::{str_expr, title_expr},
@@ -26,207 +26,238 @@ struct Emit {
     from_str: ::syn::File,
 }
 
+fn emit_enum(
+    setting: &Setting,
+    name: &str,
+    ident: &Ident,
+    variants: &[String],
+    default: &str,
+) -> Emit {
+    let doc = doc_str(&setting.help);
+    let (variant_idents, is_variants, is_variants_doc) = variants
+        .iter()
+        .map(|variant| {
+            (
+                format_ident!("{}", variant.to_case(Case::Pascal)),
+                format_ident!("is_{}", variant.to_case(Case::Snake)),
+                format!(
+                    "Check if setting is of the `{}` variant.",
+                    variant.to_case(Case::Pascal)
+                ),
+            )
+        })
+        .collect::<(Vec<_>, Vec<_>, Vec<_>)>();
+    let uppercase_variants = variants.iter().map(|v| v.to_uppercase());
+    let default_ident = format_ident!("{}", default.to_case(Case::Pascal));
+    let title_body = title_expr(name, setting.title.as_deref());
+
+    let parse_err_ident = format_ident!("Parse{ident}Error");
+    let parse_err_doc = format!(
+        "Error used by [FromStr][::core::str::FromStr] implementation for [{name}]",
+        name = name.to_case(Case::Pascal)
+    );
+    let parse_err_msg = format!("string not one of {}", variants.join(", "));
+
+    // impls
+    let impls = item::file(
+        &mut [
+            parse_quote! {
+                impl #ident {
+                    #[doc = "Get string representation of current variant."]
+                    #[inline]
+                    pub fn as_str(&self) -> &str {
+                        match self {
+                            #( Self::#variant_idents => #variants, )*
+                        }
+                    }
+
+                    #(
+                        #[doc = #is_variants_doc]
+                        pub fn #is_variants(&self) -> bool {
+                            match self {
+                                Self::#variant_idents => true,
+                                _ => false,
+                            }
+                        }
+                    )*
+                }
+
+            },
+            item::default_str(ident, &default),
+            item::title(ident, &title_body),
+            item::variants(ident, &quote! { #( Self::#variant_idents ),* }),
+            item::default(ident, &quote! { Self::#default_ident }),
+            item::display(ident, &quote! { f.write_str(self.as_str()) }),
+            item::as_ref(ident, &quote! { str }, &quote! { self.as_str() }),
+            item::from(
+                &quote! { ::std::string::String },
+                ident,
+                &quote! { value.as_str().into() },
+            ),
+        ]
+        .into_iter(),
+    );
+
+    let ty = parse_quote! {
+        #[derive(
+            Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash,
+            ::serde::Deserialize, ::serde::Serialize,
+            ::clap::ValueEnum,
+        )]
+        #[doc = #doc]
+        pub enum #ident {
+            #(#variant_idents,)*
+        }
+    };
+
+    let from_str = parse_quote! {
+        impl ::core::str::FromStr for #ident {
+            type Err = #parse_err_ident;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                #(
+                if s.chars().map(|c| c.to_uppercase()).flatten().eq(#uppercase_variants.chars()) {
+                    return Ok(Self::#variant_idents);
+                }
+                )*
+                Err(#parse_err_ident)
+            }
+        }
+
+        #[derive(Debug)]
+        #[doc = #parse_err_doc]
+        pub struct #parse_err_ident;
+
+        impl ::core::fmt::Display for #parse_err_ident {
+            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                f.write_str(#parse_err_msg)
+            }
+        }
+
+        impl ::core::error::Error for #ident {}
+    };
+
+    Emit {
+        ty,
+        impls,
+        from_str,
+    }
+}
+
+fn emit_path(setting: &Setting, name: &str, ident: &Ident, path: &str) -> Emit {
+    let title_body = title_expr(name, setting.title.as_deref());
+    let doc = doc_str(&setting.help);
+    let default_value = str_expr(path);
+
+    let ty = parse_quote! {
+        #[derive(
+            Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash,
+            ::serde::Serialize, ::serde::Deserialize
+        )]
+        #[doc = #doc]
+        #[serde(transparent)]
+        pub struct #ident(String);
+    };
+
+    let impls = item::file(
+        &mut [
+            parse_quote! {
+                impl #ident {
+                    #[doc = "Construct a new value from a string."]
+                    #[inline]
+                    pub fn new(string: ::std::string::String) -> Self {
+                        Self(string)
+                    }
+
+                    #[doc = "Unwrap into inner string value."]
+                    #[inline]
+                    pub fn into_inner(self) -> ::std::string::String {
+                        let Self(string) = self;
+                        string
+                    }
+
+                    #[doc = "Get setting as a string slice."]
+                    #[inline]
+                    pub fn as_str(&self) -> &str {
+                        &self.0
+                    }
+
+                    #[doc = "Get setting as a path."]
+                    #[inline]
+                    pub fn as_path(&self) -> &::std::path::Path {
+                        ::std::path::Path::new(self.as_str())
+                    }
+
+                    #[doc = "Get setting as an os string."]
+                    #[inline]
+                    pub fn as_os_str(&self) -> &::std::ffi::OsStr{
+                        ::std::ffi::OsStr::new(self.as_str())
+                    }
+
+                    #[doc = "Get a `PathBuf` from setting."]
+                    #[inline]
+                    pub fn to_path_buf(&self) -> ::std::path::PathBuf {
+                        self.as_path().to_path_buf()
+                    }
+                }
+            },
+            item::title(ident, &title_body),
+            item::default_str(ident, &default_value),
+            item::default(
+                ident,
+                &quote! { Self(<Self as crate::settings::DefaultStr>::default_str().into()) },
+            ),
+            item::display(ident, &quote! { f.write_str(self.as_str()) }),
+            item::deref(ident, &quote! { str }, &quote! { self.as_str() }),
+            item::as_ref(ident, &quote! { str }, &quote! { self.as_str() }),
+            item::as_ref(
+                ident,
+                &quote! { ::std::path::Path },
+                &quote! { self.as_path() },
+            ),
+            item::as_ref(
+                ident,
+                &quote! { ::std::ffi::OsStr },
+                &quote! { self.as_os_str() },
+            ),
+            item::from(
+                ident,
+                &quote! { ::std::string::String },
+                &quote! { Self::new(value) },
+            ),
+            item::from(
+                &quote! { ::std::string::String },
+                ident,
+                &quote! { value.into_inner() },
+            ),
+        ]
+        .into_iter(),
+    );
+
+    let from_str = parse_quote! {
+        impl ::core::str::FromStr for #ident {
+            type Err = ::core::convert::Infallible;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                Ok(Self(s.into()))
+            }
+        }
+    };
+
+    Emit {
+        ty,
+        impls,
+        from_str,
+    }
+}
+
 fn emit_type(setting: &Setting, name: &str) -> Emit {
     let ident = format_ident!("{}", name.to_case(Case::Pascal));
     match &setting.content {
         SettingContent::Enum { variants, default } => {
-            let doc = doc_str(&setting.help);
-            let (variant_idents, is_variants, is_variants_doc) = variants
-                .iter()
-                .map(|variant| {
-                    (
-                        format_ident!("{}", variant.to_case(Case::Pascal)),
-                        format_ident!("is_{}", variant.to_case(Case::Snake)),
-                        format!(
-                            "Check if setting is of the `{}` variant.",
-                            variant.to_case(Case::Pascal)
-                        ),
-                    )
-                })
-                .collect::<(Vec<_>, Vec<_>, Vec<_>)>();
-            let uppercase_variants = variants.iter().map(|v| v.to_uppercase());
-            let default_ident = format_ident!("{}", default.to_case(Case::Pascal));
-            let title_body = title_expr(name, setting.title.as_deref());
-
-            let parse_err_ident = format_ident!("Parse{ident}Error");
-            let parse_err_doc = format!(
-                "Error used by [FromStr][::core::str::FromStr] implementation for [{name}]",
-                name = name.to_case(Case::Pascal)
-            );
-            let parse_err_msg = format!("string not one of {}", variants.join(", "));
-
-            // impls
-            let impls = item::file(
-                &mut [
-                    parse_quote! {
-                        impl #ident {
-                            #[doc = "Get string representation of current variant."]
-                            #[inline]
-                            pub fn as_str(&self) -> &str {
-                                match self {
-                                    #( Self::#variant_idents => #variants, )*
-                                }
-                            }
-
-                            #(
-                                #[doc = #is_variants_doc]
-                                pub fn #is_variants(&self) -> bool {
-                                    match self {
-                                        Self::#variant_idents => true,
-                                        _ => false,
-                                    }
-                                }
-                            )*
-                        }
-
-                    },
-                    item::default_str(&ident, default),
-                    item::title(&ident, &title_body),
-                    item::variants(&ident, &quote! { #( Self::#variant_idents ),* }),
-                    item::default(&ident, &quote! { Self::#default_ident }),
-                    item::display(&ident, &quote! { f.write_str(self.as_str()) }),
-                    item::as_ref(&ident, &quote! { str }, &quote! { self.as_str() }),
-                    item::from(
-                        &quote! { ::std::string::String },
-                        &ident,
-                        &quote! { value.as_str().into() },
-                    ),
-                ]
-                .into_iter(),
-            );
-
-            let ty = parse_quote! {
-                #[derive(
-                    Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash,
-                    ::serde::Deserialize, ::serde::Serialize,
-                    ::clap::ValueEnum,
-                )]
-                #[doc = #doc]
-                pub enum #ident {
-                    #(#variant_idents,)*
-                }
-            };
-
-            let from_str = parse_quote! {
-                impl ::core::str::FromStr for #ident {
-                    type Err = #parse_err_ident;
-
-                    fn from_str(s: &str) -> Result<Self, Self::Err> {
-                        #(
-                        if s.chars().map(|c| c.to_uppercase()).flatten().eq(#uppercase_variants.chars()) {
-                            return Ok(Self::#variant_idents);
-                        }
-                        )*
-                        Err(#parse_err_ident)
-                    }
-                }
-
-                #[derive(Debug)]
-                #[doc = #parse_err_doc]
-                pub struct #parse_err_ident;
-
-                impl ::core::fmt::Display for #parse_err_ident {
-                    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-                        f.write_str(#parse_err_msg)
-                    }
-                }
-
-                impl ::core::error::Error for #ident {}
-            };
-
-            Emit {
-                ty,
-                impls,
-                from_str,
-            }
+            emit_enum(setting, name, &ident, variants, default)
         }
-        SettingContent::Path { path } => {
-            let title_body = title_expr(name, setting.title.as_deref());
-            let doc = doc_str(&setting.help);
-            let default_value = str_expr(&path);
-
-            let ty = parse_quote! {
-                #[derive(
-                    Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash,
-                    ::serde::Serialize, ::serde::Deserialize
-                )]
-                #[doc = #doc]
-                #[serde(transparent)]
-                pub struct #ident(String);
-            };
-
-            let impls = item::file(
-                &mut [
-                    parse_quote! {
-                        impl #ident {
-                            #[doc = "Construct a new value from a string."]
-                            #[inline]
-                            pub fn new(string: ::std::string::String) -> Self {
-                                Self(string)
-                            }
-
-                            #[doc = "Unwrap into inner string value."]
-                            #[inline]
-                            pub fn into_inner(self) -> ::std::string::String {
-                                let Self(string) = self;
-                                string
-                            }
-
-                            #[doc = "Get setting as a string slice."]
-                            #[inline]
-                            pub fn as_str(&self) -> &str {
-                                &self.0
-                            }
-
-                            #[doc = "Get setting as a path."]
-                            #[inline]
-                            pub fn as_path(&self) -> &::std::path::Path {
-                                ::std::path::Path::new(self.as_str())
-                            }
-
-                            #[doc = "Get setting as an os string."]
-                            #[inline]
-                            pub fn as_os_str(&self) -> &::std::ffi::OsStr{
-                                ::std::ffi::OsStr::new(self.as_str())
-                            }
-
-                            #[doc = "Get a `PathBuf` from setting."]
-                            #[inline]
-                            pub fn to_path_buf(&self) -> ::std::path::PathBuf {
-                                self.as_path().to_path_buf()
-                            }
-                        }
-                    },
-                    item::title(&ident, &title_body),
-                    item::default_str(&ident, &default_value),
-                    item::default(&ident, &quote! { Self(<Self as crate::settings::DefaultStr>::default_str().into()) }),
-                    item::display(&ident, &quote! { f.write_str(self.as_str()) }),
-                    item::deref(&ident, &quote! { str }, &quote! { self.as_str() }),
-                    item::as_ref(&ident, &quote! { str }, &quote! { self.as_str() }),
-                    item::as_ref(&ident, &quote! { ::std::path::Path }, &quote! { self.as_path() }),
-                    item::as_ref(&ident, &quote! { ::std::ffi::OsStr }, &quote! { self.as_os_str() }),
-                    item::from(&ident, &quote! { ::std::string::String }, &quote! { Self::new(value) }),
-                    item::from(&quote! { ::std::string::String }, &ty, &quote! { value.into_inner() }),
-                ]
-                .into_iter(),
-            );
-
-            let from_str = parse_quote! {
-                impl ::core::str::FromStr for #ident {
-                    type Err = ::core::convert::Infallible;
-
-                    fn from_str(s: &str) -> Result<Self, Self::Err> {
-                        Ok(Self(s.into()))
-                    }
-                }
-            };
-
-            Emit {
-                ty,
-                impls,
-                from_str,
-            }
-        }
+        SettingContent::Path { path } => emit_path(setting, name, &ident, path),
     }
 }
 

@@ -10,6 +10,7 @@ use ::iced::{
     widget::{self, horizontal_rule, text, text_input, toggler, vertical_space},
 };
 use ::log::info;
+use ::spel_katalog_common::{OrStatus, status};
 use ::tap::{Pipe, TryConv};
 
 use crate::image_buffer::ImageBuffer;
@@ -119,8 +120,6 @@ pub enum Safety {
 
 #[derive(Debug, IsVariant, From, Clone)]
 pub enum Message {
-    #[from]
-    Status(String),
     Filter(String),
     #[from]
     Settings(settings::Message),
@@ -148,20 +147,30 @@ impl App {
             .centered()
             .executor::<::tokio::runtime::Runtime>()
             .run_with(|| {
-                let task = Task::done(
-                    games::Message::LoadDb(app.settings.lutris_db().as_path().to_path_buf()).into(),
-                );
+                let task = app
+                    .settings
+                    .lutris_db()
+                    .as_path()
+                    .to_path_buf()
+                    .pipe(games::Message::LoadDb)
+                    .pipe(crate::Message::from)
+                    .pipe(OrStatus::new)
+                    .pipe(Task::done);
                 (app, task)
             })
             .map_err(Report::from)
     }
 
-    pub fn update(&mut self, msg: Message) -> Task<Message> {
-        match msg {
-            Message::Status(status) => {
+    pub fn update(&mut self, msg: OrStatus<Message>) -> Task<OrStatus<Message>> {
+        let msg = match msg {
+            OrStatus::Message(msg) => msg,
+            OrStatus::Status(status) => {
                 info!("status: {status}");
                 self.status = status;
+                return Task::none();
             }
+        };
+        match msg {
             Message::Filter(filter) => {
                 self.filter = filter;
                 self.games.sort(&self.settings, &self.filter);
@@ -185,20 +194,23 @@ impl App {
 
                 return task;
             }
-            Message::View(message) => return self.view.update(message),
+            Message::View(message) => return self.view.update(message).map(OrStatus::new),
             Message::Games(message) => {
                 return self.games.update(message, &self.settings, &self.filter);
             }
             Message::FindImages { slugs } => {
                 let coverart = self.settings.coverart_dir().as_path().to_path_buf();
-                return self.image_buffer.find_images(slugs, coverart);
+                return self
+                    .image_buffer
+                    .find_images(slugs, coverart)
+                    .map(OrStatus::new);
             }
             Message::Info(message) => {
                 return self.info.update(message, &self.settings, &self.games);
             }
             Message::RunGame(id, safety) => {
                 let Some(game) = self.games.by_id(id) else {
-                    return Task::done(format!("could not run game with id {id}").into());
+                    return Task::done(status!("could not run game with id {id}"));
                 };
 
                 let lutris = self.settings.lutris_exe().clone();
@@ -268,7 +280,7 @@ impl App {
         Task::none()
     }
 
-    pub fn view(&self) -> Element<Message> {
+    pub fn view(&self) -> Element<OrStatus<Message>> {
         w::col()
             .padding(5)
             .spacing(0)
@@ -313,6 +325,7 @@ impl App {
                             }),
                     ),
             )
-            .into()
+            .pipe(Element::from)
+            .map(OrStatus::new)
     }
 }
