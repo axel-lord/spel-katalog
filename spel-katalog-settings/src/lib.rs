@@ -49,7 +49,10 @@ pub trait Title {
 }
 
 /// Trait for simple enums to provide all values.
-pub trait Variants
+///
+/// # Safety
+/// The `VARIANTS` associated constant must contain all variants.
+pub unsafe trait Variants
 where
     Self: 'static + Sized,
 {

@@ -107,7 +107,7 @@ pub fn default_str(ty: &dyn ToTokens, body: &dyn ToTokens) -> Item {
 pub fn variants(ty: &dyn ToTokens, variants: &dyn ToTokens) -> Item {
     spec!(ty: Type, variants: Punctuated<Expr, Token![,]>);
     parse_quote! {
-        impl crate::Variants for #ty {
+        unsafe impl crate::Variants for #ty {
             const VARIANTS: &[Self] = &[#variants];
         }
     }
