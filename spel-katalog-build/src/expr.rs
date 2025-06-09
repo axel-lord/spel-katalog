@@ -21,7 +21,7 @@ pub static FORMAT_RE: LazyLock<Regex> = LazyLock::new(|| {
 pub fn str_expr(value: &str) -> ::syn::Expr {
     if FORMAT_RE.is_match(value) {
         parse_quote! {{
-            static _LAZY: crate::lazy::Lazy = crate::lazy::Lazy::new(|| format!(#value));
+            static _LAZY: ::spel_katalog_common::lazy::Lazy = ::spel_katalog_common::lazy::Lazy::new(|| format!(#value));
             &_LAZY
         }}
     } else {

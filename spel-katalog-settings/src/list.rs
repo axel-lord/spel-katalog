@@ -3,11 +3,9 @@ use ::iced::{
     widget::{Column, Row, container, pick_list, text_input},
 };
 use ::tap::Conv;
+use spel_katalog_common::w;
 
-use crate::{
-    settings::{DefaultStr, Title, Variants},
-    w,
-};
+use crate::{DefaultStr, Title, Variants};
 
 pub fn pl<'a, T, M>(value: Option<T>) -> (&'a str, Element<'a, M>)
 where

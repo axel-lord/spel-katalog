@@ -83,7 +83,7 @@ pub fn from(ty: &dyn ToTokens, from: &dyn ToTokens, body: &dyn ToTokens) -> Item
 pub fn title(ty: &dyn ToTokens, body: &dyn ToTokens) -> Item {
     spec!(ty: Type, body: Vec<Stmt>);
     parse_quote! {
-        impl crate::settings::Title for #ty {
+        impl crate::Title for #ty {
             fn title() -> &'static str {
                 #( #body )*
             }
@@ -95,7 +95,7 @@ pub fn title(ty: &dyn ToTokens, body: &dyn ToTokens) -> Item {
 pub fn default_str(ty: &dyn ToTokens, body: &dyn ToTokens) -> Item {
     spec!(ty: Type, body: Vec<Stmt>);
     parse_quote! {
-        impl crate::settings::DefaultStr for #ty {
+        impl crate::DefaultStr for #ty {
             fn default_str() -> &'static str {
                 #( #body )*
             }
@@ -107,7 +107,7 @@ pub fn default_str(ty: &dyn ToTokens, body: &dyn ToTokens) -> Item {
 pub fn variants(ty: &dyn ToTokens, variants: &dyn ToTokens) -> Item {
     spec!(ty: Type, variants: Punctuated<Expr, Token![,]>);
     parse_quote! {
-        impl crate::settings::Variants for #ty {
+        impl crate::Variants for #ty {
             const VARIANTS: &[Self] = &[#variants];
         }
     }

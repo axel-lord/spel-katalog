@@ -10,7 +10,7 @@ use ::iced::{
     widget::{self, horizontal_rule, text, text_input, toggler, vertical_space},
 };
 use ::log::info;
-use ::spel_katalog_common::{OrStatus, status};
+use ::spel_katalog_common::{OrStatus, status, w};
 use ::tap::{Pipe, TryConv};
 
 use crate::image_buffer::ImageBuffer;
@@ -20,17 +20,14 @@ mod image_buffer;
 mod info;
 mod view;
 
-pub mod lazy;
-pub mod settings;
 pub mod t;
-pub mod w;
 pub mod y;
 
 #[derive(Debug, Parser)]
 #[command(author, version)]
 pub struct Cli {
     #[command(flatten)]
-    pub settings: settings::Settings,
+    pub settings: ::spel_katalog_settings::Settings,
 
     /// Show settings at startup.
     #[arg(long)]
@@ -61,9 +58,9 @@ impl TryFrom<Cli> for App {
                 .map_err(|err| {
                     eyre!(err).suggestion(format!("does {config:?} exist, and is it readable"))
                 })?
-                .pipe_deref(::toml::from_str::<settings::Settings>)
+                .pipe_deref(::toml::from_str::<::spel_katalog_settings::Settings>)
                 .map_err(|err| eyre!(err).suggestion(format!("is {config:?} a toml file")))?
-                .apply(settings::Delta::create(overrides.clone()))
+                .apply(::spel_katalog_settings::Delta::create(overrides.clone()))
         } else {
             overrides.clone()
         };
@@ -83,7 +80,7 @@ impl TryFrom<Cli> for App {
         let filter = String::new();
         let status = String::new();
         let view = view::State::new(show_settings);
-        let settings = settings::State { settings, config };
+        let settings = ::spel_katalog_settings::State { settings, config };
         let games = games::State::default();
         let image_buffer = ImageBuffer::empty();
         let info = info::State::default();
@@ -102,7 +99,7 @@ impl TryFrom<Cli> for App {
 
 #[derive(Debug)]
 pub struct App {
-    settings: settings::State,
+    settings: ::spel_katalog_settings::State,
     games: games::State,
     status: String,
     filter: String,
@@ -122,7 +119,7 @@ pub enum Safety {
 pub enum Message {
     Filter(String),
     #[from]
-    Settings(settings::Message),
+    Settings(::spel_katalog_settings::Message),
     #[from]
     View(view::Message),
     #[from]
@@ -178,11 +175,11 @@ impl App {
             Message::Settings(message) => {
                 let re_sort = matches!(
                     &message,
-                    settings::Message::Delta(
-                        settings::Delta::FilterMode(..)
-                            | settings::Delta::Show(..)
-                            | settings::Delta::SortBy(..)
-                            | settings::Delta::SortDir(..)
+                    ::spel_katalog_settings::Message::Delta(
+                        ::spel_katalog_settings::Delta::FilterMode(..)
+                            | ::spel_katalog_settings::Delta::Show(..)
+                            | ::spel_katalog_settings::Delta::SortBy(..)
+                            | ::spel_katalog_settings::Delta::SortDir(..)
                     )
                 );
 
@@ -192,7 +189,7 @@ impl App {
                     self.games.sort(&self.settings, &self.filter);
                 }
 
-                return task;
+                return task.map(OrStatus::convert);
             }
             Message::View(message) => return self.view.update(message).map(OrStatus::new),
             Message::Games(message) => {
@@ -251,7 +248,7 @@ impl App {
                                         .ok()
                                 })
                                 .map(|config| config.game.common_parent())
-                                .unwrap_or_else(|| settings::HOME.as_path().into());
+                                .unwrap_or_else(|| ::spel_katalog_settings::HOME.as_path().into());
                             let mut arg = OsString::from("--whitelist=");
                             arg.push(common);
                             arg.push("/");
@@ -287,9 +284,9 @@ impl App {
             .push(
                 text_input(
                     match self.settings.settings.filter_mode() {
-                        settings::FilterMode::Filter => "filter...",
-                        settings::FilterMode::Search => "search...",
-                        settings::FilterMode::Regex => "regex...",
+                        ::spel_katalog_settings::FilterMode::Filter => "filter...",
+                        ::spel_katalog_settings::FilterMode::Search => "search...",
+                        ::spel_katalog_settings::FilterMode::Regex => "regex...",
                     },
                     &self.filter,
                 )
@@ -308,10 +305,10 @@ impl App {
                         toggler(self.settings.network().is_enabled())
                             .spacing(0)
                             .on_toggle(|net| {
-                                Message::Settings(settings::Message::Delta(
-                                    settings::Delta::Network(match net {
-                                        true => settings::Network::Enabled,
-                                        false => settings::Network::Disabled,
+                                Message::Settings(::spel_katalog_settings::Message::Delta(
+                                    spel_katalog_settings::Delta::Network(match net {
+                                        true => spel_katalog_settings::Network::Enabled,
+                                        false => spel_katalog_settings::Network::Disabled,
                                     }),
                                 ))
                             }),

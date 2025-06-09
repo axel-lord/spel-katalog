@@ -4227,6 +4227,7 @@ dependencies = [
  "shell-words",
  "spel-katalog-build",
  "spel-katalog-common",
+ "spel-katalog-settings",
  "sqlite",
  "strsim",
  "tap",
@@ -4255,6 +4256,25 @@ dependencies = [
 [[package]]
 name = "spel-katalog-common"
 version = "0.1.0"
+dependencies = [
+ "iced",
+]
+
+[[package]]
+name = "spel-katalog-settings"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "derive_more",
+ "iced",
+ "log",
+ "serde",
+ "spel-katalog-build",
+ "spel-katalog-common",
+ "tap",
+ "tokio",
+ "toml",
+]
 
 [[package]]
 name = "spirv"

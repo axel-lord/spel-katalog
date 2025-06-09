@@ -10,10 +10,11 @@ use ::iced::{
 };
 use ::itertools::Itertools;
 use ::rustc_hash::FxHashMap;
-use ::spel_katalog_common::{OrStatus, status};
+use ::spel_katalog_common::{OrStatus, status, w};
+use ::spel_katalog_settings::Settings;
 use ::tap::{Pipe, Tap};
 
-use crate::{Safety, settings::Settings, w};
+use crate::Safety;
 
 pub use crate::games::games::{Game, Games};
 

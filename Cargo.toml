@@ -1,5 +1,5 @@
 [workspace]
-members = [ "spel-katalog-build","spel-katalog", "spel-katalog-common"]
+members = [ "spel-katalog-build", "spel-katalog", "spel-katalog-common", "spel-katalog-settings"]
 resolver = "2"
 default-members = ["spel-katalog"]
 
@@ -65,3 +65,4 @@ toml = "0.8.22"
 xdg = "3.0.0"
 proc-macro2 = { version = "1.0.95", default-features = false }
 spel-katalog-build = { path = "spel-katalog-build" }
+spel-katalog-common = { path = "spel-katalog-common" }

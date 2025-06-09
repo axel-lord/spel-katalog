@@ -1,17 +1,22 @@
+//! Common widgets.
+
 use ::iced::{
     Alignment::Center,
     Background, Color, Element,
     widget::{Column, Row, Scrollable, scrollable},
 };
 
+/// Create a column.
 pub fn col<'a, M>() -> Column<'a, M> {
     Column::new().spacing(3)
 }
 
+/// Create a row.
 pub fn row<'a, M>() -> Row<'a, M> {
     Row::new().spacing(3).align_y(Center)
 }
 
+/// Create a scrollable.
 pub fn scroll<'a, M>(element: impl Into<Element<'a, M>>) -> Scrollable<'a, M> {
     scrollable(element).style(|theme, status| {
         let scrollable::Style {

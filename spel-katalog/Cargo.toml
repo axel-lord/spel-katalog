@@ -24,7 +24,8 @@ rustc-hash.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_yml.workspace = true
 shell-words.workspace = true
-spel-katalog-common.path = "../spel-katalog-common"
+spel-katalog-common.workspace = true
+spel-katalog-settings.path = "../spel-katalog-settings/"
 sqlite.workspace = true
 strsim.workspace = true
 tap.workspace = true

@@ -1,5 +1,8 @@
+//! Lazy initialized strings.
+
 use ::std::{path::Path, sync::LazyLock};
 
+/// [LazyLock] of string implementing display.
 #[derive(Debug)]
 pub struct Lazy(LazyLock<String>);
 
@@ -12,14 +15,17 @@ impl ::std::ops::Deref for Lazy {
 }
 
 impl Lazy {
+    /// Get a new instance.
     pub const fn new(f: fn() -> String) -> Self {
         Self(LazyLock::new(f))
     }
 
+    /// Get value as a string slice.
     pub fn as_str(&self) -> &str {
         self
     }
 
+    /// Get value as a path.
     pub fn as_path(&self) -> &Path {
         Path::new(self.as_str())
     }

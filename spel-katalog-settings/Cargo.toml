@@ -1,0 +1,21 @@
+[package]
+name = "spel-katalog-settings"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+iced.workspace = true
+derive_more = { workspace = true, features = ["from", "is_variant", "display", "into_iterator", "as_ref", "deref", "into", "deref_mut"] }
+tap.workspace = true
+log.workspace = true
+toml.workspace = true
+serde = { workspace = true, features = ["derive"] }
+clap = { workspace = true, features = ["derive"] }
+spel-katalog-common.workspace = true
+tokio = { workspace = true, features = ["parking_lot"] }
+
+[build-dependencies]
+spel-katalog-build.workspace = true
+
+[lints]
+workspace = true

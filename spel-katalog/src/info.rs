@@ -9,10 +9,11 @@ use ::iced::{
     widget::{self, button, horizontal_rule, horizontal_space, vertical_rule},
 };
 use ::image::ImageError;
-use ::spel_katalog_common::{OrStatus, status};
+use ::spel_katalog_common::{OrStatus, status, w};
+use ::spel_katalog_settings::Settings;
 use ::tap::Pipe;
 
-use crate::{Safety, games::Games, image_buffer::ImageBuffer, settings::Settings, t, w, y};
+use crate::{Safety, games::Games, image_buffer::ImageBuffer, t, y};
 
 #[derive(Debug)]
 pub struct State {

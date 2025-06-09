@@ -3,8 +3,7 @@ use ::std::{cell::OnceCell, iter};
 use ::derive_more::{Display, IsVariant};
 use ::iced::widget::image::Handle;
 use ::rustc_hash::FxHashMap;
-
-use crate::settings::Settings;
+use ::spel_katalog_settings::Settings;
 
 #[derive(Debug, Clone, IsVariant, Display)]
 pub enum Runner {
@@ -100,20 +99,20 @@ impl Games {
         };
 
         let sort_items = |items: &mut Vec<usize>| match settings.sort_by() {
-            crate::settings::SortBy::Id => {
+            ::spel_katalog_settings::SortBy::Id => {
                 items.sort_by_key(|idx| games.get(*idx).map(|game| -game.id))
             }
-            crate::settings::SortBy::Name => {
+            ::spel_katalog_settings::SortBy::Name => {
                 items.sort_by_key(|idx| games.get(*idx).map(|game| &game.name))
             }
-            crate::settings::SortBy::Slug => {
+            ::spel_katalog_settings::SortBy::Slug => {
                 items.sort_by_key(|idx| games.get(*idx).map(|game| &game.slug))
             }
         };
 
         let mut to_be = if !filter.is_empty() {
             match settings.filter_mode() {
-                crate::settings::FilterMode::Filter => {
+                ::spel_katalog_settings::FilterMode::Filter => {
                     let filter = filter.to_uppercase();
 
                     let mut to_be = to_be
@@ -130,7 +129,7 @@ impl Games {
 
                     to_be
                 }
-                crate::settings::FilterMode::Search => {
+                ::spel_katalog_settings::FilterMode::Search => {
                     let filter = filter.to_uppercase();
                     let mut dist = to_be
                         .filter_map(|idx| {
@@ -147,7 +146,7 @@ impl Games {
 
                     dist.into_iter().map(|(idx, ..)| idx).collect()
                 }
-                crate::settings::FilterMode::Regex => to_be.collect(),
+                ::spel_katalog_settings::FilterMode::Regex => to_be.collect(),
             }
         } else {
             let mut to_be = to_be.collect();

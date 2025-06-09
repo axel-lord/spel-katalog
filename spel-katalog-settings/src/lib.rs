@@ -1,4 +1,4 @@
-use ::std::path::PathBuf;
+//! Settings widgets.
 
 use ::derive_more::{Deref, DerefMut, From, IsVariant};
 use ::iced::{
@@ -7,15 +7,13 @@ use ::iced::{
     Task,
     widget::{button, horizontal_rule, text},
 };
+
 use ::log::warn;
-use ::spel_katalog_common::{OrStatus, status};
+use ::spel_katalog_common::{OrStatus, lazy::Lazy, status, w};
+use ::std::path::PathBuf;
 use ::tap::Pipe;
 
-use crate::{
-    lazy::Lazy,
-    settings::list::{pl, pl_list, ti, ti_list},
-    w,
-};
+use crate::list::{pl, pl_list, ti, ti_list};
 
 mod list;
 
@@ -33,8 +31,6 @@ where
 {
     const VARIANTS: &[Self];
 }
-
-include!(concat!(env!("OUT_DIR"), "/settings.rs"));
 
 impl From<Theme> for ::iced::Theme {
     fn from(value: Theme) -> Self {
@@ -54,6 +50,8 @@ pub static HOME: Lazy = Lazy::new(|| {
         }
     })
 });
+
+include!(concat!(env!("OUT_DIR"), "/settings.rs"));
 
 #[derive(Debug, IsVariant, Clone, From)]
 pub enum Message {
@@ -86,7 +84,7 @@ async fn save(settings: Settings, path: PathBuf) -> Result<PathBuf, PathBuf> {
 }
 
 impl State {
-    pub fn update(&mut self, message: Message) -> Task<OrStatus<crate::Message>> {
+    pub fn update(&mut self, message: Message) -> Task<OrStatus<Message>> {
         match message {
             Message::Delta(delta) => {
                 delta.apply(&mut self.settings);

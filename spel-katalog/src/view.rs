@@ -106,7 +106,7 @@ impl State {
 
     pub fn view<'a>(
         &'a self,
-        settings: &'a crate::settings::State,
+        settings: &'a ::spel_katalog_settings::State,
         games: &'a crate::games::State,
         info: &'a crate::info::State,
     ) -> Element<'a, crate::Message> {

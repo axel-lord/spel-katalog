@@ -26,7 +26,7 @@ impl Game {
         let prefix = self
             .prefix
             .as_deref()
-            .unwrap_or_else(|| crate::settings::HOME.as_path());
+            .unwrap_or_else(|| ::spel_katalog_settings::HOME.as_path());
         let exe = &self.exe;
 
         common(exe, prefix)

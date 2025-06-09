@@ -205,7 +205,7 @@ fn emit_path(setting: &Setting, name: &str, ident: &Ident, path: &str) -> Emit {
             item::default_str(ident, &default_value),
             item::default(
                 ident,
-                &quote! { Self(<Self as crate::settings::DefaultStr>::default_str().into()) },
+                &quote! { Self(<Self as crate::DefaultStr>::default_str().into()) },
             ),
             item::display(ident, &quote! { f.write_str(self.as_str()) }),
             item::deref(ident, &quote! { str }, &quote! { self.as_str() }),
