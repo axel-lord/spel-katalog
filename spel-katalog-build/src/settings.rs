@@ -311,7 +311,7 @@ pub fn write(settings: Settings, dest: &Path) {
                 #[doc = #ty_doc]
                 #[arg(long)]
                 #[serde(skip_serializing_if = "Option::is_none", default)]
-                #field_names: Option<#ty_names>,
+                pub(crate) #field_names: Option<#ty_names>,
                 )*
             }
 

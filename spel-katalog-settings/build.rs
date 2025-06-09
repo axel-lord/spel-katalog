@@ -1,3 +1,5 @@
+//! build script generating settings
+
 use ::std::{env, path::Path};
 
 use ::spel_katalog_build::{format::Settings, settings};

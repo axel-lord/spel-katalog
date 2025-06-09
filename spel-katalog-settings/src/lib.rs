@@ -1,4 +1,5 @@
 //! Settings widgets.
+#![allow(missing_docs)]
 
 use ::derive_more::{Deref, DerefMut, From, IsVariant};
 use ::iced::{
@@ -8,8 +9,7 @@ use ::iced::{
     widget::{button, horizontal_rule, text},
 };
 
-use ::log::warn;
-use ::spel_katalog_common::{OrStatus, lazy::Lazy, status, w};
+use ::spel_katalog_common::{OrStatus, status, w};
 use ::std::path::PathBuf;
 use ::tap::Pipe;
 
@@ -17,18 +17,43 @@ use crate::list::{pl, pl_list, ti, ti_list};
 
 mod list;
 
+#[doc(hidden)]
+mod generated {
+    #![allow(missing_docs)]
+
+    pub static HOME: ::spel_katalog_common::lazy::Lazy =
+        ::spel_katalog_common::lazy::Lazy::new(|| {
+            String::from(match &::std::env::var("HOME") {
+                Ok(home) => home.as_str().trim_end_matches('/'),
+                Err(err) => {
+                    ::log::warn!("could not get home directory, {err}");
+                    "/opt"
+                }
+            })
+        });
+
+    include!(concat!(env!("OUT_DIR"), "/settings.rs"));
+}
+pub use generated::*;
+
+/// Trait to provide a default string representation of a type.
 pub trait DefaultStr {
+    /// Get the default string representation of self.
     fn default_str() -> &'static str;
 }
 
+/// Trait to provide settings titles.
 pub trait Title {
+    /// Title to use for setting.
     fn title() -> &'static str;
 }
 
+/// Trait for simple enums to provide all values.
 pub trait Variants
 where
     Self: 'static + Sized,
 {
+    /// All values for enum.
     const VARIANTS: &[Self];
 }
 
@@ -40,18 +65,6 @@ impl From<Theme> for ::iced::Theme {
         }
     }
 }
-
-pub static HOME: Lazy = Lazy::new(|| {
-    String::from(match &::std::env::var("HOME") {
-        Ok(home) => home.as_str().trim_end_matches('/'),
-        Err(err) => {
-            warn!("could not get home directory, {err}");
-            "/opt"
-        }
-    })
-});
-
-include!(concat!(env!("OUT_DIR"), "/settings.rs"));
 
 #[derive(Debug, IsVariant, Clone, From)]
 pub enum Message {
