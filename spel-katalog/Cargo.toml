@@ -4,45 +4,45 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-async-stream = "0.3.6"
-bon = "3.6.3"
-clap = { version = "4.5.39", features = ["derive"] }
-color-eyre = "0.6.5"
-derive_more = { version = "2.0.1", features = ["from", "is_variant", "display", "into_iterator", "as_ref", "deref", "into", "deref_mut"] }
-display = "0.1.2"
-env_logger = "0.11.8"
-iced = { version = "0.13.1", features = ["tokio", "lazy", "image", "advanced"] }
-image = "0.25.6"
-itertools = "0.14.0"
-log = { version = "0.4.27", features = ["max_level_debug", "release_max_level_info"] }
-parking_lot = "0.12.4"
-paste = "1.0.15"
-rayon = "1.10.0"
-regex = "1.11.1"
-rfd = { version = "0.15.3", default-features = false, features = ["xdg-portal", "tokio"] }
-rustc-hash = "2.1.1"
-serde = { version = "1.0.219", features = ["derive"] }
-serde_yml = "0.0.12"
-shell-words = "1.1.0"
-sqlite = "0.37.0"
-strsim = "0.11.1"
-strum = { version = "0.27.1", features = ["derive"] }
-tap = "1.0.1"
-thiserror = "2.0.12"
-tokio = { version = "1.45.1", features = ["full"] }
-tokio-stream = { version = "0.1.17", features = ["full"] }
-toml = "0.8.22"
-xdg = "3.0.0"
+async-stream.workspace = true
+bon.workspace = true
+clap = { workspace = true, features = ["derive"] }
+color-eyre.workspace = true
+derive_more = { workspace = true, features = ["from", "is_variant", "display", "into_iterator", "as_ref", "deref", "into", "deref_mut"] }
+display.workspace = true
+env_logger.workspace = true
+iced = { workspace = true, features = ["tokio", "lazy", "image", "advanced"] }
+image.workspace = true
+itertools.workspace = true
+log = { workspace = true, features = ["max_level_debug", "release_max_level_info"] }
+parking_lot.workspace = true
+paste.workspace = true
+rayon.workspace = true
+regex.workspace = true
+rfd = { workspace = true, features = ["xdg-portal", "tokio"] }
+rustc-hash.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_yml.workspace = true
+shell-words.workspace = true
+sqlite.workspace = true
+strsim.workspace = true
+strum = { workspace = true, features = ["derive"] }
+tap.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tokio-stream = { workspace = true, features = ["full"] }
+toml.workspace = true
+xdg.workspace = true
 
 [build-dependencies]
-convert_case = "0.8.0"
-prettyplease = "0.2.33"
-quote = { version = "1.0.40", default-features = false }
-regex = "1.11.1"
-rustc-hash = "2.1.1"
-serde = { version = "1.0.219", features = ["derive"] }
-syn = { version = "2.0.101", default-features = false, features = ["full"] }
-toml = "0.8.22"
+convert_case.workspace = true
+prettyplease.workspace = true
+quote.workspace = true
+regex.workspace = true
+rustc-hash.workspace = true
+serde = { workspace = true, features = ["derive"] }
+syn = { workspace = true, features = ["full"] }
+toml.workspace = true
 
 [lints.rust]
 missing_debug_implementations = "warn"
