@@ -1,5 +1,5 @@
 [workspace]
-members = ["spel-katalog"]
+members = [ "spel-katalog-build","spel-katalog"]
 resolver = "2"
 default-members = ["spel-katalog"]
 
@@ -59,7 +59,9 @@ strum = "0.27.1"
 syn = { version = "2.0.101", default-features = false }
 tap = "1.0.1"
 thiserror = "2.0.12"
-tokio = "1.45.1"
-tokio-stream = "0.1.17"
+tokio = { version = "1.45.1" }
+tokio-stream = { version = "0.1.17" }
 toml = "0.8.22"
 xdg = "3.0.0"
+proc-macro2 = { version = "1.0.95", default-features = false }
+spel-katalog-build = { path = "spel-katalog-build" }

@@ -4228,6 +4228,7 @@ dependencies = [
  "serde",
  "serde_yml",
  "shell-words",
+ "spel-katalog-build",
  "sqlite",
  "strsim",
  "strum",
@@ -4238,6 +4239,21 @@ dependencies = [
  "tokio-stream",
  "toml",
  "xdg",
+]
+
+[[package]]
+name = "spel-katalog-build"
+version = "0.1.0"
+dependencies = [
+ "convert_case 0.8.0",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "rustc-hash 2.1.1",
+ "serde",
+ "syn 2.0.101",
+ "toml",
 ]
 
 [[package]]
@@ -4568,20 +4584,8 @@ dependencies = [
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
- "tokio-macros",
  "tracing",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "tokio-macros"
-version = "2.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e06d43f1345a3bcd39f6a56dbb7dcab2ba47e68e8ac134855e7e2bdbaf8cab8"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.101",
 ]
 
 [[package]]
@@ -4591,20 +4595,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eca58d7bba4a75707817a2c44174253f9236b2d5fbd055602e9d5c07c139a047"
 dependencies = [
  "futures-core",
- "pin-project-lite",
- "tokio",
- "tokio-util",
-]
-
-[[package]]
-name = "tokio-util"
-version = "0.7.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66a539a9ad6d5d281510d5bd368c973d636c02dbf8a67300bfb6b950696ad7df"
-dependencies = [
- "bytes",
- "futures-core",
- "futures-sink",
  "pin-project-lite",
  "tokio",
 ]
