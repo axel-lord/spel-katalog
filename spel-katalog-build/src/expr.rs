@@ -45,4 +45,3 @@ pub fn title_expr(name: &str, title: Option<&str>) -> ::syn::Expr {
         }
     }
 }
-

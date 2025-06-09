@@ -22,4 +22,3 @@ pub fn doc_str(value: &str) -> Cow<str> {
         Cow::Owned(format!("{value}."))
     }
 }
-

@@ -7,3 +7,5 @@ pub mod expr;
 pub mod item;
 
 pub mod string;
+
+pub mod settings;
