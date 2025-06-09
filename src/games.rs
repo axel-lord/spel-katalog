@@ -9,6 +9,7 @@ use ::iced::{
     widget::{self, container, image::Handle, stack},
 };
 use ::itertools::Itertools;
+use ::rustc_hash::FxHashMap;
 use ::tap::{Pipe, Tap};
 
 use crate::{Safety, settings::Settings, w};
@@ -55,6 +56,31 @@ impl State {
             Message::LoadDb(path_buf) => Task::future(::tokio::task::spawn_blocking(
                 move || -> Result<Vec<Game>, LoadDbError> {
                     let db = ::sqlite::open(&path_buf)?;
+
+                    let _cats = db
+                        .prepare("SELECT id, name FROM categories WHERE")?
+                        .into_iter()
+                        .map(|cat| {
+                            let cat = cat?;
+                            let id = cat.try_read::<i64, _>("id")?;
+                            let name = cat.try_read::<&str, _>("name")?;
+
+                            Ok((id, String::from(name)))
+                        })
+                        .collect::<Result<FxHashMap<_, _>, ::sqlite::Error>>();
+
+                    let _game_cats = db
+                        .prepare("SELECT game_id, category_id FROM games_categories")?
+                        .into_iter()
+                        .map(|row| {
+                            let row = row?;
+                            let game: i64 = row.try_read("game_id")?;
+                            let cat: i64 = row.try_read("category_id")?;
+
+                            Ok((game, cat))
+                        })
+                        .collect::<Result<Vec<_>, ::sqlite::Error>>();
+
                     db.prepare("SELECT id,name,slug,runner,configpath FROM games")?
                         .into_iter()
                         .filter_map(|row| {
