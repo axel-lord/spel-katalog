@@ -17,9 +17,6 @@ use crate::{
 };
 
 mod list;
-pub mod expanded {
-    pub use super::HOME;
-}
 
 pub trait DefaultStr {
     fn default_str() -> &'static str;
