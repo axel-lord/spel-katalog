@@ -1,3 +1,5 @@
+//! [State], [Message] and [Request] impls.
+
 use ::std::{
     convert::identity,
     path::{Path, PathBuf},
@@ -14,10 +16,12 @@ use ::iced::{
 use ::itertools::Itertools;
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, w};
-use ::spel_katalog_games::{Game, Games};
 use ::spel_katalog_settings::Settings;
 use ::tap::{Pipe, Tap};
 
+use crate::{Game, Games};
+
+/// State of games element.
 #[derive(Debug, Default, Deref, DerefMut)]
 pub struct State {
     #[deref]
@@ -25,20 +29,30 @@ pub struct State {
     games: Games,
 }
 
+/// Internal message used for games element.
 #[derive(Debug, Clone, IsVariant)]
 pub enum Message {
+    /// Load games from local lutris database.
     LoadDb(PathBuf),
+    /// Set loaded games.
     SetGames(Vec<Game>),
+    /// Set thumbnails.
     SetImages {
+        /// Slugs for games to set thumbnails for.
         slugs: Vec<String>,
+        /// Thumbnails to set.
         images: Vec<Handle>,
     },
+    /// Set a single thumbnail.
     SetImage {
+        /// Slug.
         slug: String,
+        /// Image.
         image: Handle,
     },
 }
 
+/// Requests for other widgets.
 #[derive(Debug, Clone, IsVariant)]
 pub enum Request {
     /// Set currently chosen game.
@@ -52,6 +66,11 @@ pub enum Request {
         id: i64,
         /// Should the game be sandboxed.
         sandbox: bool,
+    },
+    /// Find thumbnails.
+    FindImages {
+        /// Slugs of thumbnails to find.
+        slugs: Vec<String>,
     },
 }
 
@@ -103,13 +122,14 @@ fn load_db(path: &Path) -> Result<Vec<Game>, LoadDbError> {
 }
 
 impl State {
+    /// Update internal state and send messages.
     pub fn update(
         &mut self,
         msg: Message,
         tx: &StatusSender,
         settings: &Settings,
         filter: &str,
-    ) -> Task<crate::Message> {
+    ) -> Task<OrRequest<Message, Request>> {
         match msg {
             Message::LoadDb(path_buf) => {
                 let tx = tx.clone();
@@ -119,7 +139,6 @@ impl State {
                             Ok(games) => games
                                 .pipe(Message::SetGames)
                                 .pipe(OrRequest::Message)
-                                .pipe(crate::Message::Games)
                                 .pipe(Task::done),
                             Err(err) => match err {
                                 LoadDbError::Sqlite(error) => {
@@ -144,7 +163,7 @@ impl State {
                 let slugs = self.all().iter().map(|game| &game.slug).cloned().collect();
                 status!(tx, "read games from database");
 
-                Task::done(crate::Message::FindImages { slugs })
+                Task::done(OrRequest::Request(Request::FindImages { slugs }).into())
             }
             Message::SetImages { slugs, images } => {
                 for (slug, image) in slugs.into_iter().zip(images) {
@@ -160,6 +179,7 @@ impl State {
         }
     }
 
+    /// Render elements.
     pub fn view(&self) -> Element<OrRequest<Message, Request>> {
         fn card<'a>(game: &'a Game, width: f32) -> Element<'a, OrRequest<Message, Request>> {
             let handle = game.image.as_ref();

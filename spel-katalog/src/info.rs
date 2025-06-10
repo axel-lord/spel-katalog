@@ -199,7 +199,7 @@ impl State {
                         };
 
                         Ok(crate::Message::Games(OrRequest::Message(
-                            crate::games::Message::SetImage { slug, image },
+                            ::spel_katalog_games::Message::SetImage { slug, image },
                         )))
                     };
 

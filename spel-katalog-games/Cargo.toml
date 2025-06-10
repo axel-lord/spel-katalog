@@ -14,6 +14,8 @@ spel-katalog-common.workspace = true
 spel-katalog-settings.workspace = true
 log.workspace = true
 rustc-hash.workspace = true
+tokio.workspace = true
+itertools.workspace = true
 
 [lints]
 workspace = true

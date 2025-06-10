@@ -181,7 +181,7 @@ impl ImageBuffer {
                     Task::none()
                 },
                 |(slugs, images)| {
-                    crate::games::Message::SetImages { slugs, images }
+                    ::spel_katalog_games::Message::SetImages { slugs, images }
                         .pipe(OrRequest::Message)
                         .pipe(crate::Message::Games)
                         .pipe(Task::done)

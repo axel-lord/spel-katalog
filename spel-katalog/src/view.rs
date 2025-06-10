@@ -107,7 +107,7 @@ impl State {
     pub fn view<'app>(
         &'app self,
         settings: &'app ::spel_katalog_settings::State,
-        games: &'app crate::games::State,
+        games: &'app ::spel_katalog_games::State,
         info: &'app crate::info::State,
     ) -> Element<'app, crate::Message> {
         pane_grid(&self.panes, |_pane, state, _is_maximized| {

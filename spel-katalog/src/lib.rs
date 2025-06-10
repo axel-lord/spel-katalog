@@ -14,7 +14,6 @@ use ::tap::Pipe;
 
 use crate::image_buffer::ImageBuffer;
 
-mod games;
 mod image_buffer;
 mod info;
 mod view;
@@ -44,7 +43,7 @@ pub struct Cli {
 #[derive(Debug)]
 pub struct App {
     settings: ::spel_katalog_settings::State,
-    games: games::State,
+    games: ::spel_katalog_games::State,
     status: String,
     filter: String,
     view: view::State,
@@ -70,12 +69,9 @@ pub enum Message {
     #[from]
     View(view::Message),
     #[from]
-    Games(OrRequest<games::Message, games::Request>),
+    Games(OrRequest<::spel_katalog_games::Message, ::spel_katalog_games::Request>),
     #[from]
     Info(info::Message),
-    FindImages {
-        slugs: Vec<String>,
-    },
     RunGame(i64, Safety),
 }
 
@@ -135,7 +131,7 @@ impl App {
             let status = String::new();
             let view = view::State::new(show_settings);
             let settings = ::spel_katalog_settings::State { settings, config };
-            let games = games::State::default();
+            let games = ::spel_katalog_games::State::default();
             let image_buffer = ImageBuffer::empty();
             let info = info::State::default();
             let sender = tx.into();
@@ -162,7 +158,7 @@ impl App {
                     .lutris_db()
                     .as_path()
                     .to_path_buf()
-                    .pipe(games::Message::LoadDb)
+                    .pipe(spel_katalog_games::Message::LoadDb)
                     .pipe(OrRequest::Message)
                     .pipe(Message::Games)
                     .pipe(Task::done);
@@ -207,17 +203,15 @@ impl App {
             Message::Games(message) => {
                 let request = match message {
                     OrRequest::Message(message) => {
-                        return self.games.update(
-                            message,
-                            &self.sender,
-                            &self.settings,
-                            &self.filter,
-                        );
+                        return self
+                            .games
+                            .update(message, &self.sender, &self.settings, &self.filter)
+                            .map(Message::Games);
                     }
                     OrRequest::Request(request) => request,
                 };
                 match request {
-                    games::Request::SetId { id } => {
+                    ::spel_katalog_games::Request::SetId { id } => {
                         return self.info.update(
                             info::Message::SetId(id),
                             &self.sender,
@@ -225,7 +219,7 @@ impl App {
                             &self.games,
                         );
                     }
-                    games::Request::Run { id, sandbox } => {
+                    ::spel_katalog_games::Request::Run { id, sandbox } => {
                         return self.run_game(
                             id,
                             if sandbox {
@@ -235,11 +229,13 @@ impl App {
                             },
                         );
                     }
+                    ::spel_katalog_games::Request::FindImages { slugs } => {
+                        return self.image_buffer.find_images(
+                            slugs,
+                            self.settings.coverart_dir().as_path().to_path_buf(),
+                        );
+                    }
                 }
-            }
-            Message::FindImages { slugs } => {
-                let coverart = self.settings.coverart_dir().as_path().to_path_buf();
-                return self.image_buffer.find_images(slugs, coverart);
             }
             Message::Info(message) => {
                 return self
