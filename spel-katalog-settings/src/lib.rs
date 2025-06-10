@@ -13,8 +13,6 @@ use ::spel_katalog_common::{OrStatus, status, w};
 use ::std::path::PathBuf;
 use ::tap::Pipe;
 
-use crate::list::{pl, pl_list, ti, ti_list};
-
 mod list;
 
 #[doc(hidden)]
@@ -136,31 +134,9 @@ impl State {
                     ),
             )
             .push(horizontal_rule(2))
-            .push(
-                pl_list([
-                    pl(self.settings.theme),
-                    pl(self.settings.show),
-                    pl(self.settings.filter_mode),
-                    pl(self.settings.sort_by),
-                    pl(self.settings.sort_dir),
-                    pl(self.settings.network),
-                ])
-                .pipe(Element::from)
-                .map(Message::Delta),
-            )
+            .push(self.view_enums().map(Message::Delta).pipe(w::scroll))
             .push(horizontal_rule(2))
-            .push(
-                ti_list([
-                    ti(&self.settings.lutris_exe),
-                    ti(&self.settings.firejail_exe),
-                    ti(&self.settings.coverart_dir),
-                    ti(&self.settings.lutris_db),
-                    ti(&self.settings.yml_dir),
-                ])
-                .pipe(Element::from)
-                .map(Message::Delta)
-                .pipe(w::scroll),
-            )
+            .push(self.view_paths().map(Message::Delta).pipe(w::scroll))
             .into()
     }
 }

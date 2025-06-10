@@ -266,30 +266,41 @@ pub fn write(settings: Settings, dest: &Path) {
     let mut file = BufWriter::new(File::create(dest).unwrap());
     let Settings { settings } = settings;
 
-    let mut emitted = settings
+    let emitted = settings
         .iter()
         .map(|(name, setting)| (name, setting, emit_type(setting, name)))
         .collect::<Vec<_>>();
-    emitted.sort_by(|a, b| a.1.cmp(&b.1).then(a.0.cmp(&b.0)));
+    // emitted.sort_by(|a, b| a.1.cmp(&b.1).then(a.0.cmp(&b.0)));
 
     let from_str = emitted.iter().map(|(.., e)| &e.from_str);
     let types = emitted.iter().map(|(.., e)| &e.ty);
     let impls = emitted.iter().map(|(.., e)| &e.impls);
 
-    let (ty_names, ty_doc, is_variants, is_variants_docs, field_names) = emitted
-        .iter()
-        .map(|(n, s, ..)| {
-            let pascal_ident = n.to_case(Case::Pascal);
-            let snake_ident = n.to_case(Case::Snake);
-            (
-                format_ident!("{pascal_ident}"),
-                doc_str(&s.help),
-                format_ident!("is_{snake_ident}",),
-                format!("Check if delta is of the `{pascal_ident}` variant.",),
-                format_ident!("{snake_ident}"),
-            )
-        })
-        .collect::<(Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>)>();
+    let mut ty_names = Vec::new();
+    let mut ty_doc = Vec::new();
+    let mut is_variants = Vec::new();
+    let mut is_variants_docs = Vec::new();
+    let mut field_names = Vec::new();
+    let mut enum_field_names = Vec::new();
+    let mut path_field_names = Vec::new();
+
+    for (name, setting, ..) in &emitted {
+        let pascal_ident = name.to_case(Case::Pascal);
+        let snake_ident = name.to_case(Case::Snake);
+        ty_names.push(format_ident!("{pascal_ident}"));
+        ty_doc.push(doc_str(&setting.help));
+        is_variants.push(format_ident!("is_{snake_ident}",));
+        is_variants_docs.push(format!(
+            "Check if delta is of the `{pascal_ident}` variant.",
+        ));
+        field_names.push(format_ident!("{snake_ident}"));
+
+        match setting.content {
+            SettingContent::Enum { .. } => &mut enum_field_names,
+            SettingContent::Path { .. } => &mut path_field_names,
+        }
+        .push(format_ident!("{snake_ident}"));
+    }
 
     file.write_all(
         ::prettyplease::unparse(&parse_quote! {
@@ -339,6 +350,18 @@ pub fn write(settings: Settings, dest: &Path) {
                     }
                 }
                 )*
+
+                pub fn view_enums(&self) -> ::iced::Element<Delta> {
+                    crate::list::enum_list([
+                        #( crate::list::enum_choice(self.#enum_field_names), )*
+                    ]).into()
+                }
+
+                pub fn view_paths(&self) -> ::iced::Element<Delta> {
+                    crate::list::path_list([
+                        #( crate::list::path_choice(self.#path_field_names), )*
+                    ]).into()
+                }
             }
 
             /// A Change in a setting.

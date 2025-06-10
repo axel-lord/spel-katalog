@@ -1,58 +1,9 @@
 use ::std::{cell::OnceCell, iter};
 
-use ::derive_more::{Display, IsVariant};
 use ::iced::widget::image::Handle;
 use ::rustc_hash::FxHashMap;
+use ::spel_katalog_games::Game;
 use ::spel_katalog_settings::Settings;
-
-#[derive(Debug, Clone, IsVariant, Display)]
-pub enum Runner {
-    #[display("wine")]
-    Wine,
-    #[display("linux")]
-    Linux,
-    #[display("{}", _0)]
-    Other(String),
-}
-
-impl From<&str> for Runner {
-    fn from(value: &str) -> Self {
-        if value
-            .chars()
-            .flat_map(char::to_uppercase)
-            .eq("WINE".chars())
-        {
-            Self::Wine
-        } else if value
-            .chars()
-            .flat_map(char::to_uppercase)
-            .eq("LINUX".chars())
-        {
-            Self::Linux
-        } else {
-            Self::Other(value.into())
-        }
-    }
-}
-
-impl AsRef<str> for Runner {
-    fn as_ref(&self) -> &str {
-        match self {
-            Runner::Wine => "wine",
-            Runner::Linux => "linux",
-            Runner::Other(other) => other,
-        }
-    }
-}
-#[derive(Debug, Clone)]
-pub struct Game {
-    pub slug: String,
-    pub id: i64,
-    pub name: String,
-    pub runner: Runner,
-    pub configpath: String,
-    pub image: Option<Handle>,
-}
 
 #[derive(Debug)]
 struct GameCache {
@@ -76,6 +27,14 @@ impl Games {
 
     pub fn all(&self) -> impl Iterator<Item = &'_ Game> {
         self.games.iter()
+    }
+
+    pub fn all_count(&self) -> usize {
+        self.games.len()
+    }
+
+    pub fn displayed_count(&self) -> usize {
+        self.displayed.len()
     }
 
     pub fn sort(&mut self, settings: &Settings, filter: &str) {

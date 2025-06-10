@@ -1,5 +1,5 @@
 [workspace]
-members = [ "spel-katalog-build", "spel-katalog", "spel-katalog-common", "spel-katalog-settings"]
+members = [ "spel-katalog-build", "spel-katalog", "spel-katalog-common", "spel-katalog-settings", "spel-katalog-games"]
 resolver = "2"
 default-members = ["spel-katalog"]
 
@@ -36,7 +36,6 @@ clap = "4.5.39"
 color-eyre = "0.6.5"
 convert_case = "0.8.0"
 derive_more = "2.0.1"
-display = "0.1.2"
 env_logger = "0.11.8"
 iced = "0.13.1"
 image = "0.25.6"
@@ -66,3 +65,5 @@ xdg = "3.0.0"
 proc-macro2 = { version = "1.0.95", default-features = false }
 spel-katalog-build = { path = "spel-katalog-build" }
 spel-katalog-common = { path = "spel-katalog-common" }
+spel-katalog-games = { path = "spel-katalog-games" }
+spel-katalog-settings = { path = "spel-katalog-settings" }

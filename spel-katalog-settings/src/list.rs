@@ -7,7 +7,7 @@ use spel_katalog_common::w;
 
 use crate::{DefaultStr, Title, Variants};
 
-pub fn pl<'a, T, M>(value: Option<T>) -> (&'a str, Element<'a, M>)
+pub fn enum_choice<'a, T, M>(value: Option<T>) -> (&'a str, Element<'a, M>)
 where
     T: Variants + Clone + PartialEq + ToString + Default + Title,
     M: 'a + From<T>,
@@ -25,7 +25,7 @@ where
     )
 }
 
-pub fn pl_list<'a, M>(settings: impl IntoIterator<Item = (&'a str, Element<'a, M>)>) -> Row<'a, M>
+pub fn enum_list<'a, M>(settings: impl IntoIterator<Item = (&'a str, Element<'a, M>)>) -> Row<'a, M>
 where
     M: 'a,
 {
@@ -40,7 +40,7 @@ where
     w::row().align_y(Alignment::Start).push(l).push(r)
 }
 
-pub fn ti<'a, T, M>(value: &Option<T>) -> (&'a str, Element<'a, M>)
+pub fn path_input<'a, T, M>(value: &Option<T>) -> (&'a str, Element<'a, M>)
 where
     T: 'static + DefaultStr + AsRef<str> + From<String> + Clone + Title,
     M: 'a + From<T>,
@@ -61,7 +61,7 @@ where
     )
 }
 
-pub fn ti_list<'a, M>(
+pub fn path_list<'a, M>(
     settings: impl IntoIterator<Item = (&'a str, Element<'a, M>)>,
 ) -> Column<'a, M>
 where

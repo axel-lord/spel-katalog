@@ -1,0 +1,17 @@
+[package]
+name = "spel-katalog-games"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+derive_more = { workspace = true, features = ["is_variant", "display"] }
+sqlite.workspace = true
+strsim.workspace = true
+tap.workspace = true
+thiserror.workspace = true
+iced = { workspace = true, features = ["tokio", "lazy", "image", "advanced"] }
+spel-katalog-common.workspace = true
+log.workspace = true
+
+[lints]
+workspace = true

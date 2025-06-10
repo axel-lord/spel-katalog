@@ -1,7 +1,8 @@
 //! Structured input format.
 use ::std::{fs, path::Path};
 
-use ::rustc_hash::FxHashMap;
+use ::indexmap::IndexMap;
+use ::rustc_hash::FxBuildHasher;
 use ::serde::Deserialize;
 
 use crate::format::settings::Setting;
@@ -11,7 +12,7 @@ use crate::format::settings::Setting;
 pub struct Settings {
     /// Settings to generate code for.
     #[serde(flatten)]
-    pub settings: FxHashMap<String, Setting>,
+    pub settings: IndexMap<String, Setting, FxBuildHasher>,
 }
 
 impl Settings {

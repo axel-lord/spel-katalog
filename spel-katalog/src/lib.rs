@@ -7,7 +7,7 @@ use ::iced::{
     Element,
     Length::Fill,
     Task,
-    widget::{self, horizontal_rule, text, text_input, toggler, vertical_space},
+    widget::{self, horizontal_rule, text, text_input, toggler, value, vertical_space},
 };
 use ::log::info;
 use ::spel_katalog_common::{OrStatus, status, w};
@@ -139,7 +139,12 @@ impl App {
             .filter_module("spel_katalog", ::log::LevelFilter::Debug)
             .init();
         let app = Cli::parse().try_conv::<Self>()?;
-        ::iced::application("Lutris Games", Self::update, Self::view)
+
+        fn view(app: &App) -> Element<OrStatus<Message>> {
+            app.view().map(OrStatus::new)
+        }
+
+        ::iced::application("Lutris Games", Self::update, view)
             .theme(|app| ::iced::Theme::from(*app.settings.settings.theme()))
             .centered()
             .executor::<::tokio::runtime::Runtime>()
@@ -277,7 +282,7 @@ impl App {
         Task::none()
     }
 
-    pub fn view(&self) -> Element<OrStatus<Message>> {
+    pub fn view(&self) -> Element<Message> {
         w::col()
             .padding(5)
             .spacing(0)
@@ -300,6 +305,10 @@ impl App {
             .push(
                 w::row()
                     .push(text(&self.status).width(Fill))
+                    .push(text("Displayed").style(widget::text::secondary))
+                    .push(value(self.games.displayed_count()))
+                    .push(text("All").style(widget::text::secondary))
+                    .push(value(self.games.all_count()))
                     .push(text("Network").style(widget::text::secondary))
                     .push(
                         toggler(self.settings.network().is_enabled())
@@ -323,6 +332,5 @@ impl App {
                     ),
             )
             .pipe(Element::from)
-            .map(OrStatus::new)
     }
 }

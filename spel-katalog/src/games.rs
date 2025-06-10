@@ -11,12 +11,13 @@ use ::iced::{
 use ::itertools::Itertools;
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog_common::{OrStatus, status, w};
+use ::spel_katalog_games::Game;
 use ::spel_katalog_settings::Settings;
 use ::tap::{Pipe, Tap};
 
 use crate::Safety;
 
-pub use crate::games::games::{Game, Games};
+pub use crate::games::games::Games;
 
 mod games;
 
@@ -90,42 +91,7 @@ impl State {
                                 .map_err(|err| ::log::error!("row does not exist\n{err}"))
                                 .ok()?;
 
-                            let slug = row
-                                .try_read::<&str, _>("slug")
-                                .map_err(|err| ::log::error!("could not read slug of row\n{err}"))
-                                .ok()?
-                                .into();
-                            let id = row
-                                .try_read::<i64, _>("id")
-                                .map_err(|err| ::log::error!("could not read id of row\n{err}"))
-                                .ok()?
-                                .into();
-                            let name = row
-                                .try_read::<&str, _>("name")
-                                .map_err(|err| ::log::error!("could not read name of row\n{err}"))
-                                .ok()?
-                                .into();
-                            let runner = row
-                                .try_read::<&str, _>("runner")
-                                .map_err(|err| ::log::error!("could not read runner of row\n{err}"))
-                                .ok()?
-                                .into();
-                            let configpath = row
-                                .try_read::<&str, _>("configpath")
-                                .map_err(|err| {
-                                    ::log::error!("could not read configpath of row\n{err}")
-                                })
-                                .ok()?
-                                .into();
-
-                            Some(Game {
-                                slug,
-                                id,
-                                name,
-                                runner,
-                                configpath,
-                                image: None,
-                            })
+                            Game::from_row(&row)
                         })
                         .collect::<Vec<_>>()
                         .tap_mut(|games| games.sort_by_key(|game| -game.id))

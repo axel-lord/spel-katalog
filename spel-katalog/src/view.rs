@@ -104,12 +104,12 @@ impl State {
         Task::none()
     }
 
-    pub fn view<'a>(
-        &'a self,
-        settings: &'a ::spel_katalog_settings::State,
-        games: &'a crate::games::State,
-        info: &'a crate::info::State,
-    ) -> Element<'a, crate::Message> {
+    pub fn view<'app>(
+        &'app self,
+        settings: &'app ::spel_katalog_settings::State,
+        games: &'app crate::games::State,
+        info: &'app crate::info::State,
+    ) -> Element<'app, crate::Message> {
         pane_grid(&self.panes, |_pane, state, _is_maximized| {
             pane_grid::Content::new(
                 match state {

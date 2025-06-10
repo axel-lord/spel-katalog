@@ -3,16 +3,16 @@ help = "Theme to use"
 variants = ["Light", "Dark"]
 default = "Dark"
 
+[Show]
+help = "How to handle hidden games"
+variants = ["Apparent", "Hidden", "All"]
+default = "Apparent"
+
 [FilterMode]
 title = "Filter"
 help = "How to filter games"
 variants = ["Filter", "Search", "Regex"]
 default = "Search"
-
-[Show]
-help = "How to handle hidden games"
-variants = ["Apparent", "Hidden", "All"]
-default = "Apparent"
 
 [SortBy]
 help = "How to sort games"
@@ -40,15 +40,15 @@ title = "Firejail Executable"
 help = "Path to firejail executable"
 path = "/usr/bin/firejail"
 
-[LutrisDb]
-title = "Lutris Database"
-help = "Path to lutris game database"
-path = "{HOME}/.local/share/lutris/pga.db"
-
 [CoverartDir]
 title = "Coverart Directory"
 help = "Path to coverart directory"
 path = "{HOME}/.cache/lutris/coverart"
+
+[LutrisDb]
+title = "Lutris Database"
+help = "Path to lutris game database"
+path = "{HOME}/.local/share/lutris/pga.db"
 
 [YmlDir]
 title = "Game Config Directory"
