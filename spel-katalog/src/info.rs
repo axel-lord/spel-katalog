@@ -9,7 +9,7 @@ use ::iced::{
     widget::{self, button, horizontal_rule, horizontal_space, vertical_rule},
 };
 use ::image::ImageError;
-use ::spel_katalog_common::{OrRequest, OrStatus, StatusSender, async_status, w};
+use ::spel_katalog_common::{OrRequest, StatusSender, async_status, w};
 use ::spel_katalog_games::Games;
 use ::spel_katalog_settings::Settings;
 use ::tap::Pipe;
@@ -52,7 +52,7 @@ impl State {
         tx: &StatusSender,
         settings: &Settings,
         games: &Games,
-    ) -> Task<OrStatus<crate::Message>> {
+    ) -> Task<crate::Message> {
         match message {
             Message::SetId(id) => {
                 self.id = id;
@@ -71,7 +71,6 @@ impl State {
                         match ::tokio::fs::read_to_string(&path).await {
                             Ok(value) => Message::SetContent(id, value, path.clone())
                                 .pipe(crate::Message::from)
-                                .pipe(OrStatus::new)
                                 .pipe(Task::done),
                             Err(err) => {
                                 ::log::error!("failed to read yml {path:?}\n{err}");
@@ -87,7 +86,6 @@ impl State {
 
                 let show_info = crate::view::Message::Info(true)
                     .pipe(crate::Message::from)
-                    .pipe(OrStatus::new)
                     .pipe(Task::done);
 
                 Task::batch([fill_content, show_info])
@@ -208,7 +206,8 @@ impl State {
                     let tx = tx.clone();
                     Task::future(async move {
                         match task.await {
-                            Ok(msg) => Task::done(OrStatus::new(msg)),
+                            Ok(msg) => Task::done(msg),
+
                             Err(err) => {
                                 ::log::error!("{err}");
                                 async_status!(tx, "could not add thumbnail").await;

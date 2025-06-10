@@ -13,7 +13,7 @@ use ::iced::{
 };
 use ::itertools::Itertools;
 use ::rustc_hash::FxHashMap;
-use ::spel_katalog_common::{OrRequest, OrStatus, StatusSender, async_status, status, w};
+use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, w};
 use ::spel_katalog_games::{Game, Games};
 use ::spel_katalog_settings::Settings;
 use ::tap::{Pipe, Tap};
@@ -109,7 +109,7 @@ impl State {
         tx: &StatusSender,
         settings: &Settings,
         filter: &str,
-    ) -> Task<OrStatus<crate::Message>> {
+    ) -> Task<crate::Message> {
         match msg {
             Message::LoadDb(path_buf) => {
                 let tx = tx.clone();
@@ -120,7 +120,6 @@ impl State {
                                 .pipe(Message::SetGames)
                                 .pipe(OrRequest::Message)
                                 .pipe(crate::Message::Games)
-                                .pipe(OrStatus::new)
                                 .pipe(Task::done),
                             Err(err) => match err {
                                 LoadDbError::Sqlite(error) => {
@@ -145,7 +144,7 @@ impl State {
                 let slugs = self.all().iter().map(|game| &game.slug).cloned().collect();
                 status!(tx, "read games from database");
 
-                Task::done(OrStatus::new(crate::Message::FindImages { slugs }))
+                Task::done(crate::Message::FindImages { slugs })
             }
             Message::SetImages { slugs, images } => {
                 for (slug, image) in slugs.into_iter().zip(images) {

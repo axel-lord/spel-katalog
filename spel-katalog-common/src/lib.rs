@@ -1,11 +1,9 @@
 //! Common types for communication across crates.
 
 mod or_request;
-mod or_status;
 mod status_sender;
 
 pub use or_request::OrRequest;
-pub use or_status::OrStatus;
 pub use status_sender::StatusSender;
 
 pub mod lazy;

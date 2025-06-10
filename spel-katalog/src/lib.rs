@@ -9,8 +9,7 @@ use ::iced::{
     Task,
     widget::{self, horizontal_rule, text, text_input, toggler, value, vertical_space},
 };
-use ::log::info;
-use ::spel_katalog_common::{OrRequest, OrStatus, StatusSender, status, w};
+use ::spel_katalog_common::{OrRequest, StatusSender, status, w};
 use ::tap::Pipe;
 
 use crate::image_buffer::ImageBuffer;
@@ -83,9 +82,17 @@ pub enum Message {
 impl App {
     pub fn run() -> ::color_eyre::Result<()> {
         ::color_eyre::install()?;
-        ::env_logger::builder()
-            .filter_module("spel_katalog", ::log::LevelFilter::Debug)
-            .init();
+        [
+            "spel_katalog",
+            "spel_katalog_common",
+            "spel_katalog_settings",
+            "spel_katalog_games",
+        ]
+        .into_iter()
+        .fold(&mut ::env_logger::builder(), |builder, module| {
+            builder.filter_module(module, ::log::LevelFilter::Debug)
+        })
+        .init();
 
         let rx;
         let app = {
@@ -145,11 +152,7 @@ impl App {
             }
         };
 
-        fn view(app: &App) -> Element<OrStatus<Message>> {
-            app.view().map(OrStatus::new)
-        }
-
-        ::iced::application("Lutris Games", Self::update, view)
+        ::iced::application("Lutris Games", Self::update, Self::view)
             .theme(|app| ::iced::Theme::from(*app.settings.settings.theme()))
             .centered()
             .executor::<::tokio::runtime::Runtime>()
@@ -162,25 +165,16 @@ impl App {
                     .pipe(games::Message::LoadDb)
                     .pipe(OrRequest::Message)
                     .pipe(Message::Games)
-                    .pipe(OrStatus::new)
                     .pipe(Task::done);
                 let receive_status =
                     Task::stream(::tokio_stream::wrappers::ReceiverStream::new(rx))
-                        .map(|status| OrStatus::new(Message::Status(status)));
+                        .map(Message::Status);
                 (app, Task::batch([receive_status, load_db]))
             })
             .map_err(Report::from)
     }
 
-    pub fn update(&mut self, msg: OrStatus<Message>) -> Task<OrStatus<Message>> {
-        let msg = match msg {
-            OrStatus::Message(msg) => msg,
-            OrStatus::Status(status) => {
-                info!("status: {status}");
-                self.status = status;
-                return Task::none();
-            }
-        };
+    pub fn update(&mut self, msg: Message) -> Task<Message> {
         match msg {
             Message::Status(status) => {
                 self.status = status;
@@ -207,9 +201,9 @@ impl App {
                     self.games.sort(&self.settings, &self.filter);
                 }
 
-                return task.map(OrStatus::convert);
+                return task.map(From::from);
             }
-            Message::View(message) => return self.view.update(message).map(OrStatus::new),
+            Message::View(message) => return self.view.update(message),
             Message::Games(message) => {
                 let request = match message {
                     OrRequest::Message(message) => {
@@ -245,10 +239,7 @@ impl App {
             }
             Message::FindImages { slugs } => {
                 let coverart = self.settings.coverart_dir().as_path().to_path_buf();
-                return self
-                    .image_buffer
-                    .find_images(slugs, coverart)
-                    .map(OrStatus::new);
+                return self.image_buffer.find_images(slugs, coverart);
             }
             Message::Info(message) => {
                 return self
@@ -260,7 +251,7 @@ impl App {
         Task::none()
     }
 
-    fn run_game(&mut self, id: i64, safety: Safety) -> Task<OrStatus<Message>> {
+    fn run_game(&mut self, id: i64, safety: Safety) -> Task<Message> {
         let Some(game) = self.games.by_id(id) else {
             status!(&self.sender, "could not run game with id {id}");
             return Task::none();

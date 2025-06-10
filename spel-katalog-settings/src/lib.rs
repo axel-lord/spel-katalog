@@ -9,7 +9,7 @@ use ::iced::{
     widget::{button, horizontal_rule, text},
 };
 
-use ::spel_katalog_common::{OrStatus, StatusSender, async_status, w};
+use ::spel_katalog_common::{StatusSender, async_status, w};
 use ::std::path::PathBuf;
 use ::tap::Pipe;
 
@@ -98,7 +98,7 @@ async fn save(settings: Settings, path: PathBuf) -> Result<PathBuf, PathBuf> {
 }
 
 impl State {
-    pub fn update(&mut self, message: Message, tx: &StatusSender) -> Task<OrStatus<Message>> {
+    pub fn update(&mut self, message: Message, tx: &StatusSender) -> Task<Message> {
         match message {
             Message::Delta(delta) => {
                 delta.apply(&mut self.settings);
