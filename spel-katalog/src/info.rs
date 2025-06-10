@@ -1,4 +1,4 @@
-use ::std::{ffi::OsStr, path::PathBuf};
+use ::std::{convert::identity, ffi::OsStr, path::PathBuf};
 
 use ::derive_more::From;
 use ::iced::{
@@ -9,11 +9,12 @@ use ::iced::{
     widget::{self, button, horizontal_rule, horizontal_space, vertical_rule},
 };
 use ::image::ImageError;
-use ::spel_katalog_common::{OrStatus, status, w};
+use ::spel_katalog_common::{OrRequest, OrStatus, StatusSender, async_status, w};
+use ::spel_katalog_games::Games;
 use ::spel_katalog_settings::Settings;
 use ::tap::Pipe;
 
-use crate::{Safety, games::Games, image_buffer::ImageBuffer, t, y};
+use crate::{Safety, image_buffer::ImageBuffer, t, y};
 
 #[derive(Debug)]
 pub struct State {
@@ -48,6 +49,7 @@ impl State {
     pub fn update(
         &mut self,
         message: Message,
+        tx: &StatusSender,
         settings: &Settings,
         games: &Games,
     ) -> Task<OrStatus<crate::Message>> {
@@ -64,18 +66,21 @@ impl State {
                         .join(&game.configpath)
                         .with_extension("yml");
 
-                    fill_content = Task::future(::tokio::fs::read_to_string(path.clone())).then(
-                        move |result| match result {
+                    let tx = tx.clone();
+                    fill_content = Task::future(async move {
+                        match ::tokio::fs::read_to_string(&path).await {
                             Ok(value) => Message::SetContent(id, value, path.clone())
                                 .pipe(crate::Message::from)
                                 .pipe(OrStatus::new)
                                 .pipe(Task::done),
                             Err(err) => {
                                 ::log::error!("failed to read yml {path:?}\n{err}");
-                                Task::done(status!("could not read {path:?}"))
+                                async_status!(tx, "could not read {path:?}").await;
+                                Task::none()
                             }
-                        },
-                    );
+                        }
+                    })
+                    .then(identity);
                 } else {
                     fill_content = Task::none();
                 }
@@ -112,15 +117,22 @@ impl State {
             Message::SaveContent => {
                 if let Some(path) = &self.config_path {
                     let path = path.to_path_buf();
-                    Task::future(::tokio::fs::write(path.clone(), self.content.text())).then(
-                        move |result| match result {
-                            Ok(_) => Task::done(status!("wrote game config {path:?}")),
+                    let tx = tx.clone();
+                    let text = self.content.text();
+                    Task::future(async move {
+                        match ::tokio::fs::write(&path, text).await {
+                            Ok(_) => {
+                                async_status!(tx, "wrote game config {path:?}").await;
+                                Task::none()
+                            }
                             Err(err) => {
                                 ::log::error!("could not write config {path:?}\n{err}");
-                                Task::done(status!("could not write config {path:?}"))
+                                async_status!(tx, "could not write config {path:?}").await;
+                                Task::none()
                             }
-                        },
-                    )
+                        }
+                    })
+                    .then(identity)
                 } else {
                     Task::none()
                 }
@@ -188,19 +200,23 @@ impl State {
                             }
                         };
 
-                        Ok(crate::Message::Games(crate::games::Message::SetImage {
-                            slug,
-                            image,
-                        }))
+                        Ok(crate::Message::Games(OrRequest::Message(
+                            crate::games::Message::SetImage { slug, image },
+                        )))
                     };
 
-                    Task::future(task).then(|result| match result {
-                        Ok(msg) => Task::done(OrStatus::new(msg)),
-                        Err(err) => {
-                            ::log::error!("{err}");
-                            Task::done(status!("could not add thumbnail"))
+                    let tx = tx.clone();
+                    Task::future(async move {
+                        match task.await {
+                            Ok(msg) => Task::done(OrStatus::new(msg)),
+                            Err(err) => {
+                                ::log::error!("{err}");
+                                async_status!(tx, "could not add thumbnail").await;
+                                Task::none()
+                            }
                         }
                     })
+                    .then(identity)
                 }
                 None => Task::none(),
             },

@@ -5,6 +5,9 @@ edition = "2024"
 
 [dependencies]
 iced.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+derive_more = { workspace = true, features = ["is_variant", "deref", "from", "into"] }
+log.workspace = true
 
 [lints]
 workspace = true

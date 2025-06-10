@@ -9,7 +9,7 @@ use ::iced::{
     widget::{button, horizontal_rule, text},
 };
 
-use ::spel_katalog_common::{OrStatus, status, w};
+use ::spel_katalog_common::{OrStatus, StatusSender, async_status, w};
 use ::std::path::PathBuf;
 use ::tap::Pipe;
 
@@ -98,21 +98,25 @@ async fn save(settings: Settings, path: PathBuf) -> Result<PathBuf, PathBuf> {
 }
 
 impl State {
-    pub fn update(&mut self, message: Message) -> Task<OrStatus<Message>> {
+    pub fn update(&mut self, message: Message, tx: &StatusSender) -> Task<OrStatus<Message>> {
         match message {
             Message::Delta(delta) => {
                 delta.apply(&mut self.settings);
             }
             Message::Save => {
                 if let Some(path) = &self.config {
-                    return Task::future(save(self.settings.clone(), path.to_path_buf())).then(
-                        |result| {
-                            Task::done(match result {
-                                Ok(path) => status!("saved settings to {path:?}"),
-                                Err(path) => status!("could not save settings to {path:?}"),
-                            })
-                        },
-                    );
+                    let tx = tx.clone();
+                    let settings = self.settings.clone();
+                    let path = path.to_path_buf();
+                    return Task::future(async move {
+                        match save(settings, path).await {
+                            Ok(path) => async_status!(tx, "saved settings to {path:?}").await,
+                            Err(path) => {
+                                async_status!(tx, "could not save settings to {path:?}").await
+                            }
+                        }
+                    })
+                    .then(|_| Task::none());
                 }
             }
         };

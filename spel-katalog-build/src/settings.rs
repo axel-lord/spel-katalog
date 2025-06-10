@@ -359,7 +359,7 @@ pub fn write(settings: Settings, dest: &Path) {
 
                 pub fn view_paths(&self) -> ::iced::Element<Delta> {
                     crate::list::path_list([
-                        #( crate::list::path_choice(self.#path_field_names), )*
+                        #( crate::list::path_input(&self.#path_field_names), )*
                     ]).into()
                 }
             }

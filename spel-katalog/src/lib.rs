@@ -10,8 +10,8 @@ use ::iced::{
     widget::{self, horizontal_rule, text, text_input, toggler, value, vertical_space},
 };
 use ::log::info;
-use ::spel_katalog_common::{OrStatus, status, w};
-use ::tap::{Pipe, TryConv};
+use ::spel_katalog_common::{OrRequest, OrStatus, StatusSender, status, w};
+use ::tap::Pipe;
 
 use crate::image_buffer::ImageBuffer;
 
@@ -42,61 +42,6 @@ pub struct Cli {
     pub config: Option<PathBuf>,
 }
 
-impl TryFrom<Cli> for App {
-    type Error = ::color_eyre::Report;
-    fn try_from(value: Cli) -> Result<Self, Self::Error> {
-        let Cli {
-            settings,
-            show_settings,
-            config,
-            skeleton,
-        } = value;
-
-        let overrides = settings;
-        let settings = if let Some(config) = &config {
-            ::std::fs::read_to_string(config)
-                .map_err(|err| {
-                    eyre!(err).suggestion(format!("does {config:?} exist, and is it readable"))
-                })?
-                .pipe_deref(::toml::from_str::<::spel_katalog_settings::Settings>)
-                .map_err(|err| eyre!(err).suggestion(format!("is {config:?} a toml file")))?
-                .apply(::spel_katalog_settings::Delta::create(overrides.clone()))
-        } else {
-            overrides.clone()
-        };
-
-        if skeleton {
-            ::std::io::copy(
-                &mut ::std::io::Cursor::new(
-                    ::toml::to_string_pretty(&settings.skeleton()).map_err(|err| eyre!(err))?,
-                ),
-                &mut ::std::io::stdout().lock(),
-            )
-            .map_err(|err| eyre!(err))?;
-
-            ::std::process::exit(0)
-        }
-
-        let filter = String::new();
-        let status = String::new();
-        let view = view::State::new(show_settings);
-        let settings = ::spel_katalog_settings::State { settings, config };
-        let games = games::State::default();
-        let image_buffer = ImageBuffer::empty();
-        let info = info::State::default();
-
-        Ok(App {
-            settings,
-            status,
-            filter,
-            view,
-            games,
-            image_buffer,
-            info,
-        })
-    }
-}
-
 #[derive(Debug)]
 pub struct App {
     settings: ::spel_katalog_settings::State,
@@ -106,6 +51,7 @@ pub struct App {
     view: view::State,
     info: info::State,
     image_buffer: ImageBuffer,
+    sender: StatusSender,
 }
 
 #[derive(Debug, Clone, Copy, Default, IsVariant, PartialEq, Eq, Hash)]
@@ -117,13 +63,15 @@ pub enum Safety {
 
 #[derive(Debug, IsVariant, From, Clone)]
 pub enum Message {
+    #[from]
+    Status(String),
     Filter(String),
     #[from]
     Settings(::spel_katalog_settings::Message),
     #[from]
     View(view::Message),
     #[from]
-    Games(games::Message),
+    Games(OrRequest<games::Message, games::Request>),
     #[from]
     Info(info::Message),
     FindImages {
@@ -138,7 +86,64 @@ impl App {
         ::env_logger::builder()
             .filter_module("spel_katalog", ::log::LevelFilter::Debug)
             .init();
-        let app = Cli::parse().try_conv::<Self>()?;
+
+        let rx;
+        let app = {
+            let Cli {
+                settings,
+                show_settings,
+                skeleton,
+                config,
+            } = Cli::parse();
+
+            let overrides = settings;
+            let settings = if let Some(config) = &config {
+                ::std::fs::read_to_string(config)
+                    .map_err(|err| {
+                        eyre!(err).suggestion(format!("does {config:?} exist, and is it readable"))
+                    })?
+                    .pipe_deref(::toml::from_str::<::spel_katalog_settings::Settings>)
+                    .map_err(|err| eyre!(err).suggestion(format!("is {config:?} a toml file")))?
+                    .apply(::spel_katalog_settings::Delta::create(overrides.clone()))
+            } else {
+                overrides.clone()
+            };
+
+            if skeleton {
+                ::std::io::copy(
+                    &mut ::std::io::Cursor::new(
+                        ::toml::to_string_pretty(&settings.skeleton()).map_err(|err| eyre!(err))?,
+                    ),
+                    &mut ::std::io::stdout().lock(),
+                )
+                .map_err(|err| eyre!(err))?;
+
+                ::std::process::exit(0)
+            }
+
+            let tx;
+            (tx, rx) = ::tokio::sync::mpsc::channel(64);
+
+            let filter = String::new();
+            let status = String::new();
+            let view = view::State::new(show_settings);
+            let settings = ::spel_katalog_settings::State { settings, config };
+            let games = games::State::default();
+            let image_buffer = ImageBuffer::empty();
+            let info = info::State::default();
+            let sender = tx.into();
+
+            App {
+                settings,
+                status,
+                filter,
+                view,
+                games,
+                image_buffer,
+                info,
+                sender,
+            }
+        };
 
         fn view(app: &App) -> Element<OrStatus<Message>> {
             app.view().map(OrStatus::new)
@@ -149,16 +154,20 @@ impl App {
             .centered()
             .executor::<::tokio::runtime::Runtime>()
             .run_with(|| {
-                let task = app
+                let load_db = app
                     .settings
                     .lutris_db()
                     .as_path()
                     .to_path_buf()
                     .pipe(games::Message::LoadDb)
-                    .pipe(crate::Message::from)
+                    .pipe(OrRequest::Message)
+                    .pipe(Message::Games)
                     .pipe(OrStatus::new)
                     .pipe(Task::done);
-                (app, task)
+                let receive_status =
+                    Task::stream(::tokio_stream::wrappers::ReceiverStream::new(rx))
+                        .map(|status| OrStatus::new(Message::Status(status)));
+                (app, Task::batch([receive_status, load_db]))
             })
             .map_err(Report::from)
     }
@@ -173,6 +182,10 @@ impl App {
             }
         };
         match msg {
+            Message::Status(status) => {
+                self.status = status;
+                return Task::none();
+            }
             Message::Filter(filter) => {
                 self.filter = filter;
                 self.games.sort(&self.settings, &self.filter);
@@ -188,7 +201,7 @@ impl App {
                     )
                 );
 
-                let task = self.settings.update(message);
+                let task = self.settings.update(message, &self.sender);
 
                 if re_sort {
                     self.games.sort(&self.settings, &self.filter);
@@ -198,7 +211,37 @@ impl App {
             }
             Message::View(message) => return self.view.update(message).map(OrStatus::new),
             Message::Games(message) => {
-                return self.games.update(message, &self.settings, &self.filter);
+                let request = match message {
+                    OrRequest::Message(message) => {
+                        return self.games.update(
+                            message,
+                            &self.sender,
+                            &self.settings,
+                            &self.filter,
+                        );
+                    }
+                    OrRequest::Request(request) => request,
+                };
+                match request {
+                    games::Request::SetId { id } => {
+                        return self.info.update(
+                            info::Message::SetId(id),
+                            &self.sender,
+                            &self.settings,
+                            &self.games,
+                        );
+                    }
+                    games::Request::Run { id, sandbox } => {
+                        return self.run_game(
+                            id,
+                            if sandbox {
+                                Safety::Firejail
+                            } else {
+                                Safety::None
+                            },
+                        );
+                    }
+                }
             }
             Message::FindImages { slugs } => {
                 let coverart = self.settings.coverart_dir().as_path().to_path_buf();
@@ -208,78 +251,81 @@ impl App {
                     .map(OrStatus::new);
             }
             Message::Info(message) => {
-                return self.info.update(message, &self.settings, &self.games);
+                return self
+                    .info
+                    .update(message, &self.sender, &self.settings, &self.games);
             }
-            Message::RunGame(id, safety) => {
-                let Some(game) = self.games.by_id(id) else {
-                    return Task::done(status!("could not run game with id {id}"));
-                };
-
-                let lutris = self.settings.lutris_exe().clone();
-                let firejail = self.settings.firejail_exe().clone();
-                let slug = game.slug.clone();
-                let name = game.name.clone();
-                let is_net_disabled = self.settings.network().is_disabled();
-                let configpath = self
-                    .settings
-                    .yml_dir()
-                    .as_path()
-                    .join(&game.configpath)
-                    .with_extension("yml");
-
-                return Task::future(async move {
-                    let rungame = format!("lutris:rungame/{slug}");
-
-                    let status = match safety {
-                        Safety::None => {
-                            ::tokio::process::Command::new(lutris)
-                                .arg(rungame)
-                                .kill_on_drop(true)
-                                .status()
-                                .await
-                        }
-                        Safety::Firejail => {
-                            let common = ::tokio::fs::read_to_string(&configpath)
-                                .await
-                                .map_err(|err| {
-                                    ::log::error!("could not read {configpath:?}\n{err}")
-                                })
-                                .ok()
-                                .and_then(|content| {
-                                    ::serde_yml::from_str::<y::Config>(&content)
-                                        .map_err(|err| {
-                                            ::log::error!("could not parse {configpath:?}\n{err}")
-                                        })
-                                        .ok()
-                                })
-                                .map(|config| config.game.common_parent())
-                                .unwrap_or_else(|| ::spel_katalog_settings::HOME.as_path().into());
-                            let mut arg = OsString::from("--whitelist=");
-                            arg.push(common);
-                            arg.push("/");
-
-                            ::tokio::process::Command::new(firejail)
-                                .arg(arg)
-                                .args(is_net_disabled.then_some("--net=none"))
-                                .arg(lutris)
-                                .arg(rungame)
-                                .kill_on_drop(true)
-                                .status()
-                                .await
-                        }
-                    };
-
-                    match status {
-                        Ok(status) => format!("{name} exited with {status}").into(),
-                        Err(err) => {
-                            ::log::error!("could not run {slug}\n{err}");
-                            format!("could not run {slug}").into()
-                        }
-                    }
-                });
-            }
+            Message::RunGame(id, safety) => return self.run_game(id, safety),
         }
         Task::none()
+    }
+
+    fn run_game(&mut self, id: i64, safety: Safety) -> Task<OrStatus<Message>> {
+        let Some(game) = self.games.by_id(id) else {
+            status!(&self.sender, "could not run game with id {id}");
+            return Task::none();
+        };
+
+        let lutris = self.settings.lutris_exe().clone();
+        let firejail = self.settings.firejail_exe().clone();
+        let slug = game.slug.clone();
+        let name = game.name.clone();
+        let is_net_disabled = self.settings.network().is_disabled();
+        let configpath = self
+            .settings
+            .yml_dir()
+            .as_path()
+            .join(&game.configpath)
+            .with_extension("yml");
+
+        return Task::future(async move {
+            let rungame = format!("lutris:rungame/{slug}");
+
+            let status = match safety {
+                Safety::None => {
+                    ::tokio::process::Command::new(lutris)
+                        .arg(rungame)
+                        .kill_on_drop(true)
+                        .status()
+                        .await
+                }
+                Safety::Firejail => {
+                    let common = ::tokio::fs::read_to_string(&configpath)
+                        .await
+                        .map_err(|err| ::log::error!("could not read {configpath:?}\n{err}"))
+                        .ok()
+                        .and_then(|content| {
+                            ::serde_yml::from_str::<y::Config>(&content)
+                                .map_err(|err| {
+                                    ::log::error!("could not parse {configpath:?}\n{err}")
+                                })
+                                .ok()
+                        })
+                        .map(|config| config.game.common_parent())
+                        .unwrap_or_else(|| ::spel_katalog_settings::HOME.as_path().into());
+                    let mut arg = OsString::from("--whitelist=");
+                    arg.push(common);
+                    arg.push("/");
+
+                    ::tokio::process::Command::new(firejail)
+                        .arg(arg)
+                        .args(is_net_disabled.then_some("--net=none"))
+                        .arg(lutris)
+                        .arg(rungame)
+                        .kill_on_drop(true)
+                        .status()
+                        .await
+                }
+            };
+
+            match status {
+                Ok(status) => format!("{name} exited with {status}").into(),
+                Err(err) => {
+                    ::log::error!("could not run {slug}\n{err}");
+                    format!("could not run {slug}").into()
+                }
+            }
+        });
     }
 
     pub fn view(&self) -> Element<Message> {

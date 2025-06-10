@@ -1,9 +1,12 @@
+//! [Games] impl.
+
 use ::std::{cell::OnceCell, iter};
 
 use ::iced::widget::image::Handle;
 use ::rustc_hash::FxHashMap;
-use ::spel_katalog_games::Game;
 use ::spel_katalog_settings::Settings;
+
+use crate::Game;
 
 #[derive(Debug)]
 struct GameCache {
@@ -11,6 +14,7 @@ struct GameCache {
     name: String,
 }
 
+/// Collection of games.
 #[derive(Debug, Default)]
 pub struct Games {
     cache: Box<[OnceCell<GameCache>]>,
@@ -21,22 +25,27 @@ pub struct Games {
 }
 
 impl Games {
+    /// Games that are to currently be dfisplayed.
     pub fn displayed(&self) -> impl Iterator<Item = &'_ Game> {
         self.displayed.iter().filter_map(|idx| self.games.get(*idx))
     }
 
-    pub fn all(&self) -> impl Iterator<Item = &'_ Game> {
-        self.games.iter()
+    /// All games.
+    pub fn all(&self) -> &[Game] {
+        &self.games
     }
 
+    /// Amount of games.
     pub fn all_count(&self) -> usize {
         self.games.len()
     }
 
+    /// Amount of displayed games.
     pub fn displayed_count(&self) -> usize {
         self.displayed.len()
     }
 
+    /// Sort displayed games.
     pub fn sort(&mut self, settings: &Settings, filter: &str) {
         let Self {
             games,
@@ -127,17 +136,20 @@ impl Games {
         self.games.get_mut(idx)
     }
 
+    /// Get a game by it's id.
     pub fn by_id(&self, id: i64) -> Option<&Game> {
         let idx = *self.id_lookup.get(&id)?;
         self.games.get(idx)
     }
 
+    /// Set the thumbnail of a game.
     pub fn set_image(&mut self, slug: &str, image: Handle) {
         if let Some(game) = self.by_slug_mut(slug) {
             game.image = Some(image);
         }
     }
 
+    /// Set current games to the ones provided, then update lookups and display.
     pub fn set(&mut self, games: Box<[Game]>, settings: &Settings, filter: &str) {
         let (slug_lookup, id_lookup) = games
             .iter()

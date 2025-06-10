@@ -8,6 +8,7 @@ use ::std::{
 use ::iced::{Task, widget::image::Handle};
 use ::image::{RgbaImage, imageops::FilterType::Gaussian};
 use ::rayon::iter::{IntoParallelIterator, ParallelIterator};
+use ::spel_katalog_common::OrRequest;
 use ::tap::{Conv, Pipe};
 use ::tokio_stream::wrappers::IntervalStream;
 
@@ -181,6 +182,7 @@ impl ImageBuffer {
                 },
                 |(slugs, images)| {
                     crate::games::Message::SetImages { slugs, images }
+                        .pipe(OrRequest::Message)
                         .pipe(crate::Message::Games)
                         .pipe(Task::done)
                 },

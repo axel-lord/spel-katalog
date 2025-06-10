@@ -11,7 +11,9 @@ tap.workspace = true
 thiserror.workspace = true
 iced = { workspace = true, features = ["tokio", "lazy", "image", "advanced"] }
 spel-katalog-common.workspace = true
+spel-katalog-settings.workspace = true
 log.workspace = true
+rustc-hash.workspace = true
 
 [lints]
 workspace = true

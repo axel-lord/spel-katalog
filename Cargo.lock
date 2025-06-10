@@ -4216,7 +4216,10 @@ dependencies = [
 name = "spel-katalog-common"
 version = "0.1.0"
 dependencies = [
+ "derive_more",
  "iced",
+ "log",
+ "tokio",
 ]
 
 [[package]]
@@ -4226,7 +4229,9 @@ dependencies = [
  "derive_more",
  "iced",
  "log",
+ "rustc-hash 2.1.1",
  "spel-katalog-common",
+ "spel-katalog-settings",
  "sqlite",
  "strsim",
  "tap",

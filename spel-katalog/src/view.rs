@@ -113,7 +113,7 @@ impl State {
         pane_grid(&self.panes, |_pane, state, _is_maximized| {
             pane_grid::Content::new(
                 match state {
-                    Pane::Games => games.view(),
+                    Pane::Games => games.view().map(crate::Message::from),
                     Pane::Settings => settings.view().map(crate::Message::from),
                     Pane::GameInfo => info.view(settings, games),
                 }
