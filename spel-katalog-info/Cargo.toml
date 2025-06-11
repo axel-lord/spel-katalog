@@ -1,0 +1,25 @@
+[package]
+name = "spel-katalog-info"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+derive_more = { workspace = true, features = ["from", "is_variant"] }
+iced.workspace = true
+image.workspace = true
+log.workspace = true
+rfd = { workspace = true, features = ["xdg-portal","tokio"] }
+serde_yml.workspace = true
+spel-katalog-common.workspace = true
+spel-katalog-games.workspace = true
+spel-katalog-settings.workspace = true
+tap.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["fs"] }
+serde = { workspace = true, features = ["derive"] }
+tokio-stream = { workspace = true, features = ["time"] }
+rayon.workspace = true
+parking_lot.workspace = true
+
+[lints]
+workspace = true

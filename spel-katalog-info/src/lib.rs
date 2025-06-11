@@ -1,3 +1,6 @@
+//! Game info view.
+#![allow(missing_docs)]
+
 use ::std::{convert::identity, ffi::OsStr, path::PathBuf};
 
 use ::derive_more::{From, IsVariant};
@@ -9,12 +12,15 @@ use ::iced::{
     widget::{self, button, horizontal_rule, horizontal_space, image::Handle, vertical_rule},
 };
 use ::image::ImageError;
-use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, w};
+use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, t, w};
 use ::spel_katalog_games::Games;
 use ::spel_katalog_settings::Settings;
 use ::tap::Pipe;
 
-use crate::{image_buffer::ImageBuffer, t, y};
+use crate::image_buffer::ImageBuffer;
+
+pub mod image_buffer;
+pub mod y;
 
 #[derive(Debug)]
 pub struct State {
@@ -253,6 +259,7 @@ impl State {
                 .push(horizontal_rule(2))
                 .into();
         };
+        let id = game.id;
 
         w::col()
             .push(
@@ -298,7 +305,7 @@ impl State {
                                     .push(widget::text("Id    ").font(Font::MONOSPACE))
                                     .push(vertical_rule(2))
                                     .push(
-                                        widget::value(&game.id)
+                                        widget::value(id)
                                             .font(Font::MONOSPACE)
                                             .align_x(Alignment::Start)
                                             .width(Fill),
@@ -314,19 +321,13 @@ impl State {
                         button("Sandbox")
                             .padding(3)
                             .style(widget::button::success)
-                            .on_press(OrRequest::Request(Request::RunGame {
-                                id: self.id,
-                                sandbox: true,
-                            })),
+                            .on_press(OrRequest::Request(Request::RunGame { id, sandbox: true })),
                     )
                     .push(
                         button("Run")
                             .padding(3)
                             .style(widget::button::danger)
-                            .on_press(OrRequest::Request(Request::RunGame {
-                                id: self.id,
-                                sandbox: false,
-                            })),
+                            .on_press(OrRequest::Request(Request::RunGame { id, sandbox: false })),
                     )
                     .push(
                         button("Save").padding(3).on_press_maybe(
@@ -339,7 +340,7 @@ impl State {
                         button("+Thumb").padding(3).on_press_maybe(
                             game.image
                                 .is_none()
-                                .then(|| OrRequest::Message(Message::AddThumb { id: game.id })),
+                                .then(|| OrRequest::Message(Message::AddThumb { id })),
                         ),
                     )
                     .push(horizontal_space())

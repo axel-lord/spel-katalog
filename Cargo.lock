@@ -4185,6 +4185,7 @@ dependencies = [
  "spel-katalog-build",
  "spel-katalog-common",
  "spel-katalog-games",
+ "spel-katalog-info",
  "spel-katalog-settings",
  "sqlite",
  "strsim",
@@ -4238,6 +4239,28 @@ dependencies = [
  "tap",
  "thiserror 2.0.12",
  "tokio",
+]
+
+[[package]]
+name = "spel-katalog-info"
+version = "0.1.0"
+dependencies = [
+ "derive_more",
+ "iced",
+ "image 0.25.6",
+ "log",
+ "parking_lot 0.12.4",
+ "rayon",
+ "rfd",
+ "serde",
+ "serde_yml",
+ "spel-katalog-common",
+ "spel-katalog-games",
+ "spel-katalog-settings",
+ "tap",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-stream",
 ]
 
 [[package]]

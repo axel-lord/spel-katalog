@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use ::std::{
     mem,
     path::{Path, PathBuf},
@@ -8,7 +10,6 @@ use ::std::{
 use ::iced::{Task, widget::image::Handle};
 use ::image::{RgbaImage, imageops::FilterType::Gaussian};
 use ::rayon::iter::{IntoParallelIterator, ParallelIterator};
-use ::spel_katalog_common::OrRequest;
 use ::tap::{Conv, Pipe};
 use ::tokio_stream::wrappers::IntervalStream;
 
@@ -99,7 +100,11 @@ impl ImageBuffer {
         ))
     }
 
-    pub fn find_images(&mut self, slugs: Vec<String>, coverart: PathBuf) -> Task<crate::Message> {
+    pub fn find_images(
+        &mut self,
+        slugs: Vec<String>,
+        coverart: PathBuf,
+    ) -> Task<::spel_katalog_games::Message> {
         #[derive(Debug, Default)]
         struct ImageOpenError {
             list: Vec<(PathBuf, ::image::ImageError)>,
@@ -181,10 +186,7 @@ impl ImageBuffer {
                     Task::none()
                 },
                 |(slugs, images)| {
-                    ::spel_katalog_games::Message::SetImages { slugs, images }
-                        .pipe(OrRequest::Message)
-                        .pipe(crate::Message::Games)
-                        .pipe(Task::done)
+                    ::spel_katalog_games::Message::SetImages { slugs, images }.pipe(Task::done)
                 },
             )
         });

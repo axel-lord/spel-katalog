@@ -10,16 +10,10 @@ use ::iced::{
     widget::{self, horizontal_rule, text, text_input, toggler, value, vertical_space},
 };
 use ::spel_katalog_common::{OrRequest, StatusSender, status, w};
+use ::spel_katalog_info::{image_buffer::ImageBuffer, y};
 use ::tap::Pipe;
 
-use crate::image_buffer::ImageBuffer;
-
-mod image_buffer;
-mod info;
 mod view;
-
-pub mod t;
-pub mod y;
 
 #[derive(Debug, Parser)]
 #[command(author, version)]
@@ -47,7 +41,7 @@ pub struct App {
     status: String,
     filter: String,
     view: view::State,
-    info: info::State,
+    info: ::spel_katalog_info::State,
     image_buffer: ImageBuffer,
     sender: StatusSender,
 }
@@ -77,7 +71,7 @@ pub enum Message {
     #[from]
     Games(OrRequest<::spel_katalog_games::Message, ::spel_katalog_games::Request>),
     #[from]
-    Info(OrRequest<info::Message, info::Request>),
+    Info(OrRequest<::spel_katalog_info::Message, ::spel_katalog_info::Request>),
     RunGame(i64, Safety),
 }
 
@@ -139,7 +133,7 @@ impl App {
             let settings = ::spel_katalog_settings::State { settings, config };
             let games = ::spel_katalog_games::State::default();
             let image_buffer = ImageBuffer::empty();
-            let info = info::State::default();
+            let info = ::spel_katalog_info::State::default();
             let sender = tx.into();
 
             App {
@@ -221,7 +215,7 @@ impl App {
                         return self
                             .info
                             .update(
-                                info::Message::SetId { id },
+                                ::spel_katalog_info::Message::SetId { id },
                                 &self.sender,
                                 &self.settings,
                                 &self.games,
@@ -239,10 +233,14 @@ impl App {
                         );
                     }
                     ::spel_katalog_games::Request::FindImages { slugs } => {
-                        return self.image_buffer.find_images(
-                            slugs,
-                            self.settings.coverart_dir().as_path().to_path_buf(),
-                        );
+                        return self
+                            .image_buffer
+                            .find_images(
+                                slugs,
+                                self.settings.coverart_dir().as_path().to_path_buf(),
+                            )
+                            .map(OrRequest::Message)
+                            .map(Message::Games);
                     }
                 }
             }
@@ -257,10 +255,10 @@ impl App {
                     OrRequest::Request(request) => request,
                 };
                 match request {
-                    info::Request::ShowInfo(show) => {
+                    ::spel_katalog_info::Request::ShowInfo(show) => {
                         return self.view.update(view::Message::Info(show));
                     }
-                    info::Request::SetImage { slug, image } => {
+                    ::spel_katalog_info::Request::SetImage { slug, image } => {
                         return self
                             .games
                             .update(
@@ -271,7 +269,7 @@ impl App {
                             )
                             .map(Message::Games);
                     }
-                    info::Request::RunGame { id, sandbox } => {
+                    ::spel_katalog_info::Request::RunGame { id, sandbox } => {
                         return self.run_game(id, Safety::from(sandbox));
                     }
                 }
