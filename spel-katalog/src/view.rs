@@ -115,7 +115,7 @@ impl State {
                 match state {
                     Pane::Games => games.view().map(crate::Message::from),
                     Pane::Settings => settings.view().map(crate::Message::from),
-                    Pane::GameInfo => info.view(settings, games),
+                    Pane::GameInfo => info.view(settings, games).map(crate::Message::from),
                 }
                 .pipe(widget::container),
             )

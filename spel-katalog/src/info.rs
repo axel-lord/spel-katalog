@@ -1,20 +1,20 @@
 use ::std::{convert::identity, ffi::OsStr, path::PathBuf};
 
-use ::derive_more::From;
+use ::derive_more::{From, IsVariant};
 use ::iced::{
     Alignment::{self, Center},
     Element, Font,
     Length::Fill,
     Task,
-    widget::{self, button, horizontal_rule, horizontal_space, vertical_rule},
+    widget::{self, button, horizontal_rule, horizontal_space, image::Handle, vertical_rule},
 };
 use ::image::ImageError;
-use ::spel_katalog_common::{OrRequest, StatusSender, async_status, w};
+use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, w};
 use ::spel_katalog_games::Games;
 use ::spel_katalog_settings::Settings;
 use ::tap::Pipe;
 
-use crate::{Safety, image_buffer::ImageBuffer, t, y};
+use crate::{image_buffer::ImageBuffer, t, y};
 
 #[derive(Debug)]
 pub struct State {
@@ -35,14 +35,30 @@ impl Default for State {
     }
 }
 
-#[derive(Debug, Clone, From)]
+#[derive(Debug, Clone, From, IsVariant)]
 pub enum Message {
-    SetId(i64),
-    SetContent(i64, String, PathBuf),
+    SetId {
+        id: i64,
+    },
+    SetContent {
+        id: i64,
+        content: String,
+        path: PathBuf,
+    },
     #[from]
     UpdateContent(widget::text_editor::Action),
     SaveContent,
-    AddThumb(i64),
+    AddThumb {
+        /// Game id to add thumbnail for
+        id: i64,
+    },
+}
+
+#[derive(Debug, Clone, IsVariant)]
+pub enum Request {
+    ShowInfo(bool),
+    SetImage { slug: String, image: Handle },
+    RunGame { id: i64, sandbox: bool },
 }
 
 impl State {
@@ -52,9 +68,9 @@ impl State {
         tx: &StatusSender,
         settings: &Settings,
         games: &Games,
-    ) -> Task<crate::Message> {
+    ) -> Task<OrRequest<Message, Request>> {
         match message {
-            Message::SetId(id) => {
+            Message::SetId { id } => {
                 self.id = id;
 
                 let fill_content;
@@ -69,9 +85,13 @@ impl State {
                     let tx = tx.clone();
                     fill_content = Task::future(async move {
                         match ::tokio::fs::read_to_string(&path).await {
-                            Ok(value) => Message::SetContent(id, value, path.clone())
-                                .pipe(crate::Message::from)
-                                .pipe(Task::done),
+                            Ok(value) => Message::SetContent {
+                                id,
+                                content: value,
+                                path: path.clone(),
+                            }
+                            .pipe(OrRequest::Message)
+                            .pipe(Task::done),
                             Err(err) => {
                                 ::log::error!("failed to read yml {path:?}\n{err}");
                                 async_status!(tx, "could not read {path:?}").await;
@@ -84,13 +104,13 @@ impl State {
                     fill_content = Task::none();
                 }
 
-                let show_info = crate::view::Message::Info(true)
-                    .pipe(crate::Message::from)
+                let show_info = Request::ShowInfo(true)
+                    .pipe(OrRequest::Request)
                     .pipe(Task::done);
 
                 Task::batch([fill_content, show_info])
             }
-            Message::SetContent(id, content, path) => {
+            Message::SetContent { id, content, path } => {
                 if id == self.id {
                     self.content = widget::text_editor::Content::with_text(&content);
                     self.config_path = Some(path.clone());
@@ -99,7 +119,8 @@ impl State {
                         Ok(yml) => yml,
                         Err(err) => {
                             ::log::error!("could not parse yml {path:?}\n{err}");
-                            return Task::done(format!("could not parse {path:?}").into());
+                            status!(tx, "could not parse {path:?}");
+                            return Task::none();
                         }
                     };
 
@@ -135,7 +156,7 @@ impl State {
                     Task::none()
                 }
             }
-            Message::AddThumb(id) => match games.by_id(id) {
+            Message::AddThumb { id } => match games.by_id(id) {
                 Some(game) => {
                     #[derive(Debug, thiserror::Error)]
                     enum AddThumbError {
@@ -198,9 +219,7 @@ impl State {
                             }
                         };
 
-                        Ok(crate::Message::Games(OrRequest::Message(
-                            ::spel_katalog_games::Message::SetImage { slug, image },
-                        )))
+                        Ok(OrRequest::Request(Request::SetImage { slug, image }))
                     };
 
                     let tx = tx.clone();
@@ -226,7 +245,7 @@ impl State {
         &'a self,
         _settings: &'a Settings,
         games: &'a Games,
-    ) -> Element<'a, crate::Message> {
+    ) -> Element<'a, OrRequest<Message, Request>> {
         let Some(game) = games.by_id(self.id) else {
             return w::col()
                 .align_x(Center)
@@ -295,26 +314,32 @@ impl State {
                         button("Sandbox")
                             .padding(3)
                             .style(widget::button::success)
-                            .on_press(crate::Message::RunGame(self.id, Safety::Firejail)),
+                            .on_press(OrRequest::Request(Request::RunGame {
+                                id: self.id,
+                                sandbox: true,
+                            })),
                     )
                     .push(
                         button("Run")
                             .padding(3)
                             .style(widget::button::danger)
-                            .on_press(crate::Message::RunGame(self.id, Safety::None)),
+                            .on_press(OrRequest::Request(Request::RunGame {
+                                id: self.id,
+                                sandbox: false,
+                            })),
                     )
                     .push(
                         button("Save").padding(3).on_press_maybe(
                             self.config_path
                                 .is_some()
-                                .then(|| Message::SaveContent.into()),
+                                .then(|| OrRequest::Message(Message::SaveContent)),
                         ),
                     )
                     .push(
                         button("+Thumb").padding(3).on_press_maybe(
                             game.image
                                 .is_none()
-                                .then(|| Message::AddThumb(game.id).into()),
+                                .then(|| OrRequest::Message(Message::AddThumb { id: game.id })),
                         ),
                     )
                     .push(horizontal_space())
@@ -322,9 +347,7 @@ impl State {
                         widget::button("Close")
                             .padding(3)
                             .style(widget::button::secondary)
-                            .on_press_with(|| {
-                                crate::Message::View(crate::view::Message::Info(false))
-                            }),
+                            .on_press_with(|| OrRequest::Request(Request::ShowInfo(false))),
                     ),
             )
             .push(horizontal_rule(2))
@@ -338,7 +361,7 @@ impl State {
             .push(w::scroll(
                 w::col().push(
                     widget::text_editor(&self.content)
-                        .on_action(|action| action.pipe(Message::from).pipe(crate::Message::from)),
+                        .on_action(|action| action.pipe(Message::from).pipe(OrRequest::Message)),
                 ),
             ))
             .into()

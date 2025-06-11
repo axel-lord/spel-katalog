@@ -59,6 +59,12 @@ pub enum Safety {
     Firejail,
 }
 
+impl From<bool> for Safety {
+    fn from(value: bool) -> Self {
+        if value { Self::Firejail } else { Self::None }
+    }
+}
+
 #[derive(Debug, IsVariant, From, Clone)]
 pub enum Message {
     #[from]
@@ -71,7 +77,7 @@ pub enum Message {
     #[from]
     Games(OrRequest<::spel_katalog_games::Message, ::spel_katalog_games::Request>),
     #[from]
-    Info(info::Message),
+    Info(OrRequest<info::Message, info::Request>),
     RunGame(i64, Safety),
 }
 
@@ -212,12 +218,15 @@ impl App {
                 };
                 match request {
                     ::spel_katalog_games::Request::SetId { id } => {
-                        return self.info.update(
-                            info::Message::SetId(id),
-                            &self.sender,
-                            &self.settings,
-                            &self.games,
-                        );
+                        return self
+                            .info
+                            .update(
+                                info::Message::SetId { id },
+                                &self.sender,
+                                &self.settings,
+                                &self.games,
+                            )
+                            .map(Message::Info);
                     }
                     ::spel_katalog_games::Request::Run { id, sandbox } => {
                         return self.run_game(
@@ -238,9 +247,34 @@ impl App {
                 }
             }
             Message::Info(message) => {
-                return self
-                    .info
-                    .update(message, &self.sender, &self.settings, &self.games);
+                let request = match message {
+                    OrRequest::Message(message) => {
+                        return self
+                            .info
+                            .update(message, &self.sender, &self.settings, &self.games)
+                            .map(Message::Info);
+                    }
+                    OrRequest::Request(request) => request,
+                };
+                match request {
+                    info::Request::ShowInfo(show) => {
+                        return self.view.update(view::Message::Info(show));
+                    }
+                    info::Request::SetImage { slug, image } => {
+                        return self
+                            .games
+                            .update(
+                                ::spel_katalog_games::Message::SetImage { slug, image },
+                                &self.sender,
+                                &self.settings,
+                                &self.filter,
+                            )
+                            .map(Message::Games);
+                    }
+                    info::Request::RunGame { id, sandbox } => {
+                        return self.run_game(id, Safety::from(sandbox));
+                    }
+                }
             }
             Message::RunGame(id, safety) => return self.run_game(id, safety),
         }
