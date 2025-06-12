@@ -1,0 +1,11 @@
+[package]
+name = "spel-katalog-parse"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+nom = "8.0.0"
+thiserror.workspace = true
+
+[lints]
+workspace = true

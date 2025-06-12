@@ -1,5 +1,5 @@
 [workspace]
-members = [ "spel-katalog-build", "spel-katalog", "spel-katalog-common", "spel-katalog-settings", "spel-katalog-games", "spel-katalog-info"]
+members = [ "spel-katalog-build", "spel-katalog", "spel-katalog-common", "spel-katalog-settings", "spel-katalog-games", "spel-katalog-info", "spel-katalog-parse"]
 resolver = "2"
 default-members = ["spel-katalog"]
 
