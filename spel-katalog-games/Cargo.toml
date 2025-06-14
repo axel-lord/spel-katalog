@@ -16,6 +16,8 @@ log.workspace = true
 rustc-hash.workspace = true
 tokio.workspace = true
 itertools.workspace = true
+shell-words.workspace = true
+regex.workspace = true
 
 [lints]
 workspace = true

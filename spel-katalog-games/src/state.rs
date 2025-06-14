@@ -17,7 +17,7 @@ use ::itertools::Itertools;
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, w};
 use ::spel_katalog_settings::Settings;
-use ::tap::{Pipe, Tap};
+use ::tap::{Pipe, Tap, TapOptional};
 
 use crate::{Game, Games};
 
@@ -83,7 +83,7 @@ pub enum LoadDbError {
 fn load_db(path: &Path) -> Result<Vec<Game>, LoadDbError> {
     let db = ::sqlite::open(path)?;
 
-    let _cats = db
+    let cats = db
         .prepare("SELECT id, name FROM categories")?
         .into_iter()
         .map(|cat| {
@@ -91,11 +91,17 @@ fn load_db(path: &Path) -> Result<Vec<Game>, LoadDbError> {
             let id = cat.try_read::<i64, _>("id")?;
             let name = cat.try_read::<&str, _>("name")?;
 
-            Ok((id, String::from(name)))
+            Ok((String::from(name), id))
         })
         .collect::<Result<FxHashMap<_, _>, ::sqlite::Error>>();
 
-    let _game_cats = db
+    let hidden_cat = cats
+        .as_ref()
+        .ok()
+        .and_then(|cats| cats.get(".hidden").cloned())
+        .unwrap_or(i64::MAX);
+
+    let game_cats = db
         .prepare("SELECT game_id, category_id FROM games_categories")?
         .into_iter()
         .map(|row| {
@@ -103,9 +109,19 @@ fn load_db(path: &Path) -> Result<Vec<Game>, LoadDbError> {
             let game: i64 = row.try_read("game_id")?;
             let cat: i64 = row.try_read("category_id")?;
 
-            Ok((game, cat))
+            Ok::<_, ::sqlite::Error>((game, cat))
         })
-        .collect::<Result<Vec<_>, ::sqlite::Error>>();
+        .fold(FxHashMap::<i64, Vec<i64>>::default(), |mut map, result| {
+            let (game, cat) = match result {
+                Ok(values) => values,
+                Err(err) => {
+                    ::log::error!("reading categories\n{err}");
+                    return map;
+                }
+            };
+            map.entry(game).or_default().push(cat);
+            map
+        });
 
     db.prepare("SELECT id,name,slug,runner,configpath FROM games")?
         .into_iter()
@@ -114,7 +130,16 @@ fn load_db(path: &Path) -> Result<Vec<Game>, LoadDbError> {
                 .map_err(|err| ::log::error!("row does not exist\n{err}"))
                 .ok()?;
 
-            Game::from_row(&row)
+            let game = Game::from_row(&row).tap_some_mut(|game| {
+                let Some(cats) = game_cats.get(&game.id) else {
+                    return;
+                };
+
+                if cats.iter().contains(&hidden_cat) {
+                    game.hidden = true;
+                }
+            });
+            game
         })
         .collect::<Vec<_>>()
         .tap_mut(|games| games.sort_by_key(|game| -game.id))

@@ -16,6 +16,8 @@ pub struct Game {
     pub runner: Runner,
     /// Path to lutris yml for game.
     pub configpath: String,
+    /// Is the game hidden.
+    pub hidden: bool,
     /// Thumbnail in use.
     pub image: Option<Handle>,
 }
@@ -55,6 +57,7 @@ impl Game {
             name,
             runner,
             configpath,
+            hidden: false,
             image: None,
         })
     }

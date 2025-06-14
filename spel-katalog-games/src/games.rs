@@ -1,10 +1,13 @@
 //! [Games] impl.
 
-use ::std::{cell::OnceCell, iter};
+use ::std::iter;
 
 use ::iced::widget::image::Handle;
+use ::itertools::izip;
+use ::regex::RegexBuilder;
 use ::rustc_hash::FxHashMap;
-use ::spel_katalog_settings::Settings;
+use ::spel_katalog_settings::{FilterMode, Settings, SortBy};
+use ::tap::TapFallible;
 
 use crate::Game;
 
@@ -17,7 +20,7 @@ struct GameCache {
 /// Collection of games.
 #[derive(Debug, Default)]
 pub struct Games {
-    cache: Box<[OnceCell<GameCache>]>,
+    cache: Box<[Option<GameCache>]>,
     games: Box<[Game]>,
     displayed: Vec<usize>,
     slug_lookup: FxHashMap<String, usize>,
@@ -55,80 +58,112 @@ impl Games {
             cache,
         } = self;
 
-        let to_be = 0..games.len();
+        let mut to_be = izip!(0.., games, cache).collect::<Vec<_>>();
 
-        let get_game_cache = |idx: usize| -> Option<(&Game, &GameCache)> {
-            let game = games.get(idx)?;
-            let cache = cache.get(idx)?.get_or_init(|| GameCache {
+        fn filter_hidden<'a>(
+            to_be: Vec<(usize, &'a mut Game, &'a mut Option<GameCache>)>,
+            show: ::spel_katalog_settings::Show,
+        ) -> Vec<(usize, &'a mut Game, &'a mut Option<GameCache>)> {
+            match show {
+                ::spel_katalog_settings::Show::Apparent => to_be
+                    .into_iter()
+                    .filter(|(_, game, _)| !game.hidden)
+                    .collect(),
+                ::spel_katalog_settings::Show::Hidden => to_be
+                    .into_iter()
+                    .filter(|(_, game, _)| game.hidden)
+                    .collect(),
+                ::spel_katalog_settings::Show::All => to_be,
+            }
+        }
+
+        fn get_cache<'a>(game: &Game, cache: &'a mut Option<GameCache>) -> &'a GameCache {
+            cache.get_or_insert_with(|| GameCache {
                 slug: game.slug.to_uppercase(),
                 name: game.name.to_uppercase(),
-            });
-            Some((game, cache))
-        };
+            })
+        }
 
-        let sort_items = |items: &mut Vec<usize>| match settings.sort_by() {
-            ::spel_katalog_settings::SortBy::Id => {
-                items.sort_by_key(|idx| games.get(*idx).map(|game| -game.id))
+        match settings.filter_mode() {
+            FilterMode::Filter => {
+                let Ok(filters) = ::shell_words::split(filter).tap_ok_mut(|filters| {
+                    for filter in filters {
+                        *filter = filter.to_uppercase();
+                    }
+                }) else {
+                    return;
+                };
+                to_be = filter_hidden(to_be, *settings.show());
+                to_be = to_be
+                    .into_iter()
+                    .filter_map(|mut value| {
+                        let (_, game, cache) = &mut value;
+                        let cache = get_cache(game, cache);
+
+                        for filter in &filters {
+                            if cache.name.contains(filter) || cache.slug.contains(filter) {
+                                continue;
+                            }
+                            return None;
+                        }
+
+                        Some(value)
+                    })
+                    .collect();
             }
-            ::spel_katalog_settings::SortBy::Name => {
-                items.sort_by_key(|idx| games.get(*idx).map(|game| &game.name))
-            }
-            ::spel_katalog_settings::SortBy::Slug => {
-                items.sort_by_key(|idx| games.get(*idx).map(|game| &game.slug))
-            }
-        };
+            FilterMode::Search => {
+                let filter = filter.to_uppercase();
+                to_be = filter_hidden(to_be, *settings.show());
+                let mut dists = to_be
+                    .iter_mut()
+                    .map(|(idx, game, cache)| {
+                        let cache = get_cache(game, cache);
+                        (
+                            *idx,
+                            cache.name.contains(&filter),
+                            -::strsim::normalized_damerau_levenshtein(&cache.name, &filter),
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                dists.sort_by(|(_, contains_a, dist_a), (_, contains_b, dist_b)| {
+                    contains_a
+                        .cmp(contains_b)
+                        .reverse()
+                        .then(dist_a.total_cmp(dist_b))
+                });
 
-        let mut to_be = if !filter.is_empty() {
-            match settings.filter_mode() {
-                ::spel_katalog_settings::FilterMode::Filter => {
-                    let filter = filter.to_uppercase();
-
-                    let mut to_be = to_be
-                        .filter(|idx| {
-                            let Some((_game, cache)) = get_game_cache(*idx) else {
-                                return false;
-                            };
-
-                            cache.name.contains(&filter) || cache.slug.contains(&filter)
-                        })
-                        .collect();
-
-                    sort_items(&mut to_be);
-
-                    to_be
+                if settings.sort_dir().is_reverse() {
+                    dists.reverse();
                 }
-                ::spel_katalog_settings::FilterMode::Search => {
-                    let filter = filter.to_uppercase();
-                    let mut dist = to_be
-                        .filter_map(|idx| {
-                            let (_, cache) = get_game_cache(idx)?;
-                            Some((
-                                idx,
-                                cache.name.contains(&filter),
-                                -::strsim::normalized_damerau_levenshtein(&filter, &cache.name),
-                            ))
-                        })
-                        .collect::<Vec<_>>();
 
-                    dist.sort_by(|a, b| a.1.cmp(&b.1).reverse().then(a.2.total_cmp(&b.2)));
+                *displayed = dists.into_iter().map(|(i, ..)| i).collect();
 
-                    dist.into_iter().map(|(idx, ..)| idx).collect()
-                }
-                ::spel_katalog_settings::FilterMode::Regex => to_be.collect(),
+                // Search early returns here.
+                return;
             }
-        } else {
-            let mut to_be = to_be.collect();
+            FilterMode::Regex => {
+                let Ok(re) = RegexBuilder::new(filter).case_insensitive(true).build() else {
+                    return;
+                };
+                to_be = filter_hidden(to_be, *settings.show());
+                to_be = to_be
+                    .into_iter()
+                    .filter(|(_, game, _)| re.is_match(&game.name))
+                    .collect();
+            }
+        }
 
-            sort_items(&mut to_be);
-
-            to_be
+        match settings.sort_by() {
+            SortBy::Id => to_be.sort_by(|a, b| a.1.id.cmp(&b.1.id).reverse()),
+            SortBy::Name => to_be.sort_by(|a, b| a.1.name.cmp(&b.1.name)),
+            SortBy::Slug => to_be.sort_by(|a, b| a.1.slug.cmp(&b.1.slug)),
         };
 
         if settings.sort_dir().is_reverse() {
             to_be.reverse();
         }
 
-        *displayed = to_be;
+        *displayed = to_be.into_iter().map(|(i, ..)| i).collect();
     }
 
     fn by_slug_mut(&mut self, slug: &str) -> Option<&mut Game> {
@@ -157,7 +192,7 @@ impl Games {
             .map(|(idx, game)| ((game.slug.clone(), idx), (game.id, idx)))
             .collect();
         let displayed = Vec::new();
-        let cache = iter::repeat_with(OnceCell::new).take(games.len()).collect();
+        let cache = iter::repeat_with(|| None).take(games.len()).collect();
 
         *self = Self {
             games,
