@@ -9,7 +9,6 @@ iced.workspace = true
 image.workspace = true
 log.workspace = true
 rfd = { workspace = true, features = ["xdg-portal","tokio"] }
-serde_yml.workspace = true
 spel-katalog-common.workspace = true
 spel-katalog-games.workspace = true
 spel-katalog-settings.workspace = true
@@ -20,6 +19,7 @@ serde = { workspace = true, features = ["derive"] }
 tokio-stream = { workspace = true, features = ["time"] }
 rayon.workspace = true
 parking_lot.workspace = true
+yaml-rust2 = "0.10.3"
 
 [lints]
 workspace = true

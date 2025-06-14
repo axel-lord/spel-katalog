@@ -21,7 +21,6 @@ regex.workspace = true
 rfd = { workspace = true, features = ["xdg-portal","tokio"] }
 rustc-hash.workspace = true
 serde = { workspace = true, features = ["derive"] }
-serde_yml.workspace = true
 shell-words.workspace = true
 spel-katalog-common.workspace = true
 spel-katalog-settings.workspace = true

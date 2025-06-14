@@ -1,18 +1,21 @@
 //! Struct for parsing yaml
 
-use ::std::path::{Path, PathBuf};
+use ::std::{
+    path::{Path, PathBuf},
+    sync::LazyLock,
+};
 
-use ::serde::Deserialize;
+use ::yaml_rust2::{ScanError, Yaml, YamlLoader};
 
 /// A game config.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default)]
 pub struct Config {
     /// Game field.
     pub game: Game,
 }
 
 /// Game fields.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default)]
 pub struct Game {
     /// Exe path.
     pub exe: PathBuf,
@@ -38,5 +41,39 @@ impl Game {
         let exe = &self.exe;
 
         common(exe, prefix)
+    }
+}
+
+static GAME: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("game".into()));
+static EXE: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("exe".into()));
+static PREFIX: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("prefix".into()));
+
+fn get_exe(yml: &Yaml) -> Option<PathBuf> {
+    yml.as_hash()?
+        .get(&GAME)?
+        .as_hash()?
+        .get(&EXE)?
+        .as_str()
+        .map(PathBuf::from)
+}
+
+fn get_prefix(yml: &Yaml) -> Option<PathBuf> {
+    yml.as_hash()?
+        .get(&GAME)?
+        .as_hash()?
+        .get(&PREFIX)?
+        .as_str()
+        .map(PathBuf::from)
+}
+
+impl Config {
+    pub fn parse(content: &str) -> Result<Self, ScanError> {
+        let doc = YamlLoader::load_from_str(content)?;
+        Ok(Config {
+            game: Game {
+                exe: doc.get(0).and_then(get_exe).unwrap_or_default(),
+                prefix: doc.get(0).and_then(get_prefix),
+            },
+        })
     }
 }

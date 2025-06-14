@@ -314,7 +314,7 @@ impl App {
                         .map_err(|err| ::log::error!("could not read {configpath:?}\n{err}"))
                         .ok()
                         .and_then(|content| {
-                            ::serde_yml::from_str::<y::Config>(&content)
+                            y::Config::parse(&content)
                                 .map_err(|err| {
                                     ::log::error!("could not parse {configpath:?}\n{err}")
                                 })

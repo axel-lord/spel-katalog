@@ -50,7 +50,6 @@ regex = "1.11.1"
 rfd = { version = "0.15.3", default-features = false }
 rustc-hash = "2.1.1"
 serde = "1.0.219"
-serde_yml = "0.0.12"
 shell-words = "1.1.0"
 sqlite = "0.37.0"
 strsim = "0.11.1"

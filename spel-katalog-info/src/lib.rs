@@ -121,7 +121,7 @@ impl State {
                     self.content = widget::text_editor::Content::with_text(&content);
                     self.config_path = Some(path.clone());
 
-                    let yml = match ::serde_yml::from_str::<y::Config>(&content) {
+                    let yml = match y::Config::parse(&content) {
                         Ok(yml) => yml,
                         Err(err) => {
                             ::log::error!("could not parse yml {path:?}\n{err}");

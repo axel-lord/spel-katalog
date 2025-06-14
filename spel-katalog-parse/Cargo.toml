@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 nom = "8.0.0"
 thiserror.workspace = true
+tinyvec = { version = "1.9.0", features = ["alloc", "serde"] }
 
 [lints]
 workspace = true
