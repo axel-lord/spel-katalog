@@ -56,6 +56,17 @@ where
 {
     /// All values for enum.
     const VARIANTS: &[Self];
+
+    fn cycle(&self) -> Self
+    where
+        Self: PartialEq + Clone,
+    {
+        let idx = Self::VARIANTS
+            .iter()
+            .position(|v| v == self)
+            .unwrap_or_else(|| unreachable!());
+        Self::VARIANTS[(idx + 1) % Self::VARIANTS.len()].clone()
+    }
 }
 
 impl From<Theme> for ::iced::Theme {
@@ -98,6 +109,13 @@ async fn save(settings: Settings, path: PathBuf) -> Result<PathBuf, PathBuf> {
 }
 
 impl State {
+    pub fn apply_from<T>(&mut self, t: T)
+    where
+        Delta: From<T>,
+    {
+        Delta::from(t).apply(self);
+    }
+
     pub fn update(&mut self, message: Message, tx: &StatusSender) -> Task<Message> {
         match message {
             Message::Delta(delta) => {

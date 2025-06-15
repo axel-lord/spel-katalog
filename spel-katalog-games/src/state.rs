@@ -205,8 +205,12 @@ impl State {
     }
 
     /// Render elements.
-    pub fn view(&self) -> Element<OrRequest<Message, Request>> {
-        fn card<'a>(game: &'a Game, width: f32) -> Element<'a, OrRequest<Message, Request>> {
+    pub fn view(&self, shadowed: bool) -> Element<OrRequest<Message, Request>> {
+        fn card<'a>(
+            game: &'a Game,
+            width: f32,
+            shadowed: bool,
+        ) -> Element<'a, OrRequest<Message, Request>> {
             let handle = game.image.as_ref();
             let name = game.name.as_str();
 
@@ -230,27 +234,36 @@ impl State {
                 }
                 None => widget::mouse_area(text),
             }
-            .interaction(::iced::mouse::Interaction::Pointer)
-            .on_release(OrRequest::Request(Request::SetId { id: game.id }))
-            .on_middle_release(OrRequest::Request(Request::Run {
-                id: game.id,
-                sandbox: true,
-            }))
+            .interaction(if shadowed {
+                ::iced::mouse::Interaction::default()
+            } else {
+                ::iced::mouse::Interaction::Pointer
+            })
+            .pipe(|area| {
+                if shadowed {
+                    area
+                } else {
+                    area.on_release(OrRequest::Request(Request::SetId { id: game.id }))
+                        .on_middle_release(OrRequest::Request(Request::Run {
+                            id: game.id,
+                            sandbox: true,
+                        }))
+                }
+            })
             .into()
         }
 
-        widget::responsive(|size| {
+        widget::responsive(move |size| {
             let columns = ((size.width as usize - 1) / 153).clamp(1, 24);
             let width = ((size.width / columns as f32) - 3.0).clamp(150.0, 300.0);
 
-            w::scroll(
-                w::col().align_x(Alignment::Start).width(Fill).extend(
-                    self.displayed()
-                        .chunks(columns)
-                        .into_iter()
-                        .map(|chunk| w::row().extend(chunk.map(|game| card(game, width))).into()),
-                ),
-            )
+            w::scroll(w::col().align_x(Alignment::Start).width(Fill).extend(
+                self.displayed().chunks(columns).into_iter().map(|chunk| {
+                    w::row()
+                        .extend(chunk.map(|game| card(game, width, shadowed)))
+                        .into()
+                }),
+            ))
             .into()
         })
         .pipe(Element::from)

@@ -1,16 +1,29 @@
-use ::std::{ffi::OsString, path::PathBuf};
+use ::std::{
+    ffi::{OsStr, OsString},
+    ops::Mul,
+    os::unix::ffi::OsStrExt,
+    path::PathBuf,
+    time::Duration,
+};
 
 use ::clap::Parser;
 use ::color_eyre::{Report, Section, eyre::eyre};
 use ::derive_more::{From, IsVariant};
 use ::iced::{
-    Element,
-    Length::Fill,
-    Task,
-    widget::{self, horizontal_rule, text, text_input, toggler, value, vertical_space},
+    Color, Element, Font,
+    Length::{self, Fill},
+    Subscription, Task,
+    alignment::Horizontal::Left,
+    keyboard::{self, Modifiers, on_key_press},
+    widget::{
+        self, button, container, horizontal_rule, horizontal_space, opaque, stack, text,
+        text_input, toggler, value, vertical_space,
+    },
 };
+use ::rustix::process::{Pid, RawPid};
 use ::spel_katalog_common::{OrRequest, StatusSender, status, w};
 use ::spel_katalog_info::{image_buffer::ImageBuffer, y};
+use ::spel_katalog_settings::Variants;
 use ::tap::Pipe;
 
 mod view;
@@ -44,6 +57,59 @@ pub struct App {
     info: ::spel_katalog_info::State,
     image_buffer: ImageBuffer,
     sender: StatusSender,
+    process_list: Option<Vec<ProcessInfo>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ProcessInfo {
+    level: usize,
+    pid: i64,
+    name: Option<String>,
+    cmdline: String,
+}
+
+impl ProcessInfo {
+    pub fn view_list<'e>(list: &'e [ProcessInfo]) -> Element<'e, Message> {
+        container(
+            list.iter()
+                .fold(w::col().push("Process Tree"), |col, info| {
+                    col.push(info.view())
+                })
+                .align_x(Left)
+                .pipe(w::scroll)
+                .pipe(container)
+                .style(container::bordered_box)
+                .padding(3),
+        )
+        .center(Fill)
+        .style(|_theme| container::background(Color::from_rgba8(0, 0, 0, 0.7)))
+        .pipe(opaque)
+        .into()
+    }
+
+    pub fn view<'e>(&'e self) -> Element<'e, Message> {
+        let Self {
+            level,
+            pid,
+            name,
+            cmdline,
+        } = self;
+        let pid = *pid;
+        let level = *level;
+        w::row()
+            .spacing(6)
+            .push(horizontal_space().width(Length::Fixed(level.min(24).mul(12) as f32)))
+            .push(
+                button("X")
+                    .padding(3)
+                    .style(button::danger)
+                    .on_press_with(move || Message::Kill(pid)),
+            )
+            .push(value(pid))
+            .push_maybe(name.as_ref().map(text))
+            .push(text(cmdline).font(Font::MONOSPACE))
+            .into()
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, IsVariant, PartialEq, Eq, Hash)]
@@ -57,6 +123,17 @@ impl From<bool> for Safety {
     fn from(value: bool) -> Self {
         if value { Self::Firejail } else { Self::None }
     }
+}
+
+#[derive(Debug, IsVariant, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum QuickMessage {
+    ClosePane,
+    ToggleSettings,
+    OpenProcessInfo,
+    CycleHidden,
+    CycleFilter,
+    ToggleNetwork,
+    RefreshProcessInfo,
 }
 
 #[derive(Debug, IsVariant, From, Clone)]
@@ -73,6 +150,10 @@ pub enum Message {
     #[from]
     Info(OrRequest<::spel_katalog_info::Message, ::spel_katalog_info::Request>),
     RunGame(i64, Safety),
+    #[from]
+    Quick(QuickMessage),
+    ProcessInfo(Option<Vec<ProcessInfo>>),
+    Kill(i64),
 }
 
 impl App {
@@ -135,8 +216,10 @@ impl App {
             let image_buffer = ImageBuffer::empty();
             let info = ::spel_katalog_info::State::default();
             let sender = tx.into();
+            let process_list = None;
 
             App {
+                process_list,
                 settings,
                 status,
                 filter,
@@ -151,6 +234,7 @@ impl App {
         ::iced::application("Lutris Games", Self::update, Self::view)
             .theme(|app| ::iced::Theme::from(*app.settings.settings.theme()))
             .centered()
+            .subscription(Self::subscription)
             .executor::<::tokio::runtime::Runtime>()
             .run_with(|| {
                 let load_db = app
@@ -170,10 +254,29 @@ impl App {
             .map_err(Report::from)
     }
 
+    pub fn subscription(&self) -> Subscription<Message> {
+        on_key_press(|key, modifiers| match key.as_ref() {
+            keyboard::Key::Named(_named) => None,
+            keyboard::Key::Character(chr) => match chr {
+                "q" if modifiers.is_empty() => Some(QuickMessage::ClosePane),
+                "h" if modifiers.is_empty() => Some(QuickMessage::CycleHidden),
+                "f" if modifiers.is_empty() => Some(QuickMessage::CycleFilter),
+                "s" if modifiers.is_empty() => Some(QuickMessage::ToggleSettings),
+                "n" if modifiers.is_empty() => Some(QuickMessage::ToggleNetwork),
+                "k" if modifiers == Modifiers::CTRL | Modifiers::SHIFT => {
+                    Some(QuickMessage::OpenProcessInfo)
+                }
+                _ => None,
+            },
+            keyboard::Key::Unidentified => None,
+        })
+        .map(Message::Quick)
+    }
+
     pub fn update(&mut self, msg: Message) -> Task<Message> {
         match msg {
             Message::Status(status) => {
-                self.status = status;
+                self.set_status(status);
                 return Task::none();
             }
             Message::Filter(filter) => {
@@ -194,7 +297,7 @@ impl App {
                 let task = self.settings.update(message, &self.sender);
 
                 if re_sort {
-                    self.games.sort(&self.settings, &self.filter);
+                    self.sort_games();
                 }
 
                 return task.map(From::from);
@@ -275,8 +378,217 @@ impl App {
                 }
             }
             Message::RunGame(id, safety) => return self.run_game(id, safety),
+            Message::Quick(quick) => match quick {
+                QuickMessage::ClosePane => {
+                    if self.process_list.is_some() {
+                        self.process_list = None;
+                        self.set_status("closed process list");
+                    } else if self.view.info_shown() {
+                        self.view.show_info(false);
+                        self.set_status("closed info pane");
+                    } else if self.view.settings_shown() {
+                        self.view.show_settings(false);
+                        self.set_status("closed settings pane");
+                    }
+                }
+                QuickMessage::ToggleSettings => {
+                    self.view.show_settings(!self.view.settings_shown());
+                }
+                QuickMessage::OpenProcessInfo => {
+                    return Task::future(async {
+                        let mut task_dir = ::tokio::fs::read_dir("/proc/self/task/").await?;
+                        let mut children = Vec::new();
+                        while let Some(entry) = task_dir.next_entry().await? {
+                            let path = entry.path().join("children");
+                            let task_children = match ::tokio::fs::read_to_string(&path).await {
+                                Ok(task_children) => task_children,
+                                Err(err) => {
+                                    ::log::error!("reading path {path:?}\n{err}");
+                                    continue;
+                                }
+                            };
+
+                            children.extend(task_children.lines().flat_map(|line| {
+                                let line = line.trim();
+                                if line.is_empty() {
+                                    None
+                                } else {
+                                    line.parse::<i64>().ok().map(|i| (0usize, i))
+                                }
+                            }));
+                        }
+
+                        let mut summary = Vec::<ProcessInfo>::new();
+                        while let Some((level, child)) = children.pop() {
+                            let proc = PathBuf::from(format!("/proc/{child}"));
+
+                            let status = proc.join("status");
+                            let name = match ::tokio::fs::read(&status).await {
+                                Ok(bytes) => {
+                                    let mut name = None;
+                                    for line in
+                                        bytes.split(|c| *c == b'\n').map(|line| line.trim_ascii())
+                                    {
+                                        if let Some(line) = line.strip_prefix(b"Name:") {
+                                            name = line
+                                                .trim_ascii()
+                                                .pipe(OsStr::from_bytes)
+                                                .display()
+                                                .to_string()
+                                                .pipe(Some);
+                                            break;
+                                        }
+                                    }
+                                    name
+                                }
+                                Err(err) => {
+                                    ::log::error!("while reading {status:?}\n{err}");
+                                    None
+                                }
+                            };
+
+                            let cmdline = proc.join("cmdline");
+
+                            let mut cmdline = match ::tokio::fs::read(&cmdline).await {
+                                Ok(cmdline) => cmdline,
+                                Err(err) => {
+                                    ::log::error!("while reading {cmdline:?}\n{err}");
+                                    continue;
+                                }
+                            };
+
+                            let next_level = level.saturating_add(1);
+
+                            while cmdline.last() == Some(&b'\0') {
+                                cmdline.pop();
+                            }
+
+                            let cmdline = cmdline
+                                .split(|c| *c == b'\0')
+                                .map(|bytes| OsStr::from_bytes(bytes).display().to_string())
+                                .pipe(::shell_words::join);
+
+                            let tasks = proc.join("task");
+                            let mut tasks = match ::tokio::fs::read_dir(&tasks).await {
+                                Ok(tasks) => tasks,
+                                Err(err) => {
+                                    ::log::error!("reading directory {tasks:?}\n{err}");
+                                    continue;
+                                }
+                            };
+
+                            while let Some(entry) = tasks.next_entry().await? {
+                                let path = entry.path().join("children");
+                                let task_children = match ::tokio::fs::read_to_string(&path).await {
+                                    Ok(task_children) => task_children,
+                                    Err(err) => {
+                                        ::log::error!("reading path {path:?}\n{err}");
+                                        continue;
+                                    }
+                                };
+
+                                children.extend(task_children.lines().flat_map(|line| {
+                                    let line = line.trim();
+                                    if line.is_empty() {
+                                        None
+                                    } else {
+                                        line.parse::<i64>().ok().map(|i| (next_level, i))
+                                    }
+                                }));
+                            }
+
+                            summary.push(ProcessInfo {
+                                level,
+                                pid: child,
+                                name,
+                                cmdline,
+                            });
+                        }
+
+                        Ok::<_, ::tokio::io::Error>(summary)
+                    })
+                    .then(|result| match result {
+                        Ok(summary) => summary
+                            .pipe(Some)
+                            .pipe(Message::ProcessInfo)
+                            .pipe(Task::done),
+                        Err(err) => {
+                            ::log::error!("whilst collecting info\n{err}");
+                            Task::none()
+                        }
+                    });
+                }
+                QuickMessage::CycleHidden => {
+                    let next = self.settings.show().cycle();
+                    self.settings.apply_from(next);
+                    self.set_status(format!("cycled hidden to {next}"));
+                    self.sort_games();
+                }
+                QuickMessage::CycleFilter => {
+                    let next = self.settings.filter_mode().cycle();
+                    self.settings.apply_from(next);
+                    self.set_status(format!("cycled filter mode to {next}"));
+                    self.sort_games();
+                }
+                QuickMessage::ToggleNetwork => {
+                    let next = self.settings.network().cycle();
+                    self.settings.apply_from(next);
+                    self.set_status("toggled network to {next}");
+                    self.sort_games();
+                }
+                QuickMessage::RefreshProcessInfo => {
+                    if self.process_list.is_some() {
+                        return QuickMessage::OpenProcessInfo
+                            .pipe(Message::Quick)
+                            .pipe(Task::done);
+                    }
+                }
+            },
+            Message::ProcessInfo(process_infos) => self.process_list = process_infos,
+            Message::Kill(pid) => {
+                let Ok(pid) = RawPid::try_from(pid) else {
+                    return Task::none();
+                };
+                let Some(pid) = Pid::from_raw(pid) else {
+                    return Task::none();
+                };
+
+                return Task::future(async move {
+                    match ::tokio::task::spawn_blocking(move || {
+                        ::rustix::process::kill_process(pid, ::rustix::process::Signal::TERM)
+                    })
+                    .await
+                    {
+                        Ok(result) => match result {
+                            Ok(_) => ::log::info!(
+                                "sent TERM to process {pid}",
+                                pid = pid.as_raw_nonzero().get()
+                            ),
+                            Err(err) => ::log::error!(
+                                "could not kill process {pid}\n{err}",
+                                pid = pid.as_raw_nonzero().get()
+                            ),
+                        },
+                        Err(err) => ::log::error!("could not spawn blocking thread\n{err}"),
+                    };
+
+                    ::tokio::time::sleep(Duration::from_millis(750)).await;
+
+                    Message::Quick(QuickMessage::RefreshProcessInfo)
+                });
+            }
         }
         Task::none()
+    }
+
+    pub fn sort_games(&mut self) {
+        self.games.sort(&self.settings, &self.filter);
+    }
+
+    pub fn set_status(&mut self, status: impl Into<String>) {
+        let status = status.into();
+        ::log::info!("status: {status}");
+        self.status = status;
     }
 
     fn run_game(&mut self, id: i64, safety: Safety) -> Task<Message> {
@@ -297,7 +609,7 @@ impl App {
             .join(&game.configpath)
             .with_extension("yml");
 
-        return Task::future(async move {
+        let task = Task::future(async move {
             let rungame = format!("lutris:rungame/{slug}");
 
             let status = match safety {
@@ -345,6 +657,8 @@ impl App {
                 }
             }
         });
+
+        task
     }
 
     pub fn view(&self) -> Element<Message> {
@@ -365,7 +679,19 @@ impl App {
                 .on_input(Message::Filter),
             )
             .push(vertical_space().height(5))
-            .push(self.view.view(&self.settings, &self.games, &self.info))
+            .push(if let Some(process_info) = &self.process_list {
+                stack([
+                    self.view
+                        .view(&self.settings, &self.games, &self.info, true)
+                        .into(),
+                    ProcessInfo::view_list(&process_info),
+                ])
+                .pipe(Element::from)
+            } else {
+                self.view
+                    .view(&self.settings, &self.games, &self.info, false)
+                    .pipe(Element::from)
+            })
             .push(horizontal_rule(2))
             .push(
                 w::row()
@@ -389,7 +715,7 @@ impl App {
                     )
                     .push(text("Settings").style(widget::text::secondary))
                     .push(
-                        toggler(self.view.show_settings())
+                        toggler(self.view.settings_shown())
                             .spacing(0)
                             .on_toggle(|show_settings| {
                                 view::Message::Settings(show_settings).into()

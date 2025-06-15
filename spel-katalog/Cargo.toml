@@ -34,6 +34,7 @@ tokio = { workspace = true, features = ["parking_lot"] }
 tokio-stream = { workspace = true, features = ["time"] }
 toml.workspace = true
 xdg.workspace = true
+rustix = { version = "1.0.7", features = ["process"] }
 
 [build-dependencies]
 spel-katalog-build.workspace = true

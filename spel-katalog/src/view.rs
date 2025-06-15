@@ -30,8 +30,12 @@ pub enum Message {
 }
 
 impl State {
-    pub fn show_settings(&self) -> bool {
+    pub fn settings_shown(&self) -> bool {
         self.settings.is_some()
+    }
+
+    pub fn info_shown(&self) -> bool {
+        self.info.is_some()
     }
 
     pub fn new(show_settings: bool) -> Self {
@@ -65,43 +69,49 @@ impl State {
             Message::Resized(pane_grid::ResizeEvent { split, ratio }) => {
                 self.panes.resize(split, ratio);
             }
-            Message::Settings(show_settings) => {
-                if let Some(settings_pane) = self.settings.take() {
-                    if show_settings {
-                        self.settings = show_settings.then_some(settings_pane);
-                    } else {
-                        self.panes.close(settings_pane);
-                    }
-                } else if show_settings {
-                    if let Some((pane, split)) =
-                        self.panes
-                            .split(pane_grid::Axis::Vertical, self.games, Pane::Settings)
-                    {
-                        self.panes.resize(split, 0.7);
-                        self.settings = Some(pane);
-                    }
-                }
-            }
-            Message::Info(show_info) => match self.info.take() {
-                Some(info_pane) => {
-                    if show_info {
-                        self.info = show_info.then_some(info_pane);
-                    } else {
-                        self.panes.close(info_pane);
-                    }
-                }
-                None => {
-                    if let Some((pane, _split)) =
-                        self.panes
-                            .split(pane_grid::Axis::Vertical, self.games, Pane::GameInfo)
-                    {
-                        self.panes.swap(pane, self.games);
-                        self.info = Some(pane);
-                    }
-                }
-            },
+            Message::Settings(show_settings) => self.show_settings(show_settings),
+            Message::Info(show_info) => self.show_info(show_info),
         };
         Task::none()
+    }
+
+    pub fn show_settings(&mut self, show_settings: bool) {
+        if let Some(settings_pane) = self.settings.take() {
+            if show_settings {
+                self.settings = show_settings.then_some(settings_pane);
+            } else {
+                self.panes.close(settings_pane);
+            }
+        } else if show_settings {
+            if let Some((pane, split)) =
+                self.panes
+                    .split(pane_grid::Axis::Vertical, self.games, Pane::Settings)
+            {
+                self.panes.resize(split, 0.7);
+                self.settings = Some(pane);
+            }
+        }
+    }
+
+    pub fn show_info(&mut self, show_info: bool) {
+        match self.info.take() {
+            Some(info_pane) => {
+                if show_info {
+                    self.info = show_info.then_some(info_pane);
+                } else {
+                    self.panes.close(info_pane);
+                }
+            }
+            None => {
+                if let Some((pane, _split)) =
+                    self.panes
+                        .split(pane_grid::Axis::Vertical, self.games, Pane::GameInfo)
+                {
+                    self.panes.swap(pane, self.games);
+                    self.info = Some(pane);
+                }
+            }
+        }
     }
 
     pub fn view<'app>(
@@ -109,11 +119,12 @@ impl State {
         settings: &'app ::spel_katalog_settings::State,
         games: &'app ::spel_katalog_games::State,
         info: &'app spel_katalog_info::State,
+        shadowed: bool,
     ) -> Element<'app, crate::Message> {
         pane_grid(&self.panes, |_pane, state, _is_maximized| {
             pane_grid::Content::new(
                 match state {
-                    Pane::Games => games.view().map(crate::Message::from),
+                    Pane::Games => games.view(shadowed).map(crate::Message::from),
                     Pane::Settings => settings.view().map(crate::Message::from),
                     Pane::GameInfo => info.view(settings, games).map(crate::Message::from),
                 }

@@ -4184,6 +4184,7 @@ dependencies = [
  "regex",
  "rfd",
  "rustc-hash 2.1.1",
+ "rustix 1.0.7",
  "serde",
  "shell-words",
  "spel-katalog-build",
