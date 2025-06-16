@@ -3,13 +3,14 @@
 use ::std::{borrow::Cow, fmt::Display};
 
 use ::nom::{
+    Err::Failure,
     Finish, Parser,
     branch::alt,
-    bytes::complete::{is_not, tag, take_until},
+    bytes::complete::{is_not, tag},
     character::complete::char,
-    combinator::{cut, eof, map_parser},
-    error::ErrorKind,
-    multi::{many, many_till},
+    combinator::{cut, map, map_parser, peek, value},
+    error::{ErrorKind, ParseError},
+    multi::many,
     sequence::delimited,
 };
 use ::tinyvec::TinyVec;
@@ -31,11 +32,11 @@ impl Default for Component<'_> {
 
 /// Error returned when parsing fails.
 #[derive(Debug, PartialEq, Eq)]
-pub struct ParseError<'a> {
+pub struct FmtParseError<'a> {
     err: ::nom::error::Error<&'a str>,
 }
 
-impl Display for ParseError<'_> {
+impl Display for FmtParseError<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.err {
             ::nom::error::Error {
@@ -52,14 +53,26 @@ impl Display for ParseError<'_> {
     }
 }
 
-impl ::core::error::Error for ParseError<'_> {}
+impl ::core::error::Error for FmtParseError<'_> {}
+
+impl<'a> ParseError<&'a str> for FmtParseError<'a> {
+    fn from_error_kind(input: &'a str, kind: ErrorKind) -> Self {
+        Self {
+            err: ::nom::error::Error::from_error_kind(input, kind),
+        }
+    }
+
+    fn append(input: &'a str, kind: ErrorKind, _other: Self) -> Self {
+        Self::from_error_kind(input, kind)
+    }
+}
 
 /// Error returned when variable interpolation fails.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum InterpolationError<'a> {
     /// Failure occurred when parsing input.
     #[error(transparent)]
-    Parse(ParseError<'a>),
+    Parse(FmtParseError<'a>),
     /// Failure occurred trying to get a variable.
     #[error("could not get variable '{}'", var)]
     Missing {
@@ -68,44 +81,43 @@ pub enum InterpolationError<'a> {
     },
 }
 
-/// Parse a string with interpolated variables.
-pub fn parse_interpolation_components_tv<'a>(
-    input: &'a str,
-) -> Result<TinyVec<[Component<'a>; 3]>, ParseError<'a>> {
-    many(
-        0..,
-        alt((
-            map_parser(tag("}"), |input| {
-                Err(::nom::Err::Failure(::nom::error::Error {
-                    input,
-                    code: ErrorKind::Char,
-                }))
-            }),
-            is_not("{}").map(Component::Slice),
-            delimited(char('{'), cut(take_until("}")), char('}')).map(Component::Variable),
-        )),
-    )
-    .parse(input)
-    .finish()
-    .map_err(|err| ParseError { err })
-    .map(|(_, comps)| comps)
+impl<'a> From<FmtParseError<'a>> for InterpolationError<'a> {
+    fn from(value: FmtParseError<'a>) -> Self {
+        Self::Parse(value)
+    }
 }
 
 /// Parse a string with interpolated variables.
 pub fn parse_interpolation_components<'a>(
     input: &'a str,
-) -> Result<Vec<Component<'a>>, ParseError<'a>> {
-    many_till(
+) -> Result<TinyVec<[Component<'a>; 3]>, FmtParseError<'a>> {
+    use Component::{Slice, Variable};
+    let failure = |input| {
+        Err(Failure(FmtParseError::from_error_kind(
+            input,
+            ErrorKind::Char,
+        )))
+    };
+    many(
+        0..,
         alt((
-            is_not("{}").map(Component::Slice),
-            delimited(char('{'), take_until("}"), char('}')).map(Component::Variable),
+            value(Slice("{"), tag("{{")),
+            value(Slice("}"), tag("}}")),
+            map_parser(tag("}"), failure),
+            map(is_not("{}"), Slice),
+            map(
+                delimited(
+                    char('{'),
+                    alt((value("", peek(char('}'))), cut(is_not("{}")))),
+                    cut(char('}')),
+                ),
+                Variable,
+            ),
         )),
-        eof,
     )
     .parse(input)
     .finish()
-    .map_err(|err| ParseError { err })
-    .map(|(_, (components, _))| components)
+    .map(|(_, comps)| comps)
 }
 
 /// Interpolate variables in a string.
@@ -113,7 +125,7 @@ pub fn interpolate_str<'a>(
     input: &'a str,
     mut get_var: impl for<'i> FnMut(&'i str) -> Option<&'a str>,
 ) -> Result<Cow<'a, str>, InterpolationError<'a>> {
-    let parsed = parse_interpolation_components_tv(input).map_err(InterpolationError::Parse)?;
+    let parsed = parse_interpolation_components(input).map_err(InterpolationError::Parse)?;
 
     match parsed.as_slice() {
         [Component::Slice(slice)] => Ok(Cow::Borrowed(slice)),
@@ -161,39 +173,49 @@ mod tests {
         Some(MAP.get(key)?)
     }
 
-    fn n_err<'a, T>(input: &'a str, code: ErrorKind) -> Result<T, ParseError<'a>> {
-        Err(ParseError {
+    fn n_err<'a, T>(input: &'a str, code: ErrorKind) -> Result<T, FmtParseError<'a>> {
+        Err(FmtParseError {
             err: ::nom::error::Error { input, code },
         })
     }
 
+    fn new_missing<'a>(var: &'a str) -> InterpolationError<'a> {
+        InterpolationError::Missing { var }
+    }
+
     #[test]
     fn parse_empty() {
-        parse_interpolation_components("{}").unwrap();
-        parse_interpolation_components("{{}").unwrap();
-        assert_eq!(parse_interpolation_components(""), Ok(Vec::new()));
+        assert_eq!(
+            parse_interpolation_components("{}"),
+            Ok([Component::Variable("")].into_iter().collect())
+        );
+        assert_eq!(
+            parse_interpolation_components("{{}"),
+            n_err("}", ErrorKind::Char)
+        );
+        assert_eq!(parse_interpolation_components(""), Ok(TinyVec::new()));
         assert_eq!(
             parse_interpolation_components("{}}"),
             n_err("}", ErrorKind::Char)
         );
         assert_eq!(
             parse_interpolation_components("{ababab"),
-            n_err("ababab", ErrorKind::TakeUntil)
+            n_err("", ErrorKind::Char)
         );
     }
 
     #[test]
     fn test_interpolate_none() {
-        let result = interpolate_str("hello there", get).unwrap();
-        assert_eq!(result.as_ref(), "hello there",);
-        assert!(matches!(result, Cow::Borrowed(..)));
+        let result = interpolate_str("hello there", get);
+        assert_eq!(result, Ok(Cow::Borrowed("hello there")));
+        assert!(matches!(result, Ok(Cow::Borrowed(..))));
     }
 
     #[test]
     fn test_interpolate_only() {
-        let result = interpolate_str("{a}", get).unwrap();
-        assert_eq!(result.as_ref(), "first");
-        assert!(matches!(result, Cow::Borrowed(..)));
+        let result = interpolate_str("{a}", get);
+        assert_eq!(result, Ok(Cow::Borrowed("first")));
+        assert!(matches!(result, Ok(Cow::Borrowed(..))));
     }
 
     #[test]
@@ -205,35 +227,19 @@ mod tests {
 
     #[test]
     fn test_interpolate_missing() {
-        let result = interpolate_str("{d}, {e}", get);
-        assert_eq!(result, Err(InterpolationError::Missing { var: "d" }));
+        assert_eq!(interpolate_str("{d}, {e}", get), Err(new_missing("d")));
 
-        let result = interpolate_str("{{}", get);
-        assert_eq!(result, Err(InterpolationError::Missing { var: "{" }));
+        assert_eq!(
+            interpolate_str("{{}", get),
+            n_err("}", ErrorKind::Char).map_err(From::from)
+        );
 
-        let result = interpolate_str("{}", get);
-        assert_eq!(result, Err(InterpolationError::Missing { var: "" }));
+        assert_eq!(interpolate_str("{}", get), Err(new_missing("")));
 
         let result = interpolate_str("{}}", get);
-        assert_eq!(
-            result,
-            Err(InterpolationError::Parse(ParseError {
-                err: ::nom::error::Error {
-                    input: "}",
-                    code: ::nom::error::ErrorKind::Char,
-                }
-            }))
-        );
+        assert_eq!(result, n_err("}", ErrorKind::Char).map_err(From::from));
 
         let result = interpolate_str("{{}}", get);
-        assert_eq!(
-            result,
-            Err(InterpolationError::Parse(ParseError {
-                err: ::nom::error::Error {
-                    input: "}",
-                    code: ::nom::error::ErrorKind::Char,
-                }
-            }))
-        );
+        assert_eq!(result, Ok(Cow::Owned(String::from("{}"))));
     }
 }

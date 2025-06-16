@@ -10,3 +10,7 @@ tinyvec = { version = "1.9.0", features = ["alloc", "serde"] }
 
 [lints]
 workspace = true
+
+[[example]]
+name = "cmdline-format"
+path = "examples/cmdline-format.rs"
