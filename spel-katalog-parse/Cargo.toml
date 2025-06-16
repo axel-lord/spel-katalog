@@ -4,9 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-nom = "8.0.0"
+nom = { workspace = true }
 thiserror.workspace = true
-tinyvec = { version = "1.9.0", features = ["alloc", "serde"] }
+smallvec = { workspace = true, features = ["union", "const_generics", "const_new", "serde", "write"] }
+derive_more = { workspace = true, features = ["is_variant"] }
+nom_locate = { workspace = true }
 
 [lints]
 workspace = true

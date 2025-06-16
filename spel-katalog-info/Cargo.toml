@@ -19,7 +19,7 @@ serde = { workspace = true, features = ["derive"] }
 tokio-stream = { workspace = true, features = ["time"] }
 rayon.workspace = true
 parking_lot.workspace = true
-yaml-rust2 = "0.10.3"
+yaml-rust2 = { workspace = true }
 
 [lints]
 workspace = true

@@ -66,3 +66,10 @@ spel-katalog-build = { path = "spel-katalog-build" }
 spel-katalog-common = { path = "spel-katalog-common" }
 spel-katalog-games = { path = "spel-katalog-games" }
 spel-katalog-settings = { path = "spel-katalog-settings" }
+indexmap = "2.9.0"
+nom = "8.0.0"
+nom_locate = "5.0.0"
+rustix = "1.0.7"
+smallvec = "1.15.1"
+spel-katalog-info = { path = "spel-katalog-info" }
+yaml-rust2 = "0.10.3"

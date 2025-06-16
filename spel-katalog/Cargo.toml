@@ -25,7 +25,7 @@ shell-words.workspace = true
 spel-katalog-common.workspace = true
 spel-katalog-settings.workspace = true
 spel-katalog-games.workspace = true
-spel-katalog-info.path = "../spel-katalog-info/"
+spel-katalog-info = { workspace = true }
 sqlite.workspace = true
 strsim.workspace = true
 tap.workspace = true
@@ -34,7 +34,7 @@ tokio = { workspace = true, features = ["parking_lot"] }
 tokio-stream = { workspace = true, features = ["time"] }
 toml.workspace = true
 xdg.workspace = true
-rustix = { version = "1.0.7", features = ["process"] }
+rustix = { workspace = true, features = ["process"] }
 
 [build-dependencies]
 spel-katalog-build.workspace = true
