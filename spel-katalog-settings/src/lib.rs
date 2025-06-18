@@ -20,14 +20,12 @@ mod generated {
     #![allow(missing_docs)]
 
     pub static HOME: ::spel_katalog_common::lazy::Lazy =
-        ::spel_katalog_common::lazy::Lazy::new(|| {
-            String::from(match &::std::env::var("HOME") {
-                Ok(home) => home.as_str().trim_end_matches('/'),
-                Err(err) => {
-                    ::log::warn!("could not get home directory, {err}");
-                    "/opt"
-                }
-            })
+        ::spel_katalog_common::lazy::Lazy::new(|| match &::std::env::var("HOME") {
+            Ok(home) => home.as_str().trim_end_matches('/').to_owned(),
+            Err(err) => {
+                ::log::warn!("could not get home directory, {err}");
+                format!("/tmp/spel-katalog.{}", ::whoami::username())
+            }
         });
 
     impl Settings {

@@ -13,6 +13,7 @@ serde = { workspace = true, features = ["derive"] }
 clap = { workspace = true, features = ["derive"] }
 spel-katalog-common.workspace = true
 tokio = { workspace = true, features = ["parking_lot"] }
+whoami = { workspace = true }
 
 [build-dependencies]
 spel-katalog-build.workspace = true
