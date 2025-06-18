@@ -14,7 +14,7 @@ use ::iced::{
 use ::image::ImageError;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, t, w};
 use ::spel_katalog_games::Games;
-use ::spel_katalog_settings::Settings;
+use ::spel_katalog_settings::{CoverartDir, Settings, YmlDir};
 use ::tap::Pipe;
 
 use crate::image_buffer::ImageBuffer;
@@ -83,7 +83,7 @@ impl State {
 
                 if let Some(game) = games.by_id(id) {
                     let path = settings
-                        .yml_dir()
+                        .get::<YmlDir>()
                         .as_path()
                         .join(&game.configpath)
                         .with_extension("yml");
@@ -189,7 +189,7 @@ impl State {
                         },
                     }
 
-                    let dest = settings.coverart_dir().as_path().join(&game.slug);
+                    let dest = settings.get::<CoverartDir>().as_path().join(&game.slug);
                     let slug = game.slug.clone();
 
                     let task = async move {

@@ -2,7 +2,8 @@ use ::std::{
     ffi::{OsStr, OsString},
     ops::Mul,
     os::unix::ffi::OsStrExt,
-    path::PathBuf,
+    path::{Path, PathBuf},
+    sync::OnceLock,
     time::Duration,
 };
 
@@ -23,10 +24,24 @@ use ::iced::{
 use ::rustix::process::{Pid, RawPid};
 use ::spel_katalog_common::{OrRequest, StatusSender, status, w};
 use ::spel_katalog_info::{image_buffer::ImageBuffer, y};
-use ::spel_katalog_settings::Variants;
+use ::spel_katalog_settings::{
+    CoverartDir, FilterMode, FirejailExe, LutrisDb, LutrisExe, Network, Show, Theme, Variants,
+    YmlDir,
+};
 use ::tap::Pipe;
 
 mod view;
+
+fn default_config() -> &'static Path {
+    static LAZY: OnceLock<PathBuf> = OnceLock::new();
+    LAZY.get_or_init(|| {
+        let mut cfg = PathBuf::from(::spel_katalog_settings::HOME.as_str());
+        cfg.push(".config");
+        cfg.push("spel-katalog");
+        cfg.push("config.toml");
+        cfg
+    })
+}
 
 #[derive(Debug, Parser)]
 #[command(author, version)]
@@ -43,8 +58,8 @@ pub struct Cli {
     pub skeleton: bool,
 
     /// Config file to load.
-    #[arg(long, short)]
-    pub config: Option<PathBuf>,
+    #[arg(long, short, default_value=default_config().as_os_str())]
+    pub config: PathBuf,
 }
 
 #[derive(Debug)]
@@ -180,18 +195,22 @@ impl App {
                 config,
             } = Cli::parse();
 
-            let overrides = settings;
-            let settings = if let Some(config) = &config {
-                ::std::fs::read_to_string(config)
+            fn read_settings(
+                path: &Path,
+            ) -> ::color_eyre::Result<::spel_katalog_settings::Settings> {
+                ::std::fs::read_to_string(path)
                     .map_err(|err| {
-                        eyre!(err).suggestion(format!("does {config:?} exist, and is it readable"))
+                        eyre!(err).suggestion(format!("does {path:?} exist, and is it readable"))
                     })?
                     .pipe_deref(::toml::from_str::<::spel_katalog_settings::Settings>)
-                    .map_err(|err| eyre!(err).suggestion(format!("is {config:?} a toml file")))?
-                    .apply(::spel_katalog_settings::Delta::create(overrides.clone()))
-            } else {
-                overrides.clone()
-            };
+                    .map_err(|err| eyre!(err).suggestion(format!("is {path:?} a toml file")))
+            }
+
+            let overrides = settings;
+            let settings = read_settings(&config)
+                .map_err(|err| ::log::error!("could not read config file {config:?}\n{err}"))
+                .unwrap_or_default()
+                .apply(::spel_katalog_settings::Delta::create(overrides));
 
             if skeleton {
                 ::std::io::copy(
@@ -232,14 +251,14 @@ impl App {
         };
 
         ::iced::application("Lutris Games", Self::update, Self::view)
-            .theme(|app| ::iced::Theme::from(*app.settings.settings.theme()))
+            .theme(|app| ::iced::Theme::from(*app.settings.settings.get::<Theme>()))
             .centered()
             .subscription(Self::subscription)
             .executor::<::tokio::runtime::Runtime>()
             .run_with(|| {
                 let load_db = app
                     .settings
-                    .lutris_db()
+                    .get::<LutrisDb>()
                     .as_path()
                     .to_path_buf()
                     .pipe(spel_katalog_games::Message::LoadDb)
@@ -340,7 +359,7 @@ impl App {
                             .image_buffer
                             .find_images(
                                 slugs,
-                                self.settings.coverart_dir().as_path().to_path_buf(),
+                                self.settings.get::<CoverartDir>().as_path().to_path_buf(),
                             )
                             .map(OrRequest::Message)
                             .map(Message::Games);
@@ -519,19 +538,19 @@ impl App {
                     });
                 }
                 QuickMessage::CycleHidden => {
-                    let next = self.settings.show().cycle();
+                    let next = self.settings.get::<Show>().cycle();
                     self.settings.apply_from(next);
                     self.set_status(format!("cycled hidden to {next}"));
                     self.sort_games();
                 }
                 QuickMessage::CycleFilter => {
-                    let next = self.settings.filter_mode().cycle();
+                    let next = self.settings.get::<FilterMode>().cycle();
                     self.settings.apply_from(next);
                     self.set_status(format!("cycled filter mode to {next}"));
                     self.sort_games();
                 }
                 QuickMessage::ToggleNetwork => {
-                    let next = self.settings.network().cycle();
+                    let next = self.settings.get::<Network>().cycle();
                     self.settings.apply_from(next);
                     self.set_status("toggled network to {next}");
                     self.sort_games();
@@ -597,14 +616,14 @@ impl App {
             return Task::none();
         };
 
-        let lutris = self.settings.lutris_exe().clone();
-        let firejail = self.settings.firejail_exe().clone();
+        let lutris = self.settings.get::<LutrisExe>().clone();
+        let firejail = self.settings.get::<FirejailExe>().clone();
         let slug = game.slug.clone();
         let name = game.name.clone();
-        let is_net_disabled = self.settings.network().is_disabled();
+        let is_net_disabled = self.settings.get::<Network>().is_disabled();
         let configpath = self
             .settings
-            .yml_dir()
+            .get::<YmlDir>()
             .as_path()
             .join(&game.configpath)
             .with_extension("yml");
@@ -667,7 +686,7 @@ impl App {
             .spacing(0)
             .push(
                 text_input(
-                    match self.settings.settings.filter_mode() {
+                    match self.settings.settings.get::<FilterMode>() {
                         ::spel_katalog_settings::FilterMode::Filter => "filter...",
                         ::spel_katalog_settings::FilterMode::Search => "search...",
                         ::spel_katalog_settings::FilterMode::Regex => "regex...",
@@ -702,7 +721,7 @@ impl App {
                     .push(value(self.games.all_count()))
                     .push(text("Network").style(widget::text::secondary))
                     .push(
-                        toggler(self.settings.network().is_enabled())
+                        toggler(self.settings.get::<Network>().is_enabled())
                             .spacing(0)
                             .on_toggle(|net| {
                                 Message::Settings(::spel_katalog_settings::Message::Delta(

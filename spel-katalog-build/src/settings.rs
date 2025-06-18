@@ -85,6 +85,7 @@ fn emit_enum(
             },
             item::default_str(ident, &default),
             item::title(ident, &title_body),
+            item::help(ident, &str_expr(doc.trim_end_matches('.'))),
             item::variants(ident, &quote! { #( Self::#variant_idents ),* }),
             item::default(ident, &quote! { Self::#default_ident }),
             item::display(ident, &quote! { f.write_str(self.as_str()) }),
@@ -202,6 +203,7 @@ fn emit_path(setting: &Setting, name: &str, ident: &Ident, path: &str) -> Emit {
                 }
             },
             item::title(ident, &title_body),
+            item::help(ident, &str_expr(doc.trim_end_matches('.'))),
             item::default_str(ident, &default_value),
             item::default(
                 ident,
@@ -219,6 +221,16 @@ fn emit_path(setting: &Setting, name: &str, ident: &Ident, path: &str) -> Emit {
                 ident,
                 &quote! { ::std::ffi::OsStr },
                 &quote! { self.as_os_str() },
+            ),
+            item::as_ref(
+                ident,
+                &quote! { ::std::string::String },
+                &quote! { &self.0 },
+            ),
+            item::as_mut(
+                ident,
+                &quote! { ::std::string::String },
+                &quote! { &mut self.0 },
             ),
             item::from(
                 ident,
@@ -281,8 +293,14 @@ pub fn write(settings: Settings, dest: &Path) {
     let mut is_variants = Vec::new();
     let mut is_variants_docs = Vec::new();
     let mut field_names = Vec::new();
+    let mut field_names_mut = Vec::new();
     let mut enum_field_names = Vec::new();
     let mut path_field_names = Vec::new();
+    let mut path_field_names_mut = Vec::new();
+    let mut enum_ty_names = Vec::new();
+    let mut path_ty_names = Vec::new();
+    let mut enum_ty_doc = Vec::new();
+    let mut path_ty_doc = Vec::new();
 
     for (name, setting, ..) in &emitted {
         let pascal_ident = name.to_case(Case::Pascal);
@@ -294,12 +312,25 @@ pub fn write(settings: Settings, dest: &Path) {
             "Check if delta is of the `{pascal_ident}` variant.",
         ));
         field_names.push(format_ident!("{snake_ident}"));
+        field_names_mut.push(format_ident!("{snake_ident}_mut"));
 
         match setting.content {
-            SettingContent::Enum { .. } => &mut enum_field_names,
-            SettingContent::Path { .. } => &mut path_field_names,
+            SettingContent::Enum { .. } => {
+                enum_field_names.push(format_ident!("{snake_ident}"));
+                enum_ty_names.push(format_ident!("{pascal_ident}"));
+                enum_ty_doc.push(format!(
+                    "Get the [{pascal_ident}][super::{pascal_ident}] setting."
+                ));
+            }
+            SettingContent::Path { .. } => {
+                path_field_names.push(format_ident!("{snake_ident}"));
+                path_field_names_mut.push(format_ident!("{snake_ident}_mut"));
+                path_ty_names.push(format_ident!("{pascal_ident}"));
+                path_ty_doc.push(format!(
+                    "Get the [{pascal_ident}][super::{pascal_ident}] setting."
+                ));
+            }
         }
-        .push(format_ident!("{snake_ident}"));
     }
 
     file.write_all(
@@ -309,6 +340,91 @@ pub fn write(settings: Settings, dest: &Path) {
                 use super::*;
                 #(#from_str)*
             }
+
+            /// Types used for indexing settings.
+            pub mod index {
+                use super::*;
+
+                /// Index enum settings.
+                #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+                pub enum Enum {
+                    #(
+                        #[doc = #enum_ty_doc]
+                        #enum_ty_names,
+                    )*
+                }
+
+                unsafe impl crate::Variants for Enum {
+                    const VARIANTS: &[Self] = &[#( Self::#enum_ty_names ),*];
+                }
+
+                impl crate::SettingsIndex for Enum {
+                    type Output = str;
+
+                    fn get(self, settings: &Settings) -> &Self::Output {
+                        match self {#(
+                            Self::#enum_ty_names => settings.#enum_field_names().as_str(),
+                        )*}
+                    }
+                }
+
+                /// Index path settings.
+                #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+                pub enum Path {
+                    #(
+                        #[doc = #path_ty_doc]
+                        #path_ty_names,
+                    )*
+                }
+
+                unsafe impl crate::Variants for Path {
+                    const VARIANTS: &[Self] = &[#( Self::#path_ty_names ),*];
+                }
+
+                impl crate::SettingsIndex for Path {
+                    type Output = ::std::string::String;
+
+                    fn get(self, settings: &Settings) -> &Self::Output {
+                        match self {#(
+                            Self::#path_ty_names => settings.#path_field_names().as_ref(),
+                        )*}
+                    }
+                }
+
+                impl crate::SettingsIndexMut for Path {
+                    fn get_mut(self, settings: &mut Settings) -> &mut Self::Output {
+                        match self {#(
+                            Self::#path_ty_names => settings.#path_field_names_mut().as_mut(),
+                        )*}
+                    }
+                }
+
+                #(
+                impl crate::AsIndex for #ty_names {
+                    type Output = #ty_names;
+                    fn as_idx() -> impl crate::SettingsIndexMut<Output = Self::Output> {
+                        #[derive(Clone, Copy)]
+                        struct Idx;
+
+                        impl crate::SettingsIndex for Idx {
+                            type Output = #ty_names;
+                            fn get(self, settings: &Settings) -> &#ty_names {
+                                settings.#field_names()
+                            }
+                        }
+
+                        impl crate::SettingsIndexMut for Idx {
+                            fn get_mut(self, settings: &mut Settings) -> &mut #ty_names {
+                                settings.#field_names_mut()
+                            }
+                        }
+
+                        Idx
+                    }
+                }
+                )*
+            }
+
             #(#types)*
             #(#impls)*
 
@@ -327,6 +443,7 @@ pub fn write(settings: Settings, dest: &Path) {
             }
 
             impl Settings {
+                /// Apply all given delta variants.
                 pub fn apply(mut self, delta: impl IntoIterator<Item = Delta>) -> Self {
                     for delta in delta {
                         delta.apply(&mut self);
@@ -334,6 +451,7 @@ pub fn write(settings: Settings, dest: &Path) {
                     self
                 }
 
+                /// Get a skeleton config.
                 pub fn skeleton(&self) -> Self {
                     Self {#(
                         #field_names: Some(self.#field_names.clone().unwrap_or_default()),
@@ -341,7 +459,9 @@ pub fn write(settings: Settings, dest: &Path) {
                 }
 
                 #(
-                pub fn #field_names(&self) -> &#ty_names {
+
+                #[doc(hidden)]
+                pub(crate) fn #field_names(&self) -> &#ty_names {
                     static DEFAULT: ::std::sync::OnceLock<#ty_names> = ::std::sync::OnceLock::new();
 
                     match &self.#field_names {
@@ -349,14 +469,21 @@ pub fn write(settings: Settings, dest: &Path) {
                         None => DEFAULT.get_or_init(Default::default),
                     }
                 }
+                #[doc(hidden)]
+                pub(crate) fn #field_names_mut(&mut self) -> &mut #ty_names {
+                    self.#field_names.get_or_insert_with(Default::default)
+                }
+
                 )*
 
+                /// Get element to display enum options.
                 pub fn view_enums(&self) -> ::iced::Element<Delta> {
                     crate::list::enum_list([
                         #( crate::list::enum_choice(self.#enum_field_names), )*
                     ]).into()
                 }
 
+                /// Get element to display path options.
                 pub fn view_paths(&self) -> ::iced::Element<Delta> {
                     crate::list::path_list([
                         #( crate::list::path_input(&self.#path_field_names), )*

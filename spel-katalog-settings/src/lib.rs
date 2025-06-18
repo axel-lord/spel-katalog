@@ -30,6 +30,18 @@ mod generated {
             })
         });
 
+    impl Settings {
+        /// Get option by type
+        pub fn get<T: super::AsIndex>(&self) -> &T::Output {
+            &self[T::as_idx()]
+        }
+
+        /// Get mutable option by type
+        pub fn get_mut<T: super::AsIndex>(&mut self) -> &mut T::Output {
+            &mut self[T::as_idx()]
+        }
+    }
+
     include!(concat!(env!("OUT_DIR"), "/settings.rs"));
 }
 pub use generated::*;
@@ -40,10 +52,62 @@ pub trait DefaultStr {
     fn default_str() -> &'static str;
 }
 
-/// Trait to provide settings titles.
+/// Trait to provide titles for settings
 pub trait Title {
     /// Title to use for setting.
     fn title() -> &'static str;
+}
+
+/// Trait to provide help for settings.
+pub trait Help {
+    /// Get help for setting.
+    fn help() -> &'static str;
+}
+
+/// Trait for types which index settings.
+pub trait SettingsIndex {
+    /// Output type returned by indexing
+    type Output: ?Sized;
+
+    /// Get the output type.
+    fn get(self, settings: &Settings) -> &Self::Output;
+}
+
+/// Trait for types wich index settings.
+pub trait SettingsIndexMut
+where
+    Self: SettingsIndex,
+{
+    /// Get the output type as mutable.
+    fn get_mut(self, settings: &mut Settings) -> &mut Self::Output;
+}
+
+/// Trait for types which may supply an index type.
+pub trait AsIndex {
+    /// Output type of index operation.
+    type Output;
+    /// Supply the index.
+    fn as_idx() -> impl SettingsIndexMut<Output = Self::Output>;
+}
+
+impl<T> ::core::ops::Index<T> for Settings
+where
+    T: SettingsIndex,
+{
+    type Output = T::Output;
+
+    fn index(&self, index: T) -> &Self::Output {
+        index.get(self)
+    }
+}
+
+impl<T> ::core::ops::IndexMut<T> for Settings
+where
+    T: SettingsIndexMut,
+{
+    fn index_mut(&mut self, index: T) -> &mut Self::Output {
+        index.get_mut(self)
+    }
 }
 
 /// Trait for simple enums to provide all values.
@@ -89,7 +153,7 @@ pub struct State {
     #[deref]
     #[deref_mut]
     pub settings: Settings,
-    pub config: Option<PathBuf>,
+    pub config: PathBuf,
 }
 
 async fn save(settings: Settings, path: PathBuf) -> Result<PathBuf, PathBuf> {
@@ -122,20 +186,16 @@ impl State {
                 delta.apply(&mut self.settings);
             }
             Message::Save => {
-                if let Some(path) = &self.config {
-                    let tx = tx.clone();
-                    let settings = self.settings.clone();
-                    let path = path.to_path_buf();
-                    return Task::future(async move {
-                        match save(settings, path).await {
-                            Ok(path) => async_status!(tx, "saved settings to {path:?}").await,
-                            Err(path) => {
-                                async_status!(tx, "could not save settings to {path:?}").await
-                            }
-                        }
-                    })
-                    .then(|_| Task::none());
-                }
+                let tx = tx.clone();
+                let settings = self.settings.clone();
+                let path = self.config.clone();
+                return Task::future(async move {
+                    match save(settings, path).await {
+                        Ok(path) => async_status!(tx, "saved settings to {path:?}").await,
+                        Err(path) => async_status!(tx, "could not save settings to {path:?}").await,
+                    }
+                })
+                .then(|_| Task::none());
             }
         };
         Task::none()
@@ -149,11 +209,7 @@ impl State {
                 w::row()
                     .width(Fill)
                     .push(text("Settings").align_x(Alignment::Center).width(Fill))
-                    .push(
-                        button("Save")
-                            .padding(3)
-                            .on_press_maybe(self.config.is_some().then_some(Message::Save)),
-                    ),
+                    .push(button("Save").padding(3).on_press(Message::Save)),
             )
             .push(horizontal_rule(2))
             .push(self.view_enums().map(Message::Delta).pipe(w::scroll))

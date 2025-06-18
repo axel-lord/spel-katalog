@@ -6,7 +6,7 @@ use ::iced::widget::image::Handle;
 use ::itertools::izip;
 use ::regex::RegexBuilder;
 use ::rustc_hash::FxHashMap;
-use ::spel_katalog_settings::{FilterMode, Settings, SortBy};
+use ::spel_katalog_settings::{AsIndex, FilterMode, Settings, Show, SortBy, SortDir};
 use ::tap::TapFallible;
 
 use crate::Game;
@@ -84,7 +84,7 @@ impl Games {
             })
         }
 
-        match settings.filter_mode() {
+        match settings[FilterMode::as_idx()] {
             FilterMode::Filter => {
                 let Ok(filters) = ::shell_words::split(filter).tap_ok_mut(|filters| {
                     for filter in filters {
@@ -93,7 +93,7 @@ impl Games {
                 }) else {
                     return;
                 };
-                to_be = filter_hidden(to_be, *settings.show());
+                to_be = filter_hidden(to_be, settings[Show::as_idx()]);
                 to_be = to_be
                     .into_iter()
                     .filter_map(|mut value| {
@@ -113,7 +113,7 @@ impl Games {
             }
             FilterMode::Search => {
                 let filter = filter.to_uppercase();
-                to_be = filter_hidden(to_be, *settings.show());
+                to_be = filter_hidden(to_be, settings[Show::as_idx()]);
                 let mut dists = to_be
                     .iter_mut()
                     .map(|(idx, game, cache)| {
@@ -132,7 +132,7 @@ impl Games {
                         .then(dist_a.total_cmp(dist_b))
                 });
 
-                if settings.sort_dir().is_reverse() {
+                if settings[SortDir::as_idx()].is_reverse() {
                     dists.reverse();
                 }
 
@@ -145,7 +145,7 @@ impl Games {
                 let Ok(re) = RegexBuilder::new(filter).case_insensitive(true).build() else {
                     return;
                 };
-                to_be = filter_hidden(to_be, *settings.show());
+                to_be = filter_hidden(to_be, settings[Show::as_idx()]);
                 to_be = to_be
                     .into_iter()
                     .filter(|(_, game, _)| re.is_match(&game.name))
@@ -153,13 +153,13 @@ impl Games {
             }
         }
 
-        match settings.sort_by() {
+        match settings[SortBy::as_idx()] {
             SortBy::Id => to_be.sort_by(|a, b| a.1.id.cmp(&b.1.id).reverse()),
             SortBy::Name => to_be.sort_by(|a, b| a.1.name.cmp(&b.1.name)),
             SortBy::Slug => to_be.sort_by(|a, b| a.1.slug.cmp(&b.1.slug)),
         };
 
-        if settings.sort_dir().is_reverse() {
+        if settings[SortDir::as_idx()].is_reverse() {
             to_be.reverse();
         }
 

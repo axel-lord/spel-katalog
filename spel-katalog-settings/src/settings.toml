@@ -55,3 +55,13 @@ title = "Game Config Directory"
 help = "Path to lutris game yml config directory"
 path = "{HOME}/.config/lutris/games"
 
+[ExtraConfigDir]
+title = "Extra Config Directory"
+help = "Path to additional game configuration directory"
+path = "{HOME}/.config/spel-katalog/games"
+
+[ScriptConfigDir]
+title = "Script Config Directory"
+help = "Path to script config directory"
+path = "{HOME}/.config/spel-katalog/scripts"
+

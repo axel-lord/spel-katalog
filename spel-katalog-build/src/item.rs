@@ -67,6 +67,18 @@ pub fn as_ref(ty: &dyn ToTokens, target: &dyn ToTokens, body: &dyn ToTokens) -> 
     }
 }
 
+/// Generate an AsMut implementation for the given type with the given target and body.
+pub fn as_mut(ty: &dyn ToTokens, target: &dyn ToTokens, body: &dyn ToTokens) -> Item {
+    spec!(ty: Type, target: Type, body: Vec<Stmt>);
+    parse_quote! {
+        impl ::core::convert::AsMut<#target> for #ty {
+            fn as_mut(&mut self) -> &mut #target {
+                #( #body )*
+            }
+        }
+    }
+}
+
 /// Generate a from implementation for the given type with the given target and body.
 pub fn from(ty: &dyn ToTokens, from: &dyn ToTokens, body: &dyn ToTokens) -> Item {
     spec!(ty: Type, from: Type, body: Vec<Stmt>);
@@ -85,6 +97,18 @@ pub fn title(ty: &dyn ToTokens, body: &dyn ToTokens) -> Item {
     parse_quote! {
         impl crate::Title for #ty {
             fn title() -> &'static str {
+                #( #body )*
+            }
+        }
+    }
+}
+
+/// Generate a Help implementation for the given type with the given body.
+pub fn help(ty: &dyn ToTokens, body: &dyn ToTokens) -> Item {
+    spec!(ty: Type, body: Vec<Stmt>);
+    parse_quote! {
+        impl crate::Help for #ty {
+            fn help() -> &'static str {
                 #( #body )*
             }
         }
