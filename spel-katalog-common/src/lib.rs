@@ -7,7 +7,7 @@ pub use or_request::OrRequest;
 pub use status_sender::StatusSender;
 
 pub mod lazy;
-pub mod t;
+pub mod styling;
 pub mod w;
 
 /// Create a status message.

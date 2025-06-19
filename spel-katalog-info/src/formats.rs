@@ -5,6 +5,7 @@ use ::std::{
     sync::LazyLock,
 };
 
+use ::serde::{Deserialize, Serialize};
 use ::yaml_rust2::{ScanError, Yaml, YamlLoader};
 
 /// A game config.
@@ -76,4 +77,10 @@ impl Config {
             },
         })
     }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct Additional {
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub sandbox_root: Vec<String>,
 }

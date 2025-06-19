@@ -23,7 +23,7 @@ use ::iced::{
 };
 use ::rustix::process::{Pid, RawPid};
 use ::spel_katalog_common::{OrRequest, StatusSender, status, w};
-use ::spel_katalog_info::{image_buffer::ImageBuffer, y};
+use ::spel_katalog_info::{formats, image_buffer::ImageBuffer};
 use ::spel_katalog_settings::{
     CoverartDir, FilterMode, FirejailExe, LutrisDb, LutrisExe, Network, Show, Theme, Variants,
     YmlDir,
@@ -645,7 +645,7 @@ impl App {
                         .map_err(|err| ::log::error!("could not read {configpath:?}\n{err}"))
                         .ok()
                         .and_then(|content| {
-                            y::Config::parse(&content)
+                            formats::Config::parse(&content)
                                 .map_err(|err| {
                                     ::log::error!("could not parse {configpath:?}\n{err}")
                                 })
