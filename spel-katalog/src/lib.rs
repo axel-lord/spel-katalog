@@ -15,7 +15,7 @@ use ::iced::{
     Length::{self, Fill},
     Subscription, Task,
     alignment::Horizontal::Left,
-    keyboard::{self, Modifiers, on_key_press},
+    keyboard::{self, Modifiers, key::Named, on_key_press},
     widget::{
         self, button, container, horizontal_rule, horizontal_space, opaque, stack, text,
         text_input, toggler, value, vertical_space,
@@ -149,6 +149,8 @@ pub enum QuickMessage {
     CycleFilter,
     ToggleNetwork,
     RefreshProcessInfo,
+    Next,
+    Prev,
 }
 
 #[derive(Debug, IsVariant, From, Clone)]
@@ -275,7 +277,11 @@ impl App {
 
     pub fn subscription(&self) -> Subscription<Message> {
         on_key_press(|key, modifiers| match key.as_ref() {
-            keyboard::Key::Named(_named) => None,
+            keyboard::Key::Named(named) => match named {
+                Named::Tab if modifiers.is_empty() => Some(QuickMessage::Next),
+                Named::Tab if modifiers == Modifiers::SHIFT => Some(QuickMessage::Prev),
+                _ => None,
+            },
             keyboard::Key::Character(chr) => match chr {
                 "q" if modifiers.is_empty() => Some(QuickMessage::ClosePane),
                 "h" if modifiers.is_empty() => Some(QuickMessage::CycleHidden),
@@ -562,6 +568,8 @@ impl App {
                             .pipe(Task::done);
                     }
                 }
+                QuickMessage::Next => return widget::focus_next(),
+                QuickMessage::Prev => return widget::focus_previous(),
             },
             Message::ProcessInfo(process_infos) => self.process_list = process_infos,
             Message::Kill(pid) => {
