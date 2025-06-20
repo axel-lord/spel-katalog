@@ -1,5 +1,5 @@
 use ::std::{
-    ffi::OsString,
+    ffi::{OsStr, OsString},
     path::{Path, PathBuf},
     sync::OnceLock,
     time::Duration,
@@ -18,10 +18,13 @@ use ::iced::{
 use ::rustix::process::{Pid, RawPid};
 use ::spel_katalog_common::{OrRequest, StatusSender, status, w};
 use ::spel_katalog_games::SelDir;
-use ::spel_katalog_info::{formats, image_buffer::ImageBuffer};
+use ::spel_katalog_info::{
+    formats::{self, Additional},
+    image_buffer::ImageBuffer,
+};
 use ::spel_katalog_settings::{
-    CoverartDir, FilterMode, FirejailExe, LutrisDb, LutrisExe, Network, Show, Theme, Variants,
-    YmlDir,
+    CoverartDir, ExtraConfigDir, FilterMode, FirejailExe, LutrisDb, LutrisExe, Network, Show,
+    Theme, Variants, YmlDir,
 };
 use ::tap::Pipe;
 
@@ -492,12 +495,25 @@ impl App {
             .as_path()
             .join(&game.configpath)
             .with_extension("yml");
+        let extra_config_path = self
+            .settings
+            .get::<ExtraConfigDir>()
+            .as_path()
+            .join(format!("{id}.toml"));
 
         let task = Task::future(async move {
-            let rungame = format!("lutris:rungame/{slug}");
+            let rungame = format!("lutris:rungameid/{id}");
+
+            fn wl(p: impl AsRef<OsStr>) -> OsString {
+                let mut s = OsString::new();
+                s.push("--whitelist=");
+                s.push(p);
+                s
+            }
 
             let status = match safety {
                 Safety::None => {
+                    ::log::info!("executing {lutris:?} with arguments\n{:#?}", &[&rungame]);
                     ::tokio::process::Command::new(lutris)
                         .arg(rungame)
                         .kill_on_drop(true)
@@ -505,28 +521,60 @@ impl App {
                         .await
                 }
                 Safety::Firejail => {
-                    let common = ::tokio::fs::read_to_string(&configpath)
-                        .await
-                        .map_err(|err| ::log::error!("could not read {configpath:?}\n{err}"))
-                        .ok()
-                        .and_then(|content| {
-                            formats::Config::parse(&content)
-                                .map_err(|err| {
-                                    ::log::error!("could not parse {configpath:?}\n{err}")
-                                })
-                                .ok()
-                        })
-                        .map(|config| config.game.common_parent())
-                        .unwrap_or_else(|| ::spel_katalog_settings::HOME.as_path().into());
-                    let mut arg = OsString::from("--whitelist=");
-                    arg.push(common);
-                    arg.push("/");
+                    let mut args;
+                    if extra_config_path.exists() {
+                        let Some(content) = ::tokio::fs::read_to_string(&extra_config_path)
+                            .await
+                            .map_err(|err| {
+                                ::log::error!("could not read {extra_config_path:?}\n{err}")
+                            })
+                            .ok()
+                        else {
+                            return format!("could not read {extra_config_path:?}").into();
+                        };
+                        let Some(additional) = ::toml::from_str::<Additional>(&content)
+                            .map_err(|err| {
+                                ::log::error!("could not parse {extra_config_path:?}\n{err}")
+                            })
+                            .ok()
+                        else {
+                            return format!("could not parse {extra_config_path:?}").into();
+                        };
+                        args = additional
+                            .sandbox_root
+                            .into_iter()
+                            .map(wl)
+                            .collect::<Vec<_>>();
+                    } else {
+                        args = ::tokio::fs::read_to_string(&configpath)
+                            .await
+                            .map_err(|err| ::log::error!("could not read {configpath:?}\n{err}"))
+                            .ok()
+                            .and_then(|content| {
+                                formats::Config::parse(&content)
+                                    .map_err(|err| {
+                                        ::log::error!("could not parse {configpath:?}\n{err}")
+                                    })
+                                    .ok()
+                            })
+                            .map(|config| config.game.common_parent())
+                            .unwrap_or_else(|| ::spel_katalog_settings::HOME.as_path().into())
+                            .pipe(::std::iter::once)
+                            .map(wl)
+                            .collect::<Vec<_>>();
+                    }
+
+                    if is_net_disabled {
+                        args.push("--net=none".into());
+                    }
+
+                    args.push(lutris.as_os_str().into());
+                    args.push(rungame.into());
+
+                    ::log::info!("executing {firejail:?} with arguments\n{args:#?}");
 
                     ::tokio::process::Command::new(firejail)
-                        .arg(arg)
-                        .args(is_net_disabled.then_some("--net=none"))
-                        .arg(lutris)
-                        .arg(rungame)
+                        .args(args)
                         .kill_on_drop(true)
                         .status()
                         .await
