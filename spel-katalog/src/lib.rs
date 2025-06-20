@@ -1,7 +1,5 @@
 use ::std::{
-    ffi::{OsStr, OsString},
-    ops::Mul,
-    os::unix::ffi::OsStrExt,
+    ffi::OsString,
     path::{Path, PathBuf},
     sync::OnceLock,
     time::Duration,
@@ -11,18 +9,15 @@ use ::clap::Parser;
 use ::color_eyre::{Report, Section, eyre::eyre};
 use ::derive_more::{From, IsVariant};
 use ::iced::{
-    Color, Element, Font,
-    Length::{self, Fill},
+    Element,
+    Length::Fill,
     Subscription, Task,
-    alignment::Horizontal::Left,
     keyboard::{self, Modifiers, key::Named, on_key_press},
-    widget::{
-        self, button, container, horizontal_rule, horizontal_space, opaque, stack, text,
-        text_input, toggler, value, vertical_space,
-    },
+    widget::{self, horizontal_rule, stack, text, text_input, toggler, value, vertical_space},
 };
 use ::rustix::process::{Pid, RawPid};
 use ::spel_katalog_common::{OrRequest, StatusSender, status, w};
+use ::spel_katalog_games::SelDir;
 use ::spel_katalog_info::{formats, image_buffer::ImageBuffer};
 use ::spel_katalog_settings::{
     CoverartDir, FilterMode, FirejailExe, LutrisDb, LutrisExe, Network, Show, Theme, Variants,
@@ -72,60 +67,10 @@ pub struct App {
     info: ::spel_katalog_info::State,
     image_buffer: ImageBuffer,
     sender: StatusSender,
-    process_list: Option<Vec<ProcessInfo>>,
+    process_list: Option<Vec<process_info::ProcessInfo>>,
 }
 
-#[derive(Debug, Clone)]
-pub struct ProcessInfo {
-    level: usize,
-    pid: i64,
-    name: Option<String>,
-    cmdline: String,
-}
-
-impl ProcessInfo {
-    pub fn view_list<'e>(list: &'e [ProcessInfo]) -> Element<'e, Message> {
-        container(
-            list.iter()
-                .fold(w::col().push("Process Tree"), |col, info| {
-                    col.push(info.view())
-                })
-                .align_x(Left)
-                .pipe(w::scroll)
-                .pipe(container)
-                .style(container::bordered_box)
-                .padding(3),
-        )
-        .center(Fill)
-        .style(|_theme| container::background(Color::from_rgba8(0, 0, 0, 0.7)))
-        .pipe(opaque)
-        .into()
-    }
-
-    pub fn view<'e>(&'e self) -> Element<'e, Message> {
-        let Self {
-            level,
-            pid,
-            name,
-            cmdline,
-        } = self;
-        let pid = *pid;
-        let level = *level;
-        w::row()
-            .spacing(6)
-            .push(horizontal_space().width(Length::Fixed(level.min(24).mul(12) as f32)))
-            .push(
-                button("X")
-                    .padding(3)
-                    .style(button::danger)
-                    .on_press_with(move || Message::Kill(pid)),
-            )
-            .push(value(pid))
-            .push_maybe(name.as_ref().map(text))
-            .push(text(cmdline).font(Font::MONOSPACE))
-            .into()
-    }
-}
+mod process_info;
 
 #[derive(Debug, Clone, Copy, Default, IsVariant, PartialEq, Eq, Hash)]
 pub enum Safety {
@@ -149,6 +94,7 @@ pub enum QuickMessage {
     CycleFilter,
     ToggleNetwork,
     RefreshProcessInfo,
+    RunSelected,
     Next,
     Prev,
 }
@@ -169,7 +115,7 @@ pub enum Message {
     RunGame(i64, Safety),
     #[from]
     Quick(QuickMessage),
-    ProcessInfo(Option<Vec<ProcessInfo>>),
+    ProcessInfo(Option<Vec<process_info::ProcessInfo>>),
     Kill(i64),
 }
 
@@ -276,10 +222,26 @@ impl App {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
+        fn sel(sel_dir: SelDir) -> Option<Message> {
+            sel_dir
+                .pipe(::spel_katalog_games::Message::Select)
+                .pipe(OrRequest::Message)
+                .pipe(Message::Games)
+                .pipe(Some)
+        }
         on_key_press(|key, modifiers| match key.as_ref() {
             keyboard::Key::Named(named) => match named {
-                Named::Tab if modifiers.is_empty() => Some(QuickMessage::Next),
-                Named::Tab if modifiers == Modifiers::SHIFT => Some(QuickMessage::Prev),
+                Named::Tab if modifiers.is_empty() => Some(QuickMessage::Next).map(Message::Quick),
+                Named::Tab if modifiers == Modifiers::SHIFT => {
+                    Some(QuickMessage::Prev).map(Message::Quick)
+                }
+                Named::ArrowRight if modifiers.is_empty() => sel(SelDir::Right),
+                Named::ArrowLeft if modifiers.is_empty() => sel(SelDir::Left),
+                Named::ArrowUp if modifiers.is_empty() => sel(SelDir::Up),
+                Named::ArrowDown if modifiers.is_empty() => sel(SelDir::Down),
+                Named::Enter | Named::Space if modifiers.is_empty() => {
+                    Some(Message::Quick(QuickMessage::RunSelected))
+                }
                 _ => None,
             },
             keyboard::Key::Character(chr) => match chr {
@@ -292,10 +254,10 @@ impl App {
                     Some(QuickMessage::OpenProcessInfo)
                 }
                 _ => None,
-            },
+            }
+            .map(Message::Quick),
             keyboard::Key::Unidentified => None,
         })
-        .map(Message::Quick)
     }
 
     pub fn update(&mut self, msg: Message) -> Task<Message> {
@@ -420,126 +382,16 @@ impl App {
                     self.view.show_settings(!self.view.settings_shown());
                 }
                 QuickMessage::OpenProcessInfo => {
-                    return Task::future(async {
-                        let mut task_dir = ::tokio::fs::read_dir("/proc/self/task/").await?;
-                        let mut children = Vec::new();
-                        while let Some(entry) = task_dir.next_entry().await? {
-                            let path = entry.path().join("children");
-                            let task_children = match ::tokio::fs::read_to_string(&path).await {
-                                Ok(task_children) => task_children,
-                                Err(err) => {
-                                    ::log::error!("reading path {path:?}\n{err}");
-                                    continue;
-                                }
-                            };
-
-                            children.extend(task_children.lines().flat_map(|line| {
-                                let line = line.trim();
-                                if line.is_empty() {
-                                    None
-                                } else {
-                                    line.parse::<i64>().ok().map(|i| (0usize, i))
-                                }
-                            }));
-                        }
-
-                        let mut summary = Vec::<ProcessInfo>::new();
-                        while let Some((level, child)) = children.pop() {
-                            let proc = PathBuf::from(format!("/proc/{child}"));
-
-                            let status = proc.join("status");
-                            let name = match ::tokio::fs::read(&status).await {
-                                Ok(bytes) => {
-                                    let mut name = None;
-                                    for line in
-                                        bytes.split(|c| *c == b'\n').map(|line| line.trim_ascii())
-                                    {
-                                        if let Some(line) = line.strip_prefix(b"Name:") {
-                                            name = line
-                                                .trim_ascii()
-                                                .pipe(OsStr::from_bytes)
-                                                .display()
-                                                .to_string()
-                                                .pipe(Some);
-                                            break;
-                                        }
-                                    }
-                                    name
-                                }
-                                Err(err) => {
-                                    ::log::error!("while reading {status:?}\n{err}");
-                                    None
-                                }
-                            };
-
-                            let cmdline = proc.join("cmdline");
-
-                            let mut cmdline = match ::tokio::fs::read(&cmdline).await {
-                                Ok(cmdline) => cmdline,
-                                Err(err) => {
-                                    ::log::error!("while reading {cmdline:?}\n{err}");
-                                    continue;
-                                }
-                            };
-
-                            let next_level = level.saturating_add(1);
-
-                            while cmdline.last() == Some(&b'\0') {
-                                cmdline.pop();
+                    return Task::future(process_info::ProcessInfo::open()).then(|result| {
+                        match result {
+                            Ok(summary) => summary
+                                .pipe(Some)
+                                .pipe(Message::ProcessInfo)
+                                .pipe(Task::done),
+                            Err(err) => {
+                                ::log::error!("whilst collecting info\n{err}");
+                                Task::none()
                             }
-
-                            let cmdline = cmdline
-                                .split(|c| *c == b'\0')
-                                .map(|bytes| OsStr::from_bytes(bytes).display().to_string())
-                                .pipe(::shell_words::join);
-
-                            let tasks = proc.join("task");
-                            let mut tasks = match ::tokio::fs::read_dir(&tasks).await {
-                                Ok(tasks) => tasks,
-                                Err(err) => {
-                                    ::log::error!("reading directory {tasks:?}\n{err}");
-                                    continue;
-                                }
-                            };
-
-                            while let Some(entry) = tasks.next_entry().await? {
-                                let path = entry.path().join("children");
-                                let task_children = match ::tokio::fs::read_to_string(&path).await {
-                                    Ok(task_children) => task_children,
-                                    Err(err) => {
-                                        ::log::error!("reading path {path:?}\n{err}");
-                                        continue;
-                                    }
-                                };
-
-                                children.extend(task_children.lines().flat_map(|line| {
-                                    let line = line.trim();
-                                    if line.is_empty() {
-                                        None
-                                    } else {
-                                        line.parse::<i64>().ok().map(|i| (next_level, i))
-                                    }
-                                }));
-                            }
-
-                            summary.push(ProcessInfo {
-                                level,
-                                pid: child,
-                                name,
-                                cmdline,
-                            });
-                        }
-
-                        Ok::<_, ::tokio::io::Error>(summary)
-                    })
-                    .then(|result| match result {
-                        Ok(summary) => summary
-                            .pipe(Some)
-                            .pipe(Message::ProcessInfo)
-                            .pipe(Task::done),
-                        Err(err) => {
-                            ::log::error!("whilst collecting info\n{err}");
-                            Task::none()
                         }
                     });
                 }
@@ -570,6 +422,11 @@ impl App {
                 }
                 QuickMessage::Next => return widget::focus_next(),
                 QuickMessage::Prev => return widget::focus_previous(),
+                QuickMessage::RunSelected => {
+                    if let Some(id) = self.games.selected() {
+                        return self.run_game(id, Safety::Firejail);
+                    }
+                }
             },
             Message::ProcessInfo(process_infos) => self.process_list = process_infos,
             Message::Kill(pid) => {
@@ -711,7 +568,7 @@ impl App {
                     self.view
                         .view(&self.settings, &self.games, &self.info, true)
                         .into(),
-                    ProcessInfo::view_list(&process_info),
+                    process_info::ProcessInfo::view_list(&process_info),
                 ])
                 .pipe(Element::from)
             } else {

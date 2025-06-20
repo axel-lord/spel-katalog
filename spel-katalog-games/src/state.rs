@@ -1,6 +1,7 @@
 //! [State], [Message] and [Request] impls.
 
 use ::std::{
+    cell::Cell,
     convert::identity,
     path::{Path, PathBuf},
 };
@@ -27,6 +28,21 @@ pub struct State {
     #[deref]
     #[deref_mut]
     games: Games,
+    selected: Option<i64>,
+    columns: Cell<usize>,
+}
+
+/// What direction to select element in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, IsVariant)]
+pub enum SelDir {
+    /// Select element above current.
+    Up,
+    /// Select element bellow current.
+    Down,
+    /// Select element to the left of current.
+    Left,
+    /// Select element to the right of current.
+    Right,
 }
 
 /// Internal message used for games element.
@@ -50,6 +66,8 @@ pub enum Message {
         /// Image.
         image: Handle,
     },
+    /// Move selection.
+    Select(SelDir),
 }
 
 /// Requests for other widgets.
@@ -147,6 +165,16 @@ fn load_db(path: &Path) -> Result<Vec<Game>, LoadDbError> {
 }
 
 impl State {
+    /// Get current amount of columns.
+    pub fn columns(&self) -> usize {
+        self.columns.get()
+    }
+
+    /// Get id of currently selected game, if any.
+    pub fn selected(&self) -> Option<i64> {
+        self.selected
+    }
+
     /// Update internal state and send messages.
     pub fn update(
         &mut self,
@@ -201,7 +229,48 @@ impl State {
                 self.set_image(&slug, image);
                 Task::none()
             }
+            Message::Select(sel_dir) => {
+                self.select(sel_dir);
+                Task::none()
+            }
         }
+    }
+
+    fn select(&mut self, sel_dir: SelDir) {
+        use SelDir::*;
+        let Some(selected) = self.selected else {
+            return self.selected = match sel_dir {
+                Up | Left => self.displayed().next_back(),
+                Down | Right => self.displayed().next(),
+            }
+            .map(|game| game.id);
+        };
+
+        let m = |game: &Game| game.id == selected;
+
+        let idx = match sel_dir {
+            Up | Left => self.displayed().rev().position(m),
+            Down | Right => self.displayed().position(m),
+        };
+
+        let Some(idx) = idx else {
+            self.selected = None;
+            self.select(sel_dir);
+            return;
+        };
+
+        self.selected = match sel_dir {
+            Up => self
+                .displayed()
+                .rev()
+                .cycle()
+                .skip(idx + self.columns())
+                .next(),
+            Down => self.displayed().cycle().skip(idx + self.columns()).next(),
+            Left => self.displayed().rev().cycle().skip(idx + 1).next(),
+            Right => self.displayed().cycle().skip(idx + 1).next(),
+        }
+        .map(|game| game.id);
     }
 
     /// Render elements.
@@ -210,13 +279,22 @@ impl State {
             game: &'a Game,
             width: f32,
             shadowed: bool,
+            selected: Option<i64>,
         ) -> Element<'a, OrRequest<Message, Request>> {
             let handle = game.image.as_ref();
             let name = game.name.as_str();
+            let id = game.id;
+
+            let style: fn(&::iced::Theme) -> container::Style;
+            if selected == Some(id) {
+                style = |theme| container::bordered_box(theme).background(theme.palette().primary);
+            } else {
+                style = container::bordered_box;
+            };
 
             let text = container(name)
                 .padding(3)
-                .style(container::bordered_box)
+                .style(style)
                 .pipe(container)
                 .width(width)
                 .height(width)
@@ -243,11 +321,8 @@ impl State {
                 if shadowed {
                     area
                 } else {
-                    area.on_release(OrRequest::Request(Request::SetId { id: game.id }))
-                        .on_middle_release(OrRequest::Request(Request::Run {
-                            id: game.id,
-                            sandbox: true,
-                        }))
+                    area.on_release(OrRequest::Request(Request::SetId { id }))
+                        .on_middle_release(OrRequest::Request(Request::Run { id, sandbox: true }))
                 }
             })
             .into()
@@ -256,11 +331,12 @@ impl State {
         widget::responsive(move |size| {
             let columns = ((size.width as usize - 1) / 153).clamp(1, 24);
             let width = ((size.width / columns as f32) - 3.0).clamp(150.0, 300.0);
+            self.columns.set(columns);
 
             w::scroll(w::col().align_x(Alignment::Start).width(Fill).extend(
                 self.displayed().chunks(columns).into_iter().map(|chunk| {
                     w::row()
-                        .extend(chunk.map(|game| card(game, width, shadowed)))
+                        .extend(chunk.map(|game| card(game, width, shadowed, self.selected)))
                         .into()
                 }),
             ))

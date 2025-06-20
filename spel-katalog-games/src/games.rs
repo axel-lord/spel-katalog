@@ -1,6 +1,6 @@
 //! [Games] impl.
 
-use ::std::iter;
+use ::std::iter::{self, FusedIterator};
 
 use ::iced::widget::image::Handle;
 use ::itertools::izip;
@@ -29,7 +29,9 @@ pub struct Games {
 
 impl Games {
     /// Games that are to currently be dfisplayed.
-    pub fn displayed(&self) -> impl Iterator<Item = &'_ Game> {
+    pub fn displayed(
+        &self,
+    ) -> impl Iterator<Item = &'_ Game> + DoubleEndedIterator + FusedIterator + Clone {
         self.displayed.iter().filter_map(|idx| self.games.get(*idx))
     }
 
