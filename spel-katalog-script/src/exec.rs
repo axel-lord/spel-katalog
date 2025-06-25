@@ -16,7 +16,7 @@ use crate::{builder_push::builder_push, environment::Env};
 
 /// Error that occurs on failure while running a command.
 #[derive(Debug, ::thiserror::Error)]
-pub enum RunError {
+pub enum ExecError {
     /// Error that occcurs when a process cannot be spawned.
     #[error("process could not be spawned, {0}")]
     Spawn(#[source] ::std::io::Error),
@@ -54,7 +54,7 @@ impl Exec {
     }
 
     /// Run executable.
-    pub async fn run(&self, env: &Env) -> Result<ExitStatus, RunError> {
+    pub async fn run(&self, env: &Env) -> Result<ExitStatus, ExecError> {
         let exec;
         let mut args;
         match self {
@@ -86,19 +86,19 @@ impl Exec {
             .stderr(Stdio::inherit())
             .stdout(Stdio::inherit());
 
-        let mut child = command.spawn().map_err(RunError::Spawn)?;
+        let mut child = command.spawn().map_err(ExecError::Spawn)?;
 
         let duration = Duration::from_secs(30);
         let status = match timeout(duration, child.wait()).await {
             Ok(result) => match result {
                 Ok(status) => status,
-                Err(err) => return Err(RunError::Wait(err)),
+                Err(err) => return Err(ExecError::Wait(err)),
             },
             Err(err) => {
                 if let Err(err) = child.kill().await {
-                    return Err(RunError::Kill(err));
+                    return Err(ExecError::Kill(err));
                 }
-                return Err(RunError::Timeout(err, duration));
+                return Err(ExecError::Timeout(err, duration));
             }
         };
 

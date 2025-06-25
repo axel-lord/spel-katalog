@@ -1,12 +1,36 @@
 //! Script file contents
 
+use ::std::{borrow::Cow, process::ExitStatus};
+
 use ::bon::Builder;
+use ::futures::{stream::FuturesUnordered, stream::StreamExt};
+use ::rustc_hash::FxHashMap;
 use ::serde::{Deserialize, Serialize};
 
 use crate::{
-    builder_push::builder_push, dependency::Dependency, environment::Env, exec::Exec,
+    builder_push::builder_push,
+    dependency::{Dependency, DependencyError, DependencyResult},
+    environment::Env,
+    exec::{Exec, ExecError},
     script::Script,
 };
+
+/// Error type returned by running of script files.
+#[derive(Debug, ::thiserror::Error)]
+pub enum RunError {
+    /// An executable could not be ran.
+    #[error(transparent)]
+    RunExec(#[from] ExecError),
+    /// A dependency check could not be ran.
+    #[error(transparent)]
+    Dependency(#[from] DependencyError),
+    /// A dependency check returned a non try failure.
+    #[error("dependency check failed for {0}")]
+    DepCheck(String),
+    /// An executable returned a non-success status.
+    #[error("script {0} returned {1}")]
+    ExitStatus(String, ExitStatus),
+}
 
 /// A script specification.
 #[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq, Builder)]
@@ -48,6 +72,13 @@ builder_push! {
     { synced: impl Into<Exec> => synced.into() }
 }
 
+fn ref_or_default<T: Clone + Default>(t: Option<&T>) -> Cow<T> {
+    match t {
+        Some(t) => Cow::Borrowed(t),
+        None => Cow::default(),
+    }
+}
+
 impl ScriptFile {
     /// Parse json into a `ScriptFile`.
     pub fn from_json(json: &str) -> Result<Self, ::serde_json::Error> {
@@ -57,6 +88,155 @@ impl ScriptFile {
     /// Parse toml into a `ScriptFile`.
     pub fn from_toml(toml: &str) -> Result<Self, ::toml::de::Error> {
         ::toml::from_str(toml)
+    }
+
+    /// Run multiple script files.
+    pub async fn run_all(scripts: &[ScriptFile]) -> Result<(), RunError> {
+        let mut results = FxHashMap::<String, DependencyResult>::default();
+
+        for script_file in scripts {
+            let result = script_file
+                .check_require(|id| results.get(id).copied())
+                .await?;
+
+            if result.is_failure() {
+                return Err(RunError::DepCheck(script_file.script.id.clone()));
+            }
+
+            results.insert(script_file.script.id.clone(), result);
+        }
+
+        // At post require step results are not stored.
+        // as we only care about non try failures and check errors.
+        for script_file in scripts {
+            let result = script_file
+                .check_post_require(|id| results.get(id).copied())
+                .await?;
+
+            if result.is_failure() {
+                return Err(RunError::DepCheck(script_file.script.id.clone()));
+            }
+        }
+
+        for script_file in scripts {
+            let id = script_file.script.id.as_str();
+            let result = results
+                .get(id)
+                .copied()
+                .unwrap_or_else(|| unreachable!())
+                .max(
+                    script_file
+                        .check_assert(|id| results.get(id).copied())
+                        .await?,
+                );
+
+            if result.is_failure() {
+                return Err(RunError::DepCheck(id.to_owned()));
+            }
+
+            results.insert(id.to_owned(), result);
+
+            if result.is_try_failure() {
+                continue;
+            }
+
+            let env = ref_or_default(script_file.env.as_ref());
+
+            for exec in script_file
+                .script
+                .exec
+                .as_ref()
+                .into_iter()
+                .chain(&script_file.synced)
+            {
+                let status = exec.run(&env).await?;
+
+                if !status.success() {
+                    return Err(RunError::ExitStatus(id.to_owned(), status));
+                }
+            }
+
+            let mut futures = script_file
+                .parallell
+                .iter()
+                .map(|exec| exec.run(&env))
+                .collect::<FuturesUnordered<_>>();
+
+            while let Some(status) = futures.next().await {
+                let status = status?;
+                if !status.success() {
+                    return Err(RunError::ExitStatus(id.to_owned(), status));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn check_multiple(
+        &self,
+        values: impl IntoIterator<Item = &Dependency>,
+        get_prior: impl for<'k> Fn(&'k str) -> Option<DependencyResult>,
+    ) -> Result<DependencyResult, DependencyError> {
+        let env;
+        let env = if let Some(env) = &self.env {
+            env
+        } else {
+            env = Env::default();
+            &env
+        };
+
+        let mut futures = values
+            .into_iter()
+            .map(|dep| dep.check(env, &get_prior))
+            .collect::<FuturesUnordered<_>>();
+
+        let mut result = DependencyResult::Success;
+        while let Some(dep_result) = futures.next().await {
+            result = result.max(dep_result?);
+            if result.is_failure() {
+                return Ok(result);
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// Check that require dependencies hold.
+    ///
+    /// # Errors
+    /// If the check cannot be performed.
+    pub async fn check_require(
+        &self,
+        get_prior: impl for<'k> Fn(&'k str) -> Option<DependencyResult>,
+    ) -> Result<DependencyResult, DependencyError> {
+        self.check_multiple(&self.require, get_prior).await
+    }
+
+    /// Check that early assert dependencies hold.
+    ///
+    /// # Errors
+    /// If the check cannot be performed.
+    pub async fn check_post_require(
+        &self,
+        get_prior: impl for<'k> Fn(&'k str) -> Option<DependencyResult>,
+    ) -> Result<DependencyResult, DependencyError> {
+        self.check_multiple(
+            self.assert.iter().filter(|dep| dep.kind.is_script()),
+            get_prior,
+        )
+        .await
+    }
+
+    /// Check that assert dependencies hold.
+    ///
+    /// # Errors
+    /// If the check cannot be performed.
+    pub async fn check_assert(
+        &self,
+        get_prior: impl for<'k> Fn(&'k str) -> Option<DependencyResult>,
+    ) -> Result<DependencyResult, DependencyError> {
+        self.check_multiple(&self.assert, get_prior).await
     }
 
     /// Visit all parsed string values. Notably not environment variable keys.

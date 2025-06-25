@@ -8,7 +8,7 @@ use ::serde::{Deserialize, Serialize};
 
 use crate::{
     environment::Env,
-    exec::{Exec, RunError},
+    exec::{Exec, ExecError},
 };
 
 /// Error type returned by dependency check.
@@ -16,14 +16,17 @@ use crate::{
 pub enum DependencyError {
     /// Running an executable failed.
     #[error(transparent)]
-    RunExec(#[from] RunError),
+    RunExec(#[from] ExecError),
     /// A Script dependency was not ran before this one.
     #[error("no result available for {0:?}")]
     MissingDep(String),
+    /// Runtime for async operations could not be set up.
+    #[error("could not setup runtime, {0}")]
+    Runtime(#[source] ::std::io::Error),
 }
 
 /// The result of a dependency check.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, IsVariant)]
 pub enum DependencyResult {
     /// Failure which should stop all scripts.
     Failure = 2,
@@ -88,7 +91,7 @@ impl DependencyKind {
 impl Dependency {
     /// Check success of dependency.
     pub async fn check(
-        self,
+        &self,
         env: &Env,
         get_prior: impl for<'k> FnOnce(&'k str) -> Option<DependencyResult>,
     ) -> Result<DependencyResult, DependencyError> {
@@ -97,12 +100,12 @@ impl Dependency {
         let success = match kind {
             DependencyKind::Script { id } => {
                 let Some(prior) = get_prior(&id) else {
-                    return Err(DependencyError::MissingDep(id));
+                    return Err(DependencyError::MissingDep(id.clone()));
                 };
 
                 match prior {
                     DependencyResult::Success => true,
-                    _ if try_dep => {
+                    _ if *try_dep => {
                         ::log::info!("dependency did not succeed (try), {id}");
                         false
                     }
@@ -117,7 +120,7 @@ impl Dependency {
 
                 if status.success() {
                     true
-                } else if try_dep {
+                } else if *try_dep {
                     ::log::info!("dependency exec failed (try), {status}");
                     false
                 } else {
@@ -128,7 +131,7 @@ impl Dependency {
         };
 
         match success {
-            false if try_dep => Ok(DependencyResult::TryFailure),
+            false if *try_dep => Ok(DependencyResult::TryFailure),
             false => Ok(DependencyResult::Failure),
             true => Ok(DependencyResult::Success),
         }

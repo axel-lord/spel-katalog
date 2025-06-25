@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-spel-katalog-parse.workspace = true
 tap.workspace = true
 itertools.workspace = true
 log.workspace = true
@@ -12,13 +11,14 @@ toml.workspace = true
 serde = { workspace = true, features = ["derive"] }
 rustc-hash.workspace = true
 indexmap = { workspace = true, features = ["serde"] }
-tokio = { workspace = true, features = ["parking_lot", "process", "macros", "time"] }
+tokio = { workspace = true, features = ["parking_lot", "process", "time"] }
 thiserror.workspace = true
 derive_more = { workspace = true, features = ["into", "from", "is_variant"] }
 serde_json.workspace = true
 bon.workspace = true
 shell-words.workspace = true
 paste.workspace = true
+futures.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
