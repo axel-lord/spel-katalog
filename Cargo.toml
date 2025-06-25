@@ -1,5 +1,5 @@
 [workspace]
-members = [ "spel-katalog-build", "spel-katalog", "spel-katalog-common", "spel-katalog-settings", "spel-katalog-games", "spel-katalog-info", "spel-katalog-parse"]
+members = [ "spel-katalog-build", "spel-katalog", "spel-katalog-common", "spel-katalog-settings", "spel-katalog-games", "spel-katalog-info", "spel-katalog-parse", "spel-katalog-script"]
 resolver = "2"
 default-members = ["spel-katalog"]
 
@@ -74,3 +74,4 @@ smallvec = "1.15.1"
 spel-katalog-info = { path = "spel-katalog-info" }
 yaml-rust2 = "0.10.3"
 whoami = { version = "1.6.0", default-features = false }
+spel-katalog-parse = { path = "spel-katalog-parse" }

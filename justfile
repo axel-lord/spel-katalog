@@ -3,7 +3,6 @@ crate := "spel-katalog"
 default:
 	just --list
 
-
 # Generate documentation for default feature set.
 docs *EXTRA:
 	cargo doc -p {{crate}} {{EXTRA}}
@@ -39,3 +38,10 @@ fmt:
 # Check all features and targets
 check:
 	cargo clippy --all --all-features --all-targets --workspace
+
+# Run autoinherit
+autoinherit:
+	cargo autoinherit --prefer-simple-dotted
+
+# Sanity and format check
+sanity: autoinherit fmt test
