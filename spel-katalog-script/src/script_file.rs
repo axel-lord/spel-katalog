@@ -90,84 +90,116 @@ impl ScriptFile {
         ::toml::from_str(toml)
     }
 
-    /// Run multiple script files.
-    pub async fn run_all(scripts: &[ScriptFile]) -> Result<(), RunError> {
-        let mut results = FxHashMap::<String, DependencyResult>::default();
+    /// Get the id of a script file.
+    pub fn id(&self) -> &str {
+        &self.script.id
+    }
+
+    /// Requirement checks ran before script,
+    /// includes `require` and early script deps of `assert`.
+    pub async fn pre_run_check<'a>(
+        scripts: &'a [ScriptFile],
+    ) -> Result<(FxHashMap<&'a str, DependencyResult>, Vec<&'a ScriptFile>), RunError> {
+        let mut results = FxHashMap::default();
+        let mut passed_early = Vec::new();
 
         for script_file in scripts {
+            let id = script_file.id();
+
+            // Script ids which have already succeeded are skipped.
+            if let Some(DependencyResult::Success) = results.get(id) {
+                continue;
+            }
+
+            // Check if dependency holds.
             let result = script_file
                 .check_require(|id| results.get(id).copied())
                 .await?;
 
+            // A non try error interrupts all further processing.
             if result.is_failure() {
-                return Err(RunError::DepCheck(script_file.script.id.clone()));
+                return Err(RunError::DepCheck(id.to_owned()));
             }
 
-            results.insert(script_file.script.id.clone(), result);
+            // The result is inserted into the map, and the script file is passed to the next step.
+            results.insert(id, result);
+            passed_early.push(script_file);
         }
 
         // At post require step results are not stored.
         // as we only care about non try failures and check errors.
-        for script_file in scripts {
+        let mut passed_late = Vec::new();
+        for script_file in passed_early {
             let result = script_file
                 .check_post_require(|id| results.get(id).copied())
                 .await?;
 
             if result.is_failure() {
-                return Err(RunError::DepCheck(script_file.script.id.clone()));
+                return Err(RunError::DepCheck(script_file.id().to_owned()));
+            }
+            passed_late.push(script_file);
+        }
+
+        Ok((results, passed_late))
+    }
+
+    /// Run this script, only checks assert requirements.
+    ///
+    /// Returns the result of assert requirements.
+    pub async fn run(
+        &self,
+        get_prior: impl for<'k> Fn(&'k str) -> Option<DependencyResult>,
+    ) -> Result<DependencyResult, RunError> {
+        let Self {
+            synced,
+            parallell,
+            script,
+            env,
+            ..
+        } = self;
+        let id = self.id();
+        let result = get_prior(id)
+            .ok_or_else(|| RunError::DepCheck(id.to_owned()))?
+            .max(self.check_assert(&get_prior).await?);
+
+        match result {
+            DependencyResult::Failure => return Err(RunError::DepCheck(id.to_owned())),
+            DependencyResult::TryFailure => return Ok(DependencyResult::TryFailure),
+            DependencyResult::Success => {}
+        }
+
+        let env = ref_or_default(env.as_ref());
+
+        for exec in script.exec.as_ref().into_iter().chain(synced) {
+            let status = exec.run(&env).await?;
+
+            if !status.success() {
+                return Err(RunError::ExitStatus(id.to_owned(), status));
             }
         }
 
+        let mut futures = parallell
+            .iter()
+            .map(|exec| exec.run(&env))
+            .collect::<FuturesUnordered<_>>();
+
+        while let Some(status) = futures.next().await {
+            let status = status?;
+            if !status.success() {
+                return Err(RunError::ExitStatus(id.to_owned(), status));
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// Run multiple script files.
+    pub async fn run_all(scripts: &[ScriptFile]) -> Result<(), RunError> {
+        let (mut results, scripts) = Self::pre_run_check(scripts).await?;
+
         for script_file in scripts {
-            let id = script_file.script.id.as_str();
-            let result = results
-                .get(id)
-                .copied()
-                .unwrap_or_else(|| unreachable!())
-                .max(
-                    script_file
-                        .check_assert(|id| results.get(id).copied())
-                        .await?,
-                );
-
-            if result.is_failure() {
-                return Err(RunError::DepCheck(id.to_owned()));
-            }
-
-            results.insert(id.to_owned(), result);
-
-            if result.is_try_failure() {
-                continue;
-            }
-
-            let env = ref_or_default(script_file.env.as_ref());
-
-            for exec in script_file
-                .script
-                .exec
-                .as_ref()
-                .into_iter()
-                .chain(&script_file.synced)
-            {
-                let status = exec.run(&env).await?;
-
-                if !status.success() {
-                    return Err(RunError::ExitStatus(id.to_owned(), status));
-                }
-            }
-
-            let mut futures = script_file
-                .parallell
-                .iter()
-                .map(|exec| exec.run(&env))
-                .collect::<FuturesUnordered<_>>();
-
-            while let Some(status) = futures.next().await {
-                let status = status?;
-                if !status.success() {
-                    return Err(RunError::ExitStatus(id.to_owned(), status));
-                }
-            }
+            let result = script_file.run(|id| results.get(id).copied()).await?;
+            results.insert(script_file.id(), result);
         }
 
         Ok(())

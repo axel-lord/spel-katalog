@@ -11,7 +11,7 @@ mod builder_push;
 #[cfg(test)]
 mod tests {
     use crate::{
-        dependency::{Dependency, DependencyKind},
+        dependency::{Dependency, DependencyKind, DependencyResult},
         exec::{Cmd, Program},
         script::Script,
         script_file::ScriptFile,
@@ -19,8 +19,184 @@ mod tests {
 
     use ::pretty_assertions::assert_eq;
 
+    type Result = ::core::result::Result<(), ::color_eyre::Report>;
+
+    #[tokio::test]
+    async fn dep_multiple() -> Result {
+        let scripts = [
+            r#"
+            [script]
+            id = "1"
+
+            [[require]]
+            value = "hello"
+            in = ["hello", "world"]
+            "#,
+            r#"
+            [script]
+            id = "2"
+
+            [[require]]
+            script = "1"
+
+            [[require]]
+            equals = ["hello", "hi"]
+            try = true
+            "#,
+            r#"
+            [script]
+            id = "3"
+
+            [[require]]
+            script = "1"
+
+            [[require]]
+            script = "2"
+            try = true
+            "#,
+            r#"
+            [script]
+            id = "4"
+
+            [[require]]
+            script = "1"
+            "#,
+        ]
+        .into_iter()
+        .map(ScriptFile::from_toml)
+        .collect::<::core::result::Result<Vec<_>, _>>()?;
+
+        let results = ScriptFile::pre_run_check(&scripts).await?;
+
+        assert_eq!(results.get("1").copied(), Some(DependencyResult::Success));
+        assert_eq!(
+            results.get("2").copied(),
+            Some(DependencyResult::TryFailure)
+        );
+        assert_eq!(
+            results.get("3").copied(),
+            Some(DependencyResult::TryFailure)
+        );
+        assert_eq!(results.get("4").copied(), Some(DependencyResult::Success));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dep_in() -> Result {
+        let toml = r#"
+        [script]
+        id = "1"
+        [[require]]
+        values = ["hello"]
+        in = ["hello", "world"]
+        "#;
+
+        assert_eq!(
+            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            DependencyResult::Success
+        );
+
+        let toml = r#"
+        [script]
+        id = "2"
+        [[require]]
+        values = ["hello", "world", "hello"]
+        in = ["hello", "world", "world"]
+        "#;
+
+        assert_eq!(
+            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            DependencyResult::Success
+        );
+
+        let toml = r#"
+        [script]
+        id = "3"
+        [[require]]
+        values = ["hello", "world"]
+        in = ["hello"]
+        "#;
+
+        assert_eq!(
+            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            DependencyResult::Failure
+        );
+
+        let toml = r#"
+        [script]
+        id = "3"
+        [[require]]
+        values = ["hello", "world"]
+        in = ["hello"]
+        try = true
+        "#;
+
+        assert_eq!(
+            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            DependencyResult::TryFailure
+        );
+
+        let toml = r#"
+        [script]
+        id = "1"
+        [[require]]
+        value = "hello"
+        in = ["hello", "world"]
+        "#;
+
+        assert_eq!(
+            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            DependencyResult::Success
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dep_equals() -> Result {
+        let toml = r#"
+        [script]
+        id = "1"
+        [[require]]
+        equals = ["hello", "hello"]
+        "#;
+
+        assert_eq!(
+            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            DependencyResult::Success
+        );
+
+        let toml = r#"
+        [script]
+        id = "2"
+        [[require]]
+        equals = ["hello", "world"]
+        "#;
+
+        assert_eq!(
+            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            DependencyResult::Failure
+        );
+
+        let toml = r#"
+        [script]
+        id = "3"
+        [[require]]
+        equals = ["hello", "world"]
+        try = true
+        "#;
+
+        assert_eq!(
+            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            DependencyResult::TryFailure
+        );
+
+        Ok(())
+    }
+
     #[test]
-    fn cmd_script() -> ::color_eyre::Result<()> {
+    fn cmd_script() -> Result {
         let expected = ScriptFile::builder()
             .script(
                 Script::builder("Exp-v2")
@@ -43,7 +219,7 @@ mod tests {
     }
 
     #[test]
-    fn simple_script() -> ::color_eyre::Result<()> {
+    fn simple_script() -> Result {
         let expected = ScriptFile::builder()
             .script(
                 Script::builder("Exp-v1")
@@ -52,7 +228,7 @@ mod tests {
             )
             .require(
                 Dependency::builder()
-                    .kind(DependencyKind::id("PreExp"))
+                    .kind(DependencyKind::script("PreExp"))
                     .try_dep(true)
                     .build(),
             )
@@ -64,7 +240,7 @@ mod tests {
         exec = "script.sh"
 
         [[require]]
-        id = "PreExp"
+        script = "PreExp"
         try = true
         "#;
 
@@ -77,7 +253,7 @@ mod tests {
                 "exec": "script.sh"
             },
             "require": [
-                { "id": "PreExp", "try": true }
+                { "script": "PreExp", "try": true }
             ]
         }
         "#;
