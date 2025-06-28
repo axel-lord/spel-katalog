@@ -25,7 +25,9 @@ shell-words.workspace = true
 spel-katalog-common.workspace = true
 spel-katalog-settings.workspace = true
 spel-katalog-games.workspace = true
-spel-katalog-info = { workspace = true }
+spel-katalog-info.workspace = true
+spel-katalog-script.workspace = true
+spel-katalog-parse.workspace = true
 sqlite.workspace = true
 strsim.workspace = true
 tap.workspace = true
@@ -35,6 +37,7 @@ tokio-stream = { workspace = true, features = ["time"] }
 toml.workspace = true
 xdg.workspace = true
 rustix = { workspace = true, features = ["process"] }
+yaml-rust2.workspace = true
 
 [build-dependencies]
 spel-katalog-build.workspace = true

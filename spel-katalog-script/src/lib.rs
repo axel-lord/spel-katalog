@@ -9,6 +9,12 @@ pub mod script_file;
 
 mod builder_push;
 
+#[doc(inline)]
+pub use crate::script_file::RunError as Error;
+
+#[doc(inline)]
+pub use crate::script_file::ReadError;
+
 #[cfg(test)]
 mod tests {
     use crate::{

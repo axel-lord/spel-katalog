@@ -1,11 +1,18 @@
 //! Script file contents
 
-use ::std::{borrow::Cow, process::ExitStatus};
+use ::std::{
+    borrow::Cow,
+    ffi::{OsStr, OsString},
+    os::unix::ffi::OsStrExt,
+    path::{Path, PathBuf},
+    process::ExitStatus,
+};
 
 use ::bon::Builder;
 use ::futures::{stream::FuturesUnordered, stream::StreamExt};
 use ::rustc_hash::FxHashMap;
 use ::serde::{Deserialize, Serialize};
+use ::tap::{Pipe, Tap, TryConv};
 
 use crate::{
     builder_push::builder_push,
@@ -30,6 +37,26 @@ pub enum RunError {
     /// An executable returned a non-success status.
     #[error("script {0} returned {1}")]
     ExitStatus(String, ExitStatus),
+}
+
+/// Error returned when failing to parse/read a script file.
+#[derive(Debug, ::thiserror::Error)]
+pub enum ReadError {
+    /// Failed to parse a toml file.
+    #[error(transparent)]
+    Toml(#[from] ::toml::de::Error),
+
+    /// Failed to parse a json file.
+    #[error(transparent)]
+    Json(#[from] ::serde_json::Error),
+
+    /// Io error occurred while reading.
+    #[error(transparent)]
+    Read(#[from] ::std::io::Error),
+
+    /// Extension was not toml or json.
+    #[error("extension {0:?} should be \"toml\" or \"json\"")]
+    UnknownExtension(OsString),
 }
 
 /// A script specification.
@@ -62,6 +89,10 @@ pub struct ScriptFile {
     /// Application environment.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub env: Option<Env>,
+
+    /// Path to parsed file.
+    #[serde(skip)]
+    pub source: Option<PathBuf>,
 }
 
 builder_push! {
@@ -88,6 +119,38 @@ impl ScriptFile {
     /// Parse toml into a `ScriptFile`.
     pub fn from_toml(toml: &str) -> Result<Self, ::toml::de::Error> {
         ::toml::from_str(toml)
+    }
+
+    /// Read a script from a path.
+    pub async fn read(path: &Path) -> Result<Self, ReadError> {
+        let ext = path
+            .extension()
+            .ok_or_else(|| ReadError::UnknownExtension(OsString::new()))?;
+
+        let ext = ext
+            .as_bytes()
+            .try_conv::<[u8; 4]>()
+            .map_err(|_| ReadError::UnknownExtension(ext.to_os_string()))?
+            .tap_mut(|ext| ext.make_ascii_uppercase());
+
+        let content = ::tokio::fs::read_to_string(path);
+        let mut script_file = match &ext {
+            b"TOML" => {
+                let script = Self::from_toml(&content.await?)?;
+                Ok(script)
+            }
+            b"JSON" => {
+                let script = Self::from_json(&content.await?)?;
+                Ok(script)
+            }
+
+            ext => OsStr::from_bytes(ext)
+                .to_os_string()
+                .pipe(ReadError::UnknownExtension)
+                .pipe(Err),
+        }?;
+        script_file.source = Some(path.to_owned());
+        Ok(script_file)
     }
 
     /// Get the id of a script file.
@@ -283,6 +346,7 @@ impl ScriptFile {
             parallell,
             script,
             env,
+            source: _,
         } = self;
 
         assert

@@ -12,6 +12,7 @@ use ::iced::{
     Element,
     Length::Fill,
     Subscription, Task,
+    futures::{TryStreamExt, stream::FuturesOrdered},
     keyboard::{self, Modifiers, key::Named, on_key_press},
     widget::{self, horizontal_rule, stack, text, text_input, toggler, value, vertical_space},
 };
@@ -22,9 +23,10 @@ use ::spel_katalog_info::{
     formats::{self, Additional},
     image_buffer::ImageBuffer,
 };
+use ::spel_katalog_script::script_file::ScriptFile;
 use ::spel_katalog_settings::{
-    CoverartDir, ExtraConfigDir, FilterMode, FirejailExe, LutrisDb, LutrisExe, Network, Show,
-    Theme, Variants, YmlDir,
+    CoverartDir, ExtraConfigDir, FilterMode, FirejailExe, LutrisDb, LutrisExe, Network,
+    ScriptConfigDir, Show, Theme, Variants, YmlDir,
 };
 use ::tap::Pipe;
 
@@ -488,6 +490,8 @@ impl App {
         let firejail = self.settings.get::<FirejailExe>().clone();
         let slug = game.slug.clone();
         let name = game.name.clone();
+        let runner = game.runner.clone();
+        let hidden = game.hidden;
         let is_net_disabled = self.settings.get::<Network>().is_disabled();
         let configpath = self
             .settings
@@ -500,8 +504,127 @@ impl App {
             .get::<ExtraConfigDir>()
             .as_path()
             .join(format!("{id}.toml"));
+        let script_dir = self.settings.get::<ScriptConfigDir>().to_path_buf();
 
         let task = Task::future(async move {
+            #[derive(Debug, ::thiserror::Error)]
+            enum ScriptGatherError {
+                /// Forwarded io error.
+                #[error(transparent)]
+                Io(#[from] ::std::io::Error),
+                /// Forwarded script run error.
+                #[error(transparent)]
+                Script(#[from] ::spel_katalog_script::Error),
+                /// Forwarded parse error.
+                #[error(transparent)]
+                ParseRead(#[from] ::spel_katalog_script::ReadError),
+                /// Forwarded string interpolation error.
+                #[error("while interpolating {1:?}\n{0}")]
+                Interpolate(
+                    #[source] ::spel_katalog_parse::InterpolationError<String>,
+                    String,
+                ),
+            }
+
+            #[derive(Debug, ::thiserror::Error)]
+            enum ConfigError {
+                #[error(transparent)]
+                Io(#[from] ::std::io::Error),
+                #[error(transparent)]
+                Scan(#[from] ::yaml_rust2::ScanError),
+            }
+
+            let config = async {
+                let config = ::tokio::fs::read_to_string(&configpath).await?;
+                let config = formats::Config::parse(&config)?;
+
+                Ok::<_, ConfigError>(config)
+            };
+
+            let config = match config.await {
+                Ok(config) => config,
+                Err(err) => {
+                    ::log::error!("while loading config {configpath:?}\n{err}");
+                    return format!("could not load config for game").into();
+                }
+            };
+
+            let scripts_result = async {
+                if !script_dir.exists() {
+                    ::log::info!("no script dir, skipping");
+                    return Ok(());
+                }
+
+                let mut scripts = Vec::new();
+                let mut stack = Vec::new();
+
+                stack.push(script_dir);
+
+                while let Some(dir) = stack.pop() {
+                    let mut dir = ::tokio::fs::read_dir(dir).await?;
+                    while let Some(entry) = dir.next_entry().await? {
+                        let ft = entry.file_type().await?;
+
+                        let path = entry.path();
+
+                        if ft.is_dir() {
+                            stack.push(path);
+                        } else if ft.is_file() {
+                            scripts.push(path);
+                        } else {
+                            ::log::warn!("non file or directory path in script dir, {path:?}")
+                        }
+                    }
+                }
+
+                scripts.sort_unstable();
+
+                let mut scripts = scripts
+                    .iter()
+                    .map(|path| ScriptFile::read(&path))
+                    .collect::<FuturesOrdered<_>>()
+                    .try_collect::<Vec<_>>()
+                    .await?;
+
+                for script in &mut scripts {
+                    script
+                        .visit_strings(|s| {
+                            *s = ::spel_katalog_parse::interpolate_string(s, |key| match key {
+                                "HOME" => Some(::spel_katalog_settings::HOME.to_string()),
+                                "ID" => Some(id.to_string()),
+                                "SLUG" => Some(slug.clone()),
+                                "NAME" => Some(name.clone()),
+                                "RUNNER" => Some(runner.to_string()),
+                                "HIDDEN" => Some(hidden.to_string()),
+                                "EXE" => Some(config.game.exe.display().to_string()),
+                                "PREFIX" => Some(config.game.prefix.as_ref().map_or_else(
+                                    || String::new(),
+                                    |pfx| pfx.display().to_string(),
+                                )),
+                                _ => None,
+                            })?;
+                            Ok(())
+                        })
+                        .map_err(|err| {
+                            ScriptGatherError::Interpolate(
+                                err,
+                                script.source.as_ref().map_or_else(
+                                    || script.id().to_owned(),
+                                    |source| source.display().to_string(),
+                                ),
+                            )
+                        })?;
+                }
+
+                ScriptFile::run_all(&scripts).await?;
+                Ok::<_, ScriptGatherError>(())
+            };
+
+            if let Err(err) = scripts_result.await {
+                ::log::error!("failure when gathering/runnings scripts\n{err}");
+                return format!("running scripts failed").into();
+            }
+
             let rungame = format!("lutris:rungameid/{id}");
 
             fn wl(p: impl AsRef<OsStr>) -> OsString {
@@ -546,22 +669,7 @@ impl App {
                             .map(wl)
                             .collect::<Vec<_>>();
                     } else {
-                        args = ::tokio::fs::read_to_string(&configpath)
-                            .await
-                            .map_err(|err| ::log::error!("could not read {configpath:?}\n{err}"))
-                            .ok()
-                            .and_then(|content| {
-                                formats::Config::parse(&content)
-                                    .map_err(|err| {
-                                        ::log::error!("could not parse {configpath:?}\n{err}")
-                                    })
-                                    .ok()
-                            })
-                            .map(|config| config.game.common_parent())
-                            .unwrap_or_else(|| ::spel_katalog_settings::HOME.as_path().into())
-                            .pipe(::std::iter::once)
-                            .map(wl)
-                            .collect::<Vec<_>>();
+                        args = Vec::from([wl(config.game.common_parent())]);
                     }
 
                     if is_net_disabled {

@@ -4251,6 +4251,8 @@ dependencies = [
  "spel-katalog-common",
  "spel-katalog-games",
  "spel-katalog-info",
+ "spel-katalog-parse",
+ "spel-katalog-script",
  "spel-katalog-settings",
  "sqlite",
  "strsim",
@@ -4260,6 +4262,7 @@ dependencies = [
  "tokio-stream",
  "toml",
  "xdg",
+ "yaml-rust2",
 ]
 
 [[package]]

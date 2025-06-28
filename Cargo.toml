@@ -78,3 +78,4 @@ spel-katalog-parse = { path = "spel-katalog-parse" }
 pretty_assertions = "1.4.1"
 serde_json = "1.0.140"
 futures = "0.3.31"
+spel-katalog-script = { path = "spel-katalog-script" }
