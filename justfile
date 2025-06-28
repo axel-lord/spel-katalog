@@ -24,7 +24,7 @@ test-all *EXTRA:
 	cargo test --all --all-features {{EXTRA}}
 
 # Run tests with all features.
-test  *EXTRA:
+test *EXTRA:
 	cargo test --all-features {{EXTRA}}
 
 # Run tests using miri
@@ -45,3 +45,6 @@ autoinherit:
 
 # Sanity and format check
 sanity: autoinherit fmt test
+
+install: sanity
+	cargo +nightly install --path {{crate}} -Z build-std=std,panic_abort -Z build-std-features="optimize_for_size" 
