@@ -4,12 +4,14 @@ use ::std::ops::Not;
 
 use ::bon::Builder;
 use ::derive_more::{From, IsVariant};
+use ::regex::Regex;
 use ::serde::{Deserialize, Serialize};
 use ::tap::Tap;
 
 use crate::{
     environment::Env,
     exec::{Exec, ExecError},
+    maybe_single::MaybeSingle,
 };
 
 /// Error type returned by dependency check.
@@ -24,6 +26,9 @@ pub enum DependencyError {
     /// Runtime for async operations could not be set up.
     #[error("could not setup runtime, {0}")]
     Runtime(#[source] ::std::io::Error),
+    /// Regex pattern could not be compiled
+    #[error(transparent)]
+    ReCompilation(#[from] ::regex::Error),
 }
 
 /// The result of a dependency check.
@@ -63,43 +68,6 @@ pub struct Dependency {
     pub try_dep: bool,
 }
 
-/// Value/s for in check.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, From, IsVariant)]
-#[serde(untagged)]
-pub enum MaybeSingle {
-    /// Multiple values.
-    Multiple(Vec<String>),
-    /// A Single value.
-    Single(String),
-}
-
-impl MaybeSingle {
-    /// Get contents as a slice.
-    pub fn as_slice(&self) -> &[String] {
-        match self {
-            MaybeSingle::Multiple(values) => values,
-            MaybeSingle::Single(value) => ::std::slice::from_ref(value),
-        }
-    }
-
-    /// Get contents as a slice.
-    pub fn as_mut_slice(&mut self) -> &mut [String] {
-        match self {
-            MaybeSingle::Multiple(values) => values,
-            MaybeSingle::Single(value) => ::std::slice::from_mut(value),
-        }
-    }
-
-    /// Sort and deduplicate contents
-    pub fn dedup(mut self) -> Self {
-        if let Self::Multiple(values) = &mut self {
-            values.sort_unstable();
-            values.dedup();
-        }
-        self
-    }
-}
-
 /// Different kinds of dependency.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, From, IsVariant)]
 #[serde(untagged)]
@@ -108,30 +76,43 @@ pub enum DependencyKind {
     #[from(ignore)]
     Script {
         /// Id of dependency.
-        script: String,
+        #[serde(rename = "script")]
+        id: String,
     },
     /// Depend on the success of an executable.
     Exec(Exec),
     /// Depend on a group of values being the same.
-    ValueEquals {
+    Equals {
         /// Values to check if equal.
-        equals: Vec<String>,
+        #[serde(rename = "equals", alias = "equal")]
+        values: Vec<String>,
     },
     /// Depend on a value being in a list.
-    ValeuIn {
+    In {
         /// Values to check for.
         #[serde(alias = "value")]
         values: MaybeSingle,
+
         /// Collection to check for values in.
         #[serde(rename = "in")]
-        in_collection: Vec<String>,
+        collection: Vec<String>,
+    },
+    /// Check if values mayches a pattern.
+    Matches {
+        /// Values to check for.
+        #[serde(alias = "value")]
+        values: MaybeSingle,
+
+        /// Pattern to match.
+        #[serde(rename = "match", alias = "matches")]
+        pattern: String,
     },
 }
 
 impl DependencyKind {
     /// Create a script dependency on the given id.
     pub fn script(id: impl Into<String>) -> Self {
-        Self::Script { script: id.into() }
+        Self::Script { id: id.into() }
     }
 
     /// Create an executable dependency.
@@ -148,16 +129,17 @@ impl Dependency {
         get_prior: impl for<'k> FnOnce(&'k str) -> Option<DependencyResult>,
     ) -> Result<DependencyResult, DependencyError> {
         let Self { kind, try_dep } = self;
+        let try_dep = *try_dep;
 
         let result = match kind {
-            DependencyKind::Script { script: id } => {
+            DependencyKind::Script { id } => {
                 let Some(prior) = get_prior(&id) else {
                     return Err(DependencyError::MissingDep(id.clone()));
                 };
 
                 match prior {
                     result @ DependencyResult::Success => result,
-                    _ if *try_dep => {
+                    _ if try_dep => {
                         ::log::info!("dependency did not succeed (try), {id}");
                         DependencyResult::TryFailure
                     }
@@ -172,7 +154,7 @@ impl Dependency {
 
                 if status.success() {
                     DependencyResult::Success
-                } else if *try_dep {
+                } else if try_dep {
                     ::log::info!("dependency exec failed (try), {status}");
                     DependencyResult::TryFailure
                 } else {
@@ -180,12 +162,12 @@ impl Dependency {
                     DependencyResult::Failure
                 }
             }
-            DependencyKind::ValueEquals { equals } => match equals.as_slice() {
+            DependencyKind::Equals { values } => match values.as_slice() {
                 [head, remainder @ ..] if remainder.iter().all(|e| e == head) => {
                     DependencyResult::Success
                 }
                 [] => DependencyResult::Success,
-                values if *try_dep => {
+                values if try_dep => {
                     ::log::info!("equality check failed (try), for values\n{values:#?}");
                     DependencyResult::TryFailure
                 }
@@ -194,32 +176,54 @@ impl Dependency {
                     DependencyResult::Failure
                 }
             },
-            DependencyKind::ValeuIn {
-                values,
-                in_collection,
-            } => {
+            DependencyKind::In { values, collection } => {
                 let values = values.clone().dedup();
-                let in_collection = in_collection.clone().tap_mut(|in_collection| {
-                    in_collection.sort_unstable();
-                    in_collection.dedup();
+                let collection = collection.clone().tap_mut(|collection| {
+                    collection.sort_unstable();
+                    collection.dedup();
                 });
 
                 'blk: {
                     for value in values.as_slice() {
-                        if in_collection.binary_search(&value).is_ok() {
+                        if collection.binary_search(&value).is_ok() {
                             continue;
                         }
 
-                        break 'blk if *try_dep {
-                            ::log::info!(
-                                "value {value} not in collection (try)\n{in_collection:#?}"
-                            );
+                        break 'blk if try_dep {
+                            ::log::info!("value {value} not in collection (try)\n{collection:#?}");
                             DependencyResult::TryFailure
                         } else {
-                            ::log::error!("value {value} not in collection\n{in_collection:#?}");
+                            ::log::error!("value {value} not in collection\n{collection:#?}");
                             DependencyResult::Failure
                         };
                     }
+                    DependencyResult::Success
+                }
+            }
+            DependencyKind::Matches { values, pattern } => {
+                let re = Regex::new(pattern)?;
+
+                'blk: {
+                    for value in values.as_slice() {
+                        if re.is_match(value) {
+                            continue;
+                        }
+
+                        if try_dep {
+                            ::log::info!(
+                                "pattern /{}/ did not match {:?} (try)",
+                                re.as_str(),
+                                value
+                            );
+
+                            break 'blk DependencyResult::TryFailure;
+                        } else {
+                            ::log::error!("pattern /{}/ did not match {:?}", re.as_str(), value);
+
+                            break 'blk DependencyResult::Failure;
+                        }
+                    }
+
                     DependencyResult::Success
                 }
             }
@@ -234,17 +238,24 @@ impl Dependency {
         mut f: impl FnMut(&mut String) -> Result<(), E>,
     ) -> Result<(), E> {
         match &mut self.kind {
-            DependencyKind::Script { script: id } => f(id),
+            DependencyKind::Script { id } => f(id),
             DependencyKind::Exec(exec) => exec.visit_strings(f),
-            DependencyKind::ValueEquals { equals } => equals.iter_mut().try_for_each(f),
-            DependencyKind::ValeuIn {
+            DependencyKind::Equals { values: equals } => equals.iter_mut().try_for_each(f),
+            DependencyKind::In {
                 values,
-                in_collection,
+                collection: in_collection,
             } => values
                 .as_mut_slice()
                 .iter_mut()
                 .chain(in_collection)
                 .try_for_each(f),
+            DependencyKind::Matches {
+                values,
+                pattern: matches,
+            } => {
+                f(matches)?;
+                values.as_mut_slice().iter_mut().try_for_each(f)
+            }
         }
     }
 }

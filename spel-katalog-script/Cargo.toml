@@ -13,12 +13,13 @@ rustc-hash.workspace = true
 indexmap = { workspace = true, features = ["serde"] }
 tokio = { workspace = true, features = ["parking_lot", "process", "time"] }
 thiserror.workspace = true
-derive_more = { workspace = true, features = ["into", "from", "is_variant"] }
+derive_more = { workspace = true, features = ["into", "from", "is_variant", "deref", "deref_mut"] }
 serde_json.workspace = true
 bon.workspace = true
 shell-words.workspace = true
 paste.workspace = true
 futures.workspace = true
+regex.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true

@@ -3,6 +3,7 @@
 pub mod dependency;
 pub mod environment;
 pub mod exec;
+pub mod maybe_single;
 pub mod script;
 pub mod script_file;
 
@@ -66,7 +67,7 @@ mod tests {
         .map(ScriptFile::from_toml)
         .collect::<::core::result::Result<Vec<_>, _>>()?;
 
-        let results = ScriptFile::pre_run_check(&scripts).await?;
+        let (results, _) = ScriptFile::pre_run_check(&scripts).await?;
 
         assert_eq!(results.get("1").copied(), Some(DependencyResult::Success));
         assert_eq!(
@@ -78,6 +79,24 @@ mod tests {
             Some(DependencyResult::TryFailure)
         );
         assert_eq!(results.get("4").copied(), Some(DependencyResult::Success));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dep_match() -> Result {
+        let toml = r#"
+        [script]
+        id = "1"
+        [[require]]
+        value = "Hello world!"
+        matches = "^He[li].*!$"
+        "#;
+
+        assert_eq!(
+            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            DependencyResult::Success
+        );
 
         Ok(())
     }
