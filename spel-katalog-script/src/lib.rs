@@ -141,6 +141,7 @@ mod tests {
         [[require]]
         values = ["hello", "world"]
         in = ["hello"]
+        panic = true
         "#;
 
         assert_eq!(
@@ -154,7 +155,6 @@ mod tests {
         [[require]]
         values = ["hello", "world"]
         in = ["hello"]
-        try = true
         "#;
 
         assert_eq!(
@@ -168,6 +168,7 @@ mod tests {
         [[require]]
         value = "hello"
         in = ["hello", "world"]
+        panic = true
         "#;
 
         assert_eq!(
@@ -185,6 +186,7 @@ mod tests {
         id = "1"
         [[require]]
         equals = ["hello", "hello"]
+        panic = true
         "#;
 
         assert_eq!(
@@ -197,6 +199,7 @@ mod tests {
         id = "2"
         [[require]]
         equals = ["hello", "world"]
+        panic = true
         "#;
 
         assert_eq!(
@@ -209,7 +212,6 @@ mod tests {
         id = "3"
         [[require]]
         equals = ["hello", "world"]
-        try = true
         "#;
 
         assert_eq!(
@@ -254,7 +256,6 @@ mod tests {
             .require(
                 Dependency::builder()
                     .kind(DependencyKind::script("PreExp"))
-                    .try_dep(true)
                     .build(),
             )
             .build();
@@ -266,7 +267,6 @@ mod tests {
 
         [[require]]
         script = "PreExp"
-        try = true
         "#;
 
         assert_eq!(ScriptFile::from_toml(toml)?, expected.clone());

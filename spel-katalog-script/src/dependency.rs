@@ -63,9 +63,9 @@ pub struct Dependency {
     pub kind: DependencyKind,
 
     /// Failure will stop current script but no others unless current one is required.
-    #[serde(default, skip_serializing_if = "Not::not", rename = "try")]
+    #[serde(default, skip_serializing_if = "Not::not")]
     #[builder(default)]
-    pub try_dep: bool,
+    pub panic: bool,
 }
 
 /// Different kinds of dependency.
@@ -128,8 +128,19 @@ impl Dependency {
         env: &Env,
         get_prior: impl for<'k> FnOnce(&'k str) -> Option<DependencyResult>,
     ) -> Result<DependencyResult, DependencyError> {
-        let Self { kind, try_dep } = self;
-        let try_dep = *try_dep;
+        let Self { kind, panic } = self;
+        let failure = || {
+            if *panic {
+                DependencyResult::Failure
+            } else {
+                DependencyResult::TryFailure
+            }
+        };
+        let level = if *panic {
+            ::log::Level::Error
+        } else {
+            ::log::Level::Info
+        };
 
         let result = match kind {
             DependencyKind::Script { id } => {
@@ -137,16 +148,11 @@ impl Dependency {
                     return Err(DependencyError::MissingDep(id.clone()));
                 };
 
-                match prior {
-                    result @ DependencyResult::Success => result,
-                    _ if try_dep => {
-                        ::log::info!("dependency did not succeed (try), {id}");
-                        DependencyResult::TryFailure
-                    }
-                    _ => {
-                        ::log::error!("dependency did not succeed, {id}");
-                        DependencyResult::Failure
-                    }
+                if prior.is_success() {
+                    prior
+                } else {
+                    ::log::log!(level, "script dependency did not succeed, {id}");
+                    failure()
                 }
             }
             DependencyKind::Exec(exec) => {
@@ -154,26 +160,19 @@ impl Dependency {
 
                 if status.success() {
                     DependencyResult::Success
-                } else if try_dep {
-                    ::log::info!("dependency exec failed (try), {status}");
-                    DependencyResult::TryFailure
                 } else {
-                    ::log::error!("dependency exec failed, {status}");
-                    DependencyResult::Failure
+                    ::log::log!(level, "dependency exec failed, {status}");
+                    failure()
                 }
             }
             DependencyKind::Equals { values } => match values.as_slice() {
+                [] => DependencyResult::Success,
                 [head, remainder @ ..] if remainder.iter().all(|e| e == head) => {
                     DependencyResult::Success
                 }
-                [] => DependencyResult::Success,
-                values if try_dep => {
-                    ::log::info!("equality check failed (try), for values\n{values:#?}");
-                    DependencyResult::TryFailure
-                }
                 values => {
-                    ::log::error!("equality check failed, for values\n{values:#?}");
-                    DependencyResult::Failure
+                    ::log::log!(level, "equality check failed, values:\n{values:#?}");
+                    failure()
                 }
             },
             DependencyKind::In { values, collection } => {
@@ -185,17 +184,10 @@ impl Dependency {
 
                 'blk: {
                     for value in values.as_slice() {
-                        if collection.binary_search(&value).is_ok() {
-                            continue;
+                        if collection.binary_search(&value).is_err() {
+                            ::log::log!(level, "value {value} not in collection\n{collection:#?}");
+                            break 'blk failure();
                         }
-
-                        break 'blk if try_dep {
-                            ::log::info!("value {value} not in collection (try)\n{collection:#?}");
-                            DependencyResult::TryFailure
-                        } else {
-                            ::log::error!("value {value} not in collection\n{collection:#?}");
-                            DependencyResult::Failure
-                        };
                     }
                     DependencyResult::Success
                 }
@@ -205,22 +197,14 @@ impl Dependency {
 
                 'blk: {
                     for value in values.as_slice() {
-                        if re.is_match(value) {
-                            continue;
-                        }
-
-                        if try_dep {
-                            ::log::info!(
-                                "pattern /{}/ did not match {:?} (try)",
+                        if !re.is_match(value) {
+                            ::log::log!(
+                                level,
+                                "pattern /{}/ did not match {:?}",
                                 re.as_str(),
                                 value
                             );
-
-                            break 'blk DependencyResult::TryFailure;
-                        } else {
-                            ::log::error!("pattern /{}/ did not match {:?}", re.as_str(), value);
-
-                            break 'blk DependencyResult::Failure;
+                            break 'blk failure();
                         }
                     }
 

@@ -11,7 +11,7 @@ toml.workspace = true
 serde = { workspace = true, features = ["derive"] }
 rustc-hash.workspace = true
 indexmap = { workspace = true, features = ["serde"] }
-tokio = { workspace = true, features = ["parking_lot", "process", "time"] }
+tokio = { workspace = true, features = ["parking_lot", "process", "time", "fs"] }
 thiserror.workspace = true
 derive_more = { workspace = true, features = ["into", "from", "is_variant", "deref", "deref_mut"] }
 serde_json.workspace = true
