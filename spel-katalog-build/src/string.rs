@@ -15,7 +15,7 @@ pub fn title_case(value: &str) -> String {
 }
 
 /// Append a punctuation to the string if not already there.
-pub fn doc_str(value: &str) -> Cow<str> {
+pub fn doc_str(value: &str) -> Cow<'_, str> {
     if value.ends_with('.') {
         Cow::Borrowed(value)
     } else {

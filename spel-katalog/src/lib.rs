@@ -701,7 +701,7 @@ impl App {
         task
     }
 
-    pub fn view(&self) -> Element<Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         w::col()
             .padding(5)
             .spacing(0)

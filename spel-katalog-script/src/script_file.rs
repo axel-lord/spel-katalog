@@ -103,7 +103,7 @@ builder_push! {
     { synced: impl Into<Exec> => synced.into() }
 }
 
-fn ref_or_default<T: Clone + Default>(t: Option<&T>) -> Cow<T> {
+fn ref_or_default<T: Clone + Default>(t: Option<&T>) -> Cow<'_, T> {
     match t {
         Some(t) => Cow::Borrowed(t),
         None => Cow::default(),

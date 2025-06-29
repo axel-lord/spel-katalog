@@ -477,14 +477,14 @@ pub fn write(settings: Settings, dest: &Path) {
                 )*
 
                 /// Get element to display enum options.
-                pub fn view_enums(&self) -> ::iced::Element<Delta> {
+                pub fn view_enums(&self) -> ::iced::Element<'_,  Delta> {
                     crate::list::enum_list([
                         #( crate::list::enum_choice(self.#enum_field_names), )*
                     ]).into()
                 }
 
                 /// Get element to display path options.
-                pub fn view_paths(&self) -> ::iced::Element<Delta> {
+                pub fn view_paths(&self) -> ::iced::Element<'_, Delta> {
                     crate::list::path_list([
                         #( crate::list::path_input(&self.#path_field_names), )*
                     ]).into()

@@ -274,7 +274,7 @@ impl State {
     }
 
     /// Render elements.
-    pub fn view(&self, shadowed: bool) -> Element<OrRequest<Message, Request>> {
+    pub fn view(&self, shadowed: bool) -> Element<'_, OrRequest<Message, Request>> {
         fn card<'a>(
             game: &'a Game,
             width: f32,

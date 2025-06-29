@@ -199,7 +199,7 @@ impl State {
         Task::none()
     }
 
-    pub fn view(&self) -> Element<Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         w::col()
             .align_x(Alignment::Start)
             .width(Fill)
