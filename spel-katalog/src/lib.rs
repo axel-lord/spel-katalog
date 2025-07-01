@@ -5,7 +5,7 @@ use ::std::{
     time::Duration,
 };
 
-use ::clap::Parser;
+use ::clap::{Parser, Subcommand};
 use ::color_eyre::{Report, Section, eyre::eyre};
 use ::derive_more::{From, IsVariant};
 use ::iced::{
@@ -60,6 +60,37 @@ pub struct Cli {
     /// Config file to load.
     #[arg(long, short, default_value=default_config().as_os_str())]
     pub config: PathBuf,
+
+    /// Perform an action other than opening gui.
+    #[command(subcommand)]
+    pub action: Option<Subcmd>,
+}
+
+fn get_shell() -> ::clap_complete::Shell {
+    ::clap_complete::Shell::from_env().unwrap_or_else(|| ::clap_complete::Shell::Bash)
+}
+
+/// Use cases other than launching gui.
+#[derive(Debug, Subcommand)]
+pub enum Subcmd {
+    /// Output a skeleton config.
+    Skeleton {
+        /// Where to write skeleton to.
+        #[arg(long, short, default_value = "-")]
+        output: PathBuf,
+    },
+    /// Output completions.
+    Completions {
+        /// Shell to use.
+        #[arg(short, long, value_enum, default_value_t = get_shell())]
+        shell: ::clap_complete::Shell,
+        /// Name of the binary completions should be generated for.
+        #[arg(short, long, default_value = "spel-katalog")]
+        name: String,
+        /// Where to write completions to.
+        #[arg(short, long, default_value = "-")]
+        output: PathBuf,
+    },
 }
 
 #[derive(Debug)]
@@ -146,6 +177,7 @@ impl App {
                 show_settings,
                 skeleton,
                 config,
+                action: _,
             } = Cli::parse();
 
             fn read_settings(

@@ -6,6 +6,7 @@ pub mod exec;
 pub mod maybe_single;
 pub mod script;
 pub mod script_file;
+pub mod string_visitor;
 
 mod builder_push;
 
@@ -76,14 +77,8 @@ mod tests {
         let (results, _) = ScriptFile::pre_run_check(&scripts).await?;
 
         assert_eq!(results.get("1").copied(), Some(DependencyResult::Success));
-        assert_eq!(
-            results.get("2").copied(),
-            Some(DependencyResult::TryFailure)
-        );
-        assert_eq!(
-            results.get("3").copied(),
-            Some(DependencyResult::TryFailure)
-        );
+        assert_eq!(results.get("2").copied(), Some(DependencyResult::Failure));
+        assert_eq!(results.get("3").copied(), Some(DependencyResult::Failure));
         assert_eq!(results.get("4").copied(), Some(DependencyResult::Success));
 
         Ok(())
@@ -146,7 +141,7 @@ mod tests {
 
         assert_eq!(
             ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
-            DependencyResult::Failure
+            DependencyResult::Panic
         );
 
         let toml = r#"
@@ -159,7 +154,7 @@ mod tests {
 
         assert_eq!(
             ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
-            DependencyResult::TryFailure
+            DependencyResult::Failure
         );
 
         let toml = r#"
@@ -204,7 +199,7 @@ mod tests {
 
         assert_eq!(
             ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
-            DependencyResult::Failure
+            DependencyResult::Panic
         );
 
         let toml = r#"
@@ -216,7 +211,7 @@ mod tests {
 
         assert_eq!(
             ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
-            DependencyResult::TryFailure
+            DependencyResult::Failure
         );
 
         Ok(())

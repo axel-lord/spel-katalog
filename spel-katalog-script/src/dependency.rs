@@ -4,15 +4,18 @@ use ::std::ops::Not;
 
 use ::bon::Builder;
 use ::derive_more::{From, IsVariant};
-use ::regex::Regex;
 use ::serde::{Deserialize, Serialize};
 use ::tap::Tap;
 
 use crate::{
+    dependency::failure::failure,
     environment::Env,
     exec::{Exec, ExecError},
     maybe_single::MaybeSingle,
 };
+
+mod failure;
+mod matches;
 
 /// Error type returned by dependency check.
 #[derive(Debug, ::thiserror::Error)]
@@ -32,15 +35,31 @@ pub enum DependencyError {
 }
 
 /// The result of a dependency check.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, IsVariant)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum DependencyResult {
     /// Failure which should stop all scripts.
-    Failure = 2,
+    Panic = 3,
     /// Failure which should only stop current script.
-    TryFailure = 1,
+    Failure = 2,
+    /// Success which should not run current script.
+    Skip = 1,
     /// Success, continue on.
     #[default]
     Success = 0,
+}
+
+impl DependencyResult {
+    /// Check if the result is of the panic variant.
+    ///
+    /// This is the only variant check implemented as
+    /// most other cases should be handled by match,
+    /// (as they might all be considered success), but
+    /// there is great utility in checking for the panic
+    /// variant, as no more script activity should happen
+    /// when returned.
+    pub fn is_panic(self) -> bool {
+        matches!(self, Self::Panic)
+    }
 }
 
 impl FromIterator<DependencyResult> for DependencyResult {
@@ -98,15 +117,7 @@ pub enum DependencyKind {
         collection: Vec<String>,
     },
     /// Check if values mayches a pattern.
-    Matches {
-        /// Values to check for.
-        #[serde(alias = "value")]
-        values: MaybeSingle,
-
-        /// Pattern to match.
-        #[serde(rename = "match", alias = "matches")]
-        pattern: String,
-    },
+    Matches(matches::Matches),
 }
 
 impl DependencyKind {
@@ -129,18 +140,6 @@ impl Dependency {
         get_prior: impl for<'k> FnOnce(&'k str) -> Option<DependencyResult>,
     ) -> Result<DependencyResult, DependencyError> {
         let Self { kind, panic } = self;
-        let failure = || {
-            if *panic {
-                DependencyResult::Failure
-            } else {
-                DependencyResult::TryFailure
-            }
-        };
-        let level = if *panic {
-            ::log::Level::Error
-        } else {
-            ::log::Level::Info
-        };
 
         let result = match kind {
             DependencyKind::Script { id } => {
@@ -148,11 +147,11 @@ impl Dependency {
                     return Err(DependencyError::MissingDep(id.clone()));
                 };
 
-                if prior.is_success() {
-                    prior
-                } else {
-                    ::log::log!(level, "script dependency did not succeed, {id}");
-                    failure()
+                match prior {
+                    DependencyResult::Panic | DependencyResult::Failure => {
+                        failure!(*panic, "script dependency did not succeed, {id}")
+                    }
+                    DependencyResult::Skip | DependencyResult::Success => DependencyResult::Success,
                 }
             }
             DependencyKind::Exec(exec) => {
@@ -161,8 +160,7 @@ impl Dependency {
                 if status.success() {
                     DependencyResult::Success
                 } else {
-                    ::log::log!(level, "dependency exec failed, {status}");
-                    failure()
+                    failure!(*panic, "dependency exec failed, {status}")
                 }
             }
             DependencyKind::Equals { values } => match values.as_slice() {
@@ -170,10 +168,7 @@ impl Dependency {
                 [head, remainder @ ..] if remainder.iter().all(|e| e == head) => {
                     DependencyResult::Success
                 }
-                values => {
-                    ::log::log!(level, "equality check failed, values:\n{values:#?}");
-                    failure()
-                }
+                values => failure!(*panic, "equality check failed, values:\n{values:#?}"),
             },
             DependencyKind::In { values, collection } => {
                 let values = values.clone().dedup();
@@ -185,32 +180,16 @@ impl Dependency {
                 'blk: {
                     for value in values.as_slice() {
                         if collection.binary_search(&value).is_err() {
-                            ::log::log!(level, "value {value} not in collection\n{collection:#?}");
-                            break 'blk failure();
-                        }
-                    }
-                    DependencyResult::Success
-                }
-            }
-            DependencyKind::Matches { values, pattern } => {
-                let re = Regex::new(pattern)?;
-
-                'blk: {
-                    for value in values.as_slice() {
-                        if !re.is_match(value) {
-                            ::log::log!(
-                                level,
-                                "pattern /{}/ did not match {:?}",
-                                re.as_str(),
-                                value
+                            break 'blk failure!(
+                                *panic,
+                                "value {value} not in collection\n{collection:#?}"
                             );
-                            break 'blk failure();
                         }
                     }
-
                     DependencyResult::Success
                 }
             }
+            DependencyKind::Matches(m) => m.check(*panic).await?,
         };
 
         Ok(result)
@@ -225,21 +204,12 @@ impl Dependency {
             DependencyKind::Script { id } => f(id),
             DependencyKind::Exec(exec) => exec.visit_strings(f),
             DependencyKind::Equals { values: equals } => equals.iter_mut().try_for_each(f),
-            DependencyKind::In {
-                values,
-                collection: in_collection,
-            } => values
+            DependencyKind::In { values, collection } => values
                 .as_mut_slice()
                 .iter_mut()
-                .chain(in_collection)
+                .chain(collection)
                 .try_for_each(f),
-            DependencyKind::Matches {
-                values,
-                pattern: matches,
-            } => {
-                f(matches)?;
-                values.as_mut_slice().iter_mut().try_for_each(f)
-            }
+            DependencyKind::Matches(m) => m.visit_strings(&mut f),
         }
     }
 }

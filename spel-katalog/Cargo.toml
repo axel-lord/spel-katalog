@@ -38,6 +38,7 @@ toml.workspace = true
 xdg.workspace = true
 rustix = { workspace = true, features = ["process"] }
 yaml-rust2.workspace = true
+clap_complete.workspace = true
 
 [build-dependencies]
 spel-katalog-build.workspace = true

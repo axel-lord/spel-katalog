@@ -180,7 +180,7 @@ impl ScriptFile {
                 .await?;
 
             // A non try error interrupts all further processing.
-            if result.is_failure() {
+            if result.is_panic() {
                 return Err(RunError::DepCheck(id.to_owned()));
             }
 
@@ -197,7 +197,7 @@ impl ScriptFile {
                 .check_post_require(|id| results.get(id).copied())
                 .await?;
 
-            if result.is_failure() {
+            if result.is_panic() {
                 return Err(RunError::DepCheck(script_file.id().to_owned()));
             }
             passed_late.push(script_file);
@@ -226,8 +226,8 @@ impl ScriptFile {
             .max(self.check_assert(&get_prior).await?);
 
         match result {
-            DependencyResult::Failure => return Err(RunError::DepCheck(id.to_owned())),
-            DependencyResult::TryFailure => return Ok(DependencyResult::TryFailure),
+            DependencyResult::Panic => return Err(RunError::DepCheck(id.to_owned())),
+            result @ (DependencyResult::Failure | DependencyResult::Skip) => return Ok(result),
             DependencyResult::Success => {}
         }
 
@@ -289,7 +289,7 @@ impl ScriptFile {
         let mut result = DependencyResult::Success;
         while let Some(dep_result) = futures.next().await {
             result = result.max(dep_result?);
-            if result.is_failure() {
+            if result.is_panic() {
                 return Ok(result);
             }
         }
