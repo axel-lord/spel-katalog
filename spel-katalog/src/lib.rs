@@ -762,19 +762,17 @@ impl App {
                 .on_input(Message::Filter),
             )
             .push(vertical_space().height(5))
-            .push(if let Some(process_info) = &self.process_list {
-                stack([
-                    self.view
-                        .view(&self.settings, &self.games, &self.info, true)
-                        .into(),
-                    process_info::ProcessInfo::view_list(&process_info),
-                ])
-                .pipe(Element::from)
-            } else {
-                self.view
-                    .view(&self.settings, &self.games, &self.info, false)
-                    .pipe(Element::from)
-            })
+            .push(
+                stack([self
+                    .view
+                    .view(&self.settings, &self.games, &self.info, true)
+                    .into()])
+                .push_maybe(
+                    self.process_list
+                        .as_ref()
+                        .map(|process_info| process_info::ProcessInfo::view_list(&process_info)),
+                ),
+            )
             .push(horizontal_rule(2))
             .push(
                 w::row()
