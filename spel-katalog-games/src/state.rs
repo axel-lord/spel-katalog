@@ -68,6 +68,8 @@ pub enum Message {
     },
     /// Move selection.
     Select(SelDir),
+    /// Select an id.
+    SelectId(i64),
 }
 
 /// Requests for other widgets.
@@ -233,17 +235,22 @@ impl State {
                 self.select(sel_dir);
                 Task::none()
             }
+            Message::SelectId(id) => {
+                self.selected = Some(id);
+                return Task::done(OrRequest::Request(Request::SetId { id }));
+            }
         }
     }
 
     fn select(&mut self, sel_dir: SelDir) {
         use SelDir::*;
         let Some(selected) = self.selected else {
-            return self.selected = match sel_dir {
+            self.selected = match sel_dir {
                 Up | Left => self.displayed().next_back(),
                 Down | Right => self.displayed().next(),
             }
             .map(|game| game.id);
+            return;
         };
 
         let m = |game: &Game| game.id == selected;
@@ -321,7 +328,7 @@ impl State {
                 if shadowed {
                     area
                 } else {
-                    area.on_release(OrRequest::Request(Request::SetId { id }))
+                    area.on_release(OrRequest::Message(Message::SelectId(id)))
                         .on_middle_release(OrRequest::Request(Request::Run { id, sandbox: true }))
                 }
             })
