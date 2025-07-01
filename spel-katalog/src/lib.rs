@@ -357,6 +357,7 @@ impl App {
                             } else {
                                 Safety::None
                             },
+                            false,
                         );
                     }
                     ::spel_katalog_games::Request::FindImages { slugs } => {
@@ -397,11 +398,14 @@ impl App {
                             .map(Message::Games);
                     }
                     ::spel_katalog_info::Request::RunGame { id, sandbox } => {
-                        return self.run_game(id, Safety::from(sandbox));
+                        return self.run_game(id, Safety::from(sandbox), false);
+                    }
+                    ::spel_katalog_info::Request::RunLutrisInSandbox { id } => {
+                        return self.run_game(id, Safety::Firejail, true);
                     }
                 }
             }
-            Message::RunGame(id, safety) => return self.run_game(id, safety),
+            Message::RunGame(id, safety) => return self.run_game(id, safety, false),
             Message::Quick(quick) => match quick {
                 QuickMessage::ClosePane => {
                     if self.process_list.is_some() {
@@ -461,7 +465,7 @@ impl App {
                 QuickMessage::Prev => return widget::focus_previous(),
                 QuickMessage::RunSelected => {
                     if let Some(id) = self.games.selected() {
-                        return self.run_game(id, Safety::Firejail);
+                        return self.run_game(id, Safety::Firejail, false);
                     }
                 }
             },
@@ -512,7 +516,7 @@ impl App {
         self.status = status;
     }
 
-    fn run_game(&mut self, id: i64, safety: Safety) -> Task<Message> {
+    fn run_game(&mut self, id: i64, safety: Safety, no_game: bool) -> Task<Message> {
         let Some(game) = self.games.by_id(id) else {
             status!(&self.sender, "could not run game with id {id}");
             return Task::none();
@@ -657,7 +661,11 @@ impl App {
                 return format!("running scripts failed").into();
             }
 
-            let rungame = format!("lutris:rungameid/{id}");
+            let rungame = if no_game {
+                None
+            } else {
+                Some(format!("lutris:rungameid/{id}"))
+            };
 
             fn wl(p: impl AsRef<OsStr>) -> OsString {
                 let mut s = OsString::new();
@@ -670,7 +678,7 @@ impl App {
                 Safety::None => {
                     ::log::info!("executing {lutris:?} with arguments\n{:#?}", &[&rungame]);
                     ::tokio::process::Command::new(lutris)
-                        .arg(rungame)
+                        .args(rungame)
                         .kill_on_drop(true)
                         .status()
                         .await
@@ -709,7 +717,10 @@ impl App {
                     }
 
                     args.push(lutris.as_os_str().into());
-                    args.push(rungame.into());
+
+                    if let Some(rungame) = rungame {
+                        args.push(rungame.into());
+                    };
 
                     ::log::info!("executing {firejail:?} with arguments\n{args:#?}");
 

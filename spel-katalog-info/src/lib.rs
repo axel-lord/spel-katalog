@@ -76,6 +76,7 @@ pub enum Request {
     ShowInfo(bool),
     SetImage { slug: String, image: Handle },
     RunGame { id: i64, sandbox: bool },
+    RunLutrisInSandbox { id: i64 },
 }
 
 impl State {
@@ -419,6 +420,11 @@ impl State {
                             .padding(3)
                             .style(widget::button::danger)
                             .on_press(OrRequest::Request(Request::RunGame { id, sandbox: false })),
+                    )
+                    .push(
+                        button("Lutris")
+                            .padding(3)
+                            .on_press(OrRequest::Request(Request::RunLutrisInSandbox { id })),
                     )
                     .push(
                         button("+Thumb").padding(3).on_press_maybe(
