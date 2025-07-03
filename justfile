@@ -46,7 +46,7 @@ autoinherit:
 # Sanity and format check
 sanity: autoinherit fmt test-all
 
-install: sanity
+install: autoinherit fmt
 	cargo +nightly install --path {{crate}} -Z build-std=std,panic_abort -Z build-std-features="optimize_for_size"
 
 build *EXTRA: sanity
