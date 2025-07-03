@@ -4,6 +4,7 @@ use ::std::{
     cell::Cell,
     convert::identity,
     io::Cursor,
+    ops::ControlFlow,
     path::{Path, PathBuf},
 };
 
@@ -18,13 +19,16 @@ use ::iced::{
 use ::image::ImageFormat;
 use ::itertools::Itertools;
 use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
-use ::rusqlite::{Connection, OpenFlags, named_params};
+use ::rusqlite::{Connection, OpenFlags, Statement, named_params};
 use ::rustc_hash::{FxHashMap, FxHashSet};
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, w};
 use ::spel_katalog_settings::{CacheDir, Settings};
 use ::tap::Pipe;
+use ::tokio::task::{JoinError, spawn_blocking};
 
 use crate::{Game, Games};
+
+const THUMBNAILS_FILENAME: &str = "thumbnails.db";
 
 /// State of games element.
 #[derive(Debug, Default, Deref, DerefMut)]
@@ -183,12 +187,11 @@ impl State {
         settings: &Settings,
         filter: &str,
     ) -> Task<OrRequest<Message, Request>> {
-        const THUMBNAILS_FILENAME: &str = "thumbnails.db";
         match msg {
             Message::LoadDb(path_buf) => {
                 let tx = tx.clone();
                 Task::future(async move {
-                    match ::tokio::task::spawn_blocking(move || load_db(&path_buf)).await {
+                    match spawn_blocking(move || load_db(&path_buf)).await {
                         Ok(result) => match result {
                             Ok(games) => games
                                 .pipe(Message::SetGames)
@@ -223,7 +226,7 @@ impl State {
                     .cloned()
                     .collect::<FxHashSet<_>>();
                 let cache_dir = settings.get::<CacheDir>().to_path_buf();
-                let find_cached = ::tokio::task::spawn_blocking(move || {
+                let find_cached = spawn_blocking(move || {
                     let thumbnail_cache_path = cache_dir.join(THUMBNAILS_FILENAME);
                     let db = match Connection::open_with_flags(
                         &thumbnail_cache_path,
@@ -339,104 +342,25 @@ impl State {
                 images,
                 from_cache,
             } => {
-                for (slug, image) in slugs.iter().zip(&images) {
-                    self.set_image(slug, image.clone());
+                if from_cache {
+                    for (slug, image) in slugs.into_iter().zip(images) {
+                        self.set_image(&slug, image);
+                    }
+                    Task::none()
+                } else {
+                    for (slug, image) in slugs.iter().zip(&images) {
+                        self.set_image(slug, image.clone());
+                    }
+                    let cache_path = settings.get::<CacheDir>().to_path_buf();
+                    Task::future(cache_images(slugs, images, cache_path, tx.clone()))
+                        .then(|_| Task::none())
                 }
-
-                let cache_path = settings.get::<CacheDir>().to_path_buf();
-                Task::future(async move {
-                    if !from_cache {
-                        if let Err(err) = ::tokio::fs::create_dir_all(&cache_path).await {
-                            ::log::error!("could not create cache directory {cache_path:?}\n{err}");
-                            return Ok(Ok(()));
-                        }
-                        let cache_path = cache_path.join(THUMBNAILS_FILENAME);
-                        ::tokio::task::spawn_blocking(move || {
-                            let db = Connection::open(&cache_path)?;
-
-                            db.execute(
-                                r#"
-                                CREATE TABLE IF NOT EXISTS images(
-                                    slug TEXT NOT NULL UNIQUE ON CONFLICT REPLACE,
-                                    image BLOB NOT NULL
-                                )
-                                "#,
-                                [],
-                            )?;
-
-                            let mut stmt = db.prepare(
-                                r#"
-                                INSERT INTO images (slug, image) VALUES (:slug, :image)   
-                                "#,
-                            )?;
-
-                            let mut slugs_images = Vec::new();
-                            slugs
-                                .into_iter()
-                                .zip(images)
-                                .collect::<Vec<_>>()
-                                .into_par_iter()
-                                .map(|(slug, image)| {
-                                    let Handle::Rgba {
-                                        id: _,
-                                        width,
-                                        height,
-                                        pixels,
-                                    } = image
-                                    else {
-                                        return None;
-                                    };
-                                    let image =
-                                        ::image::RgbaImage::from_raw(width, height, pixels.into())?;
-                                    let mut buf = Vec::<u8>::new();
-
-                                    if let Err(err) =
-                                        image.write_to(&mut Cursor::new(&mut buf), ImageFormat::Png)
-                                    {
-                                        ::log::error!(
-                                            "failed to convert thumbnail for {slug} to png\n{err}"
-                                        );
-                                        return None;
-                                    };
-
-                                    Some((slug, buf))
-                                })
-                                .collect_into_vec(&mut slugs_images);
-
-                            for (slug, image) in slugs_images.into_iter().flatten() {
-                                if let Err(err) =
-                                    stmt.execute(named_params! {":slug": slug, ":image": image})
-                                {
-                                    ::log::error!(
-                                        "failed to save thumbnail for {slug} to cache\n{err}"
-                                    );
-                                }
-                            }
-
-                            Ok::<_, ::rusqlite::Error>(())
-                        })
-                        .await
-                    } else {
-                        Ok(Ok(()))
-                    }
-                })
-                .then(|result| match result {
-                    Ok(result) => match result {
-                        Ok(_) => Task::none(),
-                        Err(err) => {
-                            ::log::error!("could not cache thumbnails\n{err}");
-                            Task::none()
-                        }
-                    },
-                    Err(err) => {
-                        ::log::error!("cache thread failed\n{err}");
-                        Task::none()
-                    }
-                })
             }
             Message::SetImage { slug, image } => {
-                self.set_image(&slug, image);
-                Task::none()
+                self.set_image(&slug, image.clone());
+                let cache_path = settings.get::<CacheDir>().to_path_buf();
+                Task::future(cache_image(slug, image, cache_path, tx.clone()))
+                    .then(|_| Task::none())
             }
             Message::Select(sel_dir) => {
                 self.select(sel_dir);
@@ -559,4 +483,132 @@ impl State {
         })
         .pipe(Element::from)
     }
+}
+
+async fn create_cache_dir(cache_path: &Path, tx: StatusSender) -> ControlFlow<()> {
+    if let Err(err) = ::tokio::fs::create_dir_all(&cache_path).await {
+        ::log::error!("could not create cache directory {cache_path:?}\n{err}");
+        status!(tx, "could not create {cache_path:?}");
+        ControlFlow::Break(())
+    } else {
+        ControlFlow::Continue(())
+    }
+}
+
+fn handle_cache_result(result: Result<Result<(), ::rusqlite::Error>, JoinError>) {
+    match result {
+        Ok(result) => match result {
+            Ok(_) => {}
+            Err(err) => ::log::error!("could not cache thumbnails\n{err}"),
+        },
+        Err(err) => ::log::error!("cache thread failed\n{err}"),
+    }
+}
+
+async fn cache_image(slug: String, image: Handle, cache_path: PathBuf, tx: StatusSender) {
+    if create_cache_dir(&cache_path, tx).await.is_break() {
+        return;
+    }
+
+    handle_cache_result(
+        spawn_blocking(move || cache_image_blocking(slug, image, cache_path)).await,
+    );
+}
+
+async fn cache_images(
+    slugs: Vec<String>,
+    images: Vec<Handle>,
+    cache_path: PathBuf,
+    tx: StatusSender,
+) {
+    if create_cache_dir(&cache_path, tx).await.is_break() {
+        return;
+    }
+
+    handle_cache_result(
+        spawn_blocking(move || cache_images_blocking(slugs, images, cache_path)).await,
+    );
+}
+
+const CREATE_IMAGE_TABLE: &str = r#"
+CREATE TABLE IF NOT EXISTS images(
+    slug TEXT NOT NULL UNIQUE ON CONFLICT REPLACE,
+    image BLOB NOT NULL
+)
+"#;
+
+const INSERT_IMAGE: &str = r#"
+INSERT INTO images (slug, image) VALUES (:slug, :image)   
+"#;
+
+fn convert_slug_image(slug: String, image: Handle) -> Option<(String, Vec<u8>)> {
+    let Handle::Rgba {
+        id: _,
+        width,
+        height,
+        pixels,
+    } = image
+    else {
+        return None;
+    };
+    let image = ::image::RgbaImage::from_raw(width, height, pixels.into())?;
+    let mut buf = Vec::<u8>::new();
+
+    if let Err(err) = image.write_to(&mut Cursor::new(&mut buf), ImageFormat::Png) {
+        ::log::error!("failed to convert thumbnail for {slug} to png\n{err}");
+        return None;
+    };
+
+    Some((slug, buf))
+}
+
+fn insert_image(stmt: &mut Statement<'_>, slug: String, image: Vec<u8>) {
+    if let Err(err) = stmt.execute(named_params! {":slug": slug, ":image": image}) {
+        ::log::error!("failed to save thumbnail for {slug} to cache\n{err}");
+    }
+}
+
+fn cache_image_blocking(
+    slug: String,
+    image: Handle,
+    cache_path: PathBuf,
+) -> Result<(), ::rusqlite::Error> {
+    let cache_path = cache_path.join(THUMBNAILS_FILENAME);
+    let db = Connection::open(&cache_path)?;
+
+    db.execute(CREATE_IMAGE_TABLE, [])?;
+    let mut stmt = db.prepare(INSERT_IMAGE)?;
+
+    if let Some((slug, image)) = convert_slug_image(slug, image) {
+        insert_image(&mut stmt, slug, image);
+    }
+
+    Ok(())
+}
+
+fn cache_images_blocking(
+    slugs: Vec<String>,
+    images: Vec<Handle>,
+    cache_path: PathBuf,
+) -> Result<(), ::rusqlite::Error> {
+    let cache_path = cache_path.join(THUMBNAILS_FILENAME);
+    let db = Connection::open(&cache_path)?;
+
+    db.execute(CREATE_IMAGE_TABLE, [])?;
+    let mut stmt = db.prepare(INSERT_IMAGE)?;
+
+    let mut slugs_images = Vec::new();
+    slugs
+        .into_iter()
+        .zip(images)
+        .collect::<Vec<_>>()
+        .into_par_iter()
+        .map(|(slug, image)| convert_slug_image(slug, image))
+        .collect_into_vec(&mut slugs_images);
+
+    for (slug, image) in slugs_images.into_iter().flatten() {
+        insert_image(&mut stmt, slug, image);
+    }
+
+    Ok(())
 }
