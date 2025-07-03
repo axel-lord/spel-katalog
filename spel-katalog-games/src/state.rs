@@ -17,6 +17,7 @@ use ::iced::{
 };
 use ::image::ImageFormat;
 use ::itertools::Itertools;
+use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use ::rusqlite::{Connection, OpenFlags, named_params};
 use ::rustc_hash::{FxHashMap, FxHashSet};
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, w};
@@ -372,33 +373,42 @@ impl State {
                                 "#,
                             )?;
 
-                            for (slug, image) in slugs.into_iter().zip(images) {
-                                let Handle::Rgba {
-                                    id: _,
-                                    width,
-                                    height,
-                                    pixels,
-                                } = image
-                                else {
-                                    continue;
-                                };
-                                let Some(image) =
-                                    ::image::RgbaImage::from_raw(width, height, pixels.into())
-                                else {
-                                    continue;
-                                };
-                                let mut buf = Vec::<u8>::new();
-                                if let Err(err) =
-                                    image.write_to(&mut Cursor::new(&mut buf), ImageFormat::Png)
-                                {
-                                    ::log::error!(
-                                        "failed to convert thumbnail for {slug} to png\n{err}"
-                                    );
-                                    continue;
-                                }
+                            let mut slugs_images = Vec::new();
+                            slugs
+                                .into_iter()
+                                .zip(images)
+                                .collect::<Vec<_>>()
+                                .into_par_iter()
+                                .map(|(slug, image)| {
+                                    let Handle::Rgba {
+                                        id: _,
+                                        width,
+                                        height,
+                                        pixels,
+                                    } = image
+                                    else {
+                                        return None;
+                                    };
+                                    let image =
+                                        ::image::RgbaImage::from_raw(width, height, pixels.into())?;
+                                    let mut buf = Vec::<u8>::new();
 
+                                    if let Err(err) =
+                                        image.write_to(&mut Cursor::new(&mut buf), ImageFormat::Png)
+                                    {
+                                        ::log::error!(
+                                            "failed to convert thumbnail for {slug} to png\n{err}"
+                                        );
+                                        return None;
+                                    };
+
+                                    Some((slug, buf))
+                                })
+                                .collect_into_vec(&mut slugs_images);
+
+                            for (slug, image) in slugs_images.into_iter().flatten() {
                                 if let Err(err) =
-                                    stmt.execute(named_params! {":slug": slug, ":image": buf})
+                                    stmt.execute(named_params! {":slug": slug, ":image": image})
                                 {
                                     ::log::error!(
                                         "failed to save thumbnail for {slug} to cache\n{err}"

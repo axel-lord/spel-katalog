@@ -19,6 +19,7 @@ shell-words.workspace = true
 regex.workspace = true
 image.workspace = true
 rusqlite.workspace = true
+rayon.workspace = true
 
 [lints]
 workspace = true
