@@ -43,29 +43,29 @@ path = "/usr/bin/firejail"
 [CoverartDir]
 title = "Coverart Directory"
 help = "Path to coverart directory"
-path = "{HOME}/.cache/lutris/coverart"
+path = "{CACHE}/lutris/coverart"
 
 [LutrisDb]
 title = "Lutris Database"
 help = "Path to lutris game database"
-path = "{HOME}/.local/share/lutris/pga.db"
+path = "{DATA}/lutris/pga.db"
 
 [YmlDir]
 title = "Game Config Directory"
 help = "Path to lutris game yml config directory"
-path = "{HOME}/.config/lutris/games"
+path = "{CONFIG}/lutris/games"
 
 [ExtraConfigDir]
 title = "Extra Config Directory"
 help = "Path to additional game configuration directory"
-path = "{HOME}/.config/spel-katalog/games"
+path = "{CONFIG}/spel-katalog/games"
 
 [ScriptConfigDir]
 title = "Script Config Directory"
 help = "Path to script config directory"
-path = "{HOME}/.config/spel-katalog/scripts"
+path = "{CONFIG}/spel-katalog/scripts"
 
 [CacheDir]
 title = "Cache Directory"
 help = "Path to cache directory"
-path = "{HOME}/.cache/spel-katalog/"
+path = "{CACHE}/spel-katalog/"
