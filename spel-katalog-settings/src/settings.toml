@@ -65,3 +65,7 @@ title = "Script Config Directory"
 help = "Path to script config directory"
 path = "{HOME}/.config/spel-katalog/scripts"
 
+[CacheDir]
+title = "Cache Directory"
+help = "Path to cache directory"
+path = "{HOME}/.cache/spel-katalog/"

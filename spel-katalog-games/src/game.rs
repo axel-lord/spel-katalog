@@ -1,5 +1,5 @@
 use ::iced::widget::image::Handle;
-use ::sqlite::Row;
+use ::rusqlite::Row;
 
 use crate::Runner;
 
@@ -26,30 +26,29 @@ impl Game {
     /// Read a game from a database row.
     pub fn from_row(row: &Row) -> Option<Self> {
         let slug = row
-            .try_read::<&str, _>("slug")
+            .get("slug")
             .map_err(|err| ::log::error!("could not read slug of row\n{err}"))
-            .ok()?
-            .into();
+            .ok()?;
         let id = row
-            .try_read::<i64, _>("id")
+            .get("id")
             .map_err(|err| ::log::error!("could not read id of row\n{err}"))
-            .ok()?
-            .into();
+            .ok()?;
         let name = row
-            .try_read::<&str, _>("name")
+            .get("name")
             .map_err(|err| ::log::error!("could not read name of row\n{err}"))
-            .ok()?
-            .into();
+            .ok()?;
         let runner = row
-            .try_read::<&str, _>("runner")
+            .get_ref("runner")
             .map_err(|err| ::log::error!("could not read runner of row\n{err}"))
+            .ok()?
+            .as_str()
+            .map_err(|err| ::log::error!("could not get runner of row as a string\n{err}"))
             .ok()?
             .into();
         let configpath = row
-            .try_read::<&str, _>("configpath")
+            .get("configpath")
             .map_err(|err| ::log::error!("could not read configpath of row\n{err}"))
-            .ok()?
-            .into();
+            .ok()?;
 
         Some(Game {
             slug,

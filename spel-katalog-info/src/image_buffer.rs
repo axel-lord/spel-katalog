@@ -186,7 +186,12 @@ impl ImageBuffer {
                     Task::none()
                 },
                 |(slugs, images)| {
-                    ::spel_katalog_games::Message::SetImages { slugs, images }.pipe(Task::done)
+                    ::spel_katalog_games::Message::SetImages {
+                        slugs,
+                        images,
+                        from_cache: false,
+                    }
+                    .pipe(Task::done)
                 },
             )
         });

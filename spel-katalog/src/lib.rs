@@ -363,10 +363,7 @@ impl App {
                     ::spel_katalog_games::Request::FindImages { slugs } => {
                         return self
                             .image_buffer
-                            .find_images(
-                                slugs,
-                                self.settings.get::<CoverartDir>().as_path().to_path_buf(),
-                            )
+                            .find_images(slugs, self.settings.get::<CoverartDir>().to_path_buf())
                             .map(OrRequest::Message)
                             .map(Message::Games);
                     }
@@ -765,7 +762,12 @@ impl App {
             .push(
                 stack([self
                     .view
-                    .view(&self.settings, &self.games, &self.info, true)
+                    .view(
+                        &self.settings,
+                        &self.games,
+                        &self.info,
+                        self.process_list.is_some(),
+                    )
                     .into()])
                 .push_maybe(
                     self.process_list

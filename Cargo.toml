@@ -51,7 +51,6 @@ rfd = { version = "0.15.3", default-features = false }
 rustc-hash = "2.1.1"
 serde = "1.0.219"
 shell-words = "1.1.0"
-sqlite = "0.37.0"
 strsim = "0.11.1"
 strum = "0.27.1"
 syn = { version = "2.0.101", default-features = false }
@@ -80,3 +79,4 @@ serde_json = "1.0.140"
 futures = "0.3.31"
 spel-katalog-script = { path = "spel-katalog-script" }
 clap_complete = "4.5.54"
+rusqlite = "0.36.0"

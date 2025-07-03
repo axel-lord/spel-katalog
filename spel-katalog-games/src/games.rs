@@ -180,7 +180,7 @@ impl Games {
     }
 
     /// Set the thumbnail of a game.
-    pub fn set_image(&mut self, slug: &str, image: Handle) {
+    pub(crate) fn set_image(&mut self, slug: &str, image: Handle) {
         if let Some(game) = self.by_slug_mut(slug) {
             game.image = Some(image);
         }
