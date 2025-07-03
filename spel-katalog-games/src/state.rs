@@ -266,12 +266,6 @@ impl State {
 
                     let mut slugs_bytes = Vec::new();
                     while let Some(row) = rows.next()? {
-                        // if let Some((slug, handle)) =
-                        //     read_row(row, &mut game_slugs, &thumbnail_cache_path)
-                        // {
-                        //     slugs.push(slug);
-                        //     images.push(handle);
-                        // }
                         slugs_bytes.extend(get_slug_image(row, &thumbnail_cache_path));
                     }
                     let mut slugs_images = Vec::new();
