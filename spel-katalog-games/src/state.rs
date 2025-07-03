@@ -216,7 +216,7 @@ impl State {
 
                 status!(tx, "read games from database");
 
-                let mut game_slugs = self
+                let game_slugs = self
                     .all()
                     .iter()
                     .map(|game| &game.slug)
@@ -240,17 +240,13 @@ impl State {
 
                     let mut stmt = db.prepare("SELECT slug, image FROM images")?;
                     let mut rows = stmt.query([])?;
-                    let mut slugs = Vec::new();
-                    let mut images = Vec::new();
 
-                    fn read_row(
+                    fn get_slug_image(
                         row: &::rusqlite::Row<'_>,
-                        slugs: &mut FxHashSet<String>,
                         thumbnail_cache_path: &Path,
-                    ) -> Option<(String, Handle)> {
+                    ) -> Option<(String, Vec<u8>)> {
                         let slug = row
-                            .get_ref_unwrap("slug")
-                            .as_str()
+                            .get("slug")
                             .map_err(|err| {
                                 ::log::error!(
                                     "could not get slug for row in {thumbnail_cache_path:?}\n{err}"
@@ -258,48 +254,43 @@ impl State {
                             })
                             .ok()?;
                         let image = row
-                            .get_ref_unwrap("image")
-                            .as_blob()
+                            .get("image")
                             .map_err(|err| {
                                 ::log::error!(
                                     "could not get image for row in {thumbnail_cache_path:?}\n{err}"
                                 )
                             })
                             .ok()?;
+                        Some((slug, image))
+                    }
 
-                        let Some(slug) = slugs.take(slug) else {
-                            ::log::warn!("cached thumbnail {slug} not a ganme in lutris database");
-                            return None;
-                        };
-
-                        let image = match ::image::load_from_memory_with_format(
-                            image,
-                            ImageFormat::Png,
-                        ) {
+                    let mut slugs_bytes = Vec::new();
+                    while let Some(row) = rows.next()? {
+                        // if let Some((slug, handle)) =
+                        //     read_row(row, &mut game_slugs, &thumbnail_cache_path)
+                        // {
+                        //     slugs.push(slug);
+                        //     images.push(handle);
+                        // }
+                        slugs_bytes.extend(get_slug_image(row, &thumbnail_cache_path));
+                    }
+                    let mut slugs_images = Vec::new();
+                    slugs_bytes.into_par_iter().map(|(slug, image)| {
+                        let image = match ::image::load_from_memory_with_format(&image, ImageFormat::Png) {
                             Ok(image) => image.into_rgba8(),
                             Err(err) => {
                                 ::log::error!(
                                     "could not parse image for slug {slug} in {thumbnail_cache_path:?}\n{err}"
                                 );
-                                slugs.insert(slug);
                                 return None;
-                            }
+                            },
                         };
 
-                        Some((
-                            slug,
-                            Handle::from_rgba(image.width(), image.height(), image.into_raw()),
-                        ))
-                    }
+                        Some((slug, Handle::from_rgba(image.width(), image.height(), image.into_raw())))
 
-                    while let Some(row) = rows.next()? {
-                        if let Some((slug, handle)) =
-                            read_row(row, &mut game_slugs, &thumbnail_cache_path)
-                        {
-                            slugs.push(slug);
-                            images.push(handle);
-                        }
-                    }
+                    }).collect_into_vec(&mut slugs_images);
+
+                    let (slugs, images) = slugs_images.into_iter().flatten().unzip();
 
                     Ok::<_, ::rusqlite::Error>((
                         Some(Message::SetImages {
