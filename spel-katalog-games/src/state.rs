@@ -276,6 +276,9 @@ impl State {
                     }
                     let mut slugs_images = Vec::new();
                     slugs_bytes.into_par_iter().map(|(slug, image)| {
+                        if !game_slugs.contains(&slug) {
+                            return None;
+                        }
                         let image = match ::image::load_from_memory_with_format(&image, ImageFormat::Png) {
                             Ok(image) => image.into_rgba8(),
                             Err(err) => {
@@ -291,6 +294,15 @@ impl State {
                     }).collect_into_vec(&mut slugs_images);
 
                     let (slugs, images) = slugs_images.into_iter().flatten().unzip();
+
+                    let mut game_slugs = game_slugs;
+                    for slug in &slugs {
+                        if !game_slugs.remove(slug) {
+                            ::log::warn!(
+                                "thumbnail for game with slug {slug} was present in thumbnail cache but not in game datatbase"
+                            );
+                        }
+                    }
 
                     Ok::<_, ::rusqlite::Error>((
                         Some(Message::SetImages {
