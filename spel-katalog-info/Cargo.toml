@@ -2,6 +2,8 @@
 name = "spel-katalog-info"
 version = "0.1.0"
 edition = "2024"
+authors = ["Axel Lord"]
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 derive_more = { workspace = true, features = ["from", "is_variant"] }
