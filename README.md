@@ -9,8 +9,8 @@ growing a bit large.
 
 # additional config
 For some functionality the application might require extra configurations for
-games, these are stored in a directory decided on by given settings, in files
-named `*gameid*.toml`.
+games, these are stored in a directory decided on by given settings, in 
+*gameid*.toml files.
 
 Additional data consists of custom attributes which the user may assign for scripts
 and additional directories to allow when sandboxing, if no additional directory
