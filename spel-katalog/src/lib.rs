@@ -582,6 +582,26 @@ impl App {
                 }
             };
 
+            let extra_config = if extra_config_path.exists() {
+                let Some(content) = ::tokio::fs::read_to_string(&extra_config_path)
+                    .await
+                    .map_err(|err| ::log::error!("could not read {extra_config_path:?}\n{err}"))
+                    .ok()
+                else {
+                    return format!("could not read {extra_config_path:?}").into();
+                };
+                let Some(additional) = ::toml::from_str::<Additional>(&content)
+                    .map_err(|err| ::log::error!("could not parse {extra_config_path:?}\n{err}"))
+                    .ok()
+                else {
+                    return format!("could not parse {extra_config_path:?}").into();
+                };
+
+                Some(additional)
+            } else {
+                None
+            };
+
             let scripts_result = async {
                 if !script_dir.exists() {
                     ::log::info!("no script dir, skipping");
@@ -634,7 +654,16 @@ impl App {
                                     || String::new(),
                                     |pfx| pfx.display().to_string(),
                                 )),
-                                _ => None,
+                                key => {
+                                    if let Some(extra_config) = &extra_config
+                                        && let Some(attr) = key.strip_prefix("ATTR.")
+                                        && let Some(value) = extra_config.attrs.get(attr)
+                                    {
+                                        Some(value.clone())
+                                    } else {
+                                        None
+                                    }
+                                }
                             })?;
                             Ok(())
                         })
@@ -682,29 +711,8 @@ impl App {
                 }
                 Safety::Firejail => {
                     let mut args;
-                    if extra_config_path.exists() {
-                        let Some(content) = ::tokio::fs::read_to_string(&extra_config_path)
-                            .await
-                            .map_err(|err| {
-                                ::log::error!("could not read {extra_config_path:?}\n{err}")
-                            })
-                            .ok()
-                        else {
-                            return format!("could not read {extra_config_path:?}").into();
-                        };
-                        let Some(additional) = ::toml::from_str::<Additional>(&content)
-                            .map_err(|err| {
-                                ::log::error!("could not parse {extra_config_path:?}\n{err}")
-                            })
-                            .ok()
-                        else {
-                            return format!("could not parse {extra_config_path:?}").into();
-                        };
-                        args = additional
-                            .sandbox_root
-                            .into_iter()
-                            .map(wl)
-                            .collect::<Vec<_>>();
+                    if let Some(additional) = extra_config {
+                        args = additional.sandbox_root.into_iter().map(wl).collect();
                     } else {
                         args = Vec::from([wl(config.game.common_parent())]);
                     }

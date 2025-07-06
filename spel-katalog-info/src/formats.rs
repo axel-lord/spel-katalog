@@ -5,6 +5,7 @@ use ::std::{
     sync::LazyLock,
 };
 
+use ::rustc_hash::FxHashMap;
 use ::serde::{Deserialize, Serialize};
 use ::yaml_rust2::{ScanError, Yaml, YamlLoader};
 
@@ -83,4 +84,7 @@ impl Config {
 pub struct Additional {
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub sandbox_root: Vec<String>,
+
+    #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
+    pub attrs: FxHashMap<String, String>,
 }

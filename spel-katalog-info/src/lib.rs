@@ -26,6 +26,8 @@ use crate::image_buffer::ImageBuffer;
 pub mod formats;
 pub mod image_buffer;
 
+mod attrs;
+
 #[derive(Debug)]
 pub struct State {
     id: i64,
@@ -34,6 +36,7 @@ pub struct State {
     common_parent: PathBuf,
     additional_roots_content: widget::text_editor::Content,
     additional: formats::Additional,
+    attrs: attrs::State,
 }
 
 impl Default for State {
@@ -45,6 +48,7 @@ impl Default for State {
             config_path: None,
             common_parent: PathBuf::from("/"),
             additional: formats::Additional::default(),
+            attrs: attrs::State::default(),
         }
     }
 }
@@ -63,6 +67,7 @@ pub enum Message {
     #[from]
     UpdateContent(widget::text_editor::Action),
     UpdateAdditionalRoots(widget::text_editor::Action),
+    UpdateAttrs(attrs::Message),
     SaveContent,
     SaveAdditional,
     AddThumb {
@@ -167,6 +172,11 @@ impl State {
                     self.additional_roots_content = widget::text_editor::Content::with_text(
                         &additional.sandbox_root.join("\n"),
                     );
+                    self.attrs.attrs = additional
+                        .attrs
+                        .iter()
+                        .map(|(key, value)| (key.clone(), value.clone()))
+                        .collect();
                     self.additional = additional;
 
                     let yml = match formats::Config::parse(&content) {
@@ -303,6 +313,18 @@ impl State {
                     .collect();
 
                 Task::none()
+            }
+            Message::UpdateAttrs(msg) => {
+                let task = self.attrs.update(msg);
+
+                self.additional.attrs = self
+                    .attrs
+                    .attrs
+                    .iter()
+                    .map(|(key, value)| (key.clone(), value.clone()))
+                    .collect();
+
+                task.map(Message::UpdateAttrs).map(OrRequest::Message)
             }
             Message::SaveAdditional => {
                 async fn write_additional(
@@ -442,27 +464,55 @@ impl State {
                     ),
             )
             .push(horizontal_rule(2))
-            .push("Root Directories")
-            .push(if self.additional.sandbox_root.is_empty() {
-                widget::value(self.common_parent.display())
-                    .pipe(widget::container)
-                    .width(Fill)
-                    .padding(3)
-                    .style(styling::box_border)
-                    .pipe(Element::from)
-            } else {
-                let mut iter = self.additional.sandbox_root.iter().map(widget::text);
-                w::col()
-                    .push_maybe(iter.next())
-                    .extend(iter.flat_map(|row| [widget::horizontal_rule(2).into(), row.into()]))
-                    .pipe(widget::container)
-                    .width(Fill)
-                    .padding(3)
-                    .style(styling::box_border)
-                    .into()
-            })
             .push(w::scroll(
                 w::col()
+                    .push("Root Directories")
+                    .push(if self.additional.sandbox_root.is_empty() {
+                        widget::value(self.common_parent.display())
+                            .pipe(widget::container)
+                            .width(Fill)
+                            .padding(3)
+                            .style(styling::box_border)
+                            .pipe(Element::from)
+                    } else {
+                        let mut iter = self.additional.sandbox_root.iter().map(widget::text);
+                        w::col()
+                            .push_maybe(iter.next())
+                            .extend(
+                                iter.flat_map(|row| {
+                                    [widget::horizontal_rule(2).into(), row.into()]
+                                }),
+                            )
+                            .pipe(widget::container)
+                            .width(Fill)
+                            .padding(3)
+                            .style(styling::box_border)
+                            .into()
+                    })
+                    .push(
+                        w::row().push("Additional").push(horizontal_space()).push(
+                            button("Save")
+                                .padding(3)
+                                .on_press(OrRequest::Message(Message::SaveAdditional)),
+                        ),
+                    )
+                    .push(horizontal_rule(2))
+                    .push("Sandbox Roots")
+                    .push(
+                        widget::text_editor(&self.additional_roots_content).on_action(|action| {
+                            action
+                                .pipe(Message::UpdateAdditionalRoots)
+                                .pipe(OrRequest::Message)
+                        }),
+                    )
+                    .push("Attributes")
+                    .push(
+                        self.attrs
+                            .view()
+                            .map(Message::UpdateAttrs)
+                            .map(OrRequest::Message),
+                    )
+                    .push(horizontal_rule(2))
                     .push(
                         w::row()
                             .push(widget::container("Game Yml").padding(3))
@@ -478,23 +528,6 @@ impl State {
                     .push(
                         widget::text_editor(&self.content).on_action(|action| {
                             action.pipe(Message::from).pipe(OrRequest::Message)
-                        }),
-                    )
-                    .push(
-                        w::row()
-                            .push("Sandbox Roots")
-                            .push(horizontal_space())
-                            .push(
-                                button("Save")
-                                    .padding(3)
-                                    .on_press(OrRequest::Message(Message::SaveAdditional)),
-                            ),
-                    )
-                    .push(
-                        widget::text_editor(&self.additional_roots_content).on_action(|action| {
-                            action
-                                .pipe(Message::UpdateAdditionalRoots)
-                                .pipe(OrRequest::Message)
                         }),
                     ),
             ))

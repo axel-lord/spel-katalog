@@ -2,7 +2,7 @@
 
 use ::iced::{
     Alignment::Center,
-    Background, Color, Element,
+    Color, Element,
     widget::{Column, Row, Scrollable, scrollable},
 };
 
@@ -26,10 +26,11 @@ pub fn scroll<'a, M>(element: impl Into<Element<'a, M>>) -> Scrollable<'a, M> {
             gap,
         } = scrollable::default(theme, status);
 
+        vertical_rail.background = None;
+        horizontal_rail.background = None;
+
         match status {
             scrollable::Status::Active => {
-                vertical_rail.background = None;
-                horizontal_rail.background = None;
                 vertical_rail.scroller.color = Color::TRANSPARENT;
                 horizontal_rail.scroller.color = Color::TRANSPARENT;
             }
@@ -37,11 +38,8 @@ pub fn scroll<'a, M>(element: impl Into<Element<'a, M>>) -> Scrollable<'a, M> {
                 is_horizontal_scrollbar_hovered,
                 is_vertical_scrollbar_hovered,
             } => {
-                let apply = |bg: &mut Background| match bg {
-                    ::iced::Background::Color(color) => *color = color.scale_alpha(0.8),
-                    ::iced::Background::Gradient(_gradient) => (),
-                };
-                vertical_rail.background.as_mut().map(apply);
+                vertical_rail.scroller.color = vertical_rail.scroller.color.scale_alpha(0.5);
+                horizontal_rail.scroller.color = horizontal_rail.scroller.color.scale_alpha(0.5);
                 _ = (
                     is_horizontal_scrollbar_hovered,
                     is_vertical_scrollbar_hovered,
