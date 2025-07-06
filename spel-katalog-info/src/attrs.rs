@@ -65,6 +65,7 @@ impl State {
             .extend(self.attrs.iter().enumerate().map(|(i, (key, value))| {
                 w::row()
                     .push(key.as_str())
+                    .push("=")
                     .push(value.as_str())
                     .push(horizontal_space())
                     .push(

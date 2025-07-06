@@ -172,6 +172,7 @@ impl State {
                     self.additional_roots_content = widget::text_editor::Content::with_text(
                         &additional.sandbox_root.join("\n"),
                     );
+                    self.attrs = attrs::State::default();
                     self.attrs.attrs = additional
                         .attrs
                         .iter()
@@ -343,17 +344,22 @@ impl State {
                 }
 
                 let id = self.id;
-                let additional_path = settings
-                    .get::<ExtraConfigDir>()
-                    .as_path()
-                    .join(format!("{id}.toml"));
                 let additional = self.additional.clone();
+                let extra_config_dir = settings.get::<ExtraConfigDir>().to_path_buf();
 
                 let tx = tx.clone();
                 Task::future(async move {
+                    if let Err(err) = ::tokio::fs::create_dir_all(&extra_config_dir).await {
+                        async_status!(tx, "could not create {extra_config_dir:?}").await;
+                        ::log::error!(
+                            "could not create extra config dir {extra_config_dir:?}\n{err}"
+                        );
+                        return;
+                    };
+                    let additional_path = extra_config_dir.join(format!("{id}.toml"));
                     match write_additional(&additional_path, additional).await {
-                        Some(_) => status!(tx, "saved additional for game {id}"),
-                        None => status!(tx, "could not save addotional for game {id}"),
+                        Some(_) => async_status!(tx, "saved additional for game {id}").await,
+                        None => async_status!(tx, "could not save addotional for game {id}").await,
                     }
                 })
                 .then(|_| Task::none())
