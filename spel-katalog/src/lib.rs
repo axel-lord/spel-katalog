@@ -1,5 +1,6 @@
 use ::std::{
     ffi::{OsStr, OsString},
+    mem,
     path::{Path, PathBuf},
     sync::OnceLock,
     time::Duration,
@@ -640,6 +641,7 @@ impl App {
                     .await?;
 
                 for script in &mut scripts {
+                    let globals = mem::take(&mut script.global);
                     script
                         .visit_strings(|s| {
                             *s = ::spel_katalog_parse::interpolate_string(s, |key| match key {
@@ -655,11 +657,19 @@ impl App {
                                     |pfx| pfx.display().to_string(),
                                 )),
                                 key => {
-                                    if let Some(extra_config) = &extra_config
-                                        && let Some(attr) = key.strip_prefix("ATTR.")
-                                        && let Some(value) = extra_config.attrs.get(attr)
+                                    if let Some(global) = key.strip_prefix("GLOBAL.")
+                                        && let Some(value) = globals.get(global)
                                     {
-                                        Some(value.clone())
+                                        value.clone().pipe(Some)
+                                    } else if let Some(extra_config) = &extra_config
+                                        && let Some(attr) = key.strip_prefix("ATTR.")
+                                    {
+                                        extra_config
+                                            .attrs
+                                            .get(attr)
+                                            .cloned()
+                                            .unwrap_or_default()
+                                            .pipe(Some)
                                     } else {
                                         None
                                     }

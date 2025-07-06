@@ -90,6 +90,11 @@ pub struct ScriptFile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub env: Option<Env>,
 
+    /// Values available for string interpolation in script.
+    /// They are not visited by visit_strings.
+    #[serde(default, skip_serializing_if = "FxHashMap::is_empty")]
+    pub global: FxHashMap<String, String>,
+
     /// Path to parsed file.
     #[serde(skip)]
     pub source: Option<PathBuf>,
@@ -347,6 +352,7 @@ impl ScriptFile {
             script,
             env,
             source: _,
+            global: _,
         } = self;
 
         assert
