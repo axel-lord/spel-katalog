@@ -4,6 +4,7 @@ use ::std::ops::Not;
 
 use ::bon::Builder;
 use ::derive_more::{From, IsVariant};
+use ::rustc_hash::FxHashSet;
 use ::serde::{Deserialize, Serialize};
 use ::tap::Tap;
 
@@ -106,6 +107,20 @@ pub enum DependencyKind {
         #[serde(rename = "equals", alias = "equal")]
         values: Vec<String>,
     },
+    /// Depend on a group of values being unique.
+    #[from(ignore)]
+    NotEquals {
+        /// Values to check if not equal.
+        #[serde(rename = "not-equals", alias = "not-equal")]
+        values: Vec<String>,
+    },
+    /// Require a string not be empty.
+    #[from(ignore)]
+    NotEmpty {
+        /// Requre values not be empty.
+        #[serde(rename = "not-empty")]
+        not_empty: MaybeSingle,
+    },
     /// Depend on a value being in a list.
     In {
         /// Values to check for.
@@ -190,6 +205,21 @@ impl Dependency {
                 }
             }
             DependencyKind::Matches(m) => m.check(*panic).await?,
+            DependencyKind::NotEquals { values } => {
+                if values.iter().collect::<FxHashSet<_>>().len() == values.len() {
+                    DependencyResult::Success
+                } else {
+                    failure!(*panic, "inequality check failed, values:\n{values:#?}")
+                }
+            }
+            DependencyKind::NotEmpty { not_empty } => 'blk: {
+                for value in not_empty.as_slice() {
+                    if value.is_empty() {
+                        break 'blk failure!(*panic, "a not-empty requirement is empty");
+                    }
+                }
+                DependencyResult::Success
+            }
         };
 
         Ok(result)
@@ -210,6 +240,10 @@ impl Dependency {
                 .chain(collection)
                 .try_for_each(f),
             DependencyKind::Matches(m) => m.visit_strings(&mut f),
+            DependencyKind::NotEquals { values } => values.iter_mut().try_for_each(f),
+            DependencyKind::NotEmpty { not_empty } => {
+                not_empty.as_mut_slice().iter_mut().try_for_each(f)
+            }
         }
     }
 }
