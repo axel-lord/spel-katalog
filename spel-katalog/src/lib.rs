@@ -1,12 +1,13 @@
 use ::std::{
     ffi::{OsStr, OsString},
+    io::{BufWriter, Write},
     mem,
     path::{Path, PathBuf},
     sync::OnceLock,
     time::Duration,
 };
 
-use ::clap::{Parser, Subcommand};
+use ::clap::{CommandFactory, Parser, Subcommand};
 use ::color_eyre::{Report, Section, eyre::eyre};
 use ::derive_more::{From, IsVariant};
 use ::iced::{
@@ -53,10 +54,6 @@ pub struct Cli {
     /// Show settings at startup.
     #[arg(long)]
     pub show_settings: bool,
-
-    /// Print a skeleton config.
-    #[arg(long)]
-    pub skeleton: bool,
 
     /// Config file to load.
     #[arg(long, short, default_value=default_config().as_os_str())]
@@ -176,9 +173,8 @@ impl App {
             let Cli {
                 settings,
                 show_settings,
-                skeleton,
                 config,
-                action: _,
+                action,
             } = Cli::parse();
 
             fn read_settings(
@@ -198,16 +194,64 @@ impl App {
                 .unwrap_or_default()
                 .apply(::spel_katalog_settings::Delta::create(overrides));
 
-            if skeleton {
-                ::std::io::copy(
-                    &mut ::std::io::Cursor::new(
-                        ::toml::to_string_pretty(&settings.skeleton()).map_err(|err| eyre!(err))?,
-                    ),
-                    &mut ::std::io::stdout().lock(),
-                )
-                .map_err(|err| eyre!(err))?;
-
-                ::std::process::exit(0)
+            if let Some(action) = action {
+                match action {
+                    Subcmd::Skeleton { output } => {
+                        let mut stdout;
+                        let mut file;
+                        let writer: &mut dyn Write;
+                        if output.as_os_str().to_str() == Some("-") {
+                            stdout = ::std::io::stdout().lock();
+                            writer = &mut stdout;
+                        } else {
+                            file = ::std::fs::File::create(&output)
+                                .map(BufWriter::new)
+                                .map_err(|err| {
+                                    eyre!("could not create/open {output:?}").error(err)
+                                })?;
+                            writer = &mut file;
+                        }
+                        ::std::io::copy(
+                            &mut ::std::io::Cursor::new(
+                                ::toml::to_string_pretty(&settings.skeleton())
+                                    .map_err(|err| eyre!(err))?,
+                            ),
+                            writer,
+                        )
+                        .map_err(|err| eyre!(err))?;
+                        writer
+                            .flush()
+                            .map_err(|err| eyre!("could not close/flush {output:?}").error(err))?;
+                        ::std::process::exit(0)
+                    }
+                    Subcmd::Completions {
+                        shell,
+                        name,
+                        output,
+                    } => {
+                        if output.as_os_str().to_str() == Some("-") {
+                            ::clap_complete::generate(
+                                shell,
+                                &mut Cli::command(),
+                                name,
+                                &mut ::std::io::stdout().lock(),
+                            );
+                        } else {
+                            let mut writer = ::std::fs::File::create(&output)
+                                .map(BufWriter::new)
+                                .map_err(|err| {
+                                eyre!("could not create/open {output:?}").error(err)
+                            })?;
+                            ::clap_complete::generate(
+                                shell,
+                                &mut Cli::command(),
+                                name,
+                                &mut writer,
+                            );
+                        }
+                        ::std::process::exit(0)
+                    }
+                }
             }
 
             let tx;
@@ -662,13 +706,12 @@ impl App {
                                         && let Some(value) = globals.get(global)
                                     {
                                         value.clone().pipe(Some)
-                                    } else if let Some(extra_config) = &extra_config
-                                        && let Some(attr) = key.strip_prefix("ATTR.")
-                                    {
+                                    } else if let Some(attr) = key.strip_prefix("ATTR.") {
                                         extra_config
-                                            .attrs
-                                            .get(attr)
-                                            .cloned()
+                                            .as_ref()
+                                            .and_then(|extra_config| {
+                                                extra_config.attrs.get(attr).cloned()
+                                            })
                                             .unwrap_or_default()
                                             .pipe(Some)
                                     } else {
@@ -721,11 +764,12 @@ impl App {
                         .await
                 }
                 Safety::Firejail => {
-                    let mut args;
+                    let mut args = Vec::new();
+                    ::log::info!("parsed game config\n{config:#?}");
                     if let Some(additional) = extra_config {
-                        args = additional.sandbox_root.into_iter().map(wl).collect();
+                        args.extend(additional.sandbox_root.into_iter().map(wl));
                     } else {
-                        args = Vec::from([wl(config.game.common_parent())]);
+                        args.push(wl(config.game.common_parent()));
                     }
 
                     if is_net_disabled {
