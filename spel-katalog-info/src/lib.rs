@@ -20,6 +20,7 @@ use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, styli
 use ::spel_katalog_games::Games;
 use ::spel_katalog_settings::{CoverartDir, ExtraConfigDir, Settings, YmlDir};
 use ::tap::Pipe;
+use ::yaml_rust2::Yaml;
 
 use crate::image_buffer::ImageBuffer;
 
@@ -74,6 +75,10 @@ pub enum Message {
         /// Game id to add thumbnail for
         id: i64,
     },
+    SetExe {
+        path: PathBuf,
+    },
+    OpenExe,
 }
 
 #[derive(Debug, Clone, IsVariant)]
@@ -364,7 +369,101 @@ impl State {
                 })
                 .then(|_| Task::none())
             }
+            Message::SetExe { path } => {
+                self.set_exe(path, tx);
+                Task::none()
+            }
+            Message::OpenExe => self.open_exe(tx).unwrap_or_else(Task::none),
         }
+    }
+
+    fn open_exe(&mut self, tx: &StatusSender) -> Option<Task<OrRequest<Message, Request>>> {
+        let tx = tx.clone();
+        let exe = formats::Config::parse(&self.content.text())
+            .map_err(|err| {
+                ::log::error!("could not load yaml\n{err}");
+                status!(&tx, "could not load yaml");
+            })
+            .ok()?
+            .game
+            .exe
+            .to_path_buf();
+
+        let Some(dir) = formats::Config::parse(&self.content.text())
+            .map_err(|err| {
+                ::log::error!("could not load yaml\n{err}");
+                status!(&tx, "could not load yaml");
+            })
+            .ok()?
+            .game
+            .exe
+            .parent()
+            .map(Path::to_path_buf)
+        else {
+            status!(tx, "could not get parent of {exe:?}");
+            ::log::error!("could not get parent of {exe:?}");
+            return None;
+        };
+
+        let task = Task::future(async {
+            let dialog = ::rfd::AsyncFileDialog::new()
+                .set_title("Choose Exe")
+                .set_directory(dir)
+                .pick_file()
+                .await?;
+
+            Some(OrRequest::Message(Message::SetExe {
+                path: dialog.path().to_path_buf(),
+            }))
+        })
+        .then(|msg| match msg {
+            Some(value) => Task::done(value),
+            None => Task::none(),
+        });
+
+        Some(task)
+    }
+
+    fn set_exe(&mut self, path: PathBuf, tx: &StatusSender) -> Option<()> {
+        let path = path.to_str().map(String::from)?;
+
+        let yml_content = self.content.text();
+        let mut yml = ::yaml_rust2::YamlLoader::load_from_str(&yml_content)
+            .map_err(|err| {
+                ::log::error!("could not load yaml\n{err}");
+                status!(tx, "could not load yaml");
+            })
+            .ok()?;
+
+        let exe = yml
+            .first_mut()?
+            .as_mut_hash()?
+            .get_mut(&formats::GAME)?
+            .as_mut_hash()?
+            .get_mut(&formats::EXE)?;
+
+        *exe = Yaml::String(path);
+
+        let mut text = String::new();
+        let mut emitter = ::yaml_rust2::YamlEmitter::new(&mut text);
+        for yml in yml {
+            emitter
+                .dump(&yml)
+                .map_err(|err| {
+                    ::log::error!("could not emit yaml\n{err}");
+                    status!(tx, "could not emit yaml");
+                })
+                .ok()?;
+        }
+
+        let pfx = "---\n";
+        if text.starts_with(pfx) {
+            _ = text.drain(..pfx.len());
+        }
+
+        self.content = widget::text_editor::Content::with_text(&text);
+
+        Some(())
     }
 
     pub fn view<'a>(
@@ -523,6 +622,11 @@ impl State {
                         w::row()
                             .push(widget::container("Game Yml").padding(3))
                             .push(widget::horizontal_space())
+                            .push(
+                                button("Exe")
+                                    .padding(3)
+                                    .on_press_with(|| OrRequest::Message(Message::OpenExe)),
+                            )
                             .push(
                                 button("Save").padding(3).on_press_maybe(
                                     self.config_path

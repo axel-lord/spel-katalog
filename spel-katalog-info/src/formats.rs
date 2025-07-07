@@ -48,10 +48,10 @@ impl Game {
     }
 }
 
-static GAME: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("game".into()));
-static EXE: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("exe".into()));
-static PREFIX: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("prefix".into()));
-static ARCH: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("arch".into()));
+pub static GAME: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("game".into()));
+pub static EXE: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("exe".into()));
+pub static PREFIX: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("prefix".into()));
+pub static ARCH: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("arch".into()));
 
 fn get_exe(yml: &Yaml) -> Option<PathBuf> {
     yml.as_hash()?
