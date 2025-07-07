@@ -206,7 +206,13 @@ impl Dependency {
             }
             DependencyKind::Matches(m) => m.check(*panic).await?,
             DependencyKind::NotEquals { values } => {
-                if values.iter().collect::<FxHashSet<_>>().len() == values.len() {
+                if values
+                    .iter()
+                    .map(|value| value.as_str())
+                    .collect::<FxHashSet<&str>>()
+                    .len()
+                    == values.len()
+                {
                     DependencyResult::Success
                 } else {
                     failure!(*panic, "inequality check failed, values:\n{values:#?}")

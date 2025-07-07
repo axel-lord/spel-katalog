@@ -93,6 +93,7 @@ pub struct ScriptFile {
     /// Values available for string interpolation in script.
     /// They are not visited by visit_strings.
     #[serde(default, skip_serializing_if = "FxHashMap::is_empty")]
+    #[builder(default)]
     pub global: FxHashMap<String, String>,
 
     /// Path to parsed file.

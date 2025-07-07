@@ -103,6 +103,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn dep_imatch() -> Result {
+        let toml = r#"
+        [script]
+        id = "1"
+        [[require]]
+        value = "Hello world!"
+        imatches = "^hE[li].*!$"
+        "#;
+
+        assert_eq!(
+            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            DependencyResult::Success
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn dep_in() -> Result {
         let toml = r#"
         [script]
@@ -207,6 +225,49 @@ mod tests {
         id = "3"
         [[require]]
         equals = ["hello", "world"]
+        "#;
+
+        assert_eq!(
+            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            DependencyResult::Failure
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dep_not_equals() -> Result {
+        let toml = r#"
+        [script]
+        id = "1"
+        [[require]]
+        not-equals = ["hello", "world"]
+        panic = true
+        "#;
+
+        assert_eq!(
+            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            DependencyResult::Success
+        );
+
+        let toml = r#"
+        [script]
+        id = "2"
+        [[require]]
+        not-equals = ["hello", "hello"]
+        panic = true
+        "#;
+
+        assert_eq!(
+            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            DependencyResult::Panic
+        );
+
+        let toml = r#"
+        [script]
+        id = "3"
+        [[require]]
+        not-equals = ["hello", "hello"]
         "#;
 
         assert_eq!(
