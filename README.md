@@ -49,7 +49,9 @@ Available variables are as follows.
 
 `EXE` path to the game executable.
 
-`PREFIX` path to game wine prefix if using wine otherwise an empty string,
+`PREFIX` path to game wine prefix if using wine otherwise an empty string.
+
+`ARCH` prefix architecture, if available else an empty string.
 
 `GLOBAL.var` where var may be any string gets the value from `[global]` section of script config.
 

@@ -23,6 +23,8 @@ pub struct Game {
     pub exe: PathBuf,
     /// Prefix path.
     pub prefix: Option<PathBuf>,
+    /// Game wine arch.
+    pub arch: Option<String>,
 }
 
 impl Game {
@@ -49,6 +51,7 @@ impl Game {
 static GAME: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("game".into()));
 static EXE: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("exe".into()));
 static PREFIX: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("prefix".into()));
+static ARCH: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("arch".into()));
 
 fn get_exe(yml: &Yaml) -> Option<PathBuf> {
     yml.as_hash()?
@@ -68,6 +71,15 @@ fn get_prefix(yml: &Yaml) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+fn get_arch(yml: &Yaml) -> Option<String> {
+    yml.as_hash()?
+        .get(&GAME)?
+        .as_hash()?
+        .get(&ARCH)?
+        .as_str()
+        .map(String::from)
+}
+
 impl Config {
     pub fn parse(content: &str) -> Result<Self, ScanError> {
         let doc = YamlLoader::load_from_str(content)?;
@@ -75,6 +87,7 @@ impl Config {
             game: Game {
                 exe: doc.get(0).and_then(get_exe).unwrap_or_default(),
                 prefix: doc.get(0).and_then(get_prefix),
+                arch: doc.get(0).and_then(get_arch),
             },
         })
     }

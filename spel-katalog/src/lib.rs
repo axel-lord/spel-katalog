@@ -656,6 +656,7 @@ impl App {
                                     || String::new(),
                                     |pfx| pfx.display().to_string(),
                                 )),
+                                "ARCH" => Some(config.game.arch.clone().unwrap_or_default()),
                                 key => {
                                     if let Some(global) = key.strip_prefix("GLOBAL.")
                                         && let Some(value) = globals.get(global)
