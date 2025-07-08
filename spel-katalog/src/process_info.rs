@@ -1,12 +1,12 @@
 use ::std::{ffi::OsStr, io, ops::Mul, os::unix::ffi::OsStrExt, path::PathBuf};
 
 use ::iced::{
-    Color, Element, Font,
+    Color, Element,
     Length::{self, Fill},
     alignment::Horizontal::Left,
-    widget::{button, container, horizontal_space, opaque, text, value},
+    widget::{self, button, container, horizontal_space, opaque, text, value},
 };
-use ::spel_katalog_common::w;
+use ::spel_katalog_common::{styling, w};
 use ::tap::Pipe;
 
 use crate::Message;
@@ -22,10 +22,9 @@ pub struct ProcessInfo {
 impl ProcessInfo {
     pub fn view_list<'e>(list: &'e [ProcessInfo]) -> Element<'e, Message> {
         container(
-            list.iter()
-                .fold(w::col().push("Process Tree"), |col, info| {
-                    col.push(info.view())
-                })
+            w::col()
+                .push("Process Tree")
+                .extend(list.iter().map(|info| info.view()))
                 .align_x(Left)
                 .pipe(w::scroll)
                 .pipe(container)
@@ -58,7 +57,12 @@ impl ProcessInfo {
             )
             .push(value(pid))
             .push_maybe(name.as_ref().map(text))
-            .push(text(cmdline).font(Font::MONOSPACE))
+            .push(
+                text(cmdline)
+                    .pipe(widget::container)
+                    .padding(3)
+                    .style(|t| styling::box_border(t).background(t.palette().background)),
+            )
             .into()
     }
 

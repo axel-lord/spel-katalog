@@ -1,4 +1,5 @@
 use ::std::{
+    convert::identity,
     ffi::{OsStr, OsString},
     io::{BufWriter, Write},
     mem,
@@ -31,7 +32,6 @@ use ::spel_katalog_settings::{
     ScriptConfigDir, Show, Theme, Variants, YmlDir,
 };
 use ::tap::Pipe;
-
 mod view;
 
 fn default_config() -> &'static Path {
@@ -311,7 +311,7 @@ impl App {
                 .pipe(Message::Games)
                 .pipe(Some)
         }
-        on_key_press(|key, modifiers| match key.as_ref() {
+        let on_key = on_key_press(|key, modifiers| match key.as_ref() {
             keyboard::Key::Named(named) => match named {
                 Named::Tab if modifiers.is_empty() => Some(QuickMessage::Next).map(Message::Quick),
                 Named::Tab if modifiers == Modifiers::SHIFT => {
@@ -339,7 +339,21 @@ impl App {
             }
             .map(Message::Quick),
             keyboard::Key::Unidentified => None,
-        })
+        });
+
+        let refresh = if self.process_list.is_some() {
+            Some(
+                ::iced::time::every(Duration::from_millis(500))
+                    .map(|_| Message::Quick(QuickMessage::RefreshProcessInfo)),
+            )
+        } else {
+            None
+        };
+
+        [Some(on_key), refresh]
+            .into_iter()
+            .flatten()
+            .pipe(Subscription::batch)
     }
 
     pub fn update(&mut self, msg: Message) -> Task<Message> {
@@ -465,18 +479,7 @@ impl App {
                     self.view.show_settings(!self.view.settings_shown());
                 }
                 QuickMessage::OpenProcessInfo => {
-                    return Task::future(process_info::ProcessInfo::open()).then(|result| {
-                        match result {
-                            Ok(summary) => summary
-                                .pipe(Some)
-                                .pipe(Message::ProcessInfo)
-                                .pipe(Task::done),
-                            Err(err) => {
-                                ::log::error!("whilst collecting info\n{err}");
-                                Task::none()
-                            }
-                        }
-                    });
+                    return Task::future(Self::collect_process_info()).then(identity);
                 }
                 QuickMessage::CycleHidden => {
                     let next = self.settings.get::<Show>().cycle();
@@ -493,14 +496,12 @@ impl App {
                 QuickMessage::ToggleNetwork => {
                     let next = self.settings.get::<Network>().cycle();
                     self.settings.apply_from(next);
-                    self.set_status("toggled network to {next}");
+                    self.set_status(format!("toggled network to {next}"));
                     self.sort_games();
                 }
                 QuickMessage::RefreshProcessInfo => {
                     if self.process_list.is_some() {
-                        return QuickMessage::OpenProcessInfo
-                            .pipe(Message::Quick)
-                            .pipe(Task::done);
+                        return Task::future(Self::collect_process_info()).then(identity);
                     }
                 }
                 QuickMessage::Next => return widget::focus_next(),
@@ -511,7 +512,9 @@ impl App {
                     }
                 }
             },
-            Message::ProcessInfo(process_infos) => self.process_list = process_infos,
+            Message::ProcessInfo(process_infos) => {
+                self.process_list = process_infos.filter(|infos| !infos.is_empty())
+            }
             Message::Kill(pid) => {
                 let Ok(pid) = RawPid::try_from(pid) else {
                     return Task::none();
@@ -538,14 +541,21 @@ impl App {
                         },
                         Err(err) => ::log::error!("could not spawn blocking thread\n{err}"),
                     };
-
-                    ::tokio::time::sleep(Duration::from_millis(750)).await;
-
-                    Message::Quick(QuickMessage::RefreshProcessInfo)
-                });
+                })
+                .then(|_| Task::none());
             }
         }
         Task::none()
+    }
+
+    pub async fn collect_process_info() -> Task<Message> {
+        match process_info::ProcessInfo::open().await {
+            Ok(summary) => Task::done(Message::ProcessInfo(Some(summary))),
+            Err(err) => {
+                ::log::error!("whilst collecting info\n{err}");
+                Task::none()
+            }
+        }
     }
 
     pub fn sort_games(&mut self) {
@@ -583,6 +593,19 @@ impl App {
             .as_path()
             .join(format!("{id}.toml"));
         let script_dir = self.settings.get::<ScriptConfigDir>().to_path_buf();
+
+        let (send_open, recv_open) = ::tokio::sync::oneshot::channel();
+
+        let open_process_list = Task::future(async {
+            match recv_open.await {
+                Ok(_) => Some(Message::Quick(QuickMessage::OpenProcessInfo)),
+                Err(err) => {
+                    ::log::error!("could not receive open signel through oneshot\n{err}");
+                    None
+                }
+            }
+        })
+        .then(|msg| msg.map_or_else(Task::none, Task::done));
 
         let task = Task::future(async move {
             #[derive(Debug, ::thiserror::Error)]
@@ -754,14 +777,13 @@ impl App {
                 s
             }
 
-            let status = match safety {
+            let cmd = match safety {
                 Safety::None => {
                     ::log::info!("executing {lutris:?} with arguments\n{:#?}", &[&rungame]);
                     ::tokio::process::Command::new(lutris)
                         .args(rungame)
                         .kill_on_drop(true)
                         .status()
-                        .await
                 }
                 Safety::Firejail => {
                     let mut args = Vec::new();
@@ -788,11 +810,14 @@ impl App {
                         .args(args)
                         .kill_on_drop(true)
                         .status()
-                        .await
                 }
             };
 
-            match status {
+            if send_open.send(()).is_err() {
+                ::log::warn!("could not send open signal through oneshot");
+            }
+
+            match cmd.await {
                 Ok(status) => format!("{name} exited with {status}").into(),
                 Err(err) => {
                     ::log::error!("could not run {slug}\n{err}");
@@ -801,7 +826,7 @@ impl App {
             }
         });
 
-        task
+        Task::batch([task, open_process_list])
     }
 
     pub fn view(&self) -> Element<'_, Message> {
