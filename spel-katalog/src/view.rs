@@ -1,8 +1,11 @@
 use ::derive_more::{Display, From, IsVariant};
 use ::iced::{
-    Element, Task,
+    Color, Element,
+    Length::Fill,
+    Task,
     widget::{self, pane_grid},
 };
+use ::spel_katalog_common::styling;
 use ::tap::Pipe;
 
 #[derive(Debug, Default, Clone, Copy, Display, PartialEq, Eq, IsVariant, Hash)]
@@ -121,12 +124,28 @@ impl State {
         info: &'app spel_katalog_info::State,
         shadowed: bool,
     ) -> Element<'app, crate::Message> {
+        let style =
+            |t: &iced::Theme| styling::box_border(t).background(Color::WHITE.scale_alpha(0.025));
         pane_grid(&self.panes, |_pane, state, _is_maximized| {
             pane_grid::Content::new(
                 match state {
                     Pane::Games => games.view(shadowed).map(crate::Message::from),
-                    Pane::Settings => settings.view().map(crate::Message::from),
-                    Pane::GameInfo => info.view(settings, games).map(crate::Message::from),
+                    Pane::Settings => settings
+                        .view()
+                        .map(crate::Message::from)
+                        .pipe(widget::container)
+                        .padding(5)
+                        .style(style)
+                        .height(Fill)
+                        .into(),
+                    Pane::GameInfo => info
+                        .view(settings, games)
+                        .map(crate::Message::from)
+                        .pipe(widget::container)
+                        .padding(5)
+                        .style(style)
+                        .height(Fill)
+                        .into(),
                 }
                 .pipe(widget::container),
             )

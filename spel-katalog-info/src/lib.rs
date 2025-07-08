@@ -502,8 +502,7 @@ impl State {
                                             .font(Font::MONOSPACE)
                                             .align_x(Alignment::Start)
                                             .width(Fill),
-                                    )
-                                    .push(vertical_rule(2)),
+                                    ),
                             )
                             .push(horizontal_rule(2))
                             .push(
@@ -515,8 +514,7 @@ impl State {
                                             .font(Font::MONOSPACE)
                                             .align_x(Alignment::Start)
                                             .width(Fill),
-                                    )
-                                    .push(vertical_rule(2)),
+                                    ),
                             )
                             .push(horizontal_rule(2))
                             .push(
@@ -528,8 +526,7 @@ impl State {
                                             .font(Font::MONOSPACE)
                                             .align_x(Alignment::Start)
                                             .width(Fill),
-                                    )
-                                    .push(vertical_rule(2)),
+                                    ),
                             ),
                     ),
             )
@@ -577,7 +574,7 @@ impl State {
                             .pipe(widget::container)
                             .width(Fill)
                             .padding(3)
-                            .style(styling::box_border)
+                            .style(|t| styling::box_border(t).background(t.palette().background))
                             .pipe(Element::from)
                     } else {
                         let mut iter = self.additional.sandbox_root.iter().map(widget::text);
@@ -591,7 +588,7 @@ impl State {
                             .pipe(widget::container)
                             .width(Fill)
                             .padding(3)
-                            .style(styling::box_border)
+                            .style(|t| styling::box_border(t).background(t.palette().background))
                             .into()
                     })
                     .push(
@@ -604,11 +601,13 @@ impl State {
                     .push(horizontal_rule(2))
                     .push("Sandbox Roots")
                     .push(
-                        widget::text_editor(&self.additional_roots_content).on_action(|action| {
-                            action
-                                .pipe(Message::UpdateAdditionalRoots)
-                                .pipe(OrRequest::Message)
-                        }),
+                        widget::text_editor(&self.additional_roots_content)
+                            .on_action(|action| {
+                                action
+                                    .pipe(Message::UpdateAdditionalRoots)
+                                    .pipe(OrRequest::Message)
+                            })
+                            .padding(3),
                     )
                     .push("Attributes")
                     .push(
@@ -636,10 +635,11 @@ impl State {
                             ),
                     )
                     .push(
-                        widget::text_editor(&self.content).on_action(|action| {
-                            action.pipe(Message::from).pipe(OrRequest::Message)
-                        }),
-                    ),
+                        widget::text_editor(&self.content)
+                            .on_action(|action| action.pipe(Message::from).pipe(OrRequest::Message))
+                            .padding(3),
+                    )
+                    .push(horizontal_space().width(0)),
             ))
             .into()
     }

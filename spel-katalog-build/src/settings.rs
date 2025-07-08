@@ -484,10 +484,10 @@ pub fn write(settings: Settings, dest: &Path) {
                 }
 
                 /// Get element to display path options.
-                pub fn view_paths(&self) -> ::iced::Element<'_, Delta> {
+                pub fn view_paths(&self) -> ::iced::widget::Column<'_, Delta> {
                     crate::list::path_list([
                         #( crate::list::path_input(&self.#path_field_names), )*
-                    ]).into()
+                    ])
                 }
             }
 

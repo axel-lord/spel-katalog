@@ -838,6 +838,7 @@ impl App {
                         .map(|process_info| process_info::ProcessInfo::view_list(&process_info)),
                 ),
             )
+            .push(vertical_space().height(3))
             .push(horizontal_rule(2))
             .push(
                 w::row()

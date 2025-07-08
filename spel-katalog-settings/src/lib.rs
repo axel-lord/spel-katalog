@@ -6,7 +6,7 @@ use ::iced::{
     Alignment, Element,
     Length::Fill,
     Task,
-    widget::{button, horizontal_rule, text},
+    widget::{button, horizontal_rule, horizontal_space, text},
 };
 
 use ::spel_katalog_common::{StatusSender, async_status, w};
@@ -280,7 +280,13 @@ impl State {
             .push(horizontal_rule(2))
             .push(self.view_enums().map(Message::Delta).pipe(w::scroll))
             .push(horizontal_rule(2))
-            .push(self.view_paths().map(Message::Delta).pipe(w::scroll))
+            .push(
+                self.view_paths()
+                    .push(horizontal_space().width(0))
+                    .pipe(Element::from)
+                    .map(Message::Delta)
+                    .pipe(w::scroll),
+            )
             .into()
     }
 }
