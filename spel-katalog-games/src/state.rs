@@ -51,6 +51,8 @@ pub enum SelDir {
     Left,
     /// Select element to the right of current.
     Right,
+    /// Deselect element.
+    None,
 }
 
 /// Internal message used for games element.
@@ -102,6 +104,8 @@ pub enum Request {
         /// Slugs of thumbnails to find.
         slugs: Vec<String>,
     },
+    /// Close game info
+    CloseInfo,
 }
 
 #[derive(Debug, ::thiserror::Error)]
@@ -373,12 +377,14 @@ impl State {
         }
     }
 
-    fn select(&mut self, sel_dir: SelDir) {
-        use SelDir::*;
+    /// Select a game in a direction.
+    pub fn select(&mut self, sel_dir: SelDir) {
+        use SelDir::{Down, Left, Right, Up};
         let Some(selected) = self.selected else {
             self.selected = match sel_dir {
                 Up | Left => self.displayed().next_back(),
                 Down | Right => self.displayed().next(),
+                SelDir::None => Option::None,
             }
             .map(|game| game.id);
             return;
@@ -389,6 +395,7 @@ impl State {
         let idx = match sel_dir {
             Up | Left => self.displayed().rev().position(m),
             Down | Right => self.displayed().position(m),
+            SelDir::None => Option::None,
         };
 
         let Some(idx) = idx else {
@@ -407,6 +414,7 @@ impl State {
             Down => self.displayed().cycle().skip(idx + self.columns()).next(),
             Left => self.displayed().rev().cycle().skip(idx + 1).next(),
             Right => self.displayed().cycle().skip(idx + 1).next(),
+            SelDir::None => Option::None,
         }
         .map(|game| game.id);
     }
@@ -461,6 +469,7 @@ impl State {
                 } else {
                     area.on_release(OrRequest::Message(Message::SelectId(id)))
                         .on_middle_release(OrRequest::Request(Request::Run { id, sandbox: true }))
+                        .on_right_release(OrRequest::Request(Request::CloseInfo))
                 }
             })
             .into()

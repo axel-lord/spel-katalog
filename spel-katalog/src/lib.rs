@@ -122,6 +122,7 @@ impl From<bool> for Safety {
 #[derive(Debug, IsVariant, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum QuickMessage {
     ClosePane,
+    CloseAll,
     ToggleSettings,
     OpenProcessInfo,
     CycleHidden,
@@ -328,6 +329,7 @@ impl App {
             },
             keyboard::Key::Character(chr) => match chr {
                 "q" if modifiers.is_empty() => Some(QuickMessage::ClosePane),
+                "q" if modifiers == Modifiers::CTRL => Some(QuickMessage::CloseAll),
                 "h" if modifiers.is_empty() => Some(QuickMessage::CycleHidden),
                 "f" if modifiers.is_empty() => Some(QuickMessage::CycleFilter),
                 "s" if modifiers.is_empty() => Some(QuickMessage::ToggleSettings),
@@ -426,6 +428,10 @@ impl App {
                             .map(OrRequest::Message)
                             .map(Message::Games);
                     }
+                    ::spel_katalog_games::Request::CloseInfo => {
+                        self.view.show_info(false);
+                        self.games.select(SelDir::None);
+                    }
                 }
             }
             Message::Info(message) => {
@@ -440,7 +446,7 @@ impl App {
                 };
                 match request {
                     ::spel_katalog_info::Request::ShowInfo(show) => {
-                        return self.view.update(view::Message::Info(show));
+                        self.view.show_info(show);
                     }
                     ::spel_katalog_info::Request::SetImage { slug, image } => {
                         return self
@@ -463,6 +469,14 @@ impl App {
             }
             Message::RunGame(id, safety) => return self.run_game(id, safety, false),
             Message::Quick(quick) => match quick {
+                QuickMessage::CloseAll => {
+                    self.process_list = None;
+                    self.view.show_info(false);
+                    self.view.show_settings(false);
+                    self.games.select(SelDir::None);
+                    self.filter = String::new();
+                    self.sort_games();
+                }
                 QuickMessage::ClosePane => {
                     if self.process_list.is_some() {
                         self.process_list = None;
@@ -473,6 +487,11 @@ impl App {
                     } else if self.view.settings_shown() {
                         self.view.show_settings(false);
                         self.set_status("closed settings pane");
+                    } else if self.games.selected().is_some() {
+                        self.games.select(SelDir::None);
+                    } else if !self.filter.is_empty() {
+                        self.filter = String::new();
+                        self.sort_games();
                     }
                 }
                 QuickMessage::ToggleSettings => {
