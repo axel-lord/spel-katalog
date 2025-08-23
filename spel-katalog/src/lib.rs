@@ -807,8 +807,11 @@ impl App {
                 Safety::Firejail => {
                     let mut args = Vec::new();
                     ::log::info!("parsed game config\n{config:#?}");
-                    if let Some(additional) = extra_config {
-                        args.extend(additional.sandbox_root.into_iter().map(wl));
+                    if let Some(additional) = extra_config
+                        .map(|additional| additional.sandbox_root)
+                        .filter(|roots| !roots.is_empty())
+                    {
+                        args.extend(additional.into_iter().map(wl));
                     } else {
                         args.push(wl(config.game.common_parent()));
                     }
