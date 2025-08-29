@@ -640,11 +640,9 @@ impl State {
                         ),
                     )
                     .push(
-                        button("Open").padding(3).on_press_maybe(
-                            game.image
-                                .is_none()
-                                .then(|| OrRequest::Message(Message::OpenDir)),
-                        ),
+                        button("Open")
+                            .padding(3)
+                            .on_press(OrRequest::Message(Message::OpenDir)),
                     )
                     .push(horizontal_space())
                     .push(
