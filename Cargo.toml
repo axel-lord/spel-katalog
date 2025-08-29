@@ -80,3 +80,5 @@ futures = "0.3.31"
 spel-katalog-script = { path = "spel-katalog-script" }
 clap_complete = "4.5.54"
 rusqlite = "0.36.0"
+iced_highlighter = "0.13.0"
+open = "5.3.2"

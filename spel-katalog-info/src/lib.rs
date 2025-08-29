@@ -5,6 +5,7 @@ use ::std::{
     convert::identity,
     ffi::OsStr,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use ::derive_more::{From, IsVariant};
@@ -13,8 +14,14 @@ use ::iced::{
     Element, Font,
     Length::Fill,
     Task,
-    widget::{self, button, horizontal_rule, horizontal_space, image::Handle, vertical_rule},
+    widget::{
+        self, button, horizontal_rule, horizontal_space,
+        image::Handle,
+        text_editor::{Action, Edit},
+        vertical_rule,
+    },
 };
+use ::iced_highlighter::Highlighter;
 use ::image::ImageError;
 use ::open::that_detached;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, styling, w};
@@ -174,7 +181,20 @@ impl State {
                 additional,
             } => {
                 if id == self.id {
-                    self.content = widget::text_editor::Content::with_text(&content);
+                    // Probably most correct solution.
+                    // self.content = widget::text_editor::Content::with_text(&content);
+
+                    // Unless performed as actions, formatting is ignored for some reason
+                    let actions = [
+                        Action::SelectAll,
+                        Action::Edit(Edit::Delete),
+                        Action::Edit(Edit::Paste(Arc::new(content.clone()))),
+                    ];
+
+                    for action in actions {
+                        self.content.perform(action);
+                    }
+
                     self.config_path = Some(path.clone());
                     self.additional_roots_content = widget::text_editor::Content::with_text(
                         &additional.sandbox_root.join("\n"),
@@ -705,6 +725,13 @@ impl State {
                     )
                     .push(
                         widget::text_editor(&self.content)
+                            .highlight_with::<Highlighter>(
+                                ::iced_highlighter::Settings {
+                                    theme: ::iced_highlighter::Theme::SolarizedDark,
+                                    token: "yml".to_string(),
+                                },
+                                |h, _| h.to_format(),
+                            )
                             .on_action(|action| action.pipe(Message::from).pipe(OrRequest::Message))
                             .padding(3),
                     )
