@@ -49,12 +49,14 @@ impl State {
                     .push(
                         widget::text_input("Key...", &self.key)
                             .padding(3)
-                            .on_input(Message::Key),
+                            .on_input(Message::Key)
+                            .on_submit(Message::Add),
                     )
                     .push(
                         widget::text_input("Value...", &self.value)
                             .padding(3)
-                            .on_input(Message::Value),
+                            .on_input(Message::Value)
+                            .on_submit(Message::Add),
                     )
                     .push(
                         widget::button("Add")
