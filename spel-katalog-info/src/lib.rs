@@ -23,7 +23,7 @@ use ::iced::{
 };
 use ::iced_highlighter::Highlighter;
 use ::image::ImageError;
-use ::open::that_detached;
+use ::open::that;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, styling, w};
 use ::spel_katalog_games::Games;
 use ::spel_katalog_settings::{CoverartDir, ExtraConfigDir, Settings, YmlDir};
@@ -447,7 +447,7 @@ impl State {
                         }
                     };
 
-                    if let Err(err) = that_detached(&parent) {
+                    if let Err(err) = that(&parent) {
                         async_status!(&tx, "failed to open {parent:?}").await;
                         ::log::error!("failed to open {parent:?}\n{err}");
                     }
