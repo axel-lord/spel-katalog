@@ -16,6 +16,7 @@ use ::iced::{
     widget::{self, button, horizontal_rule, horizontal_space, image::Handle, vertical_rule},
 };
 use ::image::ImageError;
+use ::open::that_detached;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, styling, w};
 use ::spel_katalog_games::Games;
 use ::spel_katalog_settings::{CoverartDir, ExtraConfigDir, Settings, YmlDir};
@@ -79,6 +80,7 @@ pub enum Message {
         path: PathBuf,
     },
     OpenExe,
+    OpenDir,
 }
 
 #[derive(Debug, Clone, IsVariant)]
@@ -374,6 +376,66 @@ impl State {
                 Task::none()
             }
             Message::OpenExe => self.open_exe(tx).unwrap_or_else(Task::none),
+            Message::OpenDir => {
+                let Some(game) = games.by_id(self.id) else {
+                    status!(tx, "could not get game by id {}", self.id);
+                    return Task::none();
+                };
+
+                let config_path = settings
+                    .get::<YmlDir>()
+                    .as_path()
+                    .join(&game.configpath)
+                    .with_extension("yml");
+
+                let tx = tx.clone();
+
+                Task::future(async move {
+                    let content = match ::tokio::fs::read_to_string(&config_path).await {
+                        Ok(content) => content,
+                        Err(err) => {
+                            async_status!(&tx, "could not read {config_path:?}").await;
+                            ::log::error!("while reading {config_path:?}\n{err}");
+                            return;
+                        }
+                    };
+
+                    let config = match formats::Config::parse(&content) {
+                        Ok(config) => config,
+                        Err(err) => {
+                            async_status!(&tx, "could not parse {config_path:?}").await;
+                            ::log::error!("while parsing {config_path:?} as yaml\n{err}");
+                            return;
+                        }
+                    };
+
+                    let parent = match config.game.exe.canonicalize() {
+                        Ok(mut exe_path) => {
+                            if exe_path.pop() {
+                                exe_path
+                            } else {
+                                async_status!(&tx, "could not get parent of {exe_path:?}").await;
+                                ::log::error!("could not get parent of {exe_path:?}");
+                                return;
+                            }
+                        }
+                        Err(err) => {
+                            async_status!(&tx, "could not canonicalize {:?}", config.game.exe)
+                                .await;
+                            ::log::error!("while canonicalizing {:?}\n{err}", config.game.exe);
+                            return;
+                        }
+                    };
+
+                    if let Err(err) = that_detached(&parent) {
+                        async_status!(&tx, "failed to open {parent:?}").await;
+                        ::log::error!("failed to open {parent:?}\n{err}");
+                    }
+
+                    async_status!(&tx, "opened {parent:?}").await;
+                })
+                .then(|_| Task::none())
+            }
         }
     }
 
@@ -555,6 +617,13 @@ impl State {
                             game.image
                                 .is_none()
                                 .then(|| OrRequest::Message(Message::AddThumb { id })),
+                        ),
+                    )
+                    .push(
+                        button("Open").padding(3).on_press_maybe(
+                            game.image
+                                .is_none()
+                                .then(|| OrRequest::Message(Message::OpenDir)),
                         ),
                     )
                     .push(horizontal_space())
