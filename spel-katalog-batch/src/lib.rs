@@ -1,6 +1,8 @@
 //! Batch command runner.
 
+use ::derive_more::Display;
 use ::iced::{
+    Alignment::Center,
     Element, Font,
     Length::Fill,
     Task,
@@ -11,12 +13,15 @@ use ::iced::{
 };
 use ::iced_highlighter::Highlighter;
 use ::spel_katalog_common::OrRequest;
+use ::strum::VariantArray;
 
 /// Message for batch view.
 #[derive(Debug, Clone)]
 pub enum Message {
     /// Text Editor action.
     Action(Action),
+    /// Set language in use.
+    Lang(Language),
 }
 
 /// Request for batch view.
@@ -33,6 +38,7 @@ pub enum Request {
 pub struct State {
     script: text_editor::Content,
     hl_settings: ::iced_highlighter::Settings,
+    lang: Language,
 }
 
 impl Default for State {
@@ -43,8 +49,23 @@ impl Default for State {
                 theme: ::iced_highlighter::Theme::SolarizedDark,
                 token: String::from("zsh"),
             },
+            lang: Language::Zsh,
         }
     }
+}
+
+/// Language to execute using.
+#[derive(Debug, Clone, Copy, VariantArray, Display, PartialEq, Eq)]
+pub enum Language {
+    /// Execute as a zsh script.
+    #[display("zsh")]
+    Zsh,
+    /// Execute as a bash script.
+    #[display("bash")]
+    Bash,
+    /// Execute as a python script.
+    #[display("python")]
+    Python,
 }
 
 impl State {
@@ -55,6 +76,11 @@ impl State {
                 self.script.perform(action);
                 Task::none()
             }
+            Message::Lang(language) => {
+                self.hl_settings.token = language.to_string();
+                self.lang = language;
+                Task::none()
+            }
         }
     }
 
@@ -63,12 +89,25 @@ impl State {
         widget::container(
             widget::Column::new()
                 .push(
-                    widget::Row::new().push(horizontal_space()).push(
-                        button("Hide")
-                            .padding(3)
-                            .style(widget::button::danger)
-                            .on_press_with(|| OrRequest::Request(Request::HideBatch)),
-                    ).padding(3),
+                    widget::Row::new()
+                        .align_y(Center)
+                        .push(
+                            widget::pick_list(Language::VARIANTS, Some(self.lang), |l| {
+                                OrRequest::Message(Message::Lang(l))
+                            })
+                            .padding(3),
+                        )
+                        .push(horizontal_space())
+                        .push(button("Run").padding(3).style(widget::button::success))
+                        .push(button("Save").padding(3))
+                        .push(
+                            button("Hide")
+                                .padding(3)
+                                .style(widget::button::danger)
+                                .on_press_with(|| OrRequest::Request(Request::HideBatch)),
+                        )
+                        .padding(3)
+                        .spacing(3),
                 )
                 .push(
                     widget::text_editor(&self.script)

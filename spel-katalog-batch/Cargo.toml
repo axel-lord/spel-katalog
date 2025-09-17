@@ -7,7 +7,7 @@ edition = "2024"
 iced.workspace = true
 iced_highlighter.workspace = true
 derive_more = { workspace = true, features = ["display"] }
-strum.workspace = true
+strum = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["process"] }
 spel-katalog-common.workspace = true
 
