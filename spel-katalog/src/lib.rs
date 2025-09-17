@@ -99,6 +99,8 @@ pub struct App {
     filter: String,
     view: view::State,
     info: ::spel_katalog_info::State,
+    batch: ::spel_katalog_batch::State,
+    show_batch: bool,
     image_buffer: ImageBuffer,
     sender: StatusSender,
     process_list: Option<Vec<process_info::ProcessInfo>>,
@@ -132,6 +134,7 @@ pub enum QuickMessage {
     RunSelected,
     Next,
     Prev,
+    ToggleBatch,
 }
 
 #[derive(Debug, IsVariant, From, Clone)]
@@ -152,6 +155,8 @@ pub enum Message {
     Quick(QuickMessage),
     ProcessInfo(Option<Vec<process_info::ProcessInfo>>),
     Kill(i64),
+    #[from]
+    Batch(OrRequest<::spel_katalog_batch::Message, ::spel_katalog_batch::Request>),
 }
 
 impl App {
@@ -267,6 +272,8 @@ impl App {
             let info = ::spel_katalog_info::State::default();
             let sender = tx.into();
             let process_list = None;
+            let show_batch = false;
+            let batch = Default::default();
 
             App {
                 process_list,
@@ -278,6 +285,8 @@ impl App {
                 image_buffer,
                 info,
                 sender,
+                batch,
+                show_batch,
             }
         };
 
@@ -336,6 +345,9 @@ impl App {
                 "n" if modifiers.is_empty() => Some(QuickMessage::ToggleNetwork),
                 "k" if modifiers == Modifiers::CTRL | Modifiers::SHIFT => {
                     Some(QuickMessage::OpenProcessInfo)
+                }
+                "b" if modifiers == Modifiers::CTRL | Modifiers::SHIFT => {
+                    Some(QuickMessage::ToggleBatch)
                 }
                 _ => None,
             }
@@ -530,6 +542,7 @@ impl App {
                         return self.run_game(id, Safety::Firejail, false);
                     }
                 }
+                QuickMessage::ToggleBatch => self.show_batch = !self.show_batch,
             },
             Message::ProcessInfo(process_infos) => {
                 self.process_list = process_infos.filter(|infos| !infos.is_empty())
@@ -563,6 +576,15 @@ impl App {
                 })
                 .then(|_| Task::none());
             }
+            Message::Batch(or_request) => match or_request {
+                OrRequest::Message(msg) => return self.batch.update(msg).map(From::from),
+                OrRequest::Request(req) => match req {
+                    ::spel_katalog_batch::Request::ShowProcesses => {
+                        return Task::done(Message::Quick(QuickMessage::OpenProcessInfo));
+                    }
+                    ::spel_katalog_batch::Request::HideBatch => self.show_batch = false,
+                },
+            },
         }
         Task::none()
     }
@@ -876,9 +898,20 @@ impl App {
                         &self.settings,
                         &self.games,
                         &self.info,
-                        self.process_list.is_some(),
+                        self.process_list.is_some() || self.show_batch,
                     )
                     .into()])
+                .push_maybe(self.show_batch.then(|| {
+                    self.batch
+                        .view()
+                        .pipe(widget::container)
+                        .padding(50)
+                        .center_x(Fill)
+                        .height(Fill)
+                        .pipe(widget::opaque)
+                        .pipe(Element::from)
+                        .map(Message::Batch)
+                }))
                 .push_maybe(
                     self.process_list
                         .as_ref()

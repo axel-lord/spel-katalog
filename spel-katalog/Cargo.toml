@@ -24,6 +24,7 @@ rfd = { workspace = true, features = ["xdg-portal","tokio"] }
 rustc-hash.workspace = true
 serde = { workspace = true, features = ["derive"] }
 shell-words.workspace = true
+spel-katalog-batch.workspace = true
 spel-katalog-common.workspace = true
 spel-katalog-settings.workspace = true
 spel-katalog-games.workspace = true

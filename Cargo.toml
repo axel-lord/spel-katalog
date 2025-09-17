@@ -1,5 +1,5 @@
 [workspace]
-members = [ "spel-katalog-build", "spel-katalog", "spel-katalog-common", "spel-katalog-settings", "spel-katalog-games", "spel-katalog-info", "spel-katalog-parse", "spel-katalog-script"]
+members = [ "spel-katalog-build", "spel-katalog", "spel-katalog-common", "spel-katalog-settings", "spel-katalog-games", "spel-katalog-info", "spel-katalog-parse", "spel-katalog-script", "spel-katalog-batch"]
 resolver = "2"
 default-members = ["spel-katalog"]
 
@@ -61,6 +61,7 @@ tokio-stream = { version = "0.1.17" }
 toml = "0.8.22"
 xdg = "3.0.0"
 proc-macro2 = { version = "1.0.95", default-features = false }
+spel-katalog-batch = { path = "spel-katalog-batch" }
 spel-katalog-build = { path = "spel-katalog-build" }
 spel-katalog-common = { path = "spel-katalog-common" }
 spel-katalog-games = { path = "spel-katalog-games" }

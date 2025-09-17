@@ -1,0 +1,15 @@
+[package]
+name = "spel-katalog-batch"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+iced.workspace = true
+iced_highlighter.workspace = true
+derive_more = { workspace = true, features = ["display"] }
+strum.workspace = true
+tokio = { workspace = true, features = ["process"] }
+spel-katalog-common.workspace = true
+
+[lints]
+workspace = true
