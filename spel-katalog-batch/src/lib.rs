@@ -4,6 +4,7 @@ use ::std::{
     io::{Write, pipe},
     path::PathBuf,
     process::Command,
+    sync::Arc,
 };
 
 use ::derive_more::Display;
@@ -20,7 +21,7 @@ use ::iced::{
 };
 use ::iced_highlighter::Highlighter;
 use ::serde::Serialize;
-use ::spel_katalog_common::OrRequest;
+use ::spel_katalog_common::{OrRequest, StatusSender, async_status};
 use ::strum::VariantArray;
 use ::tap::Pipe;
 
@@ -52,8 +53,12 @@ pub enum Message {
     Action(Action),
     /// Set language in use.
     Lang(Language),
+    /// Set scope in use.
+    Scope(Scope),
     /// Run batch script on info.
     RunBatch(Vec<BatchInfo>),
+    /// Set script content.
+    SetContent(String, String, Language),
     /// Clear batch script.
     Clear,
     /// Open batch script.
@@ -72,7 +77,7 @@ pub enum Request {
     /// Hide batch window.
     HideBatch,
     /// Gather batch info
-    GatherBatchInfo,
+    GatherBatchInfo(Scope),
 }
 
 /// State of batch view.
@@ -81,6 +86,7 @@ pub struct State {
     script: text_editor::Content,
     hl_settings: ::iced_highlighter::Settings,
     lang: Language,
+    scope: Scope,
     script_title: String,
 }
 
@@ -93,18 +99,20 @@ impl Default for State {
                 token: String::from("zsh"),
             },
             lang: Language::Zsh,
+            scope: Scope::default(),
             script_title: "samle.zsh".to_owned(),
         }
     }
 }
 
 /// Language to execute using.
-#[derive(Debug, Clone, Copy, VariantArray, Display, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, VariantArray, Display, PartialEq, Eq)]
 pub enum Language {
     /// Execute as a zsh script.
     #[display("zsh")]
     Zsh,
     /// Execute as a bash script.
+    #[default]
     #[display("bash")]
     Bash,
     /// Execute as a python script.
@@ -112,9 +120,24 @@ pub enum Language {
     Python,
 }
 
+/// What games to use as input.
+#[derive(Debug, Clone, Copy, Default, VariantArray, Display, PartialEq, Eq)]
+pub enum Scope {
+    /// Use all games.
+    All,
+    /// Use currently shown games.
+    #[default]
+    Shown,
+}
+
 impl State {
     /// Update state.
-    pub fn update(&mut self, msg: Message) -> Task<OrRequest<Message, Request>> {
+    pub fn update(
+        &mut self,
+        msg: Message,
+        tx: &StatusSender,
+        settings: &::spel_katalog_settings::Settings,
+    ) -> Task<OrRequest<Message, Request>> {
         match msg {
             Message::Action(action) => {
                 self.script.perform(action);
@@ -193,12 +216,108 @@ impl State {
                     .for_each(|action| self.script.perform(action));
                 Task::none()
             }
-            Message::Open => todo!(),
-            Message::Save => todo!(),
+            Message::Open => {
+                let tx = tx.clone();
+                let batch_dir = settings
+                    .get::<::spel_katalog_settings::BatchScriptDir>()
+                    .as_path()
+                    .to_path_buf();
+                Task::future(async move {
+                    let file_path = ::rfd::AsyncFileDialog::new()
+                        .set_title("Save Batch Script")
+                        .set_directory(batch_dir)
+                        .pick_file()
+                        .await;
+                    let Some(file_path) = file_path else {
+                        ::log::info!("batch script open cancelled");
+                        return None;
+                    };
+                    let file_path = file_path.path();
+                    let result = ::tokio::fs::read_to_string(file_path).await;
+
+                    match result {
+                        Err(err) => {
+                            ::log::error!("could not open script {file_path:?}\n{err}");
+                            async_status!(tx, "could not open script {file_path:?}").await;
+                            None
+                        }
+                        Ok(content) => {
+                            let ext = file_path
+                                .extension()
+                                .and_then(|ext| ext.to_str())
+                                .unwrap_or_default();
+                            let ext = if ext.eq_ignore_ascii_case("zsh") {
+                                Language::Zsh
+                            } else if ext.eq_ignore_ascii_case("py") {
+                                Language::Python
+                            } else {
+                                Language::Bash
+                            };
+
+                            Some(OrRequest::Message(Message::SetContent(
+                                content,
+                                file_path
+                                    .file_name()
+                                    .map(|name| name.display().to_string())
+                                    .unwrap_or_default(),
+                                ext,
+                            )))
+                        }
+                    }
+                })
+                .then(|result| match result {
+                    Some(msg) => Task::done(msg),
+                    None => Task::none(),
+                })
+            }
+            Message::Save => {
+                let content = self.script.text();
+                let tx = tx.clone();
+                let batch_dir = settings
+                    .get::<::spel_katalog_settings::BatchScriptDir>()
+                    .as_path()
+                    .to_path_buf();
+                Task::future(async move {
+                    let file_path = ::rfd::AsyncFileDialog::new()
+                        .set_title("Save Batch Script")
+                        .set_directory(batch_dir)
+                        .save_file()
+                        .await;
+                    let Some(file_path) = file_path else {
+                        ::log::info!("batch script save cancelled");
+                        return;
+                    };
+                    let file_path = file_path.path();
+                    let result = ::tokio::fs::write(file_path, content.as_bytes()).await;
+
+                    if let Err(err) = result {
+                        ::log::error!("could not save script to {file_path:?}\n{err}");
+                        async_status!(tx, "could not save script to {file_path:?}").await;
+                    }
+                })
+                .then(|_| Task::none())
+            }
             Message::Indent => {
                 for _ in 0..4 {
                     self.script.perform(Action::Edit(Edit::Insert(' ')));
                 }
+                Task::none()
+            }
+            Message::SetContent(content, title, language) => {
+                self.script_title = title;
+                self.lang = language;
+                self.hl_settings.token = language.to_string();
+                [
+                    Action::SelectAll,
+                    Action::Edit(Edit::Backspace),
+                    Action::Edit(Edit::Paste(Arc::new(content))),
+                ]
+                .into_iter()
+                .for_each(|action| self.script.perform(action));
+                Task::none()
+            }
+            Message::Scope(scope) => {
+                self.scope = scope;
                 Task::none()
             }
         }
@@ -217,12 +336,20 @@ impl State {
                             })
                             .padding(3),
                         )
-                        .push(text(&self.script_title).width(Fill))
+                        .push(text(&self.script_title).center().width(Fill))
+                        .push(
+                            widget::pick_list(Scope::VARIANTS, Some(self.scope), |s| {
+                                OrRequest::Message(Message::Scope(s))
+                            })
+                            .padding(3),
+                        )
                         .push(
                             button("Run")
                                 .padding(3)
                                 .style(widget::button::success)
-                                .on_press(OrRequest::Request(Request::GatherBatchInfo)),
+                                .on_press_with(|| {
+                                    OrRequest::Request(Request::GatherBatchInfo(self.scope))
+                                }),
                         )
                         .push(
                             button("Clear")
@@ -260,6 +387,12 @@ impl State {
                                 == Key::Named(::iced::keyboard::key::Named::Tab)
                             {
                                 Some(Binding::Custom(OrRequest::Message(Message::Indent)))
+                            } else if keypress.key.as_ref() == Key::Character("r")
+                                && keypress.modifiers == Modifiers::CTRL
+                            {
+                                Some(Binding::Custom(OrRequest::Request(
+                                    Request::GatherBatchInfo(self.scope),
+                                )))
                             } else if keypress.modifiers == Modifiers::CTRL
                                 && keypress.key.as_ref() == Key::Character("d")
                             {

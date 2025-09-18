@@ -578,32 +578,43 @@ impl App {
                 .then(|_| Task::none());
             }
             Message::Batch(or_request) => match or_request {
-                OrRequest::Message(msg) => return self.batch.update(msg).map(From::from),
+                OrRequest::Message(msg) => {
+                    return self
+                        .batch
+                        .update(msg, &self.sender, &self.settings)
+                        .map(From::from);
+                }
                 OrRequest::Request(req) => match req {
                     ::spel_katalog_batch::Request::ShowProcesses => {
                         return Task::done(Message::Quick(QuickMessage::OpenProcessInfo));
                     }
                     ::spel_katalog_batch::Request::HideBatch => self.show_batch = false,
-                    ::spel_katalog_batch::Request::GatherBatchInfo => {
-                        return self
-                            .games
-                            .all()
-                            .iter()
-                            .map(|game| BatchInfo {
-                                id: game.id,
-                                slug: game.slug.clone(),
-                                name: game.name.clone(),
-                                runner: game.runner.to_string(),
-                                config: game.configpath.clone(),
-                                hidden: game.hidden,
-                                cover: None,
-                                banner: None,
-                            })
-                            .collect::<Vec<_>>()
-                            .pipe(::spel_katalog_batch::Message::RunBatch)
-                            .pipe(OrRequest::Message)
-                            .pipe(Message::Batch)
-                            .pipe(Task::done);
+                    ::spel_katalog_batch::Request::GatherBatchInfo(scope) => {
+                        fn gather<'a>(
+                            games: impl IntoIterator<Item = &'a ::spel_katalog_games::Game>,
+                        ) -> Task<Message> {
+                            games
+                                .into_iter()
+                                .map(|game| BatchInfo {
+                                    id: game.id,
+                                    slug: game.slug.clone(),
+                                    name: game.name.clone(),
+                                    runner: game.runner.to_string(),
+                                    config: game.configpath.clone(),
+                                    hidden: game.hidden,
+                                    cover: None,
+                                    banner: None,
+                                })
+                                .collect::<Vec<_>>()
+                                .pipe(::spel_katalog_batch::Message::RunBatch)
+                                .pipe(OrRequest::Message)
+                                .pipe(Message::Batch)
+                                .pipe(Task::done)
+                        }
+                        return match scope {
+                            ::spel_katalog_batch::Scope::All => gather(self.games.all()),
+                            ::spel_katalog_batch::Scope::Shown => gather(self.games.displayed()),
+                        };
                     }
                 },
             },
