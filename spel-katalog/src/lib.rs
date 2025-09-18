@@ -614,6 +614,9 @@ impl App {
                         return match scope {
                             ::spel_katalog_batch::Scope::All => gather(self.games.all()),
                             ::spel_katalog_batch::Scope::Shown => gather(self.games.displayed()),
+                            ::spel_katalog_batch::Scope::Batch => {
+                                gather(self.games.batch_selected())
+                            }
                         };
                     }
                 },

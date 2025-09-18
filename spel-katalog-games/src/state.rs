@@ -11,7 +11,7 @@ use ::std::{
 use ::derive_more::{Deref, DerefMut, IsVariant};
 use ::iced::{
     Alignment::{self},
-    Element,
+    Border, Element,
     Length::Fill,
     Task,
     widget::{self, container, image::Handle, stack},
@@ -82,6 +82,8 @@ pub enum Message {
     Select(SelDir),
     /// Select an id.
     SelectId(i64),
+    /// Batch select game.
+    BatchSelect(i64),
 }
 
 /// Requests for other widgets.
@@ -277,22 +279,22 @@ impl State {
                     }
                     let mut slugs_images = Vec::new();
                     slugs_bytes.into_par_iter().map(|(slug, image)| {
-                        if !game_slugs.contains(&slug) {
-                            return None;
-                        }
-                        let image = match ::image::load_from_memory_with_format(&image, ImageFormat::Png) {
-                            Ok(image) => image.into_rgba8(),
-                            Err(err) => {
-                                ::log::error!(
-                                    "could not parse image for slug {slug} in {thumbnail_cache_path:?}\n{err}"
-                                );
-                                return None;
-                            },
-                        };
+                                if !game_slugs.contains(&slug) {
+                                    return None;
+                                }
+                                let image = match ::image::load_from_memory_with_format(&image, ImageFormat::Png) {
+                                    Ok(image) => image.into_rgba8(),
+                                    Err(err) => {
+                                        ::log::error!(
+                                            "could not parse image for slug {slug} in {thumbnail_cache_path:?}\n{err}"
+                                        );
+                                        return None;
+                                    },
+                                };
 
-                        Some((slug, Handle::from_rgba(image.width(), image.height(), image.into_raw())))
+                                Some((slug, Handle::from_rgba(image.width(), image.height(), image.into_raw())))
 
-                    }).collect_into_vec(&mut slugs_images);
+                            }).collect_into_vec(&mut slugs_images);
 
                     let (slugs, images) = slugs_images.into_iter().flatten().unzip();
 
@@ -374,6 +376,21 @@ impl State {
                 self.selected = Some(id);
                 return Task::done(OrRequest::Request(Request::SetId { id }));
             }
+            Message::BatchSelect(id) => {
+                if let Some(game) = self.games.by_id_mut(id) {
+                    game.batch_selected = !game.batch_selected;
+                }
+                Task::none()
+            }
+        }
+    }
+
+    /// Deselect all batch selected games.
+    pub fn deselect_batch(&mut self) {
+        for game in self.all_mut() {
+            if game.batch_selected {
+                game.batch_selected = false;
+            }
         }
     }
 
@@ -433,9 +450,27 @@ impl State {
 
             let style: fn(&::iced::Theme) -> container::Style;
             if selected == Some(id) {
-                style = |theme| container::bordered_box(theme).background(theme.palette().primary);
+                if game.batch_selected {
+                    style = |theme| {
+                        container::bordered_box(theme)
+                            .border(Border {
+                                width: 1.0,
+                                radius: 0.into(),
+                                color: theme.palette().danger,
+                            })
+                            .background(theme.palette().primary)
+                    };
+                } else {
+                    style =
+                        |theme| container::bordered_box(theme).background(theme.palette().primary);
+                }
             } else {
-                style = container::bordered_box;
+                if game.batch_selected {
+                    style =
+                        |theme| container::bordered_box(theme).background(theme.palette().danger);
+                } else {
+                    style = container::bordered_box;
+                }
             };
 
             let text = container(name)
@@ -469,7 +504,7 @@ impl State {
                 } else {
                     area.on_release(OrRequest::Message(Message::SelectId(id)))
                         .on_middle_release(OrRequest::Request(Request::Run { id, sandbox: true }))
-                        .on_right_release(OrRequest::Request(Request::CloseInfo))
+                        .on_right_release(OrRequest::Message(Message::BatchSelect(id)))
                 }
             })
             .into()

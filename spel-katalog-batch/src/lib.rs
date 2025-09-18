@@ -128,6 +128,8 @@ pub enum Scope {
     /// Use currently shown games.
     #[default]
     Shown,
+    /// Use currently batch selected games.
+    Batch,
 }
 
 impl State {

@@ -28,16 +28,28 @@ pub struct Games {
 }
 
 impl Games {
-    /// Games that are to currently be dfisplayed.
+    /// Games that are currently to be displayed.
     pub fn displayed(
         &self,
     ) -> impl Iterator<Item = &'_ Game> + DoubleEndedIterator + FusedIterator + Clone {
         self.displayed.iter().filter_map(|idx| self.games.get(*idx))
     }
 
+    /// Games that are batch selected.
+    pub fn batch_selected(
+        &self,
+    ) -> impl Iterator<Item = &'_ Game> + DoubleEndedIterator + FusedIterator + Clone {
+        self.games.iter().filter(|game| game.batch_selected)
+    }
+
     /// All games.
     pub fn all(&self) -> &[Game] {
         &self.games
+    }
+
+    /// All games as mutable.
+    pub fn all_mut(&mut self) -> &mut [Game] {
+        &mut self.games
     }
 
     /// Amount of games.
@@ -177,6 +189,12 @@ impl Games {
     pub fn by_id(&self, id: i64) -> Option<&Game> {
         let idx = *self.id_lookup.get(&id)?;
         self.games.get(idx)
+    }
+
+    /// Get a game by it's id as mutable.
+    pub fn by_id_mut(&mut self, id: i64) -> Option<&mut Game> {
+        let idx = *self.id_lookup.get(&id)?;
+        self.games.get_mut(idx)
     }
 
     /// Set the thumbnail of a game.

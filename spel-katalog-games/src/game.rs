@@ -20,6 +20,8 @@ pub struct Game {
     pub hidden: bool,
     /// Thumbnail in use.
     pub image: Option<Handle>,
+    /// Is the game selected for batch commands.
+    pub batch_selected: bool,
 }
 
 impl Game {
@@ -58,6 +60,7 @@ impl Game {
             configpath,
             hidden: false,
             image: None,
+            batch_selected: false,
         })
     }
 }
