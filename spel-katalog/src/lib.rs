@@ -591,6 +591,7 @@ impl App {
                     ::spel_katalog_batch::Request::HideBatch => self.show_batch = false,
                     ::spel_katalog_batch::Request::GatherBatchInfo(scope) => {
                         fn gather<'a>(
+                            yml_dir: &str,
                             games: impl IntoIterator<Item = &'a ::spel_katalog_games::Game>,
                         ) -> Task<Message> {
                             games
@@ -600,10 +601,8 @@ impl App {
                                     slug: game.slug.clone(),
                                     name: game.name.clone(),
                                     runner: game.runner.to_string(),
-                                    config: game.configpath.clone(),
+                                    config: format!("{yml_dir}/{}.yml", game.configpath),
                                     hidden: game.hidden,
-                                    cover: None,
-                                    banner: None,
                                 })
                                 .collect::<Vec<_>>()
                                 .pipe(::spel_katalog_batch::Message::RunBatch)
@@ -611,11 +610,15 @@ impl App {
                                 .pipe(Message::Batch)
                                 .pipe(Task::done)
                         }
+                        let yml_dir = self.settings.get::<YmlDir>();
+                        let yml_dir = yml_dir.as_str();
                         return match scope {
-                            ::spel_katalog_batch::Scope::All => gather(self.games.all()),
-                            ::spel_katalog_batch::Scope::Shown => gather(self.games.displayed()),
+                            ::spel_katalog_batch::Scope::All => gather(yml_dir, self.games.all()),
+                            ::spel_katalog_batch::Scope::Shown => {
+                                gather(yml_dir, self.games.displayed())
+                            }
                             ::spel_katalog_batch::Scope::Batch => {
-                                gather(self.games.batch_selected())
+                                gather(yml_dir, self.games.batch_selected())
                             }
                         };
                     }

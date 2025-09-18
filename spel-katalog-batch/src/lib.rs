@@ -2,7 +2,6 @@
 
 use ::std::{
     io::{Write, pipe},
-    path::PathBuf,
     process::Command,
     sync::Arc,
 };
@@ -40,10 +39,6 @@ pub struct BatchInfo {
     pub config: String,
     /// True if the game is hidden.
     pub hidden: bool,
-    /// Path to cover art for game, if any.
-    pub cover: Option<PathBuf>,
-    /// Path to banner art for game, if any.
-    pub banner: Option<PathBuf>,
 }
 
 /// Message for batch view.
@@ -406,8 +401,6 @@ impl State {
                                         runner: "wine".to_owned(),
                                         config: "/dev/null".to_owned(),
                                         hidden: false,
-                                        cover: None,
-                                        banner: Some(PathBuf::from("/dev/null")),
                                     })
                                     .collect::<Vec<_>>()
                                     .pipe(Message::RunBatch)
