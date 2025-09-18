@@ -20,6 +20,7 @@ use ::iced::{
     widget::{self, horizontal_rule, stack, text, text_input, toggler, value, vertical_space},
 };
 use ::rustix::process::{Pid, RawPid};
+use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::{OrRequest, StatusSender, status, w};
 use ::spel_katalog_games::SelDir;
 use ::spel_katalog_info::{
@@ -583,6 +584,27 @@ impl App {
                         return Task::done(Message::Quick(QuickMessage::OpenProcessInfo));
                     }
                     ::spel_katalog_batch::Request::HideBatch => self.show_batch = false,
+                    ::spel_katalog_batch::Request::GatherBatchInfo => {
+                        return self
+                            .games
+                            .all()
+                            .iter()
+                            .map(|game| BatchInfo {
+                                id: game.id,
+                                slug: game.slug.clone(),
+                                name: game.name.clone(),
+                                runner: game.runner.to_string(),
+                                config: game.configpath.clone(),
+                                hidden: game.hidden,
+                                cover: None,
+                                banner: None,
+                            })
+                            .collect::<Vec<_>>()
+                            .pipe(::spel_katalog_batch::Message::RunBatch)
+                            .pipe(OrRequest::Message)
+                            .pipe(Message::Batch)
+                            .pipe(Task::done);
+                    }
                 },
             },
         }

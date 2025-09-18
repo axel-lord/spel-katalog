@@ -4,12 +4,17 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+derive_more = { workspace = true, features = ["display"] }
 iced.workspace = true
 iced_highlighter.workspace = true
-derive_more = { workspace = true, features = ["display"] }
-strum = { workspace = true, features = ["derive"] }
-tokio = { workspace = true, features = ["process"] }
+log.workspace = true
+rfd = { workspace = true, features = ["xdg-portal","tokio"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 spel-katalog-common.workspace = true
+strum = { workspace = true, features = ["derive"] }
+tap.workspace = true
+tokio = { workspace = true, features = ["process"] }
 
 [lints]
 workspace = true
