@@ -1,6 +1,29 @@
 [Theme]
 help = "Theme to use"
-variants = ["Light", "Dark"]
+variants = [
+	"Light",
+	"Dark",
+	"SolarizedLight",
+	"SolarizedDark",
+	"GruvboxLight",
+	"GruvboxDark",
+	"Dracula",
+	"Nord",
+	"CatppuccinLatte",
+	"CatppuccinFrappe",
+	"CatppuccinMacchiato",
+	"CatppuccinMocha",
+	"TokyoNight",
+	"TokyoNightStorm",
+	"TokyoNightLight",
+	"KanagawaWave",
+	"KanagawaDragon",
+	"KanagawaLotus",
+	"Moonfly",
+	"Nightfly",
+	"Oxocarbon",
+	"Ferra",
+]
 default = "Dark"
 
 [Show]
@@ -64,6 +87,11 @@ path = "{CONFIG}/spel-katalog/games"
 title = "Script Config Directory"
 help = "Path to script config directory"
 path = "{CONFIG}/spel-katalog/scripts"
+
+[BatchScriptDir]
+title = "Batch Script Directory"
+help = "Path to batch script directory"
+path = "{CONFIG}/spel-katalog/batch"
 
 [CacheDir]
 title = "Cache Directory"

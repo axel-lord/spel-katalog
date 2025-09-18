@@ -201,10 +201,38 @@ where
 
 impl From<Theme> for ::iced::Theme {
     fn from(value: Theme) -> Self {
-        match value {
-            Theme::Light => ::iced::Theme::Light,
-            Theme::Dark => ::iced::Theme::Dark,
+        macro_rules! themes {
+            ($v:expr, $($theme:ident,)*) => {
+                match $v {$(
+                    Theme:: $theme => ::iced::Theme:: $theme,
+                )*}
+            };
         }
+        themes!(
+            value,
+            Light,
+            Dark,
+            SolarizedLight,
+            SolarizedDark,
+            GruvboxLight,
+            GruvboxDark,
+            Dracula,
+            Nord,
+            CatppuccinLatte,
+            CatppuccinFrappe,
+            CatppuccinMacchiato,
+            CatppuccinMocha,
+            TokyoNight,
+            TokyoNightStorm,
+            TokyoNightLight,
+            KanagawaWave,
+            KanagawaDragon,
+            KanagawaLotus,
+            Moonfly,
+            Nightfly,
+            Oxocarbon,
+            Ferra,
+        )
     }
 }
 
