@@ -10,7 +10,7 @@ use ::iced::{
 };
 
 use ::spel_katalog_common::{StatusSender, async_status, w};
-use ::std::path::PathBuf;
+use ::std::{collections::HashMap, path::PathBuf};
 use ::tap::Pipe;
 
 mod list;
@@ -111,6 +111,9 @@ mod generated {
     include!(concat!(env!("OUT_DIR"), "/settings.rs"));
 }
 pub use generated::*;
+
+/// A generic representation of current settings.
+pub type Generic = HashMap<&'static str, String>;
 
 /// Trait to provide a default string representation of a type.
 pub trait DefaultStr {

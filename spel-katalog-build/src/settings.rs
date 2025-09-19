@@ -301,6 +301,7 @@ pub fn write(settings: Settings, dest: &Path) {
     let mut path_ty_names = Vec::new();
     let mut enum_ty_doc = Vec::new();
     let mut path_ty_doc = Vec::new();
+    let mut generic_names = Vec::new();
 
     for (name, setting, ..) in &emitted {
         let pascal_ident = name.to_case(Case::Pascal);
@@ -313,6 +314,7 @@ pub fn write(settings: Settings, dest: &Path) {
         ));
         field_names.push(format_ident!("{snake_ident}"));
         field_names_mut.push(format_ident!("{snake_ident}_mut"));
+        generic_names.push(String::clone(name));
 
         match setting.content {
             SettingContent::Enum { .. } => {
@@ -456,6 +458,13 @@ pub fn write(settings: Settings, dest: &Path) {
                     Self {#(
                         #field_names: Some(self.#field_names.clone().unwrap_or_default()),
                     )*}
+                }
+
+                /// Get generic settings.
+                pub fn generic(&self) -> crate::Generic {
+                    [#(
+                        (#generic_names, self.#field_names().to_string())
+                    ),*].into()
                 }
 
                 #(
