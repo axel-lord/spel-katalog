@@ -73,8 +73,10 @@ pub enum Request {
     ShowProcesses,
     /// Hide batch window.
     HideBatch,
-    /// Gather batch info
+    /// Gather batch info.
     GatherBatchInfo(Scope),
+    /// Request a cache reload.
+    ReloadCache,
 }
 
 /// State of batch view.
@@ -154,6 +156,10 @@ impl State {
                 let lang = self.lang;
                 let script = self.script.text();
                 let title = Some(self.script_title.clone()).filter(|s| !s.is_empty());
+                let thumb_db_path = settings
+                    .get::<::spel_katalog_settings::CacheDir>()
+                    .as_path()
+                    .join("thumbnails.db");
                 let settings = settings.generic();
                 let task = Task::future(::tokio::task::spawn_blocking(move || {
                     let mut command = match lang {
@@ -179,8 +185,13 @@ impl State {
                             command
                         }
                         Language::Lua => {
-                            return lua_api::lua_batch(batch_infos, script, settings)
-                                .map_err(|err| ::std::io::Error::other(err.to_string()));
+                            return lua_api::lua_batch(
+                                batch_infos,
+                                script,
+                                settings,
+                                thumb_db_path,
+                            )
+                            .map_err(|err| ::std::io::Error::other(err.to_string()));
                         }
                     };
 
@@ -203,7 +214,7 @@ impl State {
                     Ok::<_, ::std::io::Error>(())
                 }))
                 .then(|result| match result {
-                    Ok(Ok(..)) => Task::none(),
+                    Ok(Ok(..)) => Task::done(OrRequest::Request(Request::ReloadCache)),
                     Ok(Err(err)) => {
                         ::log::error!("Failure when running batch\n{err}");
                         Task::none()

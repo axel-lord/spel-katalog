@@ -3,12 +3,16 @@ name = "spel-katalog-batch"
 version = "0.1.0"
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 derive_more = { workspace = true, features = ["display"] }
 iced.workspace = true
 iced_highlighter.workspace = true
 log.workspace = true
 mlua = { workspace = true, features = ["serde", "lua54", "vendored"]}
+once_cell.workspace = true
 rfd = { workspace = true, features = ["xdg-portal","tokio"] }
 rusqlite.workspace = true
 serde = { workspace = true, features = ["derive"] }
@@ -19,6 +23,4 @@ strum = { workspace = true, features = ["derive"] }
 tap.workspace = true
 tokio = { workspace = true, features = ["process"] }
 yaml-rust2.workspace = true
-
-[lints]
-workspace = true
+image.workspace = true

@@ -622,6 +622,9 @@ impl App {
                             }
                         };
                     }
+                    ::spel_katalog_batch::Request::ReloadCache => {
+                        return self.games.find_cached(&self.settings).map(Message::Games);
+                    }
                 },
             },
         }
