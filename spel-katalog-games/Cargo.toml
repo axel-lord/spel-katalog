@@ -5,23 +5,23 @@ edition = "2024"
 authors = ["Axel Lord"]
 license = "MIT OR Apache-2.0"
 
+[lints]
+workspace = true
+
 [dependencies]
 derive_more = { workspace = true, features = ["is_variant", "display"] }
+iced = { workspace = true, features = ["tokio", "lazy", "image", "advanced"] }
+image.workspace = true
+itertools.workspace = true
+log.workspace = true
+rayon.workspace = true
+regex.workspace = true
+rusqlite.workspace = true
+rustc-hash.workspace = true
+shell-words.workspace = true
+spel-katalog-common.workspace = true
+spel-katalog-settings.workspace = true
 strsim.workspace = true
 tap.workspace = true
 thiserror.workspace = true
-iced = { workspace = true, features = ["tokio", "lazy", "image", "advanced"] }
-spel-katalog-common.workspace = true
-spel-katalog-settings.workspace = true
-log.workspace = true
-rustc-hash.workspace = true
 tokio.workspace = true
-itertools.workspace = true
-shell-words.workspace = true
-regex.workspace = true
-image.workspace = true
-rusqlite.workspace = true
-rayon.workspace = true
-
-[lints]
-workspace = true

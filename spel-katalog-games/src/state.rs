@@ -225,123 +225,7 @@ impl State {
 
                 status!(tx, "read games from database");
 
-                let game_slugs = self
-                    .all()
-                    .iter()
-                    .map(|game| &game.slug)
-                    .cloned()
-                    .collect::<FxHashSet<_>>();
-                let cache_dir = settings.get::<CacheDir>().to_path_buf();
-                let find_cached = spawn_blocking(move || {
-                    let thumbnail_cache_path = cache_dir.join(THUMBNAILS_FILENAME);
-                    let db = match Connection::open_with_flags(
-                        &thumbnail_cache_path,
-                        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-                    ) {
-                        Ok(db) => db,
-                        Err(err) => {
-                            ::log::info!(
-                                "could not open thumbnail cache {thumbnail_cache_path:?}\n{err}"
-                            );
-                            return Ok((None, game_slugs));
-                        }
-                    };
-
-                    let mut stmt = db.prepare("SELECT slug, image FROM images")?;
-                    let mut rows = stmt.query([])?;
-
-                    fn get_slug_image(
-                        row: &::rusqlite::Row<'_>,
-                        thumbnail_cache_path: &Path,
-                    ) -> Option<(String, Vec<u8>)> {
-                        let slug = row
-                            .get("slug")
-                            .map_err(|err| {
-                                ::log::error!(
-                                    "could not get slug for row in {thumbnail_cache_path:?}\n{err}"
-                                )
-                            })
-                            .ok()?;
-                        let image = row
-                            .get("image")
-                            .map_err(|err| {
-                                ::log::error!(
-                                    "could not get image for row in {thumbnail_cache_path:?}\n{err}"
-                                )
-                            })
-                            .ok()?;
-                        Some((slug, image))
-                    }
-
-                    let mut slugs_bytes = Vec::new();
-                    while let Some(row) = rows.next()? {
-                        slugs_bytes.extend(get_slug_image(row, &thumbnail_cache_path));
-                    }
-                    let mut slugs_images = Vec::new();
-                    slugs_bytes.into_par_iter().map(|(slug, image)| {
-                                if !game_slugs.contains(&slug) {
-                                    return None;
-                                }
-                                let image = match ::image::load_from_memory_with_format(&image, ImageFormat::Png) {
-                                    Ok(image) => image.into_rgba8(),
-                                    Err(err) => {
-                                        ::log::error!(
-                                            "could not parse image for slug {slug} in {thumbnail_cache_path:?}\n{err}"
-                                        );
-                                        return None;
-                                    },
-                                };
-
-                                Some((slug, Handle::from_rgba(image.width(), image.height(), image.into_raw())))
-
-                            }).collect_into_vec(&mut slugs_images);
-
-                    let (slugs, images) = slugs_images.into_iter().flatten().unzip();
-
-                    let mut game_slugs = game_slugs;
-                    for slug in &slugs {
-                        if !game_slugs.remove(slug) {
-                            ::log::warn!(
-                                "thumbnail for game with slug {slug} was present in thumbnail cache but not in game datatbase"
-                            );
-                        }
-                    }
-
-                    Ok::<_, ::rusqlite::Error>((
-                        Some(Message::SetImages {
-                            slugs,
-                            images,
-                            from_cache: true,
-                        }),
-                        game_slugs,
-                    ))
-                });
-
-                Task::future(find_cached).then(|found| match found {
-                    Ok(result) => match result {
-                        Ok((set_images, slugs)) => Task::batch(
-                            [
-                                set_images.map(OrRequest::Message),
-                                Request::FindImages {
-                                    slugs: slugs.into_iter().collect::<Vec<_>>(),
-                                }
-                                .pipe(OrRequest::Request)
-                                .pipe(Some),
-                            ]
-                            .into_iter()
-                            .flatten()
-                            .map(Task::done),
-                        ),
-                        Err(err) => {
-                            ::log::error!("image cache collection failed\n{err}");
-                            Task::none()
-                        }
-                    },
-                    Err(err) => {
-                        ::log::error!("image cache thread did not finish\n{err}");
-                        Task::none()
-                    }
-                })
+                self.find_cached(settings)
             }
             Message::SetImages {
                 slugs,
@@ -383,6 +267,125 @@ impl State {
                 Task::none()
             }
         }
+    }
+
+    /// Find cached images.
+    pub fn find_cached(&mut self, settings: &Settings) -> Task<OrRequest<Message, Request>> {
+        let game_slugs = self
+            .all()
+            .iter()
+            .map(|game| &game.slug)
+            .cloned()
+            .collect::<FxHashSet<_>>();
+        let cache_dir = settings.get::<CacheDir>().to_path_buf();
+        let find_cached = spawn_blocking(move || {
+            let thumbnail_cache_path = cache_dir.join(THUMBNAILS_FILENAME);
+            let db = match Connection::open_with_flags(
+                &thumbnail_cache_path,
+                OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+            ) {
+                Ok(db) => db,
+                Err(err) => {
+                    ::log::info!("could not open thumbnail cache {thumbnail_cache_path:?}\n{err}");
+                    return Ok((None, game_slugs));
+                }
+            };
+
+            let mut stmt = db.prepare("SELECT slug, image FROM images")?;
+            let mut rows = stmt.query([])?;
+
+            fn get_slug_image(
+                row: &::rusqlite::Row<'_>,
+                thumbnail_cache_path: &Path,
+            ) -> Option<(String, Vec<u8>)> {
+                let slug = row
+                    .get("slug")
+                    .map_err(|err| {
+                        ::log::error!(
+                            "could not get slug for row in {thumbnail_cache_path:?}\n{err}"
+                        )
+                    })
+                    .ok()?;
+                let image = row
+                    .get("image")
+                    .map_err(|err| {
+                        ::log::error!(
+                            "could not get image for row in {thumbnail_cache_path:?}\n{err}"
+                        )
+                    })
+                    .ok()?;
+                Some((slug, image))
+            }
+
+            let mut slugs_bytes = Vec::new();
+            while let Some(row) = rows.next()? {
+                slugs_bytes.extend(get_slug_image(row, &thumbnail_cache_path));
+            }
+            let mut slugs_images = Vec::new();
+            slugs_bytes.into_par_iter().map(|(slug, image)| {
+                                if !game_slugs.contains(&slug) {
+                                    return None;
+                                }
+                                let image = match ::image::load_from_memory_with_format(&image, ImageFormat::Png) {
+                                    Ok(image) => image.into_rgba8(),
+                                    Err(err) => {
+                                        ::log::error!(
+                                            "could not parse image for slug {slug} in {thumbnail_cache_path:?}\n{err}"
+                                        );
+                                        return None;
+                                    },
+                                };
+
+                                Some((slug, Handle::from_rgba(image.width(), image.height(), image.into_raw())))
+
+                            }).collect_into_vec(&mut slugs_images);
+
+            let (slugs, images) = slugs_images.into_iter().flatten().unzip();
+
+            let mut game_slugs = game_slugs;
+            for slug in &slugs {
+                if !game_slugs.remove(slug) {
+                    ::log::warn!(
+                        "thumbnail for game with slug {slug} was present in thumbnail cache but not in game datatbase"
+                    );
+                }
+            }
+
+            Ok::<_, ::rusqlite::Error>((
+                Some(Message::SetImages {
+                    slugs,
+                    images,
+                    from_cache: true,
+                }),
+                game_slugs,
+            ))
+        });
+
+        Task::future(find_cached).then(|found| match found {
+            Ok(result) => match result {
+                Ok((set_images, slugs)) => Task::batch(
+                    [
+                        set_images.map(OrRequest::Message),
+                        Request::FindImages {
+                            slugs: slugs.into_iter().collect::<Vec<_>>(),
+                        }
+                        .pipe(OrRequest::Request)
+                        .pipe(Some),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .map(Task::done),
+                ),
+                Err(err) => {
+                    ::log::error!("image cache collection failed\n{err}");
+                    Task::none()
+                }
+            },
+            Err(err) => {
+                ::log::error!("image cache thread did not finish\n{err}");
+                Task::none()
+            }
+        })
     }
 
     /// Deselect all batch selected games.

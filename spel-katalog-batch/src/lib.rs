@@ -24,6 +24,8 @@ use ::spel_katalog_common::{OrRequest, StatusSender, async_status};
 use ::strum::VariantArray;
 use ::tap::Pipe;
 
+mod lua_api;
+
 /// One entry to be sent to batch script.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct BatchInfo {
@@ -71,8 +73,10 @@ pub enum Request {
     ShowProcesses,
     /// Hide batch window.
     HideBatch,
-    /// Gather batch info
+    /// Gather batch info.
     GatherBatchInfo(Scope),
+    /// Request a cache reload.
+    ReloadCache,
 }
 
 /// State of batch view.
@@ -113,6 +117,9 @@ pub enum Language {
     /// Execute as a python script.
     #[display("python")]
     Python,
+    /// Execute as a lua script.
+    #[display("lua")]
+    Lua,
 }
 
 /// What games to use as input.
@@ -149,8 +156,12 @@ impl State {
                 let lang = self.lang;
                 let script = self.script.text();
                 let title = Some(self.script_title.clone()).filter(|s| !s.is_empty());
+                let thumb_db_path = settings
+                    .get::<::spel_katalog_settings::CacheDir>()
+                    .as_path()
+                    .join("thumbnails.db");
+                let settings = settings.generic();
                 let task = Task::future(::tokio::task::spawn_blocking(move || {
-                    let (r, mut w) = pipe()?;
                     let mut command = match lang {
                         Language::Zsh => {
                             let mut command = Command::new("zsh");
@@ -173,8 +184,18 @@ impl State {
                             command.arg("-c").arg(script);
                             command
                         }
+                        Language::Lua => {
+                            return lua_api::lua_batch(
+                                batch_infos,
+                                script,
+                                settings,
+                                thumb_db_path,
+                            )
+                            .map_err(|err| ::std::io::Error::other(err.to_string()));
+                        }
                     };
 
+                    let (r, mut w) = pipe()?;
                     let mut child = command.stdin(r).spawn()?;
 
                     for info in batch_infos {
@@ -193,7 +214,7 @@ impl State {
                     Ok::<_, ::std::io::Error>(())
                 }))
                 .then(|result| match result {
-                    Ok(Ok(..)) => Task::none(),
+                    Ok(Ok(..)) => Task::done(OrRequest::Request(Request::ReloadCache)),
                     Ok(Err(err)) => {
                         ::log::error!("Failure when running batch\n{err}");
                         Task::none()
@@ -245,6 +266,8 @@ impl State {
                                 .unwrap_or_default();
                             let ext = if ext.eq_ignore_ascii_case("zsh") {
                                 Language::Zsh
+                            } else if ext.eq_ignore_ascii_case("lua") {
+                                Language::Lua
                             } else if ext.eq_ignore_ascii_case("py") {
                                 Language::Python
                             } else {
