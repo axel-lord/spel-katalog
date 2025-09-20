@@ -181,19 +181,7 @@ impl State {
                 additional,
             } => {
                 if id == self.id {
-                    // Probably most correct solution.
-                    // self.content = widget::text_editor::Content::with_text(&content);
-
-                    // Unless performed as actions, formatting is ignored for some reason
-                    let actions = [
-                        Action::SelectAll,
-                        Action::Edit(Edit::Delete),
-                        Action::Edit(Edit::Paste(Arc::new(content.clone()))),
-                    ];
-
-                    for action in actions {
-                        self.content.perform(action);
-                    }
+                    self.set_content(content.clone());
 
                     self.config_path = Some(path.clone());
                     self.additional_roots_content = widget::text_editor::Content::with_text(
@@ -459,6 +447,20 @@ impl State {
         }
     }
 
+    fn set_content(&mut self, content: String) {
+        // Probably most correct solution.
+        // self.content = widget::text_editor::Content::with_text(&content);
+
+        // Unless performed as actions, formatting is ignored for some reason
+        [
+            Action::SelectAll,
+            Action::Edit(Edit::Delete),
+            Action::Edit(Edit::Paste(Arc::new(content))),
+        ]
+        .into_iter()
+        .for_each(|action| self.content.perform(action));
+    }
+
     fn open_exe(&mut self, tx: &StatusSender) -> Option<Task<OrRequest<Message, Request>>> {
         let tx = tx.clone();
         let exe = formats::Config::parse(&self.content.text())
@@ -543,7 +545,7 @@ impl State {
             _ = text.drain(..pfx.len());
         }
 
-        self.content = widget::text_editor::Content::with_text(&text);
+        self.set_content(text);
 
         Some(())
     }
