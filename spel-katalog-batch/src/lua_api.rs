@@ -149,6 +149,8 @@ pub fn lua_batch(
     }
 
     let globals = lua.globals();
+    globals.set("data", data)?;
+    globals.set("None", ::mlua::Value::NULL)?;
 
     let load_cover =
         lua.create_function(move |lua, slug| lua_load_cover(lua, slug, &thumb_db_path, &conn))?;
@@ -156,14 +158,15 @@ pub fn lua_batch(
     let load_yaml = lua.create_function(lua_load_yaml)?;
     let load_image = lua.create_function(lua_load_image)?;
 
-    globals.set("data", data)?;
-    globals.set("settings", settings)?;
-    globals.set("None", ::mlua::Value::NULL)?;
+    let module = lua.create_table()?;
+    module.set("settings", settings)?;
 
-    globals.set("loadYaml", load_yaml)?;
-    globals.set("dbg", dbg)?;
-    globals.set("loadCover", load_cover)?;
-    globals.set("loadImage", load_image)?;
+    module.set("loadYaml", load_yaml)?;
+    module.set("dbg", dbg)?;
+    module.set("loadCover", load_cover)?;
+    module.set("loadImage", load_image)?;
+
+    lua.register_module("@spel-katalog", module)?;
 
     lua.load(script).exec()?;
 

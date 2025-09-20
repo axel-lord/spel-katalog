@@ -11,7 +11,7 @@ derive_more = { workspace = true, features = ["display"] }
 iced.workspace = true
 iced_highlighter.workspace = true
 log.workspace = true
-mlua = { workspace = true, features = ["serde", "lua54", "vendored"]}
+mlua = { workspace = true, features = ["serde", "luau", "luau-jit", "vendored"]}
 once_cell.workspace = true
 rfd = { workspace = true, features = ["xdg-portal","tokio"] }
 rusqlite.workspace = true

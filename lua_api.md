@@ -6,6 +6,8 @@
 Loaded image, has functions as defined bellow functions header.
 
 ## Functions
+Functions are provided by the `"@spel-katalog"` module which has
+to be required (`require'@spel-katalog'`).
 
 ### `dbg(Any..) -> Any..`
 Debug print and return all passed values.
@@ -35,7 +37,10 @@ Save image as cover for given slug.
 
 ### `None`
 A null value separate from lua nil, used for optional
-values.
+values. Provided in the global scope.
 
 ### `settings`
-Current settings as a table.
+Current settings as a table. Provided as a member of the module.
+
+### `data`
+Batch data, provided as a table/vector in global scope.
