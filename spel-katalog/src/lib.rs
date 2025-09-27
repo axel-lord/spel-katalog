@@ -161,20 +161,7 @@ pub enum Message {
 }
 
 impl App {
-    pub fn run() -> ::color_eyre::Result<()> {
-        ::color_eyre::install()?;
-        [
-            "spel_katalog",
-            "spel_katalog_common",
-            "spel_katalog_settings",
-            "spel_katalog_games",
-        ]
-        .into_iter()
-        .fold(&mut ::env_logger::builder(), |builder, module| {
-            builder.filter_module(module, ::log::LevelFilter::Debug)
-        })
-        .init();
-
+    pub fn run(cli: Cli) -> ::color_eyre::Result<()> {
         let rx;
         let app = {
             let Cli {
@@ -182,7 +169,7 @@ impl App {
                 show_settings,
                 config,
                 action,
-            } = Cli::parse();
+            } = cli;
 
             fn read_settings(
                 path: &Path,

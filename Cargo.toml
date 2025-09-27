@@ -1,5 +1,5 @@
 [workspace]
-members = [ "spel-katalog-build", "spel-katalog", "spel-katalog-common", "spel-katalog-settings", "spel-katalog-games", "spel-katalog-info", "spel-katalog-parse", "spel-katalog-script", "spel-katalog-batch"]
+members = [ "spel-katalog-build", "spel-katalog", "spel-katalog-common", "spel-katalog-settings", "spel-katalog-games", "spel-katalog-info", "spel-katalog-parse", "spel-katalog-script", "spel-katalog-batch", "spel-katalog-terminal"]
 resolver = "2"
 default-members = ["spel-katalog"]
 
@@ -46,6 +46,7 @@ indexmap = "2.9.0"
 itertools = "0.14.0"
 log = "0.4.27"
 mlua = "0.11.3"
+memchr = "2.7.6"
 nom = "8.0.0"
 nom_locate = "5.0.0"
 once_cell = "1.21.3"
@@ -74,6 +75,7 @@ spel-katalog-info = { path = "spel-katalog-info" }
 spel-katalog-parse = { path = "spel-katalog-parse" }
 spel-katalog-script = { path = "spel-katalog-script" }
 spel-katalog-settings = { path = "spel-katalog-settings" }
+spel-katalog-terminal = { path = "spel-katalog-terminal" }
 strsim = "0.11.1"
 strum = "0.27.1"
 syn = { version = "2.0.101", default-features = false }
