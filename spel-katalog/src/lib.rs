@@ -47,6 +47,26 @@ fn default_config() -> &'static Path {
     })
 }
 
+/// Sender for sending exit messages.
+#[derive(Debug)]
+pub struct ExitSender(::iced::futures::channel::oneshot::Sender<()>);
+
+impl ExitSender {
+    pub fn send(self) {
+        _ = self.0.send(());
+    }
+}
+
+/// Receiver for exit messages.
+#[derive(Debug)]
+pub struct ExitReceiver(::iced::futures::channel::oneshot::Receiver<()>);
+
+/// Create a channel for sending exit messages.
+pub fn exit_channel() -> (ExitSender, ExitReceiver) {
+    let (tx, rx) = ::iced::futures::channel::oneshot::channel();
+    (ExitSender(tx), ExitReceiver(rx))
+}
+
 #[derive(Debug, Parser)]
 #[command(author, version)]
 pub struct Cli {
@@ -60,6 +80,10 @@ pub struct Cli {
     /// Config file to load.
     #[arg(long, short, default_value=default_config().as_os_str())]
     pub config: PathBuf,
+
+    /// Advanced terminal output.
+    #[arg(long)]
+    pub advanced_terminal: bool,
 
     /// Perform an action other than opening gui.
     #[command(subcommand)]
@@ -163,7 +187,11 @@ pub enum Message {
 }
 
 impl App {
-    pub fn run(cli: Cli, sink_builder: SinkBuilder) -> ::color_eyre::Result<()> {
+    pub fn run(
+        cli: Cli,
+        sink_builder: SinkBuilder,
+        exit_recv: Option<ExitReceiver>,
+    ) -> ::color_eyre::Result<()> {
         let rx;
         let app = {
             let Cli {
@@ -171,6 +199,7 @@ impl App {
                 show_settings,
                 config,
                 action,
+                advanced_terminal: _,
             } = cli;
 
             fn read_settings(
@@ -299,7 +328,17 @@ impl App {
                 let receive_status =
                     Task::stream(::tokio_stream::wrappers::ReceiverStream::new(rx))
                         .map(Message::Status);
-                (app, Task::batch([receive_status, load_db]))
+
+                (
+                    app,
+                    Task::batch(
+                        [receive_status, load_db].into_iter().chain(
+                            exit_recv.map(|exit_recv| {
+                                Task::future(exit_recv.0).then(|_| ::iced::exit())
+                            }),
+                        ),
+                    ),
+                )
             })
             .map_err(Report::from)
     }

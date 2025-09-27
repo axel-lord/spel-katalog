@@ -1,10 +1,14 @@
+use ::std::sync::mpsc::channel;
+
 use ::clap::Parser;
-use ::spel_katalog::{App, Cli};
-use ::spel_katalog_terminal::SinkBuilder;
+use ::spel_katalog::{App, Cli, exit_channel};
+use ::spel_katalog_terminal::{LinePipe, SinkBuilder};
 
 fn main() -> ::color_eyre::Result<()> {
     ::color_eyre::install()?;
-    [
+    let cli = Cli::parse();
+    let mut log_builder = ::env_logger::builder();
+    let log_builder = [
         "spel_katalog",
         "spel_katalog_batch",
         "spel_katalog_common",
@@ -16,10 +20,31 @@ fn main() -> ::color_eyre::Result<()> {
         "spel_katalog_terminal",
     ]
     .into_iter()
-    .fold(&mut ::env_logger::builder(), |builder, module| {
+    .fold(&mut log_builder, |builder, module| {
         builder.filter_module(module, ::log::LevelFilter::Debug)
-    })
-    .init();
-    let cli = Cli::parse();
-    App::run(cli, SinkBuilder::Inherit)
+    });
+
+    if cli.advanced_terminal {
+        let (log_tx, log_rx) = LinePipe::channel();
+        log_builder
+            .target(::env_logger::Target::Pipe(Box::new(log_tx)))
+            .init();
+
+        let (pipe_tx, pipe_rx) = channel();
+        let (exit_tx, exit_rx) = exit_channel();
+
+        _ = (log_rx, pipe_rx, exit_tx);
+
+        let app_handle = ::std::thread::Builder::new()
+            .name("spel-katalog-app".to_owned())
+            .spawn(|| App::run(cli, SinkBuilder::CreatePipe(pipe_tx), Some(exit_rx)))?;
+
+        match app_handle.join() {
+            Ok(result) => result,
+            Err(payload) => ::std::panic::resume_unwind(payload),
+        }
+    } else {
+        log_builder.init();
+        App::run(cli, SinkBuilder::Inherit, None)
+    }
 }
