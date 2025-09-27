@@ -10,6 +10,7 @@ use ::std::{
 use ::bon::Builder;
 use ::derive_more::From;
 use ::serde::{Deserialize, Serialize};
+use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
 use ::tokio::{process::Command, time::timeout};
 
 use crate::{builder_push::builder_push, environment::Env};
@@ -20,7 +21,10 @@ pub enum ExecError {
     /// Error that occcurs when a process cannot be spawned.
     #[error("process could not be spawned, {0}")]
     Spawn(#[source] ::std::io::Error),
-    /// Errpr that occurs on timeour.
+    /// Error that occurs when sinks cannot be created.
+    #[error("sinks could not be created, {0}")]
+    SinkCreation(#[source] ::std::io::Error),
+    /// Error that occurs on timeour.
     #[error("process did not finishe withing {d:.2} seconds, {err}", d = .1.as_secs_f64(), err = .0)]
     Timeout(#[source] ::tokio::time::error::Elapsed, Duration),
     /// Error that occurs on wait failure.
@@ -54,7 +58,11 @@ impl Exec {
     }
 
     /// Run executable.
-    pub async fn run(&self, env: &Env) -> Result<ExitStatus, ExecError> {
+    pub async fn run(
+        &self,
+        env: &Env,
+        sink_builder: &SinkBuilder,
+    ) -> Result<ExitStatus, ExecError> {
         let exec;
         let mut args;
         match self {
@@ -80,11 +88,15 @@ impl Exec {
         }
         command.envs(&env.vars);
 
+        let [stdout, stderr] = sink_builder
+            .build_double(|| SinkIdentity::Name(format!("dependency exec {exec:?}")))
+            .map_err(ExecError::SinkCreation)?;
+
         command
             .kill_on_drop(true)
             .stdin(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .stdout(Stdio::inherit());
+            .stderr(stderr)
+            .stdout(stdout);
 
         let mut child = command.spawn().map_err(ExecError::Spawn)?;
 

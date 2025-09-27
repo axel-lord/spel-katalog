@@ -6,22 +6,23 @@ authors = ["Axel Lord"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-tap.workspace = true
+bon.workspace = true
+derive_more = { workspace = true, features = ["into", "from", "is_variant", "deref", "deref_mut"] }
+futures.workspace = true
+indexmap = { workspace = true, features = ["serde"] }
 itertools.workspace = true
 log.workspace = true
-toml.workspace = true
-serde = { workspace = true, features = ["derive"] }
-rustc-hash.workspace = true
-indexmap = { workspace = true, features = ["serde"] }
-tokio = { workspace = true, features = ["parking_lot", "process", "time", "fs"] }
-thiserror.workspace = true
-derive_more = { workspace = true, features = ["into", "from", "is_variant", "deref", "deref_mut"] }
-serde_json.workspace = true
-bon.workspace = true
-shell-words.workspace = true
 paste.workspace = true
-futures.workspace = true
 regex.workspace = true
+rustc-hash.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+shell-words.workspace = true
+spel-katalog-terminal.workspace = true
+tap.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["parking_lot", "process", "time", "fs"] }
+toml.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true

@@ -32,6 +32,7 @@ use ::spel_katalog_settings::{
     CoverartDir, ExtraConfigDir, FilterMode, FirejailExe, LutrisDb, LutrisExe, Network,
     ScriptConfigDir, Show, Theme, Variants, YmlDir,
 };
+use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
 use ::tap::Pipe;
 mod view;
 
@@ -105,6 +106,7 @@ pub struct App {
     image_buffer: ImageBuffer,
     sender: StatusSender,
     process_list: Option<Vec<process_info::ProcessInfo>>,
+    sink_builder: SinkBuilder,
 }
 
 mod process_info;
@@ -161,7 +163,7 @@ pub enum Message {
 }
 
 impl App {
-    pub fn run(cli: Cli) -> ::color_eyre::Result<()> {
+    pub fn run(cli: Cli, sink_builder: SinkBuilder) -> ::color_eyre::Result<()> {
         let rx;
         let app = {
             let Cli {
@@ -275,6 +277,7 @@ impl App {
                 sender,
                 batch,
                 show_batch,
+                sink_builder,
             }
         };
 
@@ -651,6 +654,7 @@ impl App {
         let runner = game.runner.clone();
         let hidden = game.hidden;
         let is_net_disabled = self.settings.get::<Network>().is_disabled();
+        let sink_builder = self.sink_builder.clone();
         let configpath = self
             .settings
             .get::<YmlDir>()
@@ -825,13 +829,13 @@ impl App {
                         })?;
                 }
 
-                ScriptFile::run_all(&scripts).await?;
+                ScriptFile::run_all(&scripts, &sink_builder).await?;
                 Ok::<_, ScriptGatherError>(())
             };
 
             if let Err(err) = scripts_result.await {
                 ::log::error!("failure when gathering/runnings scripts\n{err}");
-                return format!("running scripts failed").into();
+                return "running scripts failed".to_owned().into();
             }
 
             let rungame = if no_game {
@@ -847,12 +851,22 @@ impl App {
                 s
             }
 
+            let (stdout, stderr) = match sink_builder.build_double(|| SinkIdentity::GameId(id)) {
+                Ok([stdout, stderr]) => (stdout, stderr),
+                Err(err) => {
+                    ::log::error!("could not create process output sinks\n{err}");
+                    return "could not create output sinks".to_owned().into();
+                }
+            };
+
             let cmd = match safety {
                 Safety::None => {
                     ::log::info!("executing {lutris:?} with arguments\n{:#?}", &[&rungame]);
                     ::tokio::process::Command::new(lutris)
                         .args(rungame)
                         .kill_on_drop(true)
+                        .stdout(stdout)
+                        .stderr(stderr)
                         .status()
                 }
                 Safety::Firejail => {
@@ -882,6 +896,8 @@ impl App {
                     ::tokio::process::Command::new(firejail)
                         .args(args)
                         .kill_on_drop(true)
+                        .stdout(stdout)
+                        .stderr(stderr)
                         .status()
                 }
             };

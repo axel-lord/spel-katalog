@@ -4676,6 +4676,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shell-words",
+ "spel-katalog-terminal",
  "tap",
  "thiserror 2.0.12",
  "tokio",

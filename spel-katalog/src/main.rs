@@ -1,5 +1,6 @@
 use ::clap::Parser;
 use ::spel_katalog::{App, Cli};
+use ::spel_katalog_terminal::SinkBuilder;
 
 fn main() -> ::color_eyre::Result<()> {
     ::color_eyre::install()?;
@@ -20,5 +21,5 @@ fn main() -> ::color_eyre::Result<()> {
     })
     .init();
     let cli = Cli::parse();
-    App::run(cli)
+    App::run(cli, SinkBuilder::Inherit)
 }

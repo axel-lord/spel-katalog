@@ -12,6 +12,7 @@ use ::bon::Builder;
 use ::futures::{stream::FuturesUnordered, stream::StreamExt};
 use ::rustc_hash::FxHashMap;
 use ::serde::{Deserialize, Serialize};
+use ::spel_katalog_terminal::SinkBuilder;
 use ::tap::{Pipe, Tap, TryConv};
 
 use crate::{
@@ -168,6 +169,7 @@ impl ScriptFile {
     /// includes `require` and early script deps of `assert`.
     pub async fn pre_run_check<'a>(
         scripts: &'a [ScriptFile],
+        sink_builder: &SinkBuilder,
     ) -> Result<(FxHashMap<&'a str, DependencyResult>, Vec<&'a ScriptFile>), RunError> {
         let mut results = FxHashMap::default();
         let mut passed_early = Vec::new();
@@ -182,7 +184,7 @@ impl ScriptFile {
 
             // Check if dependency holds.
             let result = script_file
-                .check_require(|id| results.get(id).copied())
+                .check_require(|id| results.get(id).copied(), sink_builder)
                 .await?;
 
             // A non try error interrupts all further processing.
@@ -200,7 +202,7 @@ impl ScriptFile {
         let mut passed_late = Vec::new();
         for script_file in passed_early {
             let result = script_file
-                .check_post_require(|id| results.get(id).copied())
+                .check_post_require(|id| results.get(id).copied(), sink_builder)
                 .await?;
 
             if result.is_panic() {
@@ -218,6 +220,7 @@ impl ScriptFile {
     pub async fn run(
         &self,
         get_prior: impl for<'k> Fn(&'k str) -> Option<DependencyResult>,
+        sink_builder: &SinkBuilder,
     ) -> Result<DependencyResult, RunError> {
         let Self {
             synced,
@@ -229,7 +232,7 @@ impl ScriptFile {
         let id = self.id();
         let result = get_prior(id)
             .ok_or_else(|| RunError::DepCheck(id.to_owned()))?
-            .max(self.check_assert(&get_prior).await?);
+            .max(self.check_assert(&get_prior, sink_builder).await?);
 
         match result {
             DependencyResult::Panic => return Err(RunError::DepCheck(id.to_owned())),
@@ -240,7 +243,7 @@ impl ScriptFile {
         let env = ref_or_default(env.as_ref());
 
         for exec in script.exec.as_ref().into_iter().chain(synced) {
-            let status = exec.run(&env).await?;
+            let status = exec.run(&env, sink_builder).await?;
 
             if !status.success() {
                 return Err(RunError::ExitStatus(id.to_owned(), status));
@@ -249,7 +252,7 @@ impl ScriptFile {
 
         let mut futures = parallell
             .iter()
-            .map(|exec| exec.run(&env))
+            .map(|exec| exec.run(&env, sink_builder))
             .collect::<FuturesUnordered<_>>();
 
         while let Some(status) = futures.next().await {
@@ -263,11 +266,16 @@ impl ScriptFile {
     }
 
     /// Run multiple script files.
-    pub async fn run_all(scripts: &[ScriptFile]) -> Result<(), RunError> {
-        let (mut results, scripts) = Self::pre_run_check(scripts).await?;
+    pub async fn run_all(
+        scripts: &[ScriptFile],
+        sink_builder: &SinkBuilder,
+    ) -> Result<(), RunError> {
+        let (mut results, scripts) = Self::pre_run_check(scripts, sink_builder).await?;
 
         for script_file in scripts {
-            let result = script_file.run(|id| results.get(id).copied()).await?;
+            let result = script_file
+                .run(|id| results.get(id).copied(), sink_builder)
+                .await?;
             results.insert(script_file.id(), result);
         }
 
@@ -278,6 +286,7 @@ impl ScriptFile {
         &self,
         values: impl IntoIterator<Item = &Dependency>,
         get_prior: impl for<'k> Fn(&'k str) -> Option<DependencyResult>,
+        sink_builder: &SinkBuilder,
     ) -> Result<DependencyResult, DependencyError> {
         let env;
         let env = if let Some(env) = &self.env {
@@ -289,7 +298,7 @@ impl ScriptFile {
 
         let mut futures = values
             .into_iter()
-            .map(|dep| dep.check(env, &get_prior))
+            .map(|dep| dep.check(env, &get_prior, sink_builder))
             .collect::<FuturesUnordered<_>>();
 
         let mut result = DependencyResult::Success;
@@ -310,8 +319,10 @@ impl ScriptFile {
     pub async fn check_require(
         &self,
         get_prior: impl for<'k> Fn(&'k str) -> Option<DependencyResult>,
+        sink_builder: &SinkBuilder,
     ) -> Result<DependencyResult, DependencyError> {
-        self.check_multiple(&self.require, get_prior).await
+        self.check_multiple(&self.require, get_prior, sink_builder)
+            .await
     }
 
     /// Check that early assert dependencies hold.
@@ -321,10 +332,12 @@ impl ScriptFile {
     pub async fn check_post_require(
         &self,
         get_prior: impl for<'k> Fn(&'k str) -> Option<DependencyResult>,
+        sink_builder: &SinkBuilder,
     ) -> Result<DependencyResult, DependencyError> {
         self.check_multiple(
             self.assert.iter().filter(|dep| dep.kind.is_script()),
             get_prior,
+            sink_builder,
         )
         .await
     }
@@ -336,8 +349,10 @@ impl ScriptFile {
     pub async fn check_assert(
         &self,
         get_prior: impl for<'k> Fn(&'k str) -> Option<DependencyResult>,
+        sink_builder: &SinkBuilder,
     ) -> Result<DependencyResult, DependencyError> {
-        self.check_multiple(&self.assert, get_prior).await
+        self.check_multiple(&self.assert, get_prior, sink_builder)
+            .await
     }
 
     /// Visit all parsed string values. Notably not environment variable keys.

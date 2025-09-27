@@ -26,6 +26,7 @@ mod tests {
     };
 
     use ::pretty_assertions::assert_eq;
+    use ::spel_katalog_terminal::SinkBuilder;
 
     type Result = ::core::result::Result<(), ::color_eyre::Report>;
 
@@ -74,7 +75,7 @@ mod tests {
         .map(ScriptFile::from_toml)
         .collect::<::core::result::Result<Vec<_>, _>>()?;
 
-        let (results, _) = ScriptFile::pre_run_check(&scripts).await?;
+        let (results, _) = ScriptFile::pre_run_check(&scripts, &SinkBuilder::Inherit).await?;
 
         assert_eq!(results.get("1").copied(), Some(DependencyResult::Success));
         assert_eq!(results.get("2").copied(), Some(DependencyResult::Failure));
@@ -95,7 +96,9 @@ mod tests {
         "#;
 
         assert_eq!(
-            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            ScriptFile::from_toml(toml)?
+                .check_require(|_| None, &SinkBuilder::Inherit)
+                .await?,
             DependencyResult::Success
         );
 
@@ -113,7 +116,9 @@ mod tests {
         "#;
 
         assert_eq!(
-            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            ScriptFile::from_toml(toml)?
+                .check_require(|_| None, &SinkBuilder::Inherit)
+                .await?,
             DependencyResult::Success
         );
 
@@ -131,7 +136,9 @@ mod tests {
         "#;
 
         assert_eq!(
-            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            ScriptFile::from_toml(toml)?
+                .check_require(|_| None, &SinkBuilder::Inherit)
+                .await?,
             DependencyResult::Success
         );
 
@@ -144,7 +151,9 @@ mod tests {
         "#;
 
         assert_eq!(
-            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            ScriptFile::from_toml(toml)?
+                .check_require(|_| None, &SinkBuilder::Inherit)
+                .await?,
             DependencyResult::Success
         );
 
@@ -158,7 +167,9 @@ mod tests {
         "#;
 
         assert_eq!(
-            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            ScriptFile::from_toml(toml)?
+                .check_require(|_| None, &SinkBuilder::Inherit)
+                .await?,
             DependencyResult::Panic
         );
 
@@ -171,7 +182,9 @@ mod tests {
         "#;
 
         assert_eq!(
-            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            ScriptFile::from_toml(toml)?
+                .check_require(|_| None, &SinkBuilder::Inherit)
+                .await?,
             DependencyResult::Failure
         );
 
@@ -185,7 +198,9 @@ mod tests {
         "#;
 
         assert_eq!(
-            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            ScriptFile::from_toml(toml)?
+                .check_require(|_| None, &SinkBuilder::Inherit)
+                .await?,
             DependencyResult::Success
         );
 
@@ -203,7 +218,9 @@ mod tests {
         "#;
 
         assert_eq!(
-            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            ScriptFile::from_toml(toml)?
+                .check_require(|_| None, &SinkBuilder::Inherit)
+                .await?,
             DependencyResult::Success
         );
 
@@ -216,7 +233,9 @@ mod tests {
         "#;
 
         assert_eq!(
-            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            ScriptFile::from_toml(toml)?
+                .check_require(|_| None, &SinkBuilder::Inherit)
+                .await?,
             DependencyResult::Panic
         );
 
@@ -228,7 +247,9 @@ mod tests {
         "#;
 
         assert_eq!(
-            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            ScriptFile::from_toml(toml)?
+                .check_require(|_| None, &SinkBuilder::Inherit)
+                .await?,
             DependencyResult::Failure
         );
 
@@ -246,7 +267,9 @@ mod tests {
         "#;
 
         assert_eq!(
-            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            ScriptFile::from_toml(toml)?
+                .check_require(|_| None, &SinkBuilder::Inherit)
+                .await?,
             DependencyResult::Success
         );
 
@@ -259,7 +282,9 @@ mod tests {
         "#;
 
         assert_eq!(
-            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            ScriptFile::from_toml(toml)?
+                .check_require(|_| None, &SinkBuilder::Inherit)
+                .await?,
             DependencyResult::Panic
         );
 
@@ -271,7 +296,9 @@ mod tests {
         "#;
 
         assert_eq!(
-            ScriptFile::from_toml(toml)?.check_require(|_| None).await?,
+            ScriptFile::from_toml(toml)?
+                .check_require(|_| None, &SinkBuilder::Inherit)
+                .await?,
             DependencyResult::Failure
         );
 
