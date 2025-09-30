@@ -10,8 +10,9 @@ use ::ratatui::{
     DefaultTerminal, Frame,
     crossterm::event::{self, Event, KeyCode, KeyEventKind},
     layout::{Constraint, Direction, Layout, Margin, Rect},
+    style::Stylize,
     text::Text,
-    widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    widgets::{Block, Paragraph, ScrollDirection, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 
 use crate::{Channels, LinePipe, SinkIdentity};
@@ -41,6 +42,22 @@ struct Pipe {
     id: SinkIdentity,
     is_disconnected: bool,
     lines: Vec<String>,
+    scroll_state: Option<usize>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum SelectedArea {
+    Log,
+    Pipe,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Action {
+    Exit,
+    #[expect(unused)]
+    Scroll(ScrollDirection),
+    SwapSelected,
+    Noop,
 }
 
 pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()> {
@@ -53,96 +70,159 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
     let mut log = Vec::new();
     let mut pipes = Vec::new();
     let mut latest = None;
+    let mut log_scroll_state: Option<ScrollbarState> = None;
+    let mut selected_area = SelectedArea::Log;
 
     loop {
         terminal.draw(|frame| {
-            let (output_id, output, closed): (_, &[String], _) = if let Some(Pipe {
-                id,
-                lines,
-                is_disconnected,
-                ..
-            }) =
-                latest.and_then(|latest| pipes.get(latest))
-            {
-                (Some(id), lines.as_slice(), *is_disconnected)
-            } else {
-                (None, Default::default(), true)
+            let mut draw_log = |frame: &mut Frame, area: Rect| {
+                let lines = Paragraph::new(Text::from_iter(
+                    log.iter().map(|item: &String| item.as_str()),
+                ));
+                frame.render_widget(lines, area);
+
+                if (area.height as usize) < log.len() {
+                    let mut state;
+                    let state = if let Some(state) = &mut log_scroll_state {
+                        state
+                    } else {
+                        state = ScrollbarState::new(log.len()).position(log.len());
+                        &mut state
+                    };
+                    let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
+                    frame.render_stateful_widget(
+                        scrollbar,
+                        area.inner(Margin {
+                            vertical: 1,
+                            horizontal: 0,
+                        }),
+                        state,
+                    );
+                }
             };
 
+            if let Some((
+                Pipe {
+                    id,
+                    is_disconnected: closed,
+                    lines: output,
+                    scroll_state,
+                    ..
+                },
+                idx,
+            )) = latest.and_then(|idx: usize| Some((pipes.get_mut(idx)?, idx)))
             {
-                // let text = Paragraph::new(format!("Placeholder! Iteration {count}"));
-                // frame.render_widget(text, frame.area());
+                let layout = Layout::new(
+                    Direction::Vertical,
+                    [Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)],
+                )
+                .areas::<2>(frame.area());
 
-                let draw_log = |frame: &mut Frame, area: Rect| {
-                    let lines = Paragraph::new(Text::from_iter(
-                        log.iter().map(|item: &String| item.as_str()),
-                    ));
-                    frame.render_widget(lines, area);
-
-                    if (area.height as usize) < log.len() {
-                        let mut state = ScrollbarState::new(log.len()).position(log.len());
-                        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
-                        frame.render_stateful_widget(
-                            scrollbar,
-                            area.inner(Margin {
-                                vertical: 1,
-                                horizontal: 0,
-                            }),
-                            &mut state,
-                        );
-                    }
-                };
-
-                if let Some(id) = output_id {
-                    let layout = Layout::new(
-                        Direction::Vertical,
-                        [Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)],
-                    )
-                    .areas::<2>(frame.area());
-
-                    let block = Block::bordered().title_bottom("Application Log");
-                    let area = block.inner(layout[1]);
-                    frame.render_widget(block, layout[1]);
-
-                    draw_log(frame, area);
-
-                    let lines =
-                        Paragraph::new(Text::from_iter(output.iter().map(|item| item.as_str())));
-                    let block = Block::bordered().title_bottom(if closed {
-                        format!("{id} (closed)")
-                    } else {
-                        id.to_string()
-                    });
-                    let area = block.inner(layout[0]);
-
-                    frame.render_widget(block, layout[0]);
-                    frame.render_widget(lines, area);
-
-                    if (area.height as usize) < output.len() {
-                        let mut state = ScrollbarState::new(output.len()).position(output.len());
-                        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
-                        frame.render_stateful_widget(
-                            scrollbar,
-                            area.inner(Margin {
-                                horizontal: 0,
-                                vertical: 1,
-                            }),
-                            &mut state,
-                        );
-                    }
+                let block = if matches!(selected_area, SelectedArea::Log) {
+                    Block::bordered().title_bottom("Application Log".bold().blue())
                 } else {
-                    let area = frame.area();
-                    draw_log(frame, area);
+                    Block::bordered().title_bottom("Application Log")
+                };
+                let area = block.inner(layout[1]);
+                frame.render_widget(block, layout[1]);
+
+                draw_log(frame, area);
+
+                let lines =
+                    Paragraph::new(Text::from_iter(output.iter().map(|item| item.as_str())));
+                let title = if *closed {
+                    format!("[{idx}] {id} (closed)")
+                } else {
+                    format!("[{idx}] {id}")
+                };
+                let block = if matches!(selected_area, SelectedArea::Pipe) {
+                    Block::bordered().title_bottom(title.bold().blue())
+                } else {
+                    Block::bordered().title_bottom(title)
+                };
+                let area = block.inner(layout[0]);
+
+                frame.render_widget(block, layout[0]);
+
+                if (area.height as usize) < output.len() {
+                    let mut state;
+                    let state = if let Some(pos) = scroll_state {
+                        state = ScrollbarState::new(output.len()).position(*pos);
+                        &mut state
+                    } else {
+                        state = ScrollbarState::new(output.len()).position(output.len());
+                        &mut state
+                    };
+
+                    frame.render_widget(
+                        lines.scroll((scroll_state.unwrap_or(output.len()) as u16, 0)),
+                        area,
+                    );
+                    let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
+                    frame.render_stateful_widget(
+                        scrollbar,
+                        area.inner(Margin {
+                            horizontal: 0,
+                            vertical: 1,
+                        }),
+                        state,
+                    );
+                } else {
+                    frame.render_widget(lines, area);
                 }
+            } else {
+                let area = frame.area();
+                draw_log(frame, area);
             }
         })?;
 
         loop {
             let mut should_redraw = false;
             if event::poll(Duration::from_secs_f64(1.0 / 10.0))? {
-                if handle_events()? {
-                    exit_tx();
-                    return Ok(());
+                match handle_events()? {
+                    Action::Exit => {
+                        exit_tx();
+                        return Ok(());
+                    }
+                    Action::Scroll(dir) => match selected_area {
+                        SelectedArea::Log => {
+                            log_scroll_state
+                                .get_or_insert_with(|| {
+                                    ScrollbarState::new(log.len()).position(log.len())
+                                })
+                                .scroll(dir);
+                        }
+                        SelectedArea::Pipe => {
+                            if let Some(Pipe {
+                                lines,
+                                scroll_state,
+                                ..
+                            }) = latest.and_then(|idx: usize| pipes.get_mut(idx))
+                            {
+                                let pos = scroll_state.get_or_insert_with(|| lines.len());
+                                match dir {
+                                    ScrollDirection::Forward => {
+                                        *pos += 1;
+                                    }
+                                    ScrollDirection::Backward => {
+                                        *pos = pos.saturating_sub(1);
+                                    }
+                                }
+                                if *pos >= lines.len() {
+                                    *scroll_state = None;
+                                }
+                            }
+                        }
+                    },
+                    Action::SwapSelected => match selected_area {
+                        SelectedArea::Log => {
+                            if latest.is_some() {
+                                selected_area = SelectedArea::Pipe;
+                            }
+                        }
+                        SelectedArea::Pipe => selected_area = SelectedArea::Log,
+                    },
+                    Action::Noop => {}
                 }
                 should_redraw = true;
             };
@@ -158,6 +238,7 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
                         id,
                         is_disconnected: false,
                         lines: Vec::new(),
+                        scroll_state: None,
                     });
                 }
                 Err(err) => {
@@ -239,13 +320,16 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
     }
 }
 
-fn handle_events() -> io::Result<bool> {
+fn handle_events() -> io::Result<Action> {
     match event::read()? {
         Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
-            KeyCode::Char('q') => return Ok(true),
+            KeyCode::Char('q') => return Ok(Action::Exit),
+            /* KeyCode::Up => return Ok(Action::Scroll(ScrollDirection::Backward)),
+            KeyCode::Down => return Ok(Action::Scroll(ScrollDirection::Forward)), */
+            KeyCode::Left | KeyCode::Right => return Ok(Action::SwapSelected),
             _ => {}
         },
         _ => {}
     }
-    Ok(false)
+    Ok(Action::Noop)
 }
