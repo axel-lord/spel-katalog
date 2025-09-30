@@ -2,7 +2,7 @@ use ::std::sync::mpsc::channel;
 
 use ::clap::Parser;
 use ::spel_katalog::{App, Cli, exit_channel};
-use ::spel_katalog_terminal::{LinePipe, SinkBuilder};
+use ::spel_katalog_terminal::{Channels, LinePipe, SinkBuilder};
 
 fn main() -> ::color_eyre::Result<()> {
     ::color_eyre::install()?;
@@ -33,16 +33,23 @@ fn main() -> ::color_eyre::Result<()> {
         let (pipe_tx, pipe_rx) = channel();
         let (exit_tx, exit_rx) = exit_channel();
 
-        _ = (log_rx, pipe_rx, exit_tx);
-
         let app_handle = ::std::thread::Builder::new()
             .name("spel-katalog-app".to_owned())
-            .spawn(|| App::run(cli, SinkBuilder::CreatePipe(pipe_tx), Some(exit_rx)))?;
+            .spawn(|| {
+                ::spel_katalog_terminal::tui(Channels {
+                    exit_tx: Box::new(|| exit_tx.send()),
+                    pipe_rx,
+                    log_rx,
+                })
+            })?;
+
+        App::run(cli, SinkBuilder::CreatePipe(pipe_tx), Some(exit_rx))?;
 
         match app_handle.join() {
-            Ok(result) => result,
+            Ok(result) => result?,
             Err(payload) => ::std::panic::resume_unwind(payload),
         }
+        Ok(())
     } else {
         log_builder.init();
         App::run(cli, SinkBuilder::Inherit, None)
