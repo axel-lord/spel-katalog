@@ -6,12 +6,13 @@ authors = ["Axel Lord"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
+derive-new.workspace = true
+derive_more = { workspace = true, features = ["display", "deref", "deref_mut","as_ref", "into_iterator"] }
 log.workspace = true
 memchr.workspace = true
 ratatui.workspace = true
-derive_more = { workspace = true, features = ["display", "deref", "deref_mut","as_ref", "into_iterator"] }
 rmp.workspace = true
-derive-new.workspace = true
+tap.workspace = true
 
 [lints]
 workspace = true

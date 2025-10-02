@@ -4862,6 +4862,7 @@ dependencies = [
  "memchr",
  "ratatui",
  "rmp",
+ "tap",
 ]
 
 [[package]]

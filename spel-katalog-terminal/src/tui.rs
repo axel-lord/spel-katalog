@@ -1,5 +1,6 @@
 //! TUI implementation.
 use ::std::{
+    borrow::Cow,
     io,
     sync::mpsc::TryRecvError,
     thread::{self, JoinHandle},
@@ -12,8 +13,9 @@ use ::ratatui::{
     layout::{Constraint, Direction, Layout, Margin, Rect},
     style::Stylize,
     text::Text,
-    widgets::{Block, Paragraph, ScrollDirection, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
+use ::tap::Pipe as _;
 
 use crate::{Channels, LineReceiver, SinkIdentity, line_channel};
 
@@ -23,7 +25,6 @@ struct Pipe {
     handle: Option<JoinHandle<io::Result<u64>>>,
     id: SinkIdentity,
     is_disconnected: bool,
-    scroll_state: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -35,8 +36,6 @@ enum SelectedArea {
 #[derive(Debug, Clone, Copy)]
 enum Action {
     Exit,
-    #[expect(unused)]
-    Scroll(ScrollDirection),
     SwapSelected,
     Noop,
 }
@@ -85,7 +84,6 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
                     id,
                     line_rx,
                     is_disconnected: closed,
-                    scroll_state,
                     ..
                 },
                 idx,
@@ -107,8 +105,6 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
 
                 draw_log(frame, area);
 
-                let lines =
-                    Paragraph::new(Text::from_iter(line_rx.iter().map(|item| item.1.as_str())));
                 let title = if *closed {
                     format!("[{idx}] {id} (closed)")
                 } else {
@@ -123,32 +119,22 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
 
                 frame.render_widget(block, layout[0]);
 
-                if (area.height as usize) < line_rx.len() {
-                    let mut state;
-                    let state = if let Some(pos) = scroll_state {
-                        state = ScrollbarState::new(line_rx.len()).position(*pos);
-                        &mut state
-                    } else {
-                        state = ScrollbarState::new(line_rx.len()).position(line_rx.len());
-                        &mut state
-                    };
+                let lines = line_rx
+                    .rchunks(area.height as usize)
+                    .next()
+                    .unwrap_or(&[])
+                    .iter()
+                    .map(|(count, line)| {
+                        if count.get() > 1 {
+                            Cow::Owned(format!("[x{count}] {line}"))
+                        } else {
+                            Cow::Borrowed(line.as_str())
+                        }
+                    })
+                    .pipe(Text::from_iter)
+                    .pipe(Paragraph::new);
 
-                    frame.render_widget(
-                        lines.scroll((scroll_state.unwrap_or(line_rx.len()) as u16, 0)),
-                        area,
-                    );
-                    let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
-                    frame.render_stateful_widget(
-                        scrollbar,
-                        area.inner(Margin {
-                            horizontal: 0,
-                            vertical: 1,
-                        }),
-                        state,
-                    );
-                } else {
-                    frame.render_widget(lines, area);
-                }
+                frame.render_widget(lines, area);
             } else {
                 let area = frame.area();
                 draw_log(frame, area);
@@ -163,36 +149,6 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
                         exit_tx();
                         return Ok(());
                     }
-                    Action::Scroll(dir) => match selected_area {
-                        SelectedArea::Log => {
-                            log_scroll_state
-                                .get_or_insert_with(|| {
-                                    ScrollbarState::new(log_rx.len()).position(log_rx.len())
-                                })
-                                .scroll(dir);
-                        }
-                        SelectedArea::Pipe => {
-                            if let Some(Pipe {
-                                line_rx,
-                                scroll_state,
-                                ..
-                            }) = latest.and_then(|idx: usize| pipes.get_mut(idx))
-                            {
-                                let pos = scroll_state.get_or_insert_with(|| line_rx.len());
-                                match dir {
-                                    ScrollDirection::Forward => {
-                                        *pos += 1;
-                                    }
-                                    ScrollDirection::Backward => {
-                                        *pos = pos.saturating_sub(1);
-                                    }
-                                }
-                                if *pos >= line_rx.len() {
-                                    *scroll_state = None;
-                                }
-                            }
-                        }
-                    },
                     Action::SwapSelected => match selected_area {
                         SelectedArea::Log => {
                             if latest.is_some() {
@@ -216,7 +172,6 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
                         handle,
                         id,
                         is_disconnected: false,
-                        scroll_state: None,
                     });
                 }
                 Err(err) => {
@@ -299,8 +254,6 @@ fn handle_events() -> io::Result<Action> {
     match event::read()? {
         Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
             KeyCode::Char('q') => return Ok(Action::Exit),
-            /* KeyCode::Up => return Ok(Action::Scroll(ScrollDirection::Backward)),
-            KeyCode::Down => return Ok(Action::Scroll(ScrollDirection::Forward)), */
             KeyCode::Left | KeyCode::Right => return Ok(Action::SwapSelected),
             _ => {}
         },
