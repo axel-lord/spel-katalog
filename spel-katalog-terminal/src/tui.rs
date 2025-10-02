@@ -1,7 +1,7 @@
 //! TUI implementation.
 use ::std::{
     io,
-    sync::mpsc::{Receiver, TryRecvError},
+    sync::mpsc::TryRecvError,
     thread::{self, JoinHandle},
     time::Duration,
 };
@@ -15,33 +15,14 @@ use ::ratatui::{
     widgets::{Block, Paragraph, ScrollDirection, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 
-use crate::{Channels, LinePipe, SinkIdentity};
-
-fn bytes_to_string(bytes: Vec<u8>) -> String {
-    match String::from_utf8(bytes) {
-        Ok(s) => s,
-        Err(err) => {
-            use ::std::fmt::Write;
-            let bytes = err.as_bytes();
-            let mut buf = String::with_capacity(bytes.len());
-            for chunk in err.as_bytes().utf8_chunks() {
-                buf.push_str(chunk.valid());
-                for byte in chunk.invalid() {
-                    write!(buf, "\\x{:02X}", byte).expect("write to String should succeed");
-                }
-            }
-            buf
-        }
-    }
-}
+use crate::{Channels, LineReceiver, SinkIdentity, line_channel};
 
 #[derive(Debug)]
 struct Pipe {
-    line_rx: Receiver<Vec<u8>>,
+    line_rx: LineReceiver,
     handle: Option<JoinHandle<io::Result<u64>>>,
     id: SinkIdentity,
     is_disconnected: bool,
-    lines: Vec<String>,
     scroll_state: Option<usize>,
 }
 
@@ -64,10 +45,9 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
     let Channels {
         exit_tx,
         pipe_rx,
-        log_rx,
+        mut log_rx,
     } = channels;
 
-    let mut log = Vec::new();
     let mut pipes = Vec::new();
     let mut latest = None;
     let mut log_scroll_state: Option<ScrollbarState> = None;
@@ -76,17 +56,16 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
     loop {
         terminal.draw(|frame| {
             let mut draw_log = |frame: &mut Frame, area: Rect| {
-                let lines = Paragraph::new(Text::from_iter(
-                    log.iter().map(|item: &String| item.as_str()),
-                ));
+                let lines =
+                    Paragraph::new(Text::from_iter(log_rx.iter().map(|item| item.1.as_str())));
                 frame.render_widget(lines, area);
 
-                if (area.height as usize) < log.len() {
+                if (area.height as usize) < log_rx.len() {
                     let mut state;
                     let state = if let Some(state) = &mut log_scroll_state {
                         state
                     } else {
-                        state = ScrollbarState::new(log.len()).position(log.len());
+                        state = ScrollbarState::new(log_rx.len()).position(log_rx.len());
                         &mut state
                     };
                     let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
@@ -104,8 +83,8 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
             if let Some((
                 Pipe {
                     id,
+                    line_rx,
                     is_disconnected: closed,
-                    lines: output,
                     scroll_state,
                     ..
                 },
@@ -129,7 +108,7 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
                 draw_log(frame, area);
 
                 let lines =
-                    Paragraph::new(Text::from_iter(output.iter().map(|item| item.as_str())));
+                    Paragraph::new(Text::from_iter(line_rx.iter().map(|item| item.1.as_str())));
                 let title = if *closed {
                     format!("[{idx}] {id} (closed)")
                 } else {
@@ -144,18 +123,18 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
 
                 frame.render_widget(block, layout[0]);
 
-                if (area.height as usize) < output.len() {
+                if (area.height as usize) < line_rx.len() {
                     let mut state;
                     let state = if let Some(pos) = scroll_state {
-                        state = ScrollbarState::new(output.len()).position(*pos);
+                        state = ScrollbarState::new(line_rx.len()).position(*pos);
                         &mut state
                     } else {
-                        state = ScrollbarState::new(output.len()).position(output.len());
+                        state = ScrollbarState::new(line_rx.len()).position(line_rx.len());
                         &mut state
                     };
 
                     frame.render_widget(
-                        lines.scroll((scroll_state.unwrap_or(output.len()) as u16, 0)),
+                        lines.scroll((scroll_state.unwrap_or(line_rx.len()) as u16, 0)),
                         area,
                     );
                     let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
@@ -188,18 +167,18 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
                         SelectedArea::Log => {
                             log_scroll_state
                                 .get_or_insert_with(|| {
-                                    ScrollbarState::new(log.len()).position(log.len())
+                                    ScrollbarState::new(log_rx.len()).position(log_rx.len())
                                 })
                                 .scroll(dir);
                         }
                         SelectedArea::Pipe => {
                             if let Some(Pipe {
-                                lines,
+                                line_rx,
                                 scroll_state,
                                 ..
                             }) = latest.and_then(|idx: usize| pipes.get_mut(idx))
                             {
-                                let pos = scroll_state.get_or_insert_with(|| lines.len());
+                                let pos = scroll_state.get_or_insert_with(|| line_rx.len());
                                 match dir {
                                     ScrollDirection::Forward => {
                                         *pos += 1;
@@ -208,7 +187,7 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
                                         *pos = pos.saturating_sub(1);
                                     }
                                 }
-                                if *pos >= lines.len() {
+                                if *pos >= line_rx.len() {
                                     *scroll_state = None;
                                 }
                             }
@@ -229,7 +208,7 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
 
             match pipe_rx.try_recv() {
                 Ok((mut r, id)) => {
-                    let (mut line_pipe, line_rx) = LinePipe::channel();
+                    let (mut line_pipe, line_rx) = line_channel();
                     let handle = Some(thread::spawn(move || io::copy(&mut r, &mut line_pipe)));
 
                     pipes.push(Pipe {
@@ -237,7 +216,6 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
                         handle,
                         id,
                         is_disconnected: false,
-                        lines: Vec::new(),
                         scroll_state: None,
                     });
                 }
@@ -254,7 +232,6 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
                 Pipe {
                     line_rx,
                     is_disconnected,
-                    lines,
                     handle,
                     id,
                     ..
@@ -264,53 +241,51 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
                 if *is_disconnected {
                     continue;
                 }
-                let mut receiving = true;
-                while receiving {
-                    match line_rx.try_recv() {
-                        Ok(line) => {
-                            lines.push(bytes_to_string(line));
-                            latest = Some(idx);
-                            should_redraw = true;
-                        }
-                        Err(err) => {
-                            receiving = false;
-                            if let TryRecvError::Disconnected = err {
-                                *is_disconnected = true;
-                                should_redraw = true;
-                                if let Some(handle) = handle.take() {
-                                    match handle.join() {
-                                        Ok(result) => match result {
-                                            Ok(count) => ::log::info!(
-                                                "pipe for {id} closed with {count} bytes written"
-                                            ),
-                                            Err(err) => ::log::error!(
-                                                "error copying bytes from pipe for {id}\n{err}"
-                                            ),
-                                        },
-                                        Err(err) => ::std::panic::resume_unwind(err),
-                                    }
-                                }
+
+                match line_rx.try_recv_many(128) {
+                    // Redraw if any lines where received.
+                    Ok(_count) => {
+                        should_redraw = true;
+                        latest = Some(idx);
+                    }
+
+                    // Join handle if disconnected.
+                    Err(TryRecvError::Disconnected) => {
+                        *is_disconnected = true;
+                        if let Some(handle) = handle.take() {
+                            match handle.join() {
+                                Ok(result) => match result {
+                                    Ok(count) => ::log::info!(
+                                        "pipe for {id} closed with {count} bytes written"
+                                    ),
+                                    Err(err) => ::log::error!(
+                                        "error copying bytes from pipe for {id}\n{err}"
+                                    ),
+                                },
+                                Err(err) => ::std::panic::resume_unwind(err),
                             }
                         }
                     }
+
+                    // Do nothing if no lines received.
+                    Err(TryRecvError::Empty) => {}
                 }
             }
 
-            let mut receiving = true;
-            while receiving {
-                match log_rx.try_recv() {
-                    Ok(line) => {
-                        log.push(bytes_to_string(line));
-                        should_redraw = true;
-                    }
-                    Err(err) => {
-                        if let TryRecvError::Disconnected = err {
-                            exit_tx();
-                            return Ok(());
-                        }
-                        receiving = false;
-                    }
+            match log_rx.try_recv_many(128) {
+                // Redraw if any log lines where received.
+                Ok(_c) => {
+                    should_redraw = true;
                 }
+
+                // Exit if log disconnected.
+                Err(TryRecvError::Disconnected) => {
+                    exit_tx();
+                    return Ok(());
+                }
+
+                // Continue on if nothing was received.
+                Err(TryRecvError::Empty) => {}
             }
 
             if should_redraw {

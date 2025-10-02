@@ -2,7 +2,7 @@ use ::std::sync::mpsc::channel;
 
 use ::clap::Parser;
 use ::spel_katalog::{App, Cli, exit_channel};
-use ::spel_katalog_terminal::{Channels, LinePipe, SinkBuilder};
+use ::spel_katalog_terminal::{Channels, SinkBuilder, line_channel};
 
 fn main() -> ::color_eyre::Result<()> {
     ::color_eyre::install()?;
@@ -25,7 +25,7 @@ fn main() -> ::color_eyre::Result<()> {
     });
 
     if cli.advanced_terminal {
-        let (log_tx, log_rx) = LinePipe::channel();
+        let (log_tx, log_rx) = line_channel();
         log_builder
             .target(::env_logger::Target::Pipe(Box::new(log_tx)))
             .init();

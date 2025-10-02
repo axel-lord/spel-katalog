@@ -1,14 +1,37 @@
 //! Terminal utilities.
 
-mod line_pipe;
-mod sink_builder;
-mod tui;
-
 use ::std::{fmt::Debug, io::PipeReader, sync::mpsc::Receiver};
 
 use ::derive_more::Display;
 
-pub use self::{line_pipe::LinePipe, sink_builder::SinkBuilder};
+pub use self::{
+    line_channel::{ChannelWriter, LineReceiver, line_channel},
+    sink_builder::SinkBuilder,
+};
+
+mod line_channel;
+mod sink_builder;
+mod tui;
+
+mod log_channel {}
+
+fn bytes_to_string(bytes: Vec<u8>) -> String {
+    match String::from_utf8(bytes) {
+        Ok(s) => s,
+        Err(err) => {
+            use ::std::fmt::Write;
+            let bytes = err.as_bytes();
+            let mut buf = String::with_capacity(bytes.len());
+            for chunk in err.as_bytes().utf8_chunks() {
+                buf.push_str(chunk.valid());
+                for byte in chunk.invalid() {
+                    write!(buf, "\\x{:02X}", byte).expect("write to String should succeed");
+                }
+            }
+            buf
+        }
+    }
+}
 
 /// The identity of a sink.
 /// Used when choosing output.
@@ -33,7 +56,7 @@ pub struct Channels {
     /// Receive a new pipe.
     pub pipe_rx: Receiver<(PipeReader, SinkIdentity)>,
     /// Receive log messages.
-    pub log_rx: Receiver<Vec<u8>>,
+    pub log_rx: LineReceiver,
 }
 
 impl Debug for Channels {
