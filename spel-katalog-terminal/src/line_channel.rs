@@ -27,18 +27,24 @@ pub struct ChannelWriter {
     buf: Vec<u8>,
 }
 
+impl ChannelWriter {
+    fn extend_buf(&mut self, bytes: &[u8]) {
+        self.buf.extend_from_slice(bytes);
+    }
+}
+
 impl Write for ChannelWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         match ::memchr::memchr(b'\n', buf).and_then(|idx| buf.split_at_checked(idx)) {
             Some((bytes, [_n, ..])) => {
-                self.buf.extend_from_slice(bytes);
+                self.extend_buf(bytes);
                 self.tx
                     .send(mem::take(&mut self.buf))
                     .map_err(|_| ErrorKind::BrokenPipe)?;
                 Ok(bytes.len() + 1)
             }
             None | Some((_, [])) => {
-                self.buf.extend_from_slice(buf);
+                self.extend_buf(buf);
                 Ok(buf.len())
             }
         }
@@ -65,7 +71,11 @@ pub struct LineReceiver {
 }
 
 impl LineReceiver {
-    fn add_line(&mut self, line: Vec<u8>) {
+    fn add_line(&mut self, mut line: Vec<u8>) {
+        if let Some(idx) = ::memchr::memchr(b'\x1B', &line) {
+
+        }
+
         let line = bytes_to_string(line);
         match self.last_mut() {
             Some((count, last_line)) if line == *last_line => {
