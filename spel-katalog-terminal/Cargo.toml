@@ -12,7 +12,9 @@ log.workspace = true
 memchr.workspace = true
 ratatui.workspace = true
 rmp.workspace = true
+smallvec = { workspace = true, features = ["union", "const_generics", "const_new", "write"] }
 tap.workspace = true
+vte.workspace = true
 
 [lints]
 workspace = true

@@ -8,7 +8,7 @@ use ::std::{
 use ::derive_more::{AsMut, AsRef, Deref, DerefMut, IntoIterator};
 use ::derive_new::new;
 
-use crate::bytes_to_string;
+use crate::{ansi_cleanup::clean_bytes, bytes_to_string};
 
 /// NonZero value of 1.
 const ONE_NZ: NonZero<usize> = NonZero::new(1).unwrap();
@@ -72,10 +72,7 @@ pub struct LineReceiver {
 
 impl LineReceiver {
     fn add_line(&mut self, mut line: Vec<u8>) {
-        if let Some(idx) = ::memchr::memchr(b'\x1B', &line) {
-
-        }
-
+        clean_bytes(&mut line);
         let line = bytes_to_string(line);
         match self.last_mut() {
             Some((count, last_line)) if line == *last_line => {

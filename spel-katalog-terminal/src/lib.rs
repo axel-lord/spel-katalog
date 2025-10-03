@@ -9,6 +9,7 @@ pub use self::{
     sink_builder::SinkBuilder,
 };
 
+mod ansi_cleanup;
 mod line_channel;
 mod sink_builder;
 mod tui;

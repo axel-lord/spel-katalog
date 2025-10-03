@@ -90,3 +90,4 @@ toml = "0.8.22"
 whoami = { version = "1.6.0", default-features = false }
 xdg = "3.0.0"
 yaml-rust2 = "0.10.3"
+vte = "0.15.0"
