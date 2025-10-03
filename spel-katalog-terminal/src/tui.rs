@@ -10,10 +10,10 @@ use ::std::{
 use ::ratatui::{
     DefaultTerminal, Frame,
     crossterm::event::{self, Event, KeyCode, KeyEventKind},
-    layout::{Constraint, Direction, Layout, Margin, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     style::Stylize,
     text::Text,
-    widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    widgets::{Block, Paragraph},
 };
 use ::tap::Pipe as _;
 
@@ -49,34 +49,31 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
 
     let mut pipes = Vec::new();
     let mut latest = None;
-    let mut log_scroll_state: Option<ScrollbarState> = None;
     let mut selected_area = SelectedArea::Log;
 
     loop {
         terminal.draw(|frame| {
-            let mut draw_log = |frame: &mut Frame, area: Rect| {
+            let draw_log = |frame: &mut Frame, area: Rect| {
                 let lines =
                     Paragraph::new(Text::from_iter(log_rx.iter().map(|item| item.1.as_str())));
                 frame.render_widget(lines, area);
 
-                if (area.height as usize) < log_rx.len() {
-                    let mut state;
-                    let state = if let Some(state) = &mut log_scroll_state {
-                        state
-                    } else {
-                        state = ScrollbarState::new(log_rx.len()).position(log_rx.len());
-                        &mut state
-                    };
-                    let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
-                    frame.render_stateful_widget(
-                        scrollbar,
-                        area.inner(Margin {
-                            vertical: 1,
-                            horizontal: 0,
-                        }),
-                        state,
-                    );
-                }
+                let lines = log_rx
+                    .rchunks(area.height as usize)
+                    .next()
+                    .unwrap_or(&[])
+                    .iter()
+                    .map(|(count, line)| {
+                        if count.get() > 1 {
+                            Cow::Owned(format!("[x{count}] {line}"))
+                        } else {
+                            Cow::Borrowed(line.as_str())
+                        }
+                    })
+                    .pipe(Text::from_iter)
+                    .pipe(Paragraph::new);
+
+                frame.render_widget(lines, area);
             };
 
             if let Some((
