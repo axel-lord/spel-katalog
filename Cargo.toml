@@ -1,5 +1,5 @@
 [workspace]
-members = [ "spel-katalog-build", "spel-katalog", "spel-katalog-common", "spel-katalog-settings", "spel-katalog-games", "spel-katalog-info", "spel-katalog-parse", "spel-katalog-script", "spel-katalog-batch", "spel-katalog-terminal"]
+members = [ "spel-katalog-build", "spel-katalog", "spel-katalog-common", "spel-katalog-settings", "spel-katalog-games", "spel-katalog-info", "spel-katalog-parse", "spel-katalog-script", "spel-katalog-batch", "spel-katalog-terminal", "spel-katalog-test"]
 resolver = "2"
 default-members = ["spel-katalog"]
 
@@ -91,3 +91,4 @@ whoami = { version = "1.6.0", default-features = false }
 xdg = "3.0.0"
 yaml-rust2 = "0.10.3"
 vte = "0.15.0"
+rand = "0.9.2"
