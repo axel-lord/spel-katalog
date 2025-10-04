@@ -16,7 +16,7 @@ Debug print and return all passed values.
 Print given string. Should be used for printing to make sure output is
 captured correctly.
 
-## `getEnv(name: String) -> String | None`
+### `getEnv(name: String) -> String | None`
 Read an environment variable.
 
 ### `loadYaml(path: String) -> Value`
