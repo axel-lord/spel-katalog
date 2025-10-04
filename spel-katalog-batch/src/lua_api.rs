@@ -8,7 +8,7 @@ use ::std::{
 use ::image::{DynamicImage, ImageFormat::Png, ImageReader};
 use ::mlua::{IntoLua, Lua, UserDataMethods};
 use ::once_cell::unsync::OnceCell;
-use ::rusqlite::{OptionalExtension, params};
+use ::rusqlite::{Connection, OptionalExtension, params};
 use ::serde::Serialize;
 use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
 use ::yaml_rust2::{Yaml, YamlLoader};
@@ -128,6 +128,36 @@ fn lua_load_image(lua: &Lua, path: String) -> ::mlua::Result<::mlua::Value> {
     )
 }
 
+pub fn register_image(
+    lua: &Lua,
+    conn: Rc<OnceCell<Connection>>,
+    db_path: Rc<Path>,
+) -> ::mlua::Result<()> {
+    lua.register_userdata_type::<DynamicImage>(move |r| {
+        r.add_method("w", |_, this, _: ()| Ok(this.width()));
+        r.add_method("h", |_, this, _: ()| Ok(this.height()));
+        r.add_method("save", |_, this, path: String| {
+            this.save(&path).map_err(to_runtime)
+        });
+        r.add_method("saveCover", move |_, this, slug: String| {
+            let conn = get_conn(&conn, &db_path)?;
+
+            let mut stmt = conn
+                .prepare_cached(r"INSERT INTO images (slug, image) VALUES (?1, ?2)")
+                .map_err(to_runtime)?;
+
+            let mut buf = Vec::<u8>::new();
+            this.write_to(&mut Cursor::new(&mut buf), Png)
+                .map_err(to_runtime)?;
+
+            stmt.execute(params![slug, buf]).map_err(to_runtime)?;
+
+            Ok(())
+        });
+    })?;
+    Ok(())
+}
+
 pub fn lua_batch(
     data: Vec<BatchInfo>,
     script: String,
@@ -143,32 +173,7 @@ pub fn lua_batch(
     let conn = Rc::new(OnceCell::new());
     let thumb_db_path = Rc::<Path>::from(thumb_db_path);
 
-    {
-        let conn = conn.clone();
-        let db_path = thumb_db_path.clone();
-        lua.register_userdata_type::<DynamicImage>(move |r| {
-            r.add_method("w", |_, this, _: ()| Ok(this.width()));
-            r.add_method("h", |_, this, _: ()| Ok(this.height()));
-            r.add_method("save", |_, this, path: String| {
-                this.save(&path).map_err(to_runtime)
-            });
-            r.add_method("saveCover", move |_, this, slug: String| {
-                let conn = get_conn(&conn, &db_path)?;
-
-                let mut stmt = conn
-                    .prepare_cached(r"INSERT INTO images (slug, image) VALUES (?1, ?2)")
-                    .map_err(to_runtime)?;
-
-                let mut buf = Vec::<u8>::new();
-                this.write_to(&mut Cursor::new(&mut buf), Png)
-                    .map_err(to_runtime)?;
-
-                stmt.execute(params![slug, buf]).map_err(to_runtime)?;
-
-                Ok(())
-            });
-        })?;
-    }
+    register_image(&lua, conn.clone(), thumb_db_path.clone())?;
 
     let globals = lua.globals();
     globals.set("data", data)?;
