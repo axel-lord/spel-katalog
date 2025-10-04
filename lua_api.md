@@ -12,6 +12,10 @@ to be required (`require'@spel-katalog'`).
 ### `dbg(Any..) -> Any..`
 Debug print and return all passed values.
 
+## `print(String)`
+Print given string. Should be used for printing to make sure output is
+captured correctly.
+
 ### `loadYaml(path: String)`
 Load yaml at path into a lua value.
 

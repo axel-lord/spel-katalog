@@ -21,6 +21,7 @@ use ::iced::{
 use ::iced_highlighter::Highlighter;
 use ::serde::Serialize;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status};
+use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
 use ::strum::VariantArray;
 use ::tap::Pipe;
 
@@ -141,6 +142,7 @@ impl State {
         msg: Message,
         tx: &StatusSender,
         settings: &::spel_katalog_settings::Settings,
+        sink_builder: &SinkBuilder,
     ) -> Task<OrRequest<Message, Request>> {
         match msg {
             Message::Action(action) => {
@@ -161,6 +163,7 @@ impl State {
                     .as_path()
                     .join("thumbnails.db");
                 let settings = settings.generic();
+                let sink_builder = sink_builder.clone();
                 let task = Task::future(::tokio::task::spawn_blocking(move || {
                     let mut command = match lang {
                         Language::Zsh => {
@@ -190,13 +193,17 @@ impl State {
                                 script,
                                 settings,
                                 thumb_db_path,
+                                &sink_builder,
                             )
                             .map_err(|err| ::std::io::Error::other(err.to_string()));
                         }
                     };
 
+                    let [stdout, stderr] = sink_builder
+                        .build_double(|| SinkIdentity::Name(format!("{lang} batch script")))?;
+
                     let (r, mut w) = pipe()?;
-                    let mut child = command.stdin(r).spawn()?;
+                    let mut child = command.stdin(r).stdout(stdout).stderr(stderr).spawn()?;
 
                     for info in batch_infos {
                         ::serde_json::to_writer(&mut w, &info)
