@@ -4719,6 +4719,7 @@ dependencies = [
  "serde_json",
  "spel-katalog-common",
  "spel-katalog-settings",
+ "spel-katalog-terminal",
  "strum 0.27.2",
  "tap",
  "tokio",

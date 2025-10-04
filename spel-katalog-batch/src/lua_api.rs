@@ -1,6 +1,6 @@
 use ::std::{
     fmt::Display,
-    io::Cursor,
+    io::{Cursor, PipeWriter, Write},
     path::{Path, PathBuf},
     rc::Rc,
 };
@@ -10,6 +10,7 @@ use ::mlua::{IntoLua, Lua, UserDataMethods};
 use ::once_cell::unsync::OnceCell;
 use ::rusqlite::{OptionalExtension, params};
 use ::serde::Serialize;
+use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
 use ::yaml_rust2::{Yaml, YamlLoader};
 
 use crate::BatchInfo;
@@ -59,9 +60,29 @@ fn lua_load_yaml(lua: &Lua, path: String) -> ::mlua::Result<::mlua::Value> {
     conv(lua, yml)
 }
 
-fn lua_dbg(_: &Lua, mv: ::mlua::MultiValue) -> ::mlua::Result<::mlua::MultiValue> {
-    for value in &mv {
-        eprintln!("{value:#?}");
+fn lua_print(_: &Lua, value: String, w: Option<&mut PipeWriter>) -> ::mlua::Result<()> {
+    if let Some(w) = w {
+        writeln!(w, "{value}")?;
+    } else {
+        println!("{value}");
+    }
+    ::log::info!("printed {value}");
+    Ok(())
+}
+
+fn lua_dbg(
+    _: &Lua,
+    mv: ::mlua::MultiValue,
+    w: Option<&mut PipeWriter>,
+) -> ::mlua::Result<::mlua::MultiValue> {
+    if let Some(w) = w {
+        for value in &mv {
+            writeln!(w, "{value:#?}")?;
+        }
+    } else {
+        for value in &mv {
+            println!("{value:#?}");
+        }
     }
     Ok(mv)
 }
@@ -112,6 +133,7 @@ pub fn lua_batch(
     script: String,
     settings: ::spel_katalog_settings::Generic,
     thumb_db_path: PathBuf,
+    sink_builder: &SinkBuilder,
 ) -> ::mlua::Result<()> {
     let lua = Lua::new();
     let ser = || ::mlua::serde::Serializer::new(&lua);
@@ -152,9 +174,18 @@ pub fn lua_batch(
     globals.set("data", data)?;
     globals.set("None", ::mlua::Value::NULL)?;
 
+    let [mut stdout, mut stderr] = if let Some([stdout, stderr]) =
+        sink_builder.get_pipe_writer_double(|| SinkIdentity::StaticName("Lua Batch"))?
+    {
+        [Some(stdout), Some(stderr)]
+    } else {
+        [None, None]
+    };
+
     let load_cover =
         lua.create_function(move |lua, slug| lua_load_cover(lua, slug, &thumb_db_path, &conn))?;
-    let dbg = lua.create_function(lua_dbg)?;
+    let dbg = lua.create_function_mut(move |lua, value| lua_dbg(lua, value, stderr.as_mut()))?;
+    let prnt = lua.create_function_mut(move |lua, value| lua_print(lua, value, stdout.as_mut()))?;
     let load_yaml = lua.create_function(lua_load_yaml)?;
     let load_image = lua.create_function(lua_load_image)?;
 
@@ -163,6 +194,7 @@ pub fn lua_batch(
 
     module.set("loadYaml", load_yaml)?;
     module.set("dbg", dbg)?;
+    module.set("print", prnt)?;
     module.set("loadCover", load_cover)?;
     module.set("loadImage", load_image)?;
 

@@ -610,7 +610,7 @@ impl App {
                 OrRequest::Message(msg) => {
                     return self
                         .batch
-                        .update(msg, &self.sender, &self.settings)
+                        .update(msg, &self.sender, &self.settings, &self.sink_builder)
                         .map(From::from);
                 }
                 OrRequest::Request(req) => match req {
