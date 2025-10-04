@@ -6,6 +6,7 @@ use ::bon::Builder;
 use ::derive_more::{From, IsVariant};
 use ::rustc_hash::FxHashSet;
 use ::serde::{Deserialize, Serialize};
+use ::spel_katalog_terminal::SinkBuilder;
 use ::tap::Tap;
 
 use crate::{
@@ -153,6 +154,7 @@ impl Dependency {
         &self,
         env: &Env,
         get_prior: impl for<'k> FnOnce(&'k str) -> Option<DependencyResult>,
+        sink_builder: &SinkBuilder,
     ) -> Result<DependencyResult, DependencyError> {
         let Self { kind, panic } = self;
 
@@ -170,7 +172,7 @@ impl Dependency {
                 }
             }
             DependencyKind::Exec(exec) => {
-                let status = exec.run(env).await?;
+                let status = exec.run(env, sink_builder).await?;
 
                 if status.success() {
                     DependencyResult::Success

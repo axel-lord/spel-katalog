@@ -32,6 +32,7 @@ use ::spel_katalog_settings::{
     CoverartDir, ExtraConfigDir, FilterMode, FirejailExe, LutrisDb, LutrisExe, Network,
     ScriptConfigDir, Show, Theme, Variants, YmlDir,
 };
+use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
 use ::tap::Pipe;
 mod view;
 
@@ -44,6 +45,26 @@ fn default_config() -> &'static Path {
         cfg.push("config.toml");
         cfg
     })
+}
+
+/// Sender for sending exit messages.
+#[derive(Debug)]
+pub struct ExitSender(::iced::futures::channel::oneshot::Sender<()>);
+
+impl ExitSender {
+    pub fn send(self) {
+        _ = self.0.send(());
+    }
+}
+
+/// Receiver for exit messages.
+#[derive(Debug)]
+pub struct ExitReceiver(::iced::futures::channel::oneshot::Receiver<()>);
+
+/// Create a channel for sending exit messages.
+pub fn exit_channel() -> (ExitSender, ExitReceiver) {
+    let (tx, rx) = ::iced::futures::channel::oneshot::channel();
+    (ExitSender(tx), ExitReceiver(rx))
 }
 
 #[derive(Debug, Parser)]
@@ -59,6 +80,10 @@ pub struct Cli {
     /// Config file to load.
     #[arg(long, short, default_value=default_config().as_os_str())]
     pub config: PathBuf,
+
+    /// Advanced terminal output.
+    #[arg(long)]
+    pub advanced_terminal: bool,
 
     /// Perform an action other than opening gui.
     #[command(subcommand)]
@@ -105,6 +130,7 @@ pub struct App {
     image_buffer: ImageBuffer,
     sender: StatusSender,
     process_list: Option<Vec<process_info::ProcessInfo>>,
+    sink_builder: SinkBuilder,
 }
 
 mod process_info;
@@ -161,20 +187,11 @@ pub enum Message {
 }
 
 impl App {
-    pub fn run() -> ::color_eyre::Result<()> {
-        ::color_eyre::install()?;
-        [
-            "spel_katalog",
-            "spel_katalog_common",
-            "spel_katalog_settings",
-            "spel_katalog_games",
-        ]
-        .into_iter()
-        .fold(&mut ::env_logger::builder(), |builder, module| {
-            builder.filter_module(module, ::log::LevelFilter::Debug)
-        })
-        .init();
-
+    pub fn run(
+        cli: Cli,
+        sink_builder: SinkBuilder,
+        exit_recv: Option<ExitReceiver>,
+    ) -> ::color_eyre::Result<()> {
         let rx;
         let app = {
             let Cli {
@@ -182,7 +199,8 @@ impl App {
                 show_settings,
                 config,
                 action,
-            } = Cli::parse();
+                advanced_terminal: _,
+            } = cli;
 
             fn read_settings(
                 path: &Path,
@@ -288,6 +306,7 @@ impl App {
                 sender,
                 batch,
                 show_batch,
+                sink_builder,
             }
         };
 
@@ -309,7 +328,17 @@ impl App {
                 let receive_status =
                     Task::stream(::tokio_stream::wrappers::ReceiverStream::new(rx))
                         .map(Message::Status);
-                (app, Task::batch([receive_status, load_db]))
+
+                (
+                    app,
+                    Task::batch(
+                        [receive_status, load_db].into_iter().chain(
+                            exit_recv.map(|exit_recv| {
+                                Task::future(exit_recv.0).then(|_| ::iced::exit())
+                            }),
+                        ),
+                    ),
+                )
             })
             .map_err(Report::from)
     }
@@ -664,6 +693,7 @@ impl App {
         let runner = game.runner.clone();
         let hidden = game.hidden;
         let is_net_disabled = self.settings.get::<Network>().is_disabled();
+        let sink_builder = self.sink_builder.clone();
         let configpath = self
             .settings
             .get::<YmlDir>()
@@ -838,13 +868,13 @@ impl App {
                         })?;
                 }
 
-                ScriptFile::run_all(&scripts).await?;
+                ScriptFile::run_all(&scripts, &sink_builder).await?;
                 Ok::<_, ScriptGatherError>(())
             };
 
             if let Err(err) = scripts_result.await {
                 ::log::error!("failure when gathering/runnings scripts\n{err}");
-                return format!("running scripts failed").into();
+                return "running scripts failed".to_owned().into();
             }
 
             let rungame = if no_game {
@@ -860,12 +890,22 @@ impl App {
                 s
             }
 
+            let (stdout, stderr) = match sink_builder.build_double(|| SinkIdentity::GameId(id)) {
+                Ok([stdout, stderr]) => (stdout, stderr),
+                Err(err) => {
+                    ::log::error!("could not create process output sinks\n{err}");
+                    return "could not create output sinks".to_owned().into();
+                }
+            };
+
             let cmd = match safety {
                 Safety::None => {
                     ::log::info!("executing {lutris:?} with arguments\n{:#?}", &[&rungame]);
                     ::tokio::process::Command::new(lutris)
                         .args(rungame)
                         .kill_on_drop(true)
+                        .stdout(stdout)
+                        .stderr(stderr)
                         .status()
                 }
                 Safety::Firejail => {
@@ -895,6 +935,8 @@ impl App {
                     ::tokio::process::Command::new(firejail)
                         .args(args)
                         .kill_on_drop(true)
+                        .stdout(stdout)
+                        .stderr(stderr)
                         .status()
                 }
             };

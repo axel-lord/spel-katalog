@@ -1,0 +1,27 @@
+[package]
+name = "spel-katalog-test"
+version = "0.1.0"
+edition = "2024"
+authors = ["Axel Lord"]
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "match-num"
+path = "src/match_num.rs"
+
+[dependencies]
+iced.workspace = true
+env_logger.workspace = true
+log.workspace = true
+clap = { workspace = true, features = ["derive"] }
+rand.workspace = true
+derive_more = { workspace = true, features = ["full"] }
+tap.workspace = true
+bon.workspace = true
+color-eyre.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace =  true
+
+[lints]
+workspace = true

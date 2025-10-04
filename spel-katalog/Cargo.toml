@@ -31,6 +31,7 @@ spel-katalog-games.workspace = true
 spel-katalog-info.workspace = true
 spel-katalog-script.workspace = true
 spel-katalog-parse.workspace = true
+spel-katalog-terminal.workspace = true
 strsim.workspace = true
 tap.workspace = true
 thiserror.workspace = true

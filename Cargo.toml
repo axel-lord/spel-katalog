@@ -1,5 +1,5 @@
 [workspace]
-members = [ "spel-katalog-build", "spel-katalog", "spel-katalog-common", "spel-katalog-settings", "spel-katalog-games", "spel-katalog-info", "spel-katalog-parse", "spel-katalog-script", "spel-katalog-batch"]
+members = [ "spel-katalog-build", "spel-katalog", "spel-katalog-common", "spel-katalog-settings", "spel-katalog-games", "spel-katalog-info", "spel-katalog-parse", "spel-katalog-script", "spel-katalog-batch", "spel-katalog-terminal", "spel-katalog-test"]
 resolver = "2"
 default-members = ["spel-katalog"]
 
@@ -36,6 +36,7 @@ clap = "4.5.39"
 clap_complete = "4.5.54"
 color-eyre = "0.6.5"
 convert_case = "0.8.0"
+derive-new = "0.7.0"
 derive_more = "2.0.1"
 env_logger = "0.11.8"
 futures = "0.3.31"
@@ -45,6 +46,7 @@ image = "0.25.6"
 indexmap = "2.9.0"
 itertools = "0.14.0"
 log = "0.4.27"
+memchr = "2.7.6"
 mlua = "0.11.3"
 nom = "8.0.0"
 nom_locate = "5.0.0"
@@ -56,9 +58,11 @@ pretty_assertions = "1.4.1"
 prettyplease = "0.2.33"
 proc-macro2 = { version = "1.0.95", default-features = false }
 quote = { version = "1.0.40", default-features = false }
+ratatui = "0.29.0"
 rayon = "1.10.0"
 regex = "1.11.1"
 rfd = { version = "0.15.3", default-features = false }
+rmp = "0.8.14"
 rusqlite = "0.36.0"
 rustc-hash = "2.1.1"
 rustix = "1.0.7"
@@ -74,6 +78,7 @@ spel-katalog-info = { path = "spel-katalog-info" }
 spel-katalog-parse = { path = "spel-katalog-parse" }
 spel-katalog-script = { path = "spel-katalog-script" }
 spel-katalog-settings = { path = "spel-katalog-settings" }
+spel-katalog-terminal = { path = "spel-katalog-terminal" }
 strsim = "0.11.1"
 strum = "0.27.1"
 syn = { version = "2.0.101", default-features = false }
@@ -85,3 +90,5 @@ toml = "0.8.22"
 whoami = { version = "1.6.0", default-features = false }
 xdg = "3.0.0"
 yaml-rust2 = "0.10.3"
+vte = "0.15.0"
+rand = "0.9.2"

@@ -1,0 +1,20 @@
+[package]
+name = "spel-katalog-terminal"
+version = "0.1.0"
+edition = "2024"
+authors = ["Axel Lord"]
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+derive-new.workspace = true
+derive_more = { workspace = true, features = ["display", "deref", "deref_mut","as_ref", "into_iterator"] }
+log.workspace = true
+memchr.workspace = true
+ratatui.workspace = true
+rmp.workspace = true
+smallvec = { workspace = true, features = ["union", "const_generics", "const_new", "write"] }
+tap.workspace = true
+vte.workspace = true
+
+[lints]
+workspace = true
