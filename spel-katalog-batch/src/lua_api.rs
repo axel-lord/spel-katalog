@@ -1,6 +1,8 @@
 use ::std::{
+    ffi::OsStr,
     fmt::Display,
     io::{Cursor, PipeWriter, Write},
+    os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
     rc::Rc,
 };
@@ -115,17 +117,46 @@ fn lua_load_cover(
         .map(|data| data.map_or_else(|| ::mlua::Value::NULL, ::mlua::Value::UserData))
 }
 
-fn lua_load_image(lua: &Lua, path: String) -> ::mlua::Result<::mlua::Value> {
-    fn ld(path: &str) -> Result<DynamicImage, ()> {
+fn lua_load_image(lua: &Lua, path: ::mlua::String) -> ::mlua::Result<::mlua::Value> {
+    fn ld(path: &Path) -> Result<DynamicImage, ()> {
         ImageReader::open(path)
             .map_err(|err| ::log::error!("could not open image {path:?}\n{err}"))?
             .decode()
             .map_err(|err| ::log::error!("could not decode image {path:?}\n{err}"))
     }
-    ld(&path).ok().map_or_else(
-        || Ok(::mlua::Value::NULL),
-        |img| lua.create_any_userdata(img).map(::mlua::Value::UserData),
-    )
+    ld(Path::new(OsStr::from_bytes(&path.as_bytes())))
+        .ok()
+        .map_or_else(
+            || Ok(::mlua::Value::NULL),
+            |img| lua.create_any_userdata(img).map(::mlua::Value::UserData),
+        )
+}
+
+fn lua_get_env(lua: &Lua, name: ::mlua::String) -> ::mlua::Result<Option<::mlua::String>> {
+    ::std::env::var_os(OsStr::from_bytes(&name.as_bytes()))
+        .map(|value| lua.create_string(value.as_bytes()))
+        .transpose()
+}
+
+fn lua_load_file(lua: &Lua, path: ::mlua::String) -> ::mlua::Result<::mlua::String> {
+    let path = path.as_bytes();
+    let path = OsStr::from_bytes(&path);
+
+    let content = ::std::fs::read(path)?;
+    lua.create_string(content)
+}
+
+fn lua_save_file(
+    _lua: &Lua,
+    (path, content): (::mlua::String, ::mlua::String),
+) -> ::mlua::Result<()> {
+    let path = path.as_bytes();
+    let path = OsStr::from_bytes(&path);
+    let content = content.as_bytes();
+
+    ::std::fs::write(path, content)?;
+
+    Ok(())
 }
 
 pub fn register_image(
@@ -191,17 +222,18 @@ pub fn lua_batch(
         lua.create_function(move |lua, slug| lua_load_cover(lua, slug, &thumb_db_path, &conn))?;
     let dbg = lua.create_function_mut(move |lua, value| lua_dbg(lua, value, stderr.as_mut()))?;
     let prnt = lua.create_function_mut(move |lua, value| lua_print(lua, value, stdout.as_mut()))?;
-    let load_yaml = lua.create_function(lua_load_yaml)?;
-    let load_image = lua.create_function(lua_load_image)?;
 
     let module = lua.create_table()?;
     module.set("settings", settings)?;
 
-    module.set("loadYaml", load_yaml)?;
+    module.set("loadYaml", lua.create_function(lua_load_yaml)?)?;
     module.set("dbg", dbg)?;
     module.set("print", prnt)?;
     module.set("loadCover", load_cover)?;
-    module.set("loadImage", load_image)?;
+    module.set("loadImage", lua.create_function(lua_load_image)?)?;
+    module.set("getEnv", lua.create_function(lua_get_env)?)?;
+    module.set("loadFile", lua.create_function(lua_load_file)?)?;
+    module.set("saveFile", lua.create_function(lua_save_file)?)?;
 
     lua.register_module("@spel-katalog", module)?;
 

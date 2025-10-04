@@ -16,14 +16,23 @@ Debug print and return all passed values.
 Print given string. Should be used for printing to make sure output is
 captured correctly.
 
-### `loadYaml(path: String)`
+## `getEnv(name: String) -> String | None`
+Read an environment variable.
+
+### `loadYaml(path: String) -> Value`
 Load yaml at path into a lua value.
+
+### `loadFile(path: String) -> String`
+Load contents of a file to memory.
 
 ### `loadCover(slug: String) -> Image | None`
 Load a cover thumbnail from thumbnail cache.
 
 ### `loadImage(path: String) -> Image | None`
 Load an image from given path.
+
+### `saveFile(path: String, content: String)`
+Save content to given path.
 
 ### `Image:w()`
 Get image width.
