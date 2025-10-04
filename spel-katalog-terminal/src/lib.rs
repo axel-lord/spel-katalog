@@ -14,8 +14,6 @@ mod line_channel;
 mod sink_builder;
 mod tui;
 
-mod log_channel {}
-
 fn bytes_to_string(bytes: Vec<u8>) -> String {
     match String::from_utf8(bytes) {
         Ok(s) => s,
