@@ -18,6 +18,33 @@ use ::tap::Pipe;
 
 use crate::{App, Message, QuickMessage, Safety};
 
+#[derive(Debug, ::thiserror::Error)]
+enum ScriptGatherError {
+    /// Forwarded io error.
+    #[error(transparent)]
+    Io(#[from] ::std::io::Error),
+    /// Forwarded script run error.
+    #[error(transparent)]
+    Script(#[from] ::spel_katalog_script::Error),
+    /// Forwarded parse error.
+    #[error(transparent)]
+    ParseRead(#[from] ::spel_katalog_script::ReadError),
+    /// Forwarded string interpolation error.
+    #[error("while interpolating {1:?}\n{0}")]
+    Interpolate(
+        #[source] ::spel_katalog_parse::InterpolationError<String>,
+        String,
+    ),
+}
+
+#[derive(Debug, ::thiserror::Error)]
+enum ConfigError {
+    #[error(transparent)]
+    Io(#[from] ::std::io::Error),
+    #[error(transparent)]
+    Scan(#[from] ::yaml_rust2::ScanError),
+}
+
 impl App {
     pub fn run_game(&mut self, id: i64, safety: Safety, no_game: bool) -> Task<Message> {
         let Some(game) = self.games.by_id(id) else {
@@ -60,33 +87,6 @@ impl App {
         .then(|msg| msg.map_or_else(Task::none, Task::done));
 
         let task = Task::future(async move {
-            #[derive(Debug, ::thiserror::Error)]
-            enum ScriptGatherError {
-                /// Forwarded io error.
-                #[error(transparent)]
-                Io(#[from] ::std::io::Error),
-                /// Forwarded script run error.
-                #[error(transparent)]
-                Script(#[from] ::spel_katalog_script::Error),
-                /// Forwarded parse error.
-                #[error(transparent)]
-                ParseRead(#[from] ::spel_katalog_script::ReadError),
-                /// Forwarded string interpolation error.
-                #[error("while interpolating {1:?}\n{0}")]
-                Interpolate(
-                    #[source] ::spel_katalog_parse::InterpolationError<String>,
-                    String,
-                ),
-            }
-
-            #[derive(Debug, ::thiserror::Error)]
-            enum ConfigError {
-                #[error(transparent)]
-                Io(#[from] ::std::io::Error),
-                #[error(transparent)]
-                Scan(#[from] ::yaml_rust2::ScanError),
-            }
-
             let config = async {
                 let config = ::tokio::fs::read_to_string(&configpath).await?;
                 let config = formats::Config::parse(&config)?;
