@@ -5,7 +5,7 @@ use ::std::{
     process, thread,
 };
 
-use ::mlua::{Lua, Table, UserDataMethods, Variadic};
+use ::mlua::{IntoLua, Lua, Table, UserDataMethods, Variadic};
 use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
 use ::tap::Pipe;
 
@@ -15,12 +15,14 @@ struct Command {
     args: Vec<OsString>,
 }
 
+impl IntoLua for Command {
+    fn into_lua(self, lua: &Lua) -> mlua::Result<mlua::Value> {
+        lua.create_any_userdata(self).map(::mlua::Value::UserData)
+    }
+}
+
 impl Command {
-    fn new(
-        lua: &Lua,
-        exec: ::mlua::String,
-        args: Variadic<::mlua::String>,
-    ) -> ::mlua::Result<::mlua::Value> {
+    fn new(exec: ::mlua::String, args: Variadic<::mlua::String>) -> ::mlua::Result<Command> {
         let cmd = Command {
             exec: OsString::from(OsStr::from_bytes(&exec.as_bytes())),
             args: args
@@ -29,9 +31,30 @@ impl Command {
                 .collect(),
         };
 
-        lua.create_any_userdata(cmd)?
-            .pipe(::mlua::Value::UserData)
-            .pipe(Ok)
+        Ok(cmd)
+    }
+
+    fn split_exec(&self) -> ::mlua::Result<Command> {
+        let mut initial = self
+            .exec
+            .as_bytes()
+            .pipe(str::from_utf8)
+            .map_err(::mlua::Error::external)?
+            .pipe(::shell_words::split)
+            .map_err(::mlua::Error::external)?
+            .into_iter();
+
+        let exec = initial
+            .next()
+            .ok_or_else(|| ::mlua::Error::runtime("could not split exec of command"))?
+            .into();
+
+        let args = initial
+            .map(OsString::from)
+            .chain(self.args.iter().cloned())
+            .collect();
+
+        Ok(Self { exec, args })
     }
 
     fn output(&self, lua: &Lua, input: Variadic<String>) -> ::mlua::Result<::mlua::Table> {
@@ -126,7 +149,7 @@ pub fn register_cmd(lua: &Lua, module: &Table, sink_builder: &SinkBuilder) -> ::
 
     module.set(
         "cmd",
-        lua.create_function(|lua, (exec, args)| Command::new(lua, exec, args))?,
+        lua.create_function(|_lua, (exec, args)| Command::new(exec, args))?,
     )?;
 
     lua.register_userdata_type::<Command>(move |r| {
@@ -134,6 +157,7 @@ pub fn register_cmd(lua: &Lua, module: &Table, sink_builder: &SinkBuilder) -> ::
             this.status(&sink_builder)
         });
         r.add_method("output", |lua, this, input| this.output(lua, input));
+        r.add_method("splitExec", |_lua, this, _: ()| this.split_exec());
     })?;
 
     Ok(())

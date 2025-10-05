@@ -78,6 +78,10 @@ Save image as cover for given slug.
 ### `Command:status() -> Int | None`
 Run the command returning the exit code if not interrupted.
 
+### `Command:splitExec() -> Command`
+Create a new command with the current binary split ny shell splitting
+rules as new binary and initial arguments.
+
 ### `Command:output(input: String..) -> Output`
 Run the command with the given optional input (given to command separated by newlines),
 returning a table with exit status, stderr and stdout.
