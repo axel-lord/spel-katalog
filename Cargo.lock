@@ -4717,6 +4717,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "shell-words",
  "spel-katalog-common",
  "spel-katalog-settings",
  "spel-katalog-terminal",

@@ -6,7 +6,7 @@ use ::std::{
     rc::Rc,
 };
 
-use ::mlua::Lua;
+use ::mlua::{Lua, Variadic};
 use ::once_cell::unsync::OnceCell;
 use ::serde::Serialize;
 use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
@@ -26,6 +26,15 @@ fn lua_get_env(lua: &Lua, name: ::mlua::String) -> ::mlua::Result<Option<::mlua:
     ::std::env::var_os(OsStr::from_bytes(&name.as_bytes()))
         .map(|value| lua.create_string(value.as_bytes()))
         .transpose()
+}
+
+fn lua_shell_split(_lua: &Lua, args: Variadic<String>) -> ::mlua::Result<Vec<String>> {
+    let mut out = Vec::new();
+    for arg in args {
+        let split = ::shell_words::split(&arg);
+        out.extend(split.map_err(|err| ::mlua::Error::external(err))?);
+    }
+    Ok(out)
 }
 
 pub fn lua_batch(
@@ -58,6 +67,7 @@ pub fn lua_batch(
 
     module.set("settings", settings)?;
     module.set("getEnv", lua.create_function(lua_get_env)?)?;
+    module.set("shellSplit", lua.create_function(lua_shell_split)?)?;
 
     lua.register_module("@spel-katalog", module)?;
 

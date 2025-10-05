@@ -11,7 +11,6 @@ fn lua_print(_: &Lua, value: String, w: Option<&mut PipeWriter>) -> ::mlua::Resu
     } else {
         println!("{value}");
     }
-    ::log::info!("printed {value}");
     Ok(())
 }
 

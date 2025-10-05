@@ -17,6 +17,7 @@ rfd = { workspace = true, features = ["xdg-portal","tokio"] }
 rusqlite.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+shell-words.workspace = true
 spel-katalog-common.workspace = true
 spel-katalog-settings.workspace = true
 spel-katalog-terminal.workspace = true

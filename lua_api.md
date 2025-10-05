@@ -1,5 +1,24 @@
 # Lua API for batch scripts
 
+## Conventions
+This file is written following some conventions for describing the types
+used by functions.
+
+In these examples `Ty`, optionally followed by a number, may be any type.
+
+### `Any`
+May be any lua type.
+
+### `Ty..`
+A variadic input to a function with the given type.
+
+### `[Ty]`
+An array, a table of numbered entries from 1 upwards mapping to values
+of `Ty`.
+
+### `Ty1 | Ty2`
+Either `Ty1` or `Ty2` 
+
 ## Types
 
 ### `Image`
@@ -26,6 +45,9 @@ captured correctly.
 ### `getEnv(name: String) -> String | None`
 Read an environment variable.
 
+### `shellSplit(arg: String..) -> [String]`
+Split the given input/s using shell splitting rules.
+
 ### `loadYaml(path: String) -> Value`
 Load yaml at path into a lua value.
 
@@ -41,10 +63,10 @@ Load an image from given path.
 ### `saveFile(path: String, content: String)`
 Save content to given path.
 
-### `Image:w()`
+### `Image:w() -> Int`
 Get image width.
 
-### `Image:h()`
+### `Image:h() -> Int`
 Get image height.
 
 ### `Image:save(path: String)`
