@@ -2,8 +2,11 @@
 
 ## Types
 
-## `Image`
+### `Image`
 Loaded image, has functions as defined bellow functions header.
+
+### `Command`
+An external command to be executed.
 
 ## Functions
 Functions are provided by the `"@spel-katalog"` module which has
@@ -45,6 +48,9 @@ Save image to given path.
 
 ### `Image:saveCover(slug: String)`
 Save image as cover for given slug.
+
+### `Command::status() -> Int | None`
+Run the command returning the exit code if not interrupted.
 
 ## Values
 

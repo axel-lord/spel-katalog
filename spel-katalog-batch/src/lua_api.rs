@@ -9,13 +9,14 @@ use ::std::{
 use ::mlua::Lua;
 use ::once_cell::unsync::OnceCell;
 use ::serde::Serialize;
-use ::spel_katalog_terminal::SinkBuilder;
+use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
 
 use crate::BatchInfo;
 
 mod fs;
 mod image;
 mod print;
+mod cmd;
 
 fn to_runtime<D: Display>(d: D) -> ::mlua::Error {
     ::mlua::Error::runtime(d)
@@ -38,6 +39,8 @@ pub fn lua_batch(
     let ser = || ::mlua::serde::Serializer::new(&lua);
     let data = data.serialize(ser())?;
     let settings = settings.serialize(ser())?;
+    let sink_builder =
+        sink_builder.with_locked_channel(|| SinkIdentity::StaticName("Lua Batch Script"))?;
 
     let globals = lua.globals();
     globals.set("data", data)?;
@@ -50,7 +53,8 @@ pub fn lua_batch(
 
     image::register_image(&lua, conn, thumb_db_path, &module)?;
     fs::register_fs(&lua, &module)?;
-    print::register_print(&lua, &module, sink_builder)?;
+    print::register_print(&lua, &module, &sink_builder)?;
+    cmd::register_cmd(&lua, &module, &sink_builder)?;
 
     module.set("settings", settings)?;
     module.set("getEnv", lua.create_function(lua_get_env)?)?;
