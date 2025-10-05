@@ -13,10 +13,10 @@ use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
 
 use crate::BatchInfo;
 
+mod cmd;
 mod fs;
 mod image;
 mod print;
-mod cmd;
 
 fn to_runtime<D: Display>(d: D) -> ::mlua::Error {
     ::mlua::Error::runtime(d)

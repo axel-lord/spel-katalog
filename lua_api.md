@@ -8,6 +8,10 @@ Loaded image, has functions as defined bellow functions header.
 ### `Command`
 An external command to be executed.
 
+### `Output`
+A table which is the result of `Command:output` being called.
+Has three fields `status: Int | None`, `stdout: String` and `Stderr: String`.
+
 ## Functions
 Functions are provided by the `"@spel-katalog"` module which has
 to be required (`require'@spel-katalog'`).
@@ -49,8 +53,12 @@ Save image to given path.
 ### `Image:saveCover(slug: String)`
 Save image as cover for given slug.
 
-### `Command::status() -> Int | None`
+### `Command:status() -> Int | None`
 Run the command returning the exit code if not interrupted.
+
+### `Command:output(input: String..) -> Output`
+Run the command with the given optional input (given to command separated by newlines),
+returning a table with exit status, stderr and stdout.
 
 ## Values
 

@@ -1,7 +1,8 @@
 use ::std::{
     ffi::{OsStr, OsString},
+    io::{Read, Write, pipe},
     os::unix::ffi::OsStrExt,
-    process,
+    process, thread,
 };
 
 use ::mlua::{Lua, Table, UserDataMethods, Variadic};
@@ -33,6 +34,81 @@ impl Command {
             .pipe(Ok)
     }
 
+    fn output(&self, lua: &Lua, input: Variadic<String>) -> ::mlua::Result<::mlua::Table> {
+        let mut input = input.into_iter();
+        let table = lua.create_table()?;
+
+        let (status, stdout, stderr) = if let Some(first) = input.next() {
+            let (stdin, mut w_stdin) = pipe()?;
+            let (mut r_stdout, stdout) = pipe()?;
+            let (mut r_stderr, stderr) = pipe()?;
+
+            let mut child = process::Command::new(&self.exec)
+                .args(&self.args)
+                .stdin(stdin)
+                .stdout(stdout)
+                .stderr(stderr)
+                .spawn()?;
+
+            let r = thread::scope(|s| -> ::std::io::Result<_> {
+                let stdout = s.spawn(move || -> ::std::io::Result<_> {
+                    let mut buf = Vec::new();
+                    r_stdout.read_to_end(&mut buf)?;
+                    Ok(buf)
+                });
+
+                let stderr = s.spawn(move || -> ::std::io::Result<_> {
+                    let mut buf = Vec::new();
+                    r_stderr.read_to_end(&mut buf)?;
+                    Ok(buf)
+                });
+
+                w_stdin.write_all(&first.as_bytes())?;
+
+                for s in input {
+                    w_stdin.write_all(b"\n")?;
+                    w_stdin.write_all(&s.as_bytes())?;
+                }
+
+                let status = child.wait()?;
+
+                let stdout = stdout
+                    .join()
+                    .unwrap_or_else(|p| ::std::panic::resume_unwind(p))?;
+
+                let stderr = stderr
+                    .join()
+                    .unwrap_or_else(|p| ::std::panic::resume_unwind(p))?;
+
+                Ok((status.code(), stdout, stderr))
+            });
+
+            match r {
+                Ok(value) => value,
+                Err(err) => {
+                    child.kill()?;
+                    return Err(err.into());
+                }
+            }
+        } else {
+            let process::Output {
+                status,
+                stdout,
+                stderr,
+            } = process::Command::new(&self.exec)
+                .args(&self.args)
+                .output()?;
+
+            (status.code(), stdout, stderr)
+        };
+
+        table.set("status", status)?;
+        table.set("stdout", lua.create_string(stdout)?)?;
+        table.set("stderr", lua.create_string(stderr)?)?;
+
+        Ok(table)
+    }
+
     fn status(&self, sink_builder: &SinkBuilder) -> ::mlua::Result<Option<i32>> {
         let [stdout, stderr] =
             sink_builder.build_double(|| SinkIdentity::StaticName("Lua Batch Cmd"))?;
@@ -57,6 +133,7 @@ pub fn register_cmd(lua: &Lua, module: &Table, sink_builder: &SinkBuilder) -> ::
         r.add_method("status", move |_lua, this, _: ()| {
             this.status(&sink_builder)
         });
+        r.add_method("output", |lua, this, input| this.output(lua, input));
     })?;
 
     Ok(())
