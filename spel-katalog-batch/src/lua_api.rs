@@ -37,23 +37,21 @@ fn lua_shell_split(_lua: &Lua, args: Variadic<String>) -> ::mlua::Result<Vec<Str
     Ok(out)
 }
 
-pub fn lua_batch(
-    data: Vec<BatchInfo>,
-    script: String,
+fn serializer(lua: &Lua) -> ::mlua::serde::Serializer<'_> {
+    ::mlua::serde::Serializer::new(lua)
+}
+
+pub fn register_spel_katalog(
+    lua: &Lua,
     settings: ::spel_katalog_settings::Generic,
     thumb_db_path: PathBuf,
     sink_builder: &SinkBuilder,
 ) -> ::mlua::Result<()> {
-    let lua = Lua::new();
-    let ser = || ::mlua::serde::Serializer::new(&lua);
-    let data = data.serialize(ser())?;
-    let settings = settings.serialize(ser())?;
+    let settings = settings.serialize(serializer(lua))?;
     let sink_builder =
         sink_builder.with_locked_channel(|| SinkIdentity::StaticName("Lua Batch Script"))?;
 
-    let globals = lua.globals();
-    globals.set("data", data)?;
-    globals.set("None", ::mlua::Value::NULL)?;
+    lua.globals().set("None", ::mlua::Value::NULL)?;
 
     let conn = Rc::new(OnceCell::new());
     let thumb_db_path = Rc::<Path>::from(thumb_db_path);
@@ -70,6 +68,22 @@ pub fn lua_batch(
     module.set("shellSplit", lua.create_function(lua_shell_split)?)?;
 
     lua.register_module("@spel-katalog", module)?;
+
+    Ok(())
+}
+
+pub fn lua_batch(
+    data: Vec<BatchInfo>,
+    script: String,
+    settings: ::spel_katalog_settings::Generic,
+    thumb_db_path: PathBuf,
+    sink_builder: &SinkBuilder,
+) -> ::mlua::Result<()> {
+    let lua = Lua::new();
+    let data = data.serialize(serializer(&lua))?;
+
+    lua.globals().set("data", data)?;
+    register_spel_katalog(&lua, settings, thumb_db_path, sink_builder)?;
 
     lua.load(script).exec()?;
 
