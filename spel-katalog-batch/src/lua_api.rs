@@ -39,6 +39,12 @@ fn lua_shell_split(_lua: &Lua, args: Variadic<String>) -> ::mlua::Result<Vec<Str
     Ok(out)
 }
 
+fn lua_path_exists(_lua: &Lua, path: ::mlua::String) -> ::mlua::Result<bool> {
+    let path = path.as_bytes();
+    let path = Path::new(OsStr::from_bytes(&path));
+    Ok(path.exists())
+}
+
 fn serializer(lua: &Lua) -> ::mlua::serde::Serializer<'_> {
     ::mlua::serde::Serializer::new(lua)
 }
@@ -69,6 +75,7 @@ pub fn register_spel_katalog(
     module.set("settings", settings)?;
     module.set("getEnv", lua.create_function(lua_get_env)?)?;
     module.set("shellSplit", lua.create_function(lua_shell_split)?)?;
+    module.set("pathExists", lua.create_function(lua_path_exists)?)?;
 
     lua.register_module("@spel-katalog", module)?;
 

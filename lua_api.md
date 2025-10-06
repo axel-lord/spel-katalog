@@ -63,6 +63,9 @@ Load an image from given path.
 ### `saveFile(path: String, content: String)`
 Save content to given path.
 
+### `pathExists(path: String) -> bool`
+Check if the given path exists.
+
 ### `Image:w() -> Int`
 Get image width.
 
