@@ -286,6 +286,10 @@ impl App {
                         name: name.clone(),
                         runner: runner.to_string(),
                         config: configpath.clone(),
+                        attrs: extra_config
+                            .as_ref()
+                            .map(|extra_config| extra_config.attrs.clone())
+                            .unwrap_or_default(),
                         hidden,
                     };
 

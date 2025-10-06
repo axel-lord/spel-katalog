@@ -1,6 +1,7 @@
 //! Batch command runner.
 
 use ::std::{
+    collections::HashMap,
     io::{Write, pipe},
     process::Command,
     sync::Arc,
@@ -19,6 +20,7 @@ use ::iced::{
     },
 };
 use ::iced_highlighter::Highlighter;
+use ::rustc_hash::FxHashMap;
 use ::serde::Serialize;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status};
 use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
@@ -42,6 +44,8 @@ pub struct BatchInfo {
     pub config: String,
     /// True if the game is hidden.
     pub hidden: bool,
+    /// Custom attributes set for game.
+    pub attrs: FxHashMap<String, String>,
 }
 
 /// Message for batch view.
@@ -431,6 +435,7 @@ impl State {
                                         runner: "wine".to_owned(),
                                         config: "/dev/null".to_owned(),
                                         hidden: false,
+                                        attrs: HashMap::default(),
                                     })
                                     .collect::<Vec<_>>()
                                     .pipe(Message::RunBatch)

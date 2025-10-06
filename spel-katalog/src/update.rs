@@ -1,14 +1,18 @@
-use ::std::convert::identity;
+use ::std::{convert::identity, path::Path};
 
 use ::iced::{
     Task,
     widget::{self},
 };
+use ::rustc_hash::FxHashMap;
 use ::rustix::process::{Pid, RawPid};
 use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::OrRequest;
 use ::spel_katalog_games::SelDir;
-use ::spel_katalog_settings::{CoverartDir, FilterMode, Network, Show, Variants, YmlDir};
+use ::spel_katalog_info::formats::Additional;
+use ::spel_katalog_settings::{
+    CoverartDir, ExtraConfigDir, FilterMode, Network, Show, Variants, YmlDir,
+};
 use ::tap::Pipe;
 
 use crate::{App, Message, QuickMessage, Safety};
@@ -235,6 +239,7 @@ impl App {
                     ::spel_katalog_batch::Request::GatherBatchInfo(scope) => {
                         fn gather<'a>(
                             yml_dir: &str,
+                            extra_config_dir: &str,
                             games: impl IntoIterator<Item = &'a ::spel_katalog_games::Game>,
                         ) -> Task<Message> {
                             games
@@ -246,6 +251,35 @@ impl App {
                                     runner: game.runner.to_string(),
                                     config: format!("{yml_dir}/{}.yml", game.configpath),
                                     hidden: game.hidden,
+                                    attrs: 'attrs: {
+                                        let path = format!("{extra_config_dir}/{}.toml", game.id);
+                                        let path = Path::new(&path);
+
+                                        if !path.exists() {
+                                            break 'attrs FxHashMap::default();
+                                        }
+
+                                        ::std::fs::read_to_string(path)
+                                            .map_err(|err| {
+                                                ::log::error!(
+                                                    "could not read additional path {path:?}\n{err}"
+                                                )
+                                            })
+                                            .ok()
+                                            .and_then(|content| {
+                                                let additional = ::toml::from_str::<Additional>(
+                                                    &content,
+                                                )
+                                                .map_err(|err| {
+                                                    ::log::error!(
+                                                        "could not parse toml of {path:?}\n{err}"
+                                                    )
+                                                })
+                                                .ok()?;
+                                                Some(additional.attrs)
+                                            })
+                                            .unwrap_or_default()
+                                    },
                                 })
                                 .collect::<Vec<_>>()
                                 .pipe(::spel_katalog_batch::Message::RunBatch)
@@ -255,13 +289,17 @@ impl App {
                         }
                         let yml_dir = self.settings.get::<YmlDir>();
                         let yml_dir = yml_dir.as_str();
+                        let extra_config_dir = self.settings.get::<ExtraConfigDir>();
+                        let extra_config_dir = extra_config_dir.as_str();
                         return match scope {
-                            ::spel_katalog_batch::Scope::All => gather(yml_dir, self.games.all()),
+                            ::spel_katalog_batch::Scope::All => {
+                                gather(yml_dir, extra_config_dir, self.games.all())
+                            }
                             ::spel_katalog_batch::Scope::Shown => {
-                                gather(yml_dir, self.games.displayed())
+                                gather(yml_dir, extra_config_dir, self.games.displayed())
                             }
                             ::spel_katalog_batch::Scope::Batch => {
-                                gather(yml_dir, self.games.batch_selected())
+                                gather(yml_dir, extra_config_dir, self.games.batch_selected())
                             }
                         };
                     }
