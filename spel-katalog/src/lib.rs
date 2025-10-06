@@ -1,39 +1,35 @@
 use ::std::{
-    convert::identity,
-    ffi::{OsStr, OsString},
     io::{BufWriter, Write},
-    mem,
     path::{Path, PathBuf},
     sync::OnceLock,
-    time::Duration,
 };
 
 use ::clap::{CommandFactory, Parser, Subcommand};
 use ::color_eyre::{Report, Section, eyre::eyre};
-use ::derive_more::{From, IsVariant};
+use ::derive_more::IsVariant;
 use ::iced::{
     Element,
     Length::Fill,
-    Subscription, Task,
-    futures::{TryStreamExt, stream::FuturesOrdered},
-    keyboard::{self, Modifiers, key::Named, on_key_press},
+    Task,
     widget::{self, horizontal_rule, stack, text, text_input, toggler, value, vertical_space},
 };
-use ::rustix::process::{Pid, RawPid};
-use ::spel_katalog_batch::BatchInfo;
-use ::spel_katalog_common::{OrRequest, StatusSender, status, w};
-use ::spel_katalog_games::SelDir;
-use ::spel_katalog_info::{
-    formats::{self, Additional},
-    image_buffer::ImageBuffer,
-};
-use ::spel_katalog_script::script_file::ScriptFile;
-use ::spel_katalog_settings::{
-    CoverartDir, ExtraConfigDir, FilterMode, FirejailExe, LutrisDb, LutrisExe, Network,
-    ScriptConfigDir, Show, Theme, Variants, YmlDir,
-};
-use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
+use ::spel_katalog_common::{OrRequest, StatusSender, w};
+use ::spel_katalog_info::image_buffer::ImageBuffer;
+use ::spel_katalog_settings::{FilterMode, LutrisDb, Network, Theme};
+use ::spel_katalog_terminal::SinkBuilder;
 use ::tap::Pipe;
+
+pub use self::{
+    exit_channel::{ExitReceiver, ExitSender, exit_channel},
+    message::{Message, QuickMessage},
+};
+
+mod exit_channel;
+mod message;
+mod process_info;
+mod run_game;
+mod subscription;
+mod update;
 mod view;
 
 fn default_config() -> &'static Path {
@@ -45,26 +41,6 @@ fn default_config() -> &'static Path {
         cfg.push("config.toml");
         cfg
     })
-}
-
-/// Sender for sending exit messages.
-#[derive(Debug)]
-pub struct ExitSender(::iced::futures::channel::oneshot::Sender<()>);
-
-impl ExitSender {
-    pub fn send(self) {
-        _ = self.0.send(());
-    }
-}
-
-/// Receiver for exit messages.
-#[derive(Debug)]
-pub struct ExitReceiver(::iced::futures::channel::oneshot::Receiver<()>);
-
-/// Create a channel for sending exit messages.
-pub fn exit_channel() -> (ExitSender, ExitReceiver) {
-    let (tx, rx) = ::iced::futures::channel::oneshot::channel();
-    (ExitSender(tx), ExitReceiver(rx))
 }
 
 #[derive(Debug, Parser)]
@@ -133,8 +109,6 @@ pub struct App {
     sink_builder: SinkBuilder,
 }
 
-mod process_info;
-
 #[derive(Debug, Clone, Copy, Default, IsVariant, PartialEq, Eq, Hash)]
 pub enum Safety {
     None,
@@ -146,44 +120,6 @@ impl From<bool> for Safety {
     fn from(value: bool) -> Self {
         if value { Self::Firejail } else { Self::None }
     }
-}
-
-#[derive(Debug, IsVariant, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum QuickMessage {
-    ClosePane,
-    CloseAll,
-    ToggleSettings,
-    OpenProcessInfo,
-    CycleHidden,
-    CycleFilter,
-    ToggleNetwork,
-    RefreshProcessInfo,
-    RunSelected,
-    Next,
-    Prev,
-    ToggleBatch,
-}
-
-#[derive(Debug, IsVariant, From, Clone)]
-pub enum Message {
-    #[from]
-    Status(String),
-    Filter(String),
-    #[from]
-    Settings(::spel_katalog_settings::Message),
-    #[from]
-    View(view::Message),
-    #[from]
-    Games(OrRequest<::spel_katalog_games::Message, ::spel_katalog_games::Request>),
-    #[from]
-    Info(OrRequest<::spel_katalog_info::Message, ::spel_katalog_info::Request>),
-    RunGame(i64, Safety),
-    #[from]
-    Quick(QuickMessage),
-    ProcessInfo(Option<Vec<process_info::ProcessInfo>>),
-    Kill(i64),
-    #[from]
-    Batch(OrRequest<::spel_katalog_batch::Message, ::spel_katalog_batch::Request>),
 }
 
 impl App {
@@ -331,333 +267,14 @@ impl App {
 
                 (
                     app,
-                    Task::batch(
-                        [receive_status, load_db].into_iter().chain(
-                            exit_recv.map(|exit_recv| {
-                                Task::future(exit_recv.0).then(|_| ::iced::exit())
-                            }),
-                        ),
-                    ),
+                    Task::batch([receive_status, load_db].into_iter().chain(
+                        exit_recv.map(|exit_recv| {
+                            Task::future(exit_recv.recv()).then(|_| ::iced::exit())
+                        }),
+                    )),
                 )
             })
             .map_err(Report::from)
-    }
-
-    pub fn subscription(&self) -> Subscription<Message> {
-        fn sel(sel_dir: SelDir) -> Option<Message> {
-            sel_dir
-                .pipe(::spel_katalog_games::Message::Select)
-                .pipe(OrRequest::Message)
-                .pipe(Message::Games)
-                .pipe(Some)
-        }
-        let on_key = on_key_press(|key, modifiers| match key.as_ref() {
-            keyboard::Key::Named(named) => match named {
-                Named::Tab if modifiers.is_empty() => Some(QuickMessage::Next).map(Message::Quick),
-                Named::Tab if modifiers == Modifiers::SHIFT => {
-                    Some(QuickMessage::Prev).map(Message::Quick)
-                }
-                Named::ArrowRight if modifiers.is_empty() => sel(SelDir::Right),
-                Named::ArrowLeft if modifiers.is_empty() => sel(SelDir::Left),
-                Named::ArrowUp if modifiers.is_empty() => sel(SelDir::Up),
-                Named::ArrowDown if modifiers.is_empty() => sel(SelDir::Down),
-                Named::Enter | Named::Space if modifiers.is_empty() => {
-                    Some(Message::Quick(QuickMessage::RunSelected))
-                }
-                _ => None,
-            },
-            keyboard::Key::Character(chr) => match chr {
-                "q" if modifiers.is_empty() => Some(QuickMessage::ClosePane),
-                "q" if modifiers == Modifiers::CTRL => Some(QuickMessage::CloseAll),
-                "h" if modifiers.is_empty() => Some(QuickMessage::CycleHidden),
-                "f" if modifiers.is_empty() => Some(QuickMessage::CycleFilter),
-                "s" if modifiers.is_empty() => Some(QuickMessage::ToggleSettings),
-                "n" if modifiers.is_empty() => Some(QuickMessage::ToggleNetwork),
-                "k" if modifiers == Modifiers::CTRL | Modifiers::SHIFT => {
-                    Some(QuickMessage::OpenProcessInfo)
-                }
-                "b" if modifiers == Modifiers::CTRL | Modifiers::SHIFT => {
-                    Some(QuickMessage::ToggleBatch)
-                }
-                _ => None,
-            }
-            .map(Message::Quick),
-            keyboard::Key::Unidentified => None,
-        });
-
-        let refresh = if self.process_list.is_some() {
-            Some(
-                ::iced::time::every(Duration::from_millis(500))
-                    .map(|_| Message::Quick(QuickMessage::RefreshProcessInfo)),
-            )
-        } else {
-            None
-        };
-
-        [Some(on_key), refresh]
-            .into_iter()
-            .flatten()
-            .pipe(Subscription::batch)
-    }
-
-    pub fn update(&mut self, msg: Message) -> Task<Message> {
-        match msg {
-            Message::Status(status) => {
-                self.set_status(status);
-                return Task::none();
-            }
-            Message::Filter(filter) => {
-                self.filter = filter;
-                self.games.sort(&self.settings, &self.filter);
-            }
-            Message::Settings(message) => {
-                let re_sort = matches!(
-                    &message,
-                    ::spel_katalog_settings::Message::Delta(
-                        ::spel_katalog_settings::Delta::FilterMode(..)
-                            | ::spel_katalog_settings::Delta::Show(..)
-                            | ::spel_katalog_settings::Delta::SortBy(..)
-                            | ::spel_katalog_settings::Delta::SortDir(..)
-                    )
-                );
-
-                let task = self.settings.update(message, &self.sender);
-
-                if re_sort {
-                    self.sort_games();
-                }
-
-                return task.map(From::from);
-            }
-            Message::View(message) => return self.view.update(message),
-            Message::Games(message) => {
-                let request = match message {
-                    OrRequest::Message(message) => {
-                        return self
-                            .games
-                            .update(message, &self.sender, &self.settings, &self.filter)
-                            .map(Message::Games);
-                    }
-                    OrRequest::Request(request) => request,
-                };
-                match request {
-                    ::spel_katalog_games::Request::SetId { id } => {
-                        return self
-                            .info
-                            .update(
-                                ::spel_katalog_info::Message::SetId { id },
-                                &self.sender,
-                                &self.settings,
-                                &self.games,
-                            )
-                            .map(Message::Info);
-                    }
-                    ::spel_katalog_games::Request::Run { id, sandbox } => {
-                        return self.run_game(
-                            id,
-                            if sandbox {
-                                Safety::Firejail
-                            } else {
-                                Safety::None
-                            },
-                            false,
-                        );
-                    }
-                    ::spel_katalog_games::Request::FindImages { slugs } => {
-                        return self
-                            .image_buffer
-                            .find_images(slugs, self.settings.get::<CoverartDir>().to_path_buf())
-                            .map(OrRequest::Message)
-                            .map(Message::Games);
-                    }
-                    ::spel_katalog_games::Request::CloseInfo => {
-                        self.view.show_info(false);
-                        self.games.select(SelDir::None);
-                    }
-                }
-            }
-            Message::Info(message) => {
-                let request = match message {
-                    OrRequest::Message(message) => {
-                        return self
-                            .info
-                            .update(message, &self.sender, &self.settings, &self.games)
-                            .map(Message::Info);
-                    }
-                    OrRequest::Request(request) => request,
-                };
-                match request {
-                    ::spel_katalog_info::Request::ShowInfo(show) => {
-                        self.view.show_info(show);
-                    }
-                    ::spel_katalog_info::Request::SetImage { slug, image } => {
-                        return self
-                            .games
-                            .update(
-                                ::spel_katalog_games::Message::SetImage { slug, image },
-                                &self.sender,
-                                &self.settings,
-                                &self.filter,
-                            )
-                            .map(Message::Games);
-                    }
-                    ::spel_katalog_info::Request::RunGame { id, sandbox } => {
-                        return self.run_game(id, Safety::from(sandbox), false);
-                    }
-                    ::spel_katalog_info::Request::RunLutrisInSandbox { id } => {
-                        return self.run_game(id, Safety::Firejail, true);
-                    }
-                }
-            }
-            Message::RunGame(id, safety) => return self.run_game(id, safety, false),
-            Message::Quick(quick) => match quick {
-                QuickMessage::CloseAll => {
-                    self.process_list = None;
-                    self.view.show_info(false);
-                    self.view.show_settings(false);
-                    self.games.select(SelDir::None);
-                    self.filter = String::new();
-                    self.sort_games();
-                }
-                QuickMessage::ClosePane => {
-                    if self.process_list.is_some() {
-                        self.process_list = None;
-                        self.set_status("closed process list");
-                    } else if self.view.info_shown() {
-                        self.view.show_info(false);
-                        self.set_status("closed info pane");
-                    } else if self.view.settings_shown() {
-                        self.view.show_settings(false);
-                        self.set_status("closed settings pane");
-                    } else if self.games.selected().is_some() {
-                        self.games.select(SelDir::None);
-                    } else if !self.filter.is_empty() {
-                        self.filter = String::new();
-                        self.sort_games();
-                    }
-                }
-                QuickMessage::ToggleSettings => {
-                    self.view.show_settings(!self.view.settings_shown());
-                }
-                QuickMessage::OpenProcessInfo => {
-                    return Task::future(Self::collect_process_info()).then(identity);
-                }
-                QuickMessage::CycleHidden => {
-                    let next = self.settings.get::<Show>().cycle();
-                    self.settings.apply_from(next);
-                    self.set_status(format!("cycled hidden to {next}"));
-                    self.sort_games();
-                }
-                QuickMessage::CycleFilter => {
-                    let next = self.settings.get::<FilterMode>().cycle();
-                    self.settings.apply_from(next);
-                    self.set_status(format!("cycled filter mode to {next}"));
-                    self.sort_games();
-                }
-                QuickMessage::ToggleNetwork => {
-                    let next = self.settings.get::<Network>().cycle();
-                    self.settings.apply_from(next);
-                    self.set_status(format!("toggled network to {next}"));
-                    self.sort_games();
-                }
-                QuickMessage::RefreshProcessInfo => {
-                    if self.process_list.is_some() {
-                        return Task::future(Self::collect_process_info()).then(identity);
-                    }
-                }
-                QuickMessage::Next => return widget::focus_next(),
-                QuickMessage::Prev => return widget::focus_previous(),
-                QuickMessage::RunSelected => {
-                    if let Some(id) = self.games.selected() {
-                        return self.run_game(id, Safety::Firejail, false);
-                    }
-                }
-                QuickMessage::ToggleBatch => self.show_batch = !self.show_batch,
-            },
-            Message::ProcessInfo(process_infos) => {
-                self.process_list = process_infos.filter(|infos| !infos.is_empty())
-            }
-            Message::Kill(pid) => {
-                let Ok(pid) = RawPid::try_from(pid) else {
-                    return Task::none();
-                };
-                let Some(pid) = Pid::from_raw(pid) else {
-                    return Task::none();
-                };
-
-                return Task::future(async move {
-                    match ::tokio::task::spawn_blocking(move || {
-                        ::rustix::process::kill_process(pid, ::rustix::process::Signal::TERM)
-                    })
-                    .await
-                    {
-                        Ok(result) => match result {
-                            Ok(_) => ::log::info!(
-                                "sent TERM to process {pid}",
-                                pid = pid.as_raw_nonzero().get()
-                            ),
-                            Err(err) => ::log::error!(
-                                "could not kill process {pid}\n{err}",
-                                pid = pid.as_raw_nonzero().get()
-                            ),
-                        },
-                        Err(err) => ::log::error!("could not spawn blocking thread\n{err}"),
-                    };
-                })
-                .then(|_| Task::none());
-            }
-            Message::Batch(or_request) => match or_request {
-                OrRequest::Message(msg) => {
-                    return self
-                        .batch
-                        .update(msg, &self.sender, &self.settings, &self.sink_builder)
-                        .map(From::from);
-                }
-                OrRequest::Request(req) => match req {
-                    ::spel_katalog_batch::Request::ShowProcesses => {
-                        return Task::done(Message::Quick(QuickMessage::OpenProcessInfo));
-                    }
-                    ::spel_katalog_batch::Request::HideBatch => self.show_batch = false,
-                    ::spel_katalog_batch::Request::GatherBatchInfo(scope) => {
-                        fn gather<'a>(
-                            yml_dir: &str,
-                            games: impl IntoIterator<Item = &'a ::spel_katalog_games::Game>,
-                        ) -> Task<Message> {
-                            games
-                                .into_iter()
-                                .map(|game| BatchInfo {
-                                    id: game.id,
-                                    slug: game.slug.clone(),
-                                    name: game.name.clone(),
-                                    runner: game.runner.to_string(),
-                                    config: format!("{yml_dir}/{}.yml", game.configpath),
-                                    hidden: game.hidden,
-                                })
-                                .collect::<Vec<_>>()
-                                .pipe(::spel_katalog_batch::Message::RunBatch)
-                                .pipe(OrRequest::Message)
-                                .pipe(Message::Batch)
-                                .pipe(Task::done)
-                        }
-                        let yml_dir = self.settings.get::<YmlDir>();
-                        let yml_dir = yml_dir.as_str();
-                        return match scope {
-                            ::spel_katalog_batch::Scope::All => gather(yml_dir, self.games.all()),
-                            ::spel_katalog_batch::Scope::Shown => {
-                                gather(yml_dir, self.games.displayed())
-                            }
-                            ::spel_katalog_batch::Scope::Batch => {
-                                gather(yml_dir, self.games.batch_selected())
-                            }
-                        };
-                    }
-                    ::spel_katalog_batch::Request::ReloadCache => {
-                        return self.games.find_cached(&self.settings).map(Message::Games);
-                    }
-                },
-            },
-        }
-        Task::none()
     }
 
     pub async fn collect_process_info() -> Task<Message> {
@@ -678,283 +295,6 @@ impl App {
         let status = status.into();
         ::log::info!("status: {status}");
         self.status = status;
-    }
-
-    fn run_game(&mut self, id: i64, safety: Safety, no_game: bool) -> Task<Message> {
-        let Some(game) = self.games.by_id(id) else {
-            status!(&self.sender, "could not run game with id {id}");
-            return Task::none();
-        };
-
-        let lutris = self.settings.get::<LutrisExe>().clone();
-        let firejail = self.settings.get::<FirejailExe>().clone();
-        let slug = game.slug.clone();
-        let name = game.name.clone();
-        let runner = game.runner.clone();
-        let hidden = game.hidden;
-        let is_net_disabled = self.settings.get::<Network>().is_disabled();
-        let sink_builder = self.sink_builder.clone();
-        let configpath = self
-            .settings
-            .get::<YmlDir>()
-            .as_path()
-            .join(&game.configpath)
-            .with_extension("yml");
-        let extra_config_path = self
-            .settings
-            .get::<ExtraConfigDir>()
-            .as_path()
-            .join(format!("{id}.toml"));
-        let script_dir = self.settings.get::<ScriptConfigDir>().to_path_buf();
-
-        let (send_open, recv_open) = ::tokio::sync::oneshot::channel();
-
-        let open_process_list = Task::future(async {
-            match recv_open.await {
-                Ok(_) => Some(Message::Quick(QuickMessage::OpenProcessInfo)),
-                Err(err) => {
-                    ::log::error!("could not receive open signel through oneshot\n{err}");
-                    None
-                }
-            }
-        })
-        .then(|msg| msg.map_or_else(Task::none, Task::done));
-
-        let task = Task::future(async move {
-            #[derive(Debug, ::thiserror::Error)]
-            enum ScriptGatherError {
-                /// Forwarded io error.
-                #[error(transparent)]
-                Io(#[from] ::std::io::Error),
-                /// Forwarded script run error.
-                #[error(transparent)]
-                Script(#[from] ::spel_katalog_script::Error),
-                /// Forwarded parse error.
-                #[error(transparent)]
-                ParseRead(#[from] ::spel_katalog_script::ReadError),
-                /// Forwarded string interpolation error.
-                #[error("while interpolating {1:?}\n{0}")]
-                Interpolate(
-                    #[source] ::spel_katalog_parse::InterpolationError<String>,
-                    String,
-                ),
-            }
-
-            #[derive(Debug, ::thiserror::Error)]
-            enum ConfigError {
-                #[error(transparent)]
-                Io(#[from] ::std::io::Error),
-                #[error(transparent)]
-                Scan(#[from] ::yaml_rust2::ScanError),
-            }
-
-            let config = async {
-                let config = ::tokio::fs::read_to_string(&configpath).await?;
-                let config = formats::Config::parse(&config)?;
-
-                Ok::<_, ConfigError>(config)
-            };
-
-            let config = match config.await {
-                Ok(config) => config,
-                Err(err) => {
-                    ::log::error!("while loading config {configpath:?}\n{err}");
-                    return format!("could not load config for game").into();
-                }
-            };
-
-            let extra_config = if extra_config_path.exists() {
-                let Some(content) = ::tokio::fs::read_to_string(&extra_config_path)
-                    .await
-                    .map_err(|err| ::log::error!("could not read {extra_config_path:?}\n{err}"))
-                    .ok()
-                else {
-                    return format!("could not read {extra_config_path:?}").into();
-                };
-                let Some(additional) = ::toml::from_str::<Additional>(&content)
-                    .map_err(|err| ::log::error!("could not parse {extra_config_path:?}\n{err}"))
-                    .ok()
-                else {
-                    return format!("could not parse {extra_config_path:?}").into();
-                };
-
-                Some(additional)
-            } else {
-                None
-            };
-
-            let scripts_result = async {
-                if !script_dir.exists() {
-                    ::log::info!("no script dir, skipping");
-                    return Ok(());
-                }
-
-                let mut scripts = Vec::new();
-                let mut stack = Vec::new();
-
-                stack.push(script_dir);
-
-                while let Some(dir) = stack.pop() {
-                    let mut dir = ::tokio::fs::read_dir(dir).await?;
-                    while let Some(entry) = dir.next_entry().await? {
-                        let ft = entry.file_type().await?;
-
-                        let path = entry.path();
-
-                        if ft.is_dir() {
-                            stack.push(path);
-                        } else if ft.is_file() {
-                            scripts.push(path);
-                        } else {
-                            ::log::warn!("non file or directory path in script dir, {path:?}")
-                        }
-                    }
-                }
-
-                scripts.sort_unstable();
-
-                let mut scripts = scripts
-                    .iter()
-                    .map(|path| ScriptFile::read(&path))
-                    .collect::<FuturesOrdered<_>>()
-                    .try_collect::<Vec<_>>()
-                    .await?;
-
-                for script in &mut scripts {
-                    let globals = mem::take(&mut script.global);
-                    script
-                        .visit_strings(|s| {
-                            *s = ::spel_katalog_parse::interpolate_string(s, |key| match key {
-                                "HOME" => Some(::spel_katalog_settings::HOME.to_string()),
-                                "ID" => Some(id.to_string()),
-                                "SLUG" => Some(slug.clone()),
-                                "NAME" => Some(name.clone()),
-                                "RUNNER" => Some(runner.to_string()),
-                                "HIDDEN" => Some(hidden.to_string()),
-                                "EXE" => Some(config.game.exe.display().to_string()),
-                                "PREFIX" => Some(config.game.prefix.as_ref().map_or_else(
-                                    || String::new(),
-                                    |pfx| pfx.display().to_string(),
-                                )),
-                                "ARCH" => Some(config.game.arch.clone().unwrap_or_default()),
-                                key => {
-                                    if let Some(global) = key.strip_prefix("GLOBAL.")
-                                        && let Some(value) = globals.get(global)
-                                    {
-                                        value.clone().pipe(Some)
-                                    } else if let Some(attr) = key.strip_prefix("ATTR.") {
-                                        extra_config
-                                            .as_ref()
-                                            .and_then(|extra_config| {
-                                                extra_config.attrs.get(attr).cloned()
-                                            })
-                                            .unwrap_or_default()
-                                            .pipe(Some)
-                                    } else {
-                                        None
-                                    }
-                                }
-                            })?;
-                            Ok(())
-                        })
-                        .map_err(|err| {
-                            ScriptGatherError::Interpolate(
-                                err,
-                                script.source.as_ref().map_or_else(
-                                    || script.id().to_owned(),
-                                    |source| source.display().to_string(),
-                                ),
-                            )
-                        })?;
-                }
-
-                ScriptFile::run_all(&scripts, &sink_builder).await?;
-                Ok::<_, ScriptGatherError>(())
-            };
-
-            if let Err(err) = scripts_result.await {
-                ::log::error!("failure when gathering/runnings scripts\n{err}");
-                return "running scripts failed".to_owned().into();
-            }
-
-            let rungame = if no_game {
-                None
-            } else {
-                Some(format!("lutris:rungameid/{id}"))
-            };
-
-            fn wl(p: impl AsRef<OsStr>) -> OsString {
-                let mut s = OsString::new();
-                s.push("--whitelist=");
-                s.push(p);
-                s
-            }
-
-            let (stdout, stderr) = match sink_builder.build_double(|| SinkIdentity::GameId(id)) {
-                Ok([stdout, stderr]) => (stdout, stderr),
-                Err(err) => {
-                    ::log::error!("could not create process output sinks\n{err}");
-                    return "could not create output sinks".to_owned().into();
-                }
-            };
-
-            let cmd = match safety {
-                Safety::None => {
-                    ::log::info!("executing {lutris:?} with arguments\n{:#?}", &[&rungame]);
-                    ::tokio::process::Command::new(lutris)
-                        .args(rungame)
-                        .kill_on_drop(true)
-                        .stdout(stdout)
-                        .stderr(stderr)
-                        .status()
-                }
-                Safety::Firejail => {
-                    let mut args = Vec::new();
-                    ::log::info!("parsed game config\n{config:#?}");
-                    if let Some(additional) = extra_config
-                        .map(|additional| additional.sandbox_root)
-                        .filter(|roots| !roots.is_empty())
-                    {
-                        args.extend(additional.into_iter().map(wl));
-                    } else {
-                        args.push(wl(config.game.common_parent()));
-                    }
-
-                    if is_net_disabled {
-                        args.push("--net=none".into());
-                    }
-
-                    args.push(lutris.as_os_str().into());
-
-                    if let Some(rungame) = rungame {
-                        args.push(rungame.into());
-                    };
-
-                    ::log::info!("executing {firejail:?} with arguments\n{args:#?}");
-
-                    ::tokio::process::Command::new(firejail)
-                        .args(args)
-                        .kill_on_drop(true)
-                        .stdout(stdout)
-                        .stderr(stderr)
-                        .status()
-                }
-            };
-
-            if send_open.send(()).is_err() {
-                ::log::warn!("could not send open signal through oneshot");
-            }
-
-            match cmd.await {
-                Ok(status) => format!("{name} exited with {status}").into(),
-                Err(err) => {
-                    ::log::error!("could not run {slug}\n{err}");
-                    format!("could not run {slug}").into()
-                }
-            }
-        });
-
-        Task::batch([task, open_process_list])
     }
 
     pub fn view(&self) -> Element<'_, Message> {
