@@ -1,12 +1,14 @@
 use ::std::{
     ffi::{OsStr, OsString},
     mem,
+    path::{Path, PathBuf},
 };
 
 use ::iced::{
     Task,
     futures::{TryStreamExt, stream::FuturesOrdered},
 };
+use ::rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use ::spel_katalog_common::status;
 use ::spel_katalog_info::formats::{self, Additional};
 use ::spel_katalog_script::script_file::ScriptFile;
@@ -43,6 +45,86 @@ enum ConfigError {
     Io(#[from] ::std::io::Error),
     #[error(transparent)]
     Scan(#[from] ::yaml_rust2::ScanError),
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ScriptExt {
+    Json,
+    Toml,
+    Lua,
+}
+
+impl ScriptExt {
+    pub fn from_path(path: &Path) -> Option<Self> {
+        let ext = path.extension()?.to_str()?;
+
+        if ext.eq_ignore_ascii_case("toml") {
+            Some(Self::Toml)
+        } else if ext.eq_ignore_ascii_case("json") {
+            Some(Self::Json)
+        } else if ext.eq_ignore_ascii_case("lua") {
+            Some(Self::Lua)
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct Gathered {
+    scripts: Vec<PathBuf>,
+    lua_scripts: Vec<PathBuf>,
+}
+
+async fn gather_scripts(script_dir: PathBuf) -> Result<Gathered, ScriptGatherError> {
+    if !script_dir.exists() {
+        ::log::info!("no script dir, skipping");
+        return Ok(Gathered::default());
+    }
+    let mut scripts = Vec::new();
+    let mut lua_scripts = Vec::new();
+    let mut stack = Vec::new();
+
+    stack.push(script_dir);
+
+    while let Some(dir) = stack.pop() {
+        let mut dir = ::tokio::fs::read_dir(dir).await?;
+        while let Some(entry) = dir.next_entry().await? {
+            let ft = entry.file_type().await?;
+
+            let path = entry.path();
+
+            if ft.is_dir() {
+                stack.push(path);
+            } else if ft.is_file() {
+                match ScriptExt::from_path(&path) {
+                    Some(ScriptExt::Lua) => lua_scripts.push(path),
+                    Some(_) => scripts.push(path),
+                    None => ::log::info!("unknown script extension of path {path:?}"),
+                }
+            } else {
+                ::log::warn!("non file or directory path in script dir, {path:?}")
+            }
+        }
+    }
+
+    scripts.sort_unstable();
+    lua_scripts.sort_unstable();
+
+    Ok(Gathered {
+        scripts,
+        lua_scripts,
+    })
+}
+
+async fn read_scripts(script_paths: Vec<PathBuf>) -> Result<Vec<ScriptFile>, ScriptGatherError> {
+    script_paths
+        .iter()
+        .map(|path| ScriptFile::read(path))
+        .collect::<FuturesOrdered<_>>()
+        .try_collect::<Vec<_>>()
+        .await?
+        .pipe(Ok)
 }
 
 impl App {
@@ -123,89 +205,66 @@ impl App {
             };
 
             let scripts_result = async {
-                if !script_dir.exists() {
-                    ::log::info!("no script dir, skipping");
-                    return Ok(());
-                }
+                let Gathered {
+                    scripts,
+                    lua_scripts: _,
+                } = gather_scripts(script_dir).await?;
+                let mut scripts = read_scripts(scripts).await?;
 
-                let mut scripts = Vec::new();
-                let mut stack = Vec::new();
-
-                stack.push(script_dir);
-
-                while let Some(dir) = stack.pop() {
-                    let mut dir = ::tokio::fs::read_dir(dir).await?;
-                    while let Some(entry) = dir.next_entry().await? {
-                        let ft = entry.file_type().await?;
-
-                        let path = entry.path();
-
-                        if ft.is_dir() {
-                            stack.push(path);
-                        } else if ft.is_file() {
-                            scripts.push(path);
-                        } else {
-                            ::log::warn!("non file or directory path in script dir, {path:?}")
-                        }
-                    }
-                }
-
-                scripts.sort_unstable();
-
-                let mut scripts = scripts
-                    .iter()
-                    .map(|path| ScriptFile::read(&path))
-                    .collect::<FuturesOrdered<_>>()
-                    .try_collect::<Vec<_>>()
-                    .await?;
-
-                for script in &mut scripts {
-                    let globals = mem::take(&mut script.global);
-                    script
-                        .visit_strings(|s| {
-                            *s = ::spel_katalog_parse::interpolate_string(s, |key| match key {
-                                "HOME" => Some(::spel_katalog_settings::HOME.to_string()),
-                                "ID" => Some(id.to_string()),
-                                "SLUG" => Some(slug.clone()),
-                                "NAME" => Some(name.clone()),
-                                "RUNNER" => Some(runner.to_string()),
-                                "HIDDEN" => Some(hidden.to_string()),
-                                "EXE" => Some(config.game.exe.display().to_string()),
-                                "PREFIX" => Some(config.game.prefix.as_ref().map_or_else(
-                                    || String::new(),
-                                    |pfx| pfx.display().to_string(),
-                                )),
-                                "ARCH" => Some(config.game.arch.clone().unwrap_or_default()),
-                                key => {
-                                    if let Some(global) = key.strip_prefix("GLOBAL.")
-                                        && let Some(value) = globals.get(global)
-                                    {
-                                        value.clone().pipe(Some)
-                                    } else if let Some(attr) = key.strip_prefix("ATTR.") {
-                                        extra_config
-                                            .as_ref()
-                                            .and_then(|extra_config| {
-                                                extra_config.attrs.get(attr).cloned()
-                                            })
-                                            .unwrap_or_default()
-                                            .pipe(Some)
-                                    } else {
-                                        None
-                                    }
-                                }
+                scripts
+                    .par_iter_mut()
+                    .try_for_each(|script| -> Result<_, ScriptGatherError> {
+                        let globals = mem::take(&mut script.global);
+                        script
+                            .visit_strings(|s| {
+                                *s =
+                                    ::spel_katalog_parse::interpolate_string(s, |key| match key {
+                                        "HOME" => Some(::spel_katalog_settings::HOME.to_string()),
+                                        "ID" => Some(id.to_string()),
+                                        "SLUG" => Some(slug.clone()),
+                                        "NAME" => Some(name.clone()),
+                                        "RUNNER" => Some(runner.to_string()),
+                                        "HIDDEN" => Some(hidden.to_string()),
+                                        "EXE" => Some(config.game.exe.display().to_string()),
+                                        "PREFIX" => Some(config.game.prefix.as_ref().map_or_else(
+                                            || String::new(),
+                                            |pfx| pfx.display().to_string(),
+                                        )),
+                                        "ARCH" => {
+                                            Some(config.game.arch.clone().unwrap_or_default())
+                                        }
+                                        key => {
+                                            if let Some(global) = key.strip_prefix("GLOBAL.")
+                                                && let Some(value) = globals.get(global)
+                                            {
+                                                value.clone().pipe(Some)
+                                            } else if let Some(attr) = key.strip_prefix("ATTR.") {
+                                                extra_config
+                                                    .as_ref()
+                                                    .and_then(|extra_config| {
+                                                        extra_config.attrs.get(attr).cloned()
+                                                    })
+                                                    .unwrap_or_default()
+                                                    .pipe(Some)
+                                            } else {
+                                                None
+                                            }
+                                        }
+                                    })?;
+                                Ok(())
+                            })
+                            .map_err(|err| {
+                                ScriptGatherError::Interpolate(
+                                    err,
+                                    script.source.as_ref().map_or_else(
+                                        || script.id().to_owned(),
+                                        |source| source.display().to_string(),
+                                    ),
+                                )
                             })?;
-                            Ok(())
-                        })
-                        .map_err(|err| {
-                            ScriptGatherError::Interpolate(
-                                err,
-                                script.source.as_ref().map_or_else(
-                                    || script.id().to_owned(),
-                                    |source| source.display().to_string(),
-                                ),
-                            )
-                        })?;
-                }
+
+                        Ok(())
+                    })?;
 
                 ScriptFile::run_all(&scripts, &sink_builder).await?;
                 Ok::<_, ScriptGatherError>(())
