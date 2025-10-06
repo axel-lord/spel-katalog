@@ -1,3 +1,5 @@
+//! Lua api entrypoints.
+
 use ::std::{
     ffi::OsStr,
     fmt::Display,
@@ -41,6 +43,7 @@ fn serializer(lua: &Lua) -> ::mlua::serde::Serializer<'_> {
     ::mlua::serde::Serializer::new(lua)
 }
 
+/// Register `@spel-katalog` module with lua interpreter.
 pub fn register_spel_katalog(
     lua: &Lua,
     settings: ::spel_katalog_settings::Generic,
@@ -72,6 +75,7 @@ pub fn register_spel_katalog(
     Ok(())
 }
 
+/// Run a lua script with a batch.
 pub fn lua_batch(
     data: Vec<BatchInfo>,
     script: String,

@@ -4674,6 +4674,7 @@ dependencies = [
  "image 0.25.6",
  "itertools 0.14.0",
  "log",
+ "mlua",
  "parking_lot 0.12.4",
  "paste",
  "rayon",

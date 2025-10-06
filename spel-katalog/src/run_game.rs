@@ -8,12 +8,15 @@ use ::iced::{
     Task,
     futures::{TryStreamExt, stream::FuturesOrdered},
 };
+use ::mlua::Lua;
 use ::rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
+use ::serde::Serialize;
+use ::spel_katalog_batch::{BatchInfo, lua_api};
 use ::spel_katalog_common::status;
 use ::spel_katalog_info::formats::{self, Additional};
 use ::spel_katalog_script::script_file::ScriptFile;
 use ::spel_katalog_settings::{
-    ExtraConfigDir, FirejailExe, LutrisExe, Network, ScriptConfigDir, YmlDir,
+    CacheDir, ExtraConfigDir, FirejailExe, LutrisExe, Network, ScriptConfigDir, YmlDir,
 };
 use ::spel_katalog_terminal::SinkIdentity;
 use ::tap::Pipe;
@@ -37,7 +40,15 @@ enum ScriptGatherError {
         #[source] ::spel_katalog_parse::InterpolationError<String>,
         String,
     ),
+    #[error(transparent)]
+    Lua(#[from] LuaError),
+    #[error("clould not read file {1:?}\n{0}")]
+    ReadLuaScript(#[source] ::std::io::Error, PathBuf),
 }
+
+#[derive(Debug, ::thiserror::Error)]
+#[error("lua error occured\n{0}")]
+struct LuaError(String);
 
 #[derive(Debug, ::thiserror::Error)]
 enum ConfigError {
@@ -142,18 +153,20 @@ impl App {
         let hidden = game.hidden;
         let is_net_disabled = self.settings.get::<Network>().is_disabled();
         let sink_builder = self.sink_builder.clone();
-        let configpath = self
-            .settings
-            .get::<YmlDir>()
-            .as_path()
-            .join(&game.configpath)
-            .with_extension("yml");
+        let yml_dir = self.settings.get::<YmlDir>();
+        let configpath = format!("{yml_dir}/{}.yml", game.configpath);
         let extra_config_path = self
             .settings
             .get::<ExtraConfigDir>()
             .as_path()
             .join(format!("{id}.toml"));
         let script_dir = self.settings.get::<ScriptConfigDir>().to_path_buf();
+        let thumb_db_path = self
+            .settings
+            .get::<CacheDir>()
+            .as_path()
+            .join("thumbnails.db");
+        let settings_generic = self.settings.generic();
 
         let (send_open, recv_open) = ::tokio::sync::oneshot::channel();
 
@@ -207,7 +220,7 @@ impl App {
             let scripts_result = async {
                 let Gathered {
                     scripts,
-                    lua_scripts: _,
+                    lua_scripts,
                 } = gather_scripts(script_dir).await?;
                 let mut scripts = read_scripts(scripts).await?;
 
@@ -265,6 +278,45 @@ impl App {
 
                         Ok(())
                     })?;
+
+                if !lua_scripts.is_empty() {
+                    let batch_info = BatchInfo {
+                        id,
+                        slug: slug.clone(),
+                        name: name.clone(),
+                        runner: runner.to_string(),
+                        config: configpath.clone(),
+                        hidden,
+                    };
+
+                    let scripts = lua_scripts
+                        .into_iter()
+                        .map(|path| match ::std::fs::read_to_string(&path) {
+                            Ok(content) => Ok(content),
+                            Err(err) => Err(ScriptGatherError::ReadLuaScript(err, path)),
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+
+                    let lua = Lua::new();
+                    batch_info
+                        .serialize(::mlua::serde::Serializer::new(&lua))
+                        .and_then(|game| {
+                            lua.globals().set("game", game)?;
+                            lua_api::register_spel_katalog(
+                                &lua,
+                                settings_generic,
+                                thumb_db_path,
+                                &sink_builder,
+                            )?;
+
+                            for script in scripts {
+                                lua.load(script).exec()?;
+                            }
+
+                            Ok(())
+                        })
+                        .map_err(|err| LuaError(err.to_string()))?;
+                }
 
                 ScriptFile::run_all(&scripts, &sink_builder).await?;
                 Ok::<_, ScriptGatherError>(())

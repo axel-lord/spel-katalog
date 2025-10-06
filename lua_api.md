@@ -97,3 +97,8 @@ Current settings as a table. Provided as a member of the module.
 
 ### `data`
 Batch data, provided as a table/vector in global scope.
+Only available when running batch scripts.
+
+### `game`
+Data for a single game, same format as values of batch data.
+Only available when running as a pre-launch script.

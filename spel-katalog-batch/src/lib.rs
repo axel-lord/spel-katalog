@@ -25,7 +25,7 @@ use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
 use ::strum::VariantArray;
 use ::tap::Pipe;
 
-mod lua_api;
+pub mod lua_api;
 
 /// One entry to be sent to batch script.
 #[derive(Debug, Clone, Default, Serialize)]
