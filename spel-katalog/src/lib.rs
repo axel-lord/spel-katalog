@@ -62,7 +62,7 @@ pub struct Cli {
     pub advanced_terminal: bool,
 
     /// Keep terminal open.
-    #[arg(long, visible_alias = "kt")]
+    #[arg(long, visible_alias = "kt", requires("advanced_terminal"))]
     pub keep_terminal: bool,
 
     /// Perform an action other than opening gui.
