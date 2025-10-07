@@ -8,7 +8,7 @@ use ::std::{
     rc::Rc,
 };
 
-use ::mlua::{Lua, Variadic};
+use ::mlua::{Lua, Table, Variadic};
 use ::once_cell::unsync::OnceCell;
 use ::serde::Serialize;
 use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
@@ -55,17 +55,20 @@ pub fn register_spel_katalog(
     settings: ::spel_katalog_settings::Generic,
     thumb_db_path: PathBuf,
     sink_builder: &SinkBuilder,
+    module: Option<Table>,
 ) -> ::mlua::Result<()> {
     let settings = settings.serialize(serializer(lua))?;
     let sink_builder =
         sink_builder.with_locked_channel(|| SinkIdentity::StaticName("Lua Batch Script"))?;
 
-    lua.globals().set("None", ::mlua::Value::NULL)?;
-
     let conn = Rc::new(OnceCell::new());
     let thumb_db_path = Rc::<Path>::from(thumb_db_path);
 
-    let module = lua.create_table()?;
+    let module = if let Some(module) = module {
+        module
+    } else {
+        lua.create_table()?
+    };
 
     image::register_image(&lua, conn, thumb_db_path, &module)?;
     fs::register_fs(&lua, &module)?;
@@ -76,6 +79,7 @@ pub fn register_spel_katalog(
     module.set("getEnv", lua.create_function(lua_get_env)?)?;
     module.set("shellSplit", lua.create_function(lua_shell_split)?)?;
     module.set("pathExists", lua.create_function(lua_path_exists)?)?;
+    module.set("None", ::mlua::Value::NULL)?;
 
     lua.register_module("@spel-katalog", module)?;
 
@@ -92,9 +96,11 @@ pub fn lua_batch(
 ) -> ::mlua::Result<()> {
     let lua = Lua::new();
     let data = data.serialize(serializer(&lua))?;
+    let module = lua.create_table()?;
 
-    lua.globals().set("data", data)?;
-    register_spel_katalog(&lua, settings, thumb_db_path, sink_builder)?;
+    module.set("data", data)?;
+
+    register_spel_katalog(&lua, settings, thumb_db_path, sink_builder, Some(module))?;
 
     lua.load(script).exec()?;
 

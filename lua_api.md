@@ -93,13 +93,13 @@ returning a table with exit status, stderr and stdout.
 
 ### `None`
 A null value separate from lua nil, used for optional
-values. Provided in the global scope.
+values. Provided in the module.
 
 ### `settings`
 Current settings as a table. Provided as a member of the module.
 
 ### `data`
-Batch data, provided as a table/vector in global scope.
+Batch data, provided as a table/vector in module.
 Only available when running batch scripts.
 
 ### `game`
