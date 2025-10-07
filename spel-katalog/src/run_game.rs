@@ -305,12 +305,14 @@ impl App {
                     batch_info
                         .serialize(::mlua::serde::Serializer::new(&lua))
                         .and_then(|game| {
-                            lua.globals().set("game", game)?;
+                            let module = lua.create_table()?;
+                            module.set("game", game)?;
                             lua_api::register_spel_katalog(
                                 &lua,
                                 settings_generic,
                                 thumb_db_path,
                                 &sink_builder,
+                                Some(module),
                             )?;
 
                             for script in scripts {
