@@ -32,15 +32,19 @@ fn main() -> ::color_eyre::Result<()> {
 
         let (pipe_tx, pipe_rx) = channel();
         let (exit_tx, exit_rx) = exit_channel();
+        let keep_terminal = cli.keep_terminal;
 
         let app_handle = ::std::thread::Builder::new()
             .name("spel-katalog-app".to_owned())
-            .spawn(|| {
-                ::spel_katalog_terminal::tui(Channels {
-                    exit_tx: Box::new(|| exit_tx.send()),
-                    pipe_rx,
-                    log_rx,
-                })
+            .spawn(move || {
+                ::spel_katalog_terminal::tui(
+                    Channels {
+                        exit_tx: Box::new(|| exit_tx.send()),
+                        pipe_rx,
+                        log_rx,
+                    },
+                    keep_terminal,
+                )
             })?;
 
         App::run(cli, SinkBuilder::CreatePipe(pipe_tx), Some(exit_rx))?;

@@ -58,8 +58,12 @@ pub struct Cli {
     pub config: PathBuf,
 
     /// Advanced terminal output.
-    #[arg(long)]
+    #[arg(long, visible_alias = "at")]
     pub advanced_terminal: bool,
+
+    /// Keep terminal open.
+    #[arg(long, visible_alias = "kt")]
+    pub keep_terminal: bool,
 
     /// Perform an action other than opening gui.
     #[command(subcommand)]
@@ -136,6 +140,7 @@ impl App {
                 config,
                 action,
                 advanced_terminal: _,
+                keep_terminal: _,
             } = cli;
 
             fn read_settings(

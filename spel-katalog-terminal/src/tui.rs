@@ -1,7 +1,7 @@
 //! TUI implementation.
 use ::std::{
     borrow::Cow,
-    io,
+    io, mem,
     num::NonZero,
     sync::mpsc::TryRecvError,
     thread::{self, JoinHandle},
@@ -52,6 +52,7 @@ enum Action {
     PgDn,
     NextOutput,
     PrevOutput,
+    Redraw,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Display)]
@@ -125,7 +126,11 @@ fn line_rx_paragraph(line_rx: &LineReceiver, area: Rect, scroll: ScrollPos) -> P
         .pipe(Paragraph::new)
 }
 
-pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()> {
+pub fn tui(
+    channels: Channels,
+    terminal: &mut DefaultTerminal,
+    keep_terminal: bool,
+) -> io::Result<()> {
     let Channels {
         exit_tx,
         pipe_rx,
@@ -138,6 +143,7 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
     let mut log_area = Rect::ZERO;
     let mut output_area = Rect::ZERO;
     let mut log_scroll = ScrollPos::End;
+    let mut redraw = false;
 
     fn with_latest(latest: Option<usize>, pipes: &mut [Pipe], apply: impl FnOnce(&mut Pipe)) {
         if let Some(pipe) = latest.and_then(|idx| pipes.get_mut(idx)) {
@@ -147,6 +153,10 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
 
     loop {
         terminal.draw(|frame| {
+            // Default value of bool is false.
+            if mem::take(&mut redraw) {
+                frame.render_widget(Clear, frame.area());
+            }
             let draw_log = |frame: &mut Frame, log_area: Rect| {
                 let block = if matches!(selected_area, SelectedArea::Log) {
                     Block::bordered().title_bottom("Application Log".bold().blue())
@@ -340,6 +350,7 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
                         }
                     }
                     Action::SelectLog => selected_area = SelectedArea::Log,
+                    Action::Redraw => redraw = true,
                 }
                 should_redraw = true;
             };
@@ -357,6 +368,7 @@ pub fn tui(channels: Channels, terminal: &mut DefaultTerminal) -> io::Result<()>
                         scroll: ScrollPos::End,
                     });
                 }
+                Err(_err) if keep_terminal => {}
                 Err(err) => {
                     if let TryRecvError::Disconnected = err {
                         exit_tx();
@@ -437,12 +449,13 @@ fn handle_events() -> io::Result<Action> {
     Ok(match event::read()? {
         Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
             KeyCode::Char('q') => Action::Exit,
+            KeyCode::Char('r') => Action::Redraw,
 
             KeyCode::Up if key.modifiers.intersects(KeyModifiers::ALT) => Action::SelectOutput,
             KeyCode::Down if key.modifiers.intersects(KeyModifiers::ALT) => Action::SelectLog,
 
-            KeyCode::Left => Action::PrevOutput,
-            KeyCode::Right => Action::NextOutput,
+            KeyCode::Left if key.modifiers.intersects(KeyModifiers::ALT) => Action::PrevOutput,
+            KeyCode::Right if key.modifiers.intersects(KeyModifiers::ALT) => Action::NextOutput,
 
             KeyCode::Up => Action::ScrollUp,
             KeyCode::Down => Action::ScrollDown,

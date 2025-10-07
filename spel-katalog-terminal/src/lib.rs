@@ -69,13 +69,13 @@ impl Debug for Channels {
 }
 
 /// Run tui.
-pub fn tui(channels: Channels) -> ::std::io::Result<()> {
+pub fn tui(channels: Channels, keep_terminal: bool) -> ::std::io::Result<()> {
     ::ratatui::crossterm::execute!(
         ::std::io::stdout(),
         ::ratatui::crossterm::event::EnableMouseCapture
     )?;
     let mut terminal = ::ratatui::init();
-    let res = tui::tui(channels, &mut terminal);
+    let res = tui::tui(channels, &mut terminal, keep_terminal);
     ::ratatui::restore();
     _ = ::ratatui::crossterm::execute!(
         ::std::io::stdout(),
