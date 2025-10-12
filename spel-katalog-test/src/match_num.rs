@@ -1,5 +1,7 @@
 //! Sample game, should run on all platforms, and log with color.
 
+use ::std::{f32, time::Duration};
+
 use ::clap::Parser;
 use ::iced::{
     Element,
@@ -18,6 +20,7 @@ struct Cli {}
 #[derive(Debug, Clone, Copy)]
 enum Msg {
     Pressed { x: usize, y: usize },
+    Wave(f32),
     Fill,
     Reset,
 }
@@ -132,6 +135,21 @@ impl State {
                 self.reset();
                 Task::none()
             }
+            Msg::Wave(off) => {
+                if off >= 128.0 {
+                    Task::none()
+                } else {
+                    let mag = ((f32::consts::PI * 2.0 * off / 64.0).sin() + 1.0) * 128.0;
+
+                    (0..(mag.round() as usize)).for_each(|_| print!("#"));
+                    println!();
+
+                    Task::future(async move {
+                        ::tokio::time::sleep(Duration::from_secs_f32(0.025)).await;
+                        Msg::Wave(off + 1.0)
+                    })
+                }
+            }
         }
     }
 
@@ -152,6 +170,11 @@ impl State {
                             button("Reset")
                                 .on_press_with(|| Msg::Reset)
                                 .style(widget::button::danger),
+                        )
+                        .push(
+                            button("Wave")
+                                .on_press_with(|| Msg::Wave(1.0))
+                                .style(widget::button::secondary),
                         )
                         .push(horizontal_space()),
                 ),

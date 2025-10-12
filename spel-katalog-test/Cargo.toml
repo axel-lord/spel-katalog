@@ -10,7 +10,7 @@ name = "match-num"
 path = "src/match_num.rs"
 
 [dependencies]
-iced.workspace = true
+iced = { workspace = true, features = ["tokio"] }
 env_logger.workspace = true
 log.workspace = true
 clap = { workspace = true, features = ["derive"] }
@@ -19,6 +19,7 @@ derive_more = { workspace = true, features = ["full"] }
 tap.workspace = true
 bon.workspace = true
 color-eyre.workspace = true
+tokio = { workspace = true, features = ["time"] }
 
 [dev-dependencies]
 pretty_assertions.workspace =  true
