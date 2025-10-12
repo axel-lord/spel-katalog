@@ -51,3 +51,9 @@ install: autoinherit fmt
 
 build *EXTRA: sanity
 	cargo +nightly build --release -p {{crate}} -Z build-std=std,panic_abort -Z build-std-features="optimize_for_size" {{EXTRA}}
+
+build-match-num *EXTRA:
+	cargo build --release -p spel-katalog-test --bin match-num
+
+build-match-num-exe *EXTRA:
+	cargo build --release -p spel-katalog-test --bin match-num --target=x86_64-pc-windows-gnu
