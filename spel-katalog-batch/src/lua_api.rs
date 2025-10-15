@@ -16,6 +16,7 @@ use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
 use crate::BatchInfo;
 
 mod cmd;
+mod color;
 mod fs;
 mod image;
 mod print;
@@ -74,6 +75,7 @@ pub fn register_spel_katalog(
     fs::register_fs(&lua, &module)?;
     print::register_print(&lua, &module, &sink_builder)?;
     cmd::register_cmd(&lua, &module, &sink_builder)?;
+    color::register_color(&lua, &module)?;
 
     module.set("settings", settings)?;
     module.set("getEnv", lua.create_function(lua_get_env)?)?;

@@ -31,6 +31,10 @@ An external command to be executed.
 A table which is the result of `Command:output` being called.
 Has three fields `status: Int | None`, `stdout: String` and `Stderr: String`.
 
+### `Color`
+A table/class, is a result of `Image` functions.
+Has four fields, integers betweeen 0 and 255, `r`, `g`, `b`, and a float between 0 and 1 `a`.
+
 ## Functions
 Functions are provided by the `"@spel-katalog"` module which has
 to be required (`require'@spel-katalog'`).
@@ -77,6 +81,10 @@ Save image to given path.
 
 ### `Image:saveCover(slug: String)`
 Save image as cover for given slug.
+
+### `Color:new(initial: Table...) -> Color...`
+Crate new colors either by adding the class to given tables, or
+if no tables are provided by creating a new table with the class.
 
 ### `Command:status() -> Int | None`
 Run the command returning the exit code if not interrupted.
