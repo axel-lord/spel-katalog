@@ -1,11 +1,11 @@
 use ::std::{io::Cursor, path::Path, rc::Rc};
 
-use ::image::{DynamicImage, ImageFormat::Png};
+use ::image::{DynamicImage, GenericImage, GenericImageView, ImageFormat::Png};
 use ::mlua::{Lua, Table, UserDataMethods};
 use ::once_cell::unsync::OnceCell;
 use ::rusqlite::{Connection, OptionalExtension, params};
 
-use crate::lua_api::to_runtime;
+use crate::lua_api::{color, to_runtime};
 
 fn get_conn<'c>(
     conn: &'c OnceCell<::rusqlite::Connection>,
@@ -49,10 +49,37 @@ pub fn register_image(
 
         module.set("loadCover", load_cover)?;
     }
+    let color = color::get_class(module)?;
 
     lua.register_userdata_type::<DynamicImage>(move |r| {
         r.add_method("w", |_, this, _: ()| Ok(this.width()));
         r.add_method("h", |_, this, _: ()| Ok(this.height()));
+
+        let class = color.clone();
+        r.add_method("at", move |lua, this, (x, y): (u32, u32)| {
+            if !this.in_bounds(x, y) {
+                let w = this.width();
+                let h = this.height();
+                return Err(::mlua::Error::RuntimeError(format!(
+                    "point (x: {x}, y: {y}) is outside of bounds (w: {w}, h: {h})"
+                )));
+            }
+            let [r, g, b, a] = this.get_pixel(x, y).0;
+            let clr = color::Color { r, g, b, a };
+            clr.to_table(lua, &class)
+        });
+        r.add_method_mut("set", |_, this, (x, y, clr): (u32, u32, color::Color)| {
+            if !this.in_bounds(x, y) {
+                let w = this.width();
+                let h = this.height();
+                return Err(::mlua::Error::RuntimeError(format!(
+                    "point (x: {x}, y: {y}) is outside of bounds (w: {w}, h: {h})"
+                )));
+            }
+            let color::Color { r, g, b, a } = clr;
+            this.put_pixel(x, y, ::image::Rgba([r, g, b, a]));
+            Ok(())
+        });
         r.add_method("save", |_, this, path: String| {
             this.save(&path).map_err(to_runtime)
         });

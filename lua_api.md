@@ -76,6 +76,12 @@ Get image width.
 ### `Image:h() -> Int`
 Get image height.
 
+### `Image:at(x: Int, y: Int) -> Color`
+Get color at specified pixel.
+
+### `Image:set(x: Int, y: Int, Color)`
+Set color at specified pixel.
+
 ### `Image:save(path: String)`
 Save image to given path.
 

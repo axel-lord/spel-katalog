@@ -71,11 +71,11 @@ pub fn register_spel_katalog(
         lua.create_table()?
     };
 
+    color::register_color(&lua, &module)?;
     image::register_image(&lua, conn, thumb_db_path, &module)?;
     fs::register_fs(&lua, &module)?;
     print::register_print(&lua, &module, &sink_builder)?;
     cmd::register_cmd(&lua, &module, &sink_builder)?;
-    color::register_color(&lua, &module)?;
 
     module.set("settings", settings)?;
     module.set("getEnv", lua.create_function(lua_get_env)?)?;
