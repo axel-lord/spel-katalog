@@ -1,7 +1,7 @@
 use ::std::{io::Cursor, path::Path, rc::Rc};
 
 use ::image::{DynamicImage, GenericImage, GenericImageView, ImageFormat::Png};
-use ::mlua::{Lua, Table, UserDataMethods};
+use ::mlua::{AnyUserData, Lua, Table, UserDataMethods};
 use ::nalgebra::Vector3;
 use ::once_cell::unsync::OnceCell;
 use ::rayon::prelude::*;
@@ -15,6 +15,16 @@ fn get_conn<'c>(
 ) -> ::mlua::Result<&'c ::rusqlite::Connection> {
     conn.get_or_try_init(|| ::rusqlite::Connection::open(db_path))
         .map_err(::mlua::Error::runtime)
+}
+
+fn lua_new_image(lua: &Lua, width: u32, height: u32) -> ::mlua::Result<AnyUserData> {
+    if width == 0 || height == 0 {
+        return Err(::mlua::Error::RuntimeError(format!(
+            "refusing to create an image with dimensions (w: {width}, h: {height})"
+        )));
+    }
+    let img = ::image::DynamicImage::new_rgba8(width, height);
+    lua.create_any_userdata(img)
 }
 
 fn lua_load_cover(
@@ -51,6 +61,10 @@ pub fn register_image(
 
         module.set("loadCover", load_cover)?;
     }
+    module.set(
+        "newImage",
+        lua.create_function(|lua, (w, h)| lua_new_image(lua, w, h))?,
+    )?;
     let color = color::get_class(module)?;
 
     lua.register_userdata_type::<DynamicImage>(move |r| {

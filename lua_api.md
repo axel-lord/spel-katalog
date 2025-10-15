@@ -42,9 +42,12 @@ to be required (`require'@spel-katalog'`).
 ### `dbg(Any..) -> Any..`
 Debug print and return all passed values.
 
-## `print(String)`
+### `print(String)`
 Print given string. Should be used for printing to make sure output is
 captured correctly.
+
+### `cmd(exec: String, arg: String..) -> Command`
+Create a new command with the given executable and arguments.
 
 ### `getEnv(name: String) -> String | None`
 Read an environment variable.
@@ -63,6 +66,9 @@ Load a cover thumbnail from thumbnail cache.
 
 ### `loadImage(path: String) -> Image | None`
 Load an image from given path.
+
+### `newImage(width: Int, height: Int) -> Image`
+Create a new image with the given width and height.
 
 ### `saveFile(path: String, content: String)`
 Save content to given path.
