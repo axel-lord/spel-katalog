@@ -2,7 +2,9 @@ use ::std::{io::Cursor, path::Path, rc::Rc};
 
 use ::image::{DynamicImage, GenericImage, GenericImageView, ImageFormat::Png};
 use ::mlua::{Lua, Table, UserDataMethods};
+use ::nalgebra::Vector3;
 use ::once_cell::unsync::OnceCell;
+use ::rayon::prelude::*;
 use ::rusqlite::{Connection, OptionalExtension, params};
 
 use crate::lua_api::{color, to_runtime};
@@ -79,6 +81,32 @@ pub fn register_image(
             let color::Color { r, g, b, a } = clr;
             this.put_pixel(x, y, ::image::Rgba([r, g, b, a]));
             Ok(())
+        });
+        let class = color.clone();
+        r.add_method("avg", move |lua, this, _: ()| {
+            let img;
+            let img = if let Some(img) = this.as_rgba8() {
+                img
+            } else {
+                img = this.to_rgba8();
+                &img
+            };
+
+            let w_factor = 1.0 / f64::from(img.width());
+            let h_factor = 1.0 / f64::from(img.height());
+
+            let r = img
+                .par_pixels()
+                .fold(Vector3::zeros, |avg, px| {
+                    let [r, g, b, a] = px.0.map(f64::from);
+                    let a = a / 255.0;
+                    avg + Vector3::new(r, g, b) * a * w_factor * h_factor
+                })
+                .reduce(Vector3::zeros, |a, b| a + b)
+                .map(|i| i.clamp(0.0, 255.0) as u8);
+            let [r, g, b] = *AsRef::<[u8; 3]>::as_ref(&r);
+
+            color::Color { r, g, b, a: 255 }.to_table(lua, &class)
         });
         r.add_method("save", |_, this, path: String| {
             this.save(&path).map_err(to_runtime)

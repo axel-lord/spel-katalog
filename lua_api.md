@@ -88,6 +88,9 @@ Save image to given path.
 ### `Image:saveCover(slug: String)`
 Save image as cover for given slug.
 
+### `Image:avg() -> Color`
+Get the average color of the image, with an alpha of 1.
+
 ### `Color:new(initial: Table...) -> Color...`
 Crate new colors either by adding the class to given tables, or
 if no tables are provided by creating a new table with the class.

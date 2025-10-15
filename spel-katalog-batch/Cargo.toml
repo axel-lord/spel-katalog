@@ -10,10 +10,12 @@ workspace = true
 derive_more = { workspace = true, features = ["display"] }
 iced.workspace = true
 iced_highlighter.workspace = true
-image.workspace = true
+image = { workspace = true, features = ["rayon"] }
 log.workspace = true
 mlua = { workspace = true, features = ["serde", "luau", "luau-jit", "vendored"]}
+nalgebra.workspace = true
 once_cell.workspace = true
+rayon.workspace = true
 rfd = { workspace = true, features = ["xdg-portal","tokio"] }
 rusqlite.workspace = true
 rustc-hash.workspace = true
