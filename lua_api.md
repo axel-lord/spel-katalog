@@ -35,6 +35,15 @@ Has three fields `status: Int | None`, `stdout: String` and `Stderr: String`.
 A table/class, is a result of `Image` functions.
 Has four fields, integers betweeen 0 and 255, `r`, `g`, `b`, and a float between 0 and 1 `a`.
 
+### `Letterbox`
+The input to `Image::letterbox` may be one of several other types.
+Ratio is expected to be width / height.
+Default ratio is 1 and default color is full opacity black.
+- `nil` Use default color and ratio.
+- `Color` Use the provided color with default ratio.
+- `Table { ratio: Int | Float | nil, color: Color | nil }` Use the provided ratio and color, or defaults.
+- `Int | Float` Use the provided int or float as a ratio to letterbox by, default color is used.
+
 ## Functions
 Functions are provided by the `"@spel-katalog"` module which has
 to be required (`require'@spel-katalog'`).
@@ -96,6 +105,9 @@ Save image as cover for given slug.
 
 ### `Image:avg() -> Color`
 Get the average color of the image, with an alpha of 1.
+
+### `Image:letterbox(Letterbox) -> Image`
+Create a new letterboxed image.
 
 ### `Color:new(initial: Table...) -> Color...`
 Crate new colors either by adding the class to given tables, or
