@@ -1,5 +1,7 @@
 use ::mlua::{FromLua, Lua, Table, Value, Variadic};
 
+use crate::Skeleton;
+
 /// A color as a rust type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Color {
@@ -47,23 +49,19 @@ impl FromLua for Color {
     }
 }
 
-pub fn get_class(module: &Table) -> ::mlua::Result<Table> {
-    module.get("Color")
-}
-
 pub fn new_color(class: &Table, initial: Table) -> ::mlua::Result<Table> {
     initial.set_metatable(Some(class.clone()))?;
     Ok(initial)
 }
 
-pub fn register_color(lua: &Lua, module: &Table) -> ::mlua::Result<()> {
-    let color = lua.create_table()?;
+pub fn register(lua: &Lua, skeleton: &Skeleton) -> ::mlua::Result<()> {
+    let color = &skeleton.color;
     color.set("r", 0)?;
     color.set("g", 0)?;
     color.set("b", 0)?;
     color.set("a", 1.0)?;
-    color.set("__index", &color)?;
-    module.set("Color", &color)?;
+    color.set("__index", color)?;
+    skeleton.module.set("Color", color)?;
 
     color.set(
         "new",

@@ -5,9 +5,11 @@ use ::std::{
     process, thread,
 };
 
-use ::mlua::{IntoLua, Lua, Table, UserDataMethods, Variadic};
+use ::mlua::{IntoLua, Lua, UserDataMethods, Variadic};
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::tap::Pipe;
+
+use crate::Skeleton;
 
 #[derive(Debug, Clone)]
 struct Command {
@@ -144,8 +146,9 @@ impl Command {
     }
 }
 
-pub fn register_cmd(lua: &Lua, module: &Table, sink_builder: &SinkBuilder) -> ::mlua::Result<()> {
+pub fn register(lua: &Lua, skeleton: &Skeleton, sink_builder: &SinkBuilder) -> ::mlua::Result<()> {
     let sink_builder = sink_builder.clone();
+    let module = &skeleton.module;
 
     module.set(
         "cmd",

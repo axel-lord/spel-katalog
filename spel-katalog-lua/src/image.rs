@@ -1,13 +1,13 @@
 use ::std::{io::Cursor, path::Path, rc::Rc};
 
 use ::image::{DynamicImage, GenericImage, GenericImageView, ImageFormat::Png, Pixel};
-use ::mlua::{AnyUserData, FromLua, Lua, Table, UserDataMethods, Value};
+use ::mlua::{AnyUserData, FromLua, Lua, UserDataMethods, Value};
 use ::nalgebra::Vector3;
 use ::once_cell::unsync::OnceCell;
 use ::rayon::prelude::*;
 use ::rusqlite::{Connection, OptionalExtension, params};
 
-use crate::color;
+use crate::{Skeleton, color};
 
 fn get_conn<'c>(
     conn: &'c OnceCell<::rusqlite::Connection>,
@@ -136,12 +136,13 @@ fn lua_load_cover(
         .map(|data| data.map_or_else(|| ::mlua::Value::NULL, ::mlua::Value::UserData))
 }
 
-pub fn register_image(
+pub fn register(
     lua: &Lua,
     conn: Rc<OnceCell<Connection>>,
     db_path: Rc<Path>,
-    module: &Table,
+    skeleton: &Skeleton,
 ) -> ::mlua::Result<()> {
+    let module = &skeleton.module;
     {
         let db_path = db_path.clone();
         let conn = conn.clone();
@@ -154,7 +155,7 @@ pub fn register_image(
         "newImage",
         lua.create_function(|lua, (w, h)| lua_new_image(lua, w, h))?,
     )?;
-    let color = color::get_class(module)?;
+    let color = skeleton.color.clone();
 
     lua.register_userdata_type::<DynamicImage>(move |r| {
         r.add_method("w", |_, this, _: ()| Ok(this.width()));

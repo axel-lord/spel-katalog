@@ -12,6 +12,24 @@ mod fs;
 mod image;
 mod print;
 
+/// Module skeleton, used to access objects.
+#[derive(Debug, Clone)]
+struct Skeleton {
+    /// Module table.
+    pub module: Table,
+    /// Color class table.
+    pub color: Table,
+}
+
+impl Skeleton {
+    pub fn new(lua: &Lua, module: Table) -> ::mlua::Result<Self> {
+        Ok(Self {
+            module,
+            color: lua.create_table()?,
+        })
+    }
+}
+
 fn lua_get_env(lua: &Lua, name: ::mlua::String) -> ::mlua::Result<Option<::mlua::String>> {
     ::std::env::var_os(OsStr::from_bytes(&name.as_bytes()))
         .map(|value| lua.create_string(value.as_bytes()))
@@ -46,12 +64,16 @@ pub fn register_module(
     let conn = Rc::new(OnceCell::new());
     let thumb_db_path = Rc::<Path>::from(thumb_db_path);
     let module = module.map(Ok).unwrap_or_else(|| lua.create_table())?;
+    let skeleton = Skeleton::new(lua, module)?;
 
-    color::register_color(&lua, &module)?;
-    image::register_image(&lua, conn, thumb_db_path, &module)?;
-    fs::register_fs(&lua, &module)?;
-    print::register_print(&lua, &module, &sink_builder)?;
-    cmd::register_cmd(&lua, &module, &sink_builder)?;
+    color::register(&lua, &skeleton)?;
+    image::register(&lua, conn, thumb_db_path, &skeleton)?;
+    cmd::register(&lua, &skeleton, &sink_builder)?;
+
+    let Skeleton { module, .. } = skeleton;
+
+    fs::register(&lua, &module)?;
+    print::register(&lua, &module, &sink_builder)?;
 
     module.set("getEnv", lua.create_function(lua_get_env)?)?;
     module.set("shellSplit", lua.create_function(lua_shell_split)?)?;

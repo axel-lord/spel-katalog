@@ -83,7 +83,7 @@ fn lua_save_file(
     Ok(())
 }
 
-pub fn register_fs(lua: &Lua, module: &Table) -> ::mlua::Result<()> {
+pub fn register(lua: &Lua, module: &Table) -> ::mlua::Result<()> {
     module.set("loadFile", lua.create_function(lua_load_file)?)?;
     module.set("saveFile", lua.create_function(lua_save_file)?)?;
     module.set("loadYaml", lua.create_function(lua_load_yaml)?)?;
