@@ -265,14 +265,19 @@ impl Image {
             let db_path = Rc::clone(&db_path);
             let conn = Rc::clone(&conn);
 
-            move |lua, slug| Image::load_cover(lua, slug, &db_path, &conn)
+            move |lua, (_, slug): (Table, _)| Image::load_cover(lua, slug, &db_path, &conn)
         })?;
-        let new_image = lua.create_function(|_, (w, h)| Image::new(w, h))?;
-        let load_image = lua.create_function(|lua, path| Image::load(lua, path))?;
+        let new_image = lua.create_function(|_, (_, w, h): (Table, _, _)| Image::new(w, h))?;
+        let load_image =
+            lua.create_function(|lua, (_, path): (Table, _)| Image::load(lua, path))?;
 
-        module.set("loadCover", load_cover)?;
-        module.set("newImage", new_image)?;
-        module.set("loadImage", load_image)?;
+        let class = lua.create_table()?;
+
+        class.set("loadCover", load_cover)?;
+        class.set("new", new_image)?;
+        class.set("load", load_image)?;
+
+        module.set("Image", class)?;
 
         let color_class = skeleton.color.clone();
         lua.register_userdata_type::<Image>(move |r| {
