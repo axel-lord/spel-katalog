@@ -1,8 +1,8 @@
 //! Lua api in use by project.
 
-use ::std::{ffi::OsStr, os::unix::ffi::OsStrExt, path::Path, rc::Rc};
+use ::std::{path::Path, rc::Rc};
 
-use ::mlua::{Lua, Table, Variadic};
+use ::mlua::{Lua, Table};
 use ::once_cell::unsync::OnceCell;
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 
@@ -10,7 +10,9 @@ mod cmd;
 mod color;
 mod fs;
 mod image;
+mod misc;
 mod print;
+mod yaml;
 
 /// Module skeleton, used to access objects.
 #[derive(Debug, Clone)]
@@ -28,27 +30,6 @@ impl Skeleton {
             color: lua.create_table()?,
         })
     }
-}
-
-fn lua_get_env(lua: &Lua, name: ::mlua::String) -> ::mlua::Result<Option<::mlua::String>> {
-    ::std::env::var_os(OsStr::from_bytes(&name.as_bytes()))
-        .map(|value| lua.create_string(value.as_bytes()))
-        .transpose()
-}
-
-fn lua_shell_split(_lua: &Lua, args: Variadic<String>) -> ::mlua::Result<Vec<String>> {
-    let mut out = Vec::new();
-    for arg in args {
-        let split = ::shell_words::split(&arg);
-        out.extend(split.map_err(|err| ::mlua::Error::external(err))?);
-    }
-    Ok(out)
-}
-
-fn lua_path_exists(_lua: &Lua, path: ::mlua::String) -> ::mlua::Result<bool> {
-    let path = path.as_bytes();
-    let path = Path::new(OsStr::from_bytes(&path));
-    Ok(path.exists())
 }
 
 /// Register `@spel-katalog` module with lua interpreter.
@@ -69,15 +50,14 @@ pub fn register_module(
     color::register(&lua, &skeleton)?;
     image::register(&lua, conn, thumb_db_path, &skeleton)?;
     cmd::register(&lua, &skeleton, &sink_builder)?;
+    misc::register(&lua, &skeleton)?;
+    yaml::register(&lua, &skeleton)?;
 
     let Skeleton { module, .. } = skeleton;
 
     fs::register(&lua, &module)?;
     print::register(&lua, &module, &sink_builder)?;
 
-    module.set("getEnv", lua.create_function(lua_get_env)?)?;
-    module.set("shellSplit", lua.create_function(lua_shell_split)?)?;
-    module.set("pathExists", lua.create_function(lua_path_exists)?)?;
     module.set("None", ::mlua::Value::NULL)?;
 
     lua.register_module("@spel-katalog", module)?;

@@ -1,6 +1,6 @@
-use ::std::{io::Cursor, path::Path, rc::Rc};
+use ::std::{ffi::OsStr, io::Cursor, os::unix::ffi::OsStrExt, path::Path, rc::Rc};
 
-use ::image::{DynamicImage, GenericImage, GenericImageView, ImageFormat::Png, Pixel};
+use ::image::{DynamicImage, GenericImage, GenericImageView, ImageFormat::Png, ImageReader, Pixel};
 use ::mlua::{AnyUserData, FromLua, Lua, UserDataMethods, Value};
 use ::nalgebra::Vector3;
 use ::once_cell::unsync::OnceCell;
@@ -136,6 +136,21 @@ fn lua_load_cover(
         .map(|data| data.map_or_else(|| ::mlua::Value::NULL, ::mlua::Value::UserData))
 }
 
+fn load_image(lua: &Lua, path: ::mlua::String) -> ::mlua::Result<::mlua::Value> {
+    fn ld(path: &Path) -> Result<DynamicImage, ()> {
+        ImageReader::open(path)
+            .map_err(|err| ::log::error!("could not open image {path:?}\n{err}"))?
+            .decode()
+            .map_err(|err| ::log::error!("could not decode image {path:?}\n{err}"))
+    }
+    ld(Path::new(OsStr::from_bytes(&path.as_bytes())))
+        .ok()
+        .map_or_else(
+            || Ok(::mlua::Value::NULL),
+            |img| lua.create_any_userdata(img).map(::mlua::Value::UserData),
+        )
+}
+
 pub fn register(
     lua: &Lua,
     conn: Rc<OnceCell<Connection>>,
@@ -155,6 +170,8 @@ pub fn register(
         "newImage",
         lua.create_function(|lua, (w, h)| lua_new_image(lua, w, h))?,
     )?;
+    module.set("loadImage", lua.create_function(load_image)?)?;
+
     let color = skeleton.color.clone();
 
     lua.register_userdata_type::<DynamicImage>(move |r| {
