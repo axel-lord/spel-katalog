@@ -29,7 +29,7 @@ An external command to be executed.
 
 ### `Output`
 A table which is the result of `Command:output` being called.
-Has three fields `status: Int | None`, `stdout: String` and `Stderr: String`.
+Has three fields `status: Int | nil`, `stdout: String` and `Stderr: String`.
 
 ### `Color`
 A table/class, is a result of `Image` functions.
@@ -58,7 +58,7 @@ captured correctly.
 ### `cmd(exec: String, arg: String..) -> Command`
 Create a new command with the given executable and arguments.
 
-### `getEnv(name: String) -> String | None`
+### `getEnv(name: String) -> String | nil`
 Read an environment variable.
 
 ### `shellSplit(arg: String..) -> [String]`
@@ -79,10 +79,10 @@ Check if the given path exists.
 ## Image
 Functions provided for `Image`.
 
-### `loadCover(class, slug: String) -> Image | None`
+### `loadCover(class, slug: String) -> Image | nil, String`
 Load a cover thumbnail from thumbnail cache.
 
-### `load(class, path: String) -> Image | None`
+### `load(class, path: String) -> Image | nil, String`
 Load an image from given path.
 
 ### `new(class, width: Int, height: Int) -> Image`
@@ -115,14 +115,14 @@ Create a new letterboxed image.
 ## Color
 Functions provided for `Color`.
 
-### `new(class, initial: Table...) -> Color...`
+### `new(class, initial: Table..) -> Color..`
 Crate new colors either by adding the class to given tables, or
 if no tables are provided by creating a new table with the class.
 
 ## Command
 Functions provided for `Command`.
 
-### `status(self) -> Int | None`
+### `status(self) -> Int | nil`
 Run the command returning the exit code if not interrupted.
 
 ### `splitExec(self) -> Command`
