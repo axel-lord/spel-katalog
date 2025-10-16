@@ -70,15 +70,6 @@ Load yaml at path into a lua value.
 ### `loadFile(path: String) -> String`
 Load contents of a file to memory.
 
-### `loadCover(slug: String) -> Image | None`
-Load a cover thumbnail from thumbnail cache.
-
-### `loadImage(path: String) -> Image | None`
-Load an image from given path.
-
-### `newImage(width: Int, height: Int) -> Image`
-Create a new image with the given width and height.
-
 ### `saveFile(path: String, content: String)`
 Save content to given path.
 
@@ -87,6 +78,15 @@ Check if the given path exists.
 
 ## Image
 Functions provided for `Image`.
+
+### `loadCover(class, slug: String) -> Image | None`
+Load a cover thumbnail from thumbnail cache.
+
+### `load(class, path: String) -> Image | None`
+Load an image from given path.
+
+### `new(class, width: Int, height: Int) -> Image`
+Create a new image with the given width and height.
 
 ### `w(self) -> Int`
 Get image width.
