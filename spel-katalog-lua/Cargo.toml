@@ -13,7 +13,10 @@ nalgebra.workspace = true
 rayon.workspace = true
 rusqlite.workspace = true
 spel-katalog-sink.workspace = true
+shell-words.workspace = true
 tap.workspace = true
+once_cell.workspace = true
+yaml-rust2.workspace = true
 
 [lints]
 workspace = true

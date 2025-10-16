@@ -31,6 +31,7 @@ spel-katalog-batch.workspace = true
 spel-katalog-common.workspace = true
 spel-katalog-games.workspace = true
 spel-katalog-info.workspace = true
+spel-katalog-lua.workspace = true
 spel-katalog-parse.workspace = true
 spel-katalog-script.workspace = true
 spel-katalog-settings.workspace = true

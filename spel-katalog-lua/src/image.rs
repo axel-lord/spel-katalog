@@ -7,7 +7,7 @@ use ::once_cell::unsync::OnceCell;
 use ::rayon::prelude::*;
 use ::rusqlite::{Connection, OptionalExtension, params};
 
-use crate::lua_api::{color, to_runtime};
+use crate::{color, to_runtime};
 
 fn get_conn<'c>(
     conn: &'c OnceCell<::rusqlite::Connection>,

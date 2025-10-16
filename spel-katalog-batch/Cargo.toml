@@ -12,22 +12,16 @@ workspace = true
 derive_more = { workspace = true, features = ["display"] }
 iced.workspace = true
 iced_highlighter.workspace = true
-image = { workspace = true, features = ["rayon"] }
 log.workspace = true
 mlua = { workspace = true, features = ["serde", "luau", "luau-jit", "vendored"]}
-nalgebra.workspace = true
-once_cell.workspace = true
-rayon.workspace = true
 rfd = { workspace = true, features = ["xdg-portal","tokio"] }
-rusqlite.workspace = true
 rustc-hash.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
-shell-words.workspace = true
 spel-katalog-common.workspace = true
 spel-katalog-settings.workspace = true
 spel-katalog-sink.workspace = true
+spel-katalog-lua.workspace = true
 strum = { workspace = true, features = ["derive"] }
 tap.workspace = true
 tokio = { workspace = true, features = ["process"] }
-yaml-rust2.workspace = true
