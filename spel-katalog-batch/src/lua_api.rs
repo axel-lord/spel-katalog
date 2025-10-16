@@ -16,6 +16,7 @@ use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
 use crate::BatchInfo;
 
 mod cmd;
+mod color;
 mod fs;
 mod image;
 mod print;
@@ -70,6 +71,7 @@ pub fn register_spel_katalog(
         lua.create_table()?
     };
 
+    color::register_color(&lua, &module)?;
     image::register_image(&lua, conn, thumb_db_path, &module)?;
     fs::register_fs(&lua, &module)?;
     print::register_print(&lua, &module, &sink_builder)?;

@@ -31,6 +31,19 @@ An external command to be executed.
 A table which is the result of `Command:output` being called.
 Has three fields `status: Int | None`, `stdout: String` and `Stderr: String`.
 
+### `Color`
+A table/class, is a result of `Image` functions.
+Has four fields, integers betweeen 0 and 255, `r`, `g`, `b`, and a float between 0 and 1 `a`.
+
+### `Letterbox`
+The input to `Image::letterbox` may be one of several other types.
+Ratio is expected to be width / height.
+Default ratio is 1 and default color is full opacity black.
+- `nil` Use default color and ratio.
+- `Color` Use the provided color with default ratio.
+- `Table { ratio: Int | Float | nil, color: Color | nil }` Use the provided ratio and color, or defaults.
+- `Int | Float` Use the provided int or float as a ratio to letterbox by, default color is used.
+
 ## Functions
 Functions are provided by the `"@spel-katalog"` module which has
 to be required (`require'@spel-katalog'`).
@@ -38,9 +51,12 @@ to be required (`require'@spel-katalog'`).
 ### `dbg(Any..) -> Any..`
 Debug print and return all passed values.
 
-## `print(String)`
+### `print(String)`
 Print given string. Should be used for printing to make sure output is
 captured correctly.
+
+### `cmd(exec: String, arg: String..) -> Command`
+Create a new command with the given executable and arguments.
 
 ### `getEnv(name: String) -> String | None`
 Read an environment variable.
@@ -60,6 +76,9 @@ Load a cover thumbnail from thumbnail cache.
 ### `loadImage(path: String) -> Image | None`
 Load an image from given path.
 
+### `newImage(width: Int, height: Int) -> Image`
+Create a new image with the given width and height.
+
 ### `saveFile(path: String, content: String)`
 Save content to given path.
 
@@ -72,11 +91,27 @@ Get image width.
 ### `Image:h() -> Int`
 Get image height.
 
+### `Image:at(x: Int, y: Int) -> Color`
+Get color at specified pixel.
+
+### `Image:set(x: Int, y: Int, Color)`
+Set color at specified pixel.
+
 ### `Image:save(path: String)`
 Save image to given path.
 
 ### `Image:saveCover(slug: String)`
 Save image as cover for given slug.
+
+### `Image:avg() -> Color`
+Get the average color of the image, with an alpha of 1.
+
+### `Image:letterbox(Letterbox) -> Image`
+Create a new letterboxed image.
+
+### `Color:new(initial: Table...) -> Color...`
+Crate new colors either by adding the class to given tables, or
+if no tables are provided by creating a new table with the class.
 
 ### `Command:status() -> Int | None`
 Run the command returning the exit code if not interrupted.
