@@ -6,6 +6,7 @@ use ::nalgebra::Vector3;
 use ::once_cell::unsync::OnceCell;
 use ::rayon::prelude::*;
 use ::rusqlite::{Connection, OptionalExtension, params};
+use ::tap::Pipe;
 
 use crate::{Skeleton, color};
 
@@ -74,7 +75,7 @@ impl IntoLua for Image {
 }
 
 impl Image {
-    fn new(width: u32, height: u32) -> ::mlua::Result<Self> {
+    fn new(_c: &::mlua::Table, width: u32, height: u32) -> ::mlua::Result<Self> {
         if width == 0 || height == 0 {
             return Err(::mlua::Error::RuntimeError(format!(
                 "refusing to create an image with dimensions (w: {width}, h: {height})"
@@ -123,11 +124,11 @@ impl Image {
     }
 
     fn load_cover(
-        lua: &Lua,
+        _c: &::mlua::Table,
         slug: String,
         db_path: &Path,
         conn: &OnceCell<::rusqlite::Connection>,
-    ) -> ::mlua::Result<::mlua::Value> {
+    ) -> ::mlua::Result<(Option<Self>, Option<String>)> {
         let conn = get_conn(conn, db_path)?;
         let buf = conn
             .prepare_cached(r"SELECT image FROM images WHERE slug = ?1")
@@ -137,26 +138,35 @@ impl Image {
             .map_err(::mlua::Error::runtime)?;
 
         let Some(buf) = buf else {
-            return Ok(::mlua::Value::NULL);
+            return Ok((
+                None,
+                Some(format!("could nod load cover for slug {slug:?}")),
+            ));
         };
 
-        let image =
-            ::image::load_from_memory_with_format(&buf, Png).map_err(::mlua::Error::runtime)?;
+        let image = ::image::load_from_memory_with_format(&buf, Png)
+            .map_err(::mlua::Error::runtime)?
+            .pipe(Self);
 
-        Self(image).into_lua(lua)
+        Ok((Some(image), None))
     }
 
-    fn load(lua: &Lua, path: ::mlua::String) -> ::mlua::Result<::mlua::Value> {
-        #[inline(always)]
-        fn ld(path: &Path) -> Result<DynamicImage, ()> {
-            ImageReader::open(path)
-                .map_err(|err| ::log::error!("could not open image {path:?}\n{err}"))?
-                .decode()
-                .map_err(|err| ::log::error!("could not decode image {path:?}\n{err}"))
-        }
-        ld(Path::new(OsStr::from_bytes(&path.as_bytes())))
-            .ok()
-            .map_or_else(|| Ok(::mlua::Value::NULL), |img| Self(img).into_lua(lua))
+    fn load(
+        _c: &::mlua::Table,
+        path: ::mlua::String,
+    ) -> ::mlua::Result<(Option<Self>, Option<String>)> {
+        let image = ImageReader::open(OsStr::from_bytes(&path.as_bytes()))
+            .map_err(|err| format!("could not open image {path:?}, {err}"))
+            .and_then(|image| {
+                image
+                    .decode()
+                    .map_err(|err| format!("could not decode image {path:?}, {err}"))
+            });
+
+        Ok(match image {
+            Ok(image) => (Some(Self(image)), None),
+            Err(err) => (None, Some(err)),
+        })
     }
 
     #[inline]
@@ -265,11 +275,10 @@ impl Image {
             let db_path = Rc::clone(&db_path);
             let conn = Rc::clone(&conn);
 
-            move |lua, (_, slug): (Table, _)| Image::load_cover(lua, slug, &db_path, &conn)
+            move |_, (c, slug)| Image::load_cover(&c, slug, &db_path, &conn)
         })?;
-        let new_image = lua.create_function(|_, (_, w, h): (Table, _, _)| Image::new(w, h))?;
-        let load_image =
-            lua.create_function(|lua, (_, path): (Table, _)| Image::load(lua, path))?;
+        let new_image = lua.create_function(|_, (c, w, h)| Image::new(&c, w, h))?;
+        let load_image = lua.create_function(|_, (c, path)| Image::load(&c, path))?;
 
         let class = lua.create_table()?;
 
