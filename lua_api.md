@@ -36,7 +36,7 @@ A table/class, is a result of `Image` functions.
 Has four fields, integers betweeen 0 and 255, `r`, `g`, `b`, and a float between 0 and 1 `a`.
 
 ### `Letterbox`
-The input to `Image::letterbox` may be one of several other types.
+The input to `Image:letterbox` may be one of several other types.
 Ratio is expected to be width / height.
 Default ratio is 1 and default color is full opacity black.
 - `nil` Use default color and ratio.
@@ -85,42 +85,51 @@ Save content to given path.
 ### `pathExists(path: String) -> bool`
 Check if the given path exists.
 
-### `Image:w() -> Int`
+## Image
+Functions provided for `Image`.
+
+### `w(self) -> Int`
 Get image width.
 
-### `Image:h() -> Int`
+### `h(self) -> Int`
 Get image height.
 
-### `Image:at(x: Int, y: Int) -> Color`
+### `at(self, x: Int, y: Int) -> Color`
 Get color at specified pixel.
 
-### `Image:set(x: Int, y: Int, Color)`
+### `set(self, x: Int, y: Int, Color)`
 Set color at specified pixel.
 
-### `Image:save(path: String)`
+### `save(self, path: String)`
 Save image to given path.
 
-### `Image:saveCover(slug: String)`
+### `saveCover(self, slug: String)`
 Save image as cover for given slug.
 
-### `Image:avg() -> Color`
+### `avg(self) -> Color`
 Get the average color of the image, with an alpha of 1.
 
-### `Image:letterbox(Letterbox) -> Image`
+### `letterbox(self, Letterbox) -> Image`
 Create a new letterboxed image.
 
-### `Color:new(initial: Table...) -> Color...`
+## Color
+Functions provided for `Color`.
+
+### `new(class, initial: Table...) -> Color...`
 Crate new colors either by adding the class to given tables, or
 if no tables are provided by creating a new table with the class.
 
-### `Command:status() -> Int | None`
+## Command
+Functions provided for `Command`.
+
+### `status(self) -> Int | None`
 Run the command returning the exit code if not interrupted.
 
-### `Command:splitExec() -> Command`
+### `splitExec(self) -> Command`
 Create a new command with the current binary split ny shell splitting
 rules as new binary and initial arguments.
 
-### `Command:output(input: String..) -> Output`
+### `output(self, input: String..) -> Output`
 Run the command with the given optional input (given to command separated by newlines),
 returning a table with exit status, stderr and stdout.
 

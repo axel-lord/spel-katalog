@@ -8,7 +8,8 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 image = { workspace = true, features = ["rayon"] }
 log.workspace = true
-mlua = { workspace = true, features = ["luau", "luau-jit", "vendored"]}
+either = { workspace = true, features = ["std"] }
+mlua = { workspace = true, features = ["luau", "luau-jit", "vendored", "macros"]}
 nalgebra.workspace = true
 rayon.workspace = true
 rusqlite.workspace = true
