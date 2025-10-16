@@ -16,7 +16,7 @@ use ::iced::{
 use ::spel_katalog_common::{OrRequest, StatusSender, w};
 use ::spel_katalog_info::image_buffer::ImageBuffer;
 use ::spel_katalog_settings::{FilterMode, LutrisDb, Network, Theme};
-use ::spel_katalog_terminal::SinkBuilder;
+use ::spel_katalog_sink::SinkBuilder;
 use ::tap::Pipe;
 
 pub use self::{

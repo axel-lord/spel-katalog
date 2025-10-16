@@ -18,7 +18,7 @@ rustc-hash.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 shell-words.workspace = true
-spel-katalog-terminal.workspace = true
+spel-katalog-sink.workspace = true
 tap.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["parking_lot", "process", "time", "fs"] }

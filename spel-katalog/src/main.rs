@@ -2,7 +2,8 @@ use ::std::sync::mpsc::channel;
 
 use ::clap::Parser;
 use ::spel_katalog::{App, Cli, exit_channel};
-use ::spel_katalog_terminal::{Channels, SinkBuilder, line_channel};
+use ::spel_katalog_sink::SinkBuilder;
+use ::spel_katalog_terminal::{Channels, line_channel};
 
 fn main() -> ::color_eyre::Result<()> {
     ::color_eyre::install()?;

@@ -23,7 +23,7 @@ use ::iced_highlighter::Highlighter;
 use ::rustc_hash::FxHashMap;
 use ::serde::Serialize;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status};
-use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
+use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::strum::VariantArray;
 use ::tap::Pipe;
 

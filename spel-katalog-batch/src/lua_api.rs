@@ -11,7 +11,7 @@ use ::std::{
 use ::mlua::{Lua, Table, Variadic};
 use ::once_cell::unsync::OnceCell;
 use ::serde::Serialize;
-use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
+use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 
 use crate::BatchInfo;
 

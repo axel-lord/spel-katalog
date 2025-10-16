@@ -4872,6 +4872,7 @@ dependencies = [
  "spel-katalog-parse",
  "spel-katalog-script",
  "spel-katalog-settings",
+ "spel-katalog-sink",
  "spel-katalog-terminal",
  "strsim",
  "tap",
@@ -4904,7 +4905,7 @@ dependencies = [
  "shell-words",
  "spel-katalog-common",
  "spel-katalog-settings",
- "spel-katalog-terminal",
+ "spel-katalog-sink",
  "strum 0.27.2",
  "tap",
  "tokio",
@@ -4986,6 +4987,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "spel-katalog-lua"
+version = "0.1.0"
+dependencies = [
+ "image 0.25.6",
+ "log",
+ "mlua",
+ "nalgebra",
+ "rayon",
+ "rusqlite",
+ "spel-katalog-sink",
+ "tap",
+]
+
+[[package]]
 name = "spel-katalog-parse"
 version = "0.1.0"
 dependencies = [
@@ -5014,7 +5029,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shell-words",
- "spel-katalog-terminal",
+ "spel-katalog-sink",
  "tap",
  "thiserror 2.0.12",
  "tokio",
@@ -5039,6 +5054,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "spel-katalog-sink"
+version = "0.1.0"
+dependencies = [
+ "derive_more",
+]
+
+[[package]]
 name = "spel-katalog-terminal"
 version = "0.1.0"
 dependencies = [
@@ -5049,6 +5071,7 @@ dependencies = [
  "ratatui",
  "rmp",
  "smallvec",
+ "spel-katalog-sink",
  "tap",
  "vte",
 ]

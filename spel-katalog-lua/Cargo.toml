@@ -1,0 +1,19 @@
+[package]
+name = "spel-katalog-lua"
+version = "0.1.0"
+edition = "2024"
+authors = ["Axel Lord"]
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+image = { workspace = true, features = ["rayon"] }
+log.workspace = true
+mlua = { workspace = true, features = ["luau", "luau-jit", "vendored"]}
+nalgebra.workspace = true
+rayon.workspace = true
+rusqlite.workspace = true
+spel-katalog-sink.workspace = true
+tap.workspace = true
+
+[lints]
+workspace = true

@@ -2,16 +2,12 @@
 
 use ::std::{fmt::Debug, io::PipeReader, sync::mpsc::Receiver};
 
-use ::derive_more::Display;
+use ::spel_katalog_sink::SinkIdentity;
 
-pub use self::{
-    line_channel::{ChannelWriter, LineReceiver, line_channel},
-    sink_builder::SinkBuilder,
-};
+pub use self::line_channel::{ChannelWriter, LineReceiver, line_channel};
 
 mod ansi_cleanup;
 mod line_channel;
-mod sink_builder;
 mod tui;
 
 fn bytes_to_string(bytes: Vec<u8>) -> String {
@@ -30,22 +26,6 @@ fn bytes_to_string(bytes: Vec<u8>) -> String {
             buf
         }
     }
-}
-
-/// The identity of a sink.
-/// Used when choosing output.
-#[derive(Debug, Clone, Display)]
-pub enum SinkIdentity {
-    /// A Static string.
-    StaticName(&'static str),
-    /// A normal string.
-    Name(String),
-    /// Process id.
-    #[display("Process({_0})")]
-    ProcessId(i64),
-    /// Game Id
-    #[display("Game({_0})")]
-    GameId(i64),
 }
 
 /// Collection of channels in use by tui.

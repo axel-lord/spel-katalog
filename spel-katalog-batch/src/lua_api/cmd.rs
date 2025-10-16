@@ -6,7 +6,7 @@ use ::std::{
 };
 
 use ::mlua::{IntoLua, Lua, Table, UserDataMethods, Variadic};
-use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
+use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::tap::Pipe;
 
 #[derive(Debug, Clone)]

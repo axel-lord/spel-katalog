@@ -3,7 +3,7 @@
 use ::std::io::{PipeWriter, Write};
 
 use ::mlua::{Lua, Table};
-use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
+use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 
 fn lua_print(_: &Lua, value: String, w: Option<&mut PipeWriter>) -> ::mlua::Result<()> {
     if let Some(w) = w {

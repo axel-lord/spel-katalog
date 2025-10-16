@@ -18,7 +18,7 @@ use ::spel_katalog_script::script_file::ScriptFile;
 use ::spel_katalog_settings::{
     CacheDir, ExtraConfigDir, FirejailExe, LutrisExe, Network, ScriptConfigDir, YmlDir,
 };
-use ::spel_katalog_terminal::SinkIdentity;
+use ::spel_katalog_sink::SinkIdentity;
 use ::tap::Pipe;
 
 use crate::{App, Message, QuickMessage, Safety};

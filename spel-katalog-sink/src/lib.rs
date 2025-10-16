@@ -1,4 +1,4 @@
-//! [SinkBuilder] impl.
+//! Crate with functionality for shared output sinks.
 
 use ::std::{
     io::{PipeReader, PipeWriter, pipe},
@@ -6,7 +6,23 @@ use ::std::{
     sync::{Arc, mpsc::Sender},
 };
 
-use crate::SinkIdentity;
+use ::derive_more::Display;
+
+/// The identity of a sink.
+/// Used when choosing output.
+#[derive(Debug, Clone, Display)]
+pub enum SinkIdentity {
+    /// A Static string.
+    StaticName(&'static str),
+    /// A normal string.
+    Name(String),
+    /// Process id.
+    #[display("Process({_0})")]
+    ProcessId(i64),
+    /// Game Id
+    #[display("Game({_0})")]
+    GameId(i64),
+}
 
 /// Type building output sinks.
 #[derive(Debug, Clone)]

@@ -15,6 +15,7 @@ rmp.workspace = true
 smallvec = { workspace = true, features = ["union", "const_generics", "const_new", "write"] }
 tap.workspace = true
 vte.workspace = true
+spel-katalog-sink.workspace = true
 
 [lints]
 workspace = true
