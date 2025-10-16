@@ -7,7 +7,7 @@ use ::once_cell::unsync::OnceCell;
 use ::rayon::prelude::*;
 use ::rusqlite::{Connection, OptionalExtension, params};
 
-use crate::{color, to_runtime};
+use crate::color;
 
 fn get_conn<'c>(
     conn: &'c OnceCell<::rusqlite::Connection>,
@@ -124,13 +124,13 @@ fn lua_load_cover(
 ) -> ::mlua::Result<::mlua::Value> {
     get_conn(conn, db_path)?
         .prepare_cached(r"SELECT image FROM images WHERE slug = ?1")
-        .map_err(to_runtime)?
+        .map_err(::mlua::Error::runtime)?
         .query_one(params![slug], |row| row.get::<_, Vec<u8>>(0))
         .optional()
-        .map_err(to_runtime)?
+        .map_err(::mlua::Error::runtime)?
         .map(|image| ::image::load_from_memory_with_format(&image, Png))
         .transpose()
-        .map_err(to_runtime)?
+        .map_err(::mlua::Error::runtime)?
         .map(|image| lua.create_any_userdata(image))
         .transpose()
         .map(|data| data.map_or_else(|| ::mlua::Value::NULL, ::mlua::Value::UserData))
@@ -215,20 +215,21 @@ pub fn register_image(
             color::Color { r, g, b, a: 255 }.to_table(lua, &class)
         });
         r.add_method("save", |_, this, path: String| {
-            this.save(&path).map_err(to_runtime)
+            this.save(&path).map_err(::mlua::Error::runtime)
         });
         r.add_method("saveCover", move |_, this, slug: String| {
             let conn = get_conn(&conn, &db_path)?;
 
             let mut stmt = conn
                 .prepare_cached(r"INSERT INTO images (slug, image) VALUES (?1, ?2)")
-                .map_err(to_runtime)?;
+                .map_err(::mlua::Error::runtime)?;
 
             let mut buf = Vec::<u8>::new();
             this.write_to(&mut Cursor::new(&mut buf), Png)
-                .map_err(to_runtime)?;
+                .map_err(::mlua::Error::runtime)?;
 
-            stmt.execute(params![slug, buf]).map_err(to_runtime)?;
+            stmt.execute(params![slug, buf])
+                .map_err(::mlua::Error::runtime)?;
 
             Ok(())
         });

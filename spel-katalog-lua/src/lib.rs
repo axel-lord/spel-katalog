@@ -1,6 +1,6 @@
 //! Lua api in use by project.
 
-use ::std::{ffi::OsStr, fmt::Display, os::unix::ffi::OsStrExt, path::Path, rc::Rc};
+use ::std::{ffi::OsStr, os::unix::ffi::OsStrExt, path::Path, rc::Rc};
 
 use ::mlua::{Lua, Table, Variadic};
 use ::once_cell::unsync::OnceCell;
@@ -11,10 +11,6 @@ mod color;
 mod fs;
 mod image;
 mod print;
-
-fn to_runtime<D: Display>(d: D) -> ::mlua::Error {
-    ::mlua::Error::runtime(d)
-}
 
 fn lua_get_env(lua: &Lua, name: ::mlua::String) -> ::mlua::Result<Option<::mlua::String>> {
     ::std::env::var_os(OsStr::from_bytes(&name.as_bytes()))
