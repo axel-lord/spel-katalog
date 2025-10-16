@@ -11,14 +11,14 @@ use ::iced::{
 use ::mlua::Lua;
 use ::rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use ::serde::Serialize;
-use ::spel_katalog_batch::{BatchInfo, lua_api};
+use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::status;
 use ::spel_katalog_info::formats::{self, Additional};
 use ::spel_katalog_script::script_file::ScriptFile;
 use ::spel_katalog_settings::{
     CacheDir, ExtraConfigDir, FirejailExe, LutrisExe, Network, ScriptConfigDir, YmlDir,
 };
-use ::spel_katalog_terminal::SinkIdentity;
+use ::spel_katalog_sink::SinkIdentity;
 use ::tap::Pipe;
 
 use crate::{App, Message, QuickMessage, Safety};
@@ -306,11 +306,13 @@ impl App {
                         .serialize(::mlua::serde::Serializer::new(&lua))
                         .and_then(|game| {
                             let module = lua.create_table()?;
+                            let settings =
+                                settings_generic.serialize(::mlua::serde::Serializer::new(&lua))?;
+                            module.set("settings", settings)?;
                             module.set("game", game)?;
-                            lua_api::register_spel_katalog(
+                            ::spel_katalog_lua::register_module(
                                 &lua,
-                                settings_generic,
-                                thumb_db_path,
+                                &thumb_db_path,
                                 &sink_builder,
                                 Some(module),
                             )?;

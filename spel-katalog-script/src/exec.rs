@@ -10,7 +10,7 @@ use ::std::{
 use ::bon::Builder;
 use ::derive_more::From;
 use ::serde::{Deserialize, Serialize};
-use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
+use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::tokio::{process::Command, time::timeout};
 
 use crate::{builder_push::builder_push, environment::Env};

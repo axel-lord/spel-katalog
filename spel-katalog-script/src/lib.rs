@@ -26,7 +26,7 @@ mod tests {
     };
 
     use ::pretty_assertions::assert_eq;
-    use ::spel_katalog_terminal::SinkBuilder;
+    use ::spel_katalog_sink::SinkBuilder;
 
     type Result = ::core::result::Result<(), ::color_eyre::Report>;
 

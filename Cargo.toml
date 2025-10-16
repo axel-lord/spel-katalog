@@ -1,5 +1,5 @@
 [workspace]
-members = [ "spel-katalog-build", "spel-katalog", "spel-katalog-common", "spel-katalog-settings", "spel-katalog-games", "spel-katalog-info", "spel-katalog-parse", "spel-katalog-script", "spel-katalog-batch", "spel-katalog-terminal", "spel-katalog-test"]
+members = [ "spel-katalog-build", "spel-katalog", "spel-katalog-common", "spel-katalog-settings", "spel-katalog-games", "spel-katalog-info", "spel-katalog-parse", "spel-katalog-script", "spel-katalog-batch", "spel-katalog-terminal", "spel-katalog-test", "spel-katalog-lua", "spel-katalog-sink"]
 resolver = "2"
 default-members = ["spel-katalog"]
 
@@ -77,9 +77,11 @@ spel-katalog-build = { path = "spel-katalog-build" }
 spel-katalog-common = { path = "spel-katalog-common" }
 spel-katalog-games = { path = "spel-katalog-games" }
 spel-katalog-info = { path = "spel-katalog-info" }
+spel-katalog-lua = { path = "spel-katalog-lua" }
 spel-katalog-parse = { path = "spel-katalog-parse" }
 spel-katalog-script = { path = "spel-katalog-script" }
 spel-katalog-settings = { path = "spel-katalog-settings" }
+spel-katalog-sink = { path = "spel-katalog-sink" }
 spel-katalog-terminal = { path = "spel-katalog-terminal" }
 strsim = "0.11.1"
 strum = "0.27.1"

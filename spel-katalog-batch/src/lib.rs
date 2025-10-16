@@ -3,6 +3,7 @@
 use ::std::{
     collections::HashMap,
     io::{Write, pipe},
+    path::Path,
     process::Command,
     sync::Arc,
 };
@@ -20,14 +21,38 @@ use ::iced::{
     },
 };
 use ::iced_highlighter::Highlighter;
+use ::mlua::Lua;
 use ::rustc_hash::FxHashMap;
 use ::serde::Serialize;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status};
-use ::spel_katalog_terminal::{SinkBuilder, SinkIdentity};
+use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::strum::VariantArray;
 use ::tap::Pipe;
 
-pub mod lua_api;
+/// Run a lua script with a batch.
+pub fn lua_batch(
+    data: Vec<BatchInfo>,
+    script: String,
+    settings: ::spel_katalog_settings::Generic,
+    thumb_db_path: &Path,
+    sink_builder: &SinkBuilder,
+) -> ::mlua::Result<()> {
+    let sink_builder =
+        sink_builder.with_locked_channel(|| SinkIdentity::StaticName("Lua Batch Script"))?;
+    let lua = Lua::new();
+    let data = data.serialize(::mlua::serde::Serializer::new(&lua))?;
+    let settings = settings.serialize(::mlua::serde::Serializer::new(&lua))?;
+    let module = lua.create_table()?;
+
+    module.set("settings", settings)?;
+    module.set("data", data)?;
+
+    ::spel_katalog_lua::register_module(&lua, thumb_db_path, &sink_builder, Some(module))?;
+
+    lua.load(script).exec()?;
+
+    Ok(())
+}
 
 /// One entry to be sent to batch script.
 #[derive(Debug, Clone, Default, Serialize)]
@@ -192,11 +217,11 @@ impl State {
                             command
                         }
                         Language::Lua => {
-                            return lua_api::lua_batch(
+                            return lua_batch(
                                 batch_infos,
                                 script,
                                 settings,
-                                thumb_db_path,
+                                &thumb_db_path,
                                 &sink_builder,
                             )
                             .map_err(|err| ::std::io::Error::other(err.to_string()));

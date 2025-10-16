@@ -6,7 +6,7 @@ use ::bon::Builder;
 use ::derive_more::{From, IsVariant};
 use ::rustc_hash::FxHashSet;
 use ::serde::{Deserialize, Serialize};
-use ::spel_katalog_terminal::SinkBuilder;
+use ::spel_katalog_sink::SinkBuilder;
 use ::tap::Tap;
 
 use crate::{

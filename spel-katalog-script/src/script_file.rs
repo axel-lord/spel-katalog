@@ -12,7 +12,7 @@ use ::bon::Builder;
 use ::futures::{stream::FuturesUnordered, stream::StreamExt};
 use ::rustc_hash::FxHashMap;
 use ::serde::{Deserialize, Serialize};
-use ::spel_katalog_terminal::SinkBuilder;
+use ::spel_katalog_sink::SinkBuilder;
 use ::tap::{Pipe, Tap, TryConv};
 
 use crate::{
