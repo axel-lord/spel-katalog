@@ -1,6 +1,6 @@
-use ::mlua::{FromLua, Lua, Table, Value, Variadic};
+use ::mlua::{FromLua, Lua, Table, Value};
 
-use crate::Skeleton;
+use crate::{class_instance, Skeleton};
 
 /// A color as a rust type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,7 +21,7 @@ impl Color {
         initial.set("b", self.b)?;
         initial.set("a", self.a as f64 / 255.0)?;
 
-        new_color(class, initial)
+        class_instance(class, initial)
     }
 }
 
@@ -49,39 +49,13 @@ impl FromLua for Color {
     }
 }
 
-pub fn new_color(class: &Table, initial: Table) -> ::mlua::Result<Table> {
-    initial.set_metatable(Some(class.clone()))?;
-    Ok(initial)
-}
-
-pub fn register(lua: &Lua, skeleton: &Skeleton) -> ::mlua::Result<()> {
+pub fn register(_lua: &Lua, skeleton: &Skeleton) -> ::mlua::Result<()> {
     let color = &skeleton.color;
     color.set("r", 0)?;
     color.set("g", 0)?;
     color.set("b", 0)?;
     color.set("a", 1.0)?;
-    color.set("__index", color)?;
     skeleton.module.set("Color", color)?;
-
-    color.set(
-        "new",
-        lua.create_function(
-            move |lua,
-                  (class, tables): (Table, Variadic<Table>)|
-                  -> ::mlua::Result<Variadic<Table>> {
-                if tables.is_empty() {
-                    lua.create_table()
-                        .and_then(|initial| new_color(&class, initial))
-                        .map(|color| Variadic::from_iter([color]))
-                } else {
-                    tables
-                        .into_iter()
-                        .map(|initial| new_color(&class, initial))
-                        .collect::<Result<Variadic<_>, _>>()
-                }
-            },
-        )?,
-    )?;
 
     Ok(())
 }
