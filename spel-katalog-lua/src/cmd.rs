@@ -9,7 +9,7 @@ use ::mlua::{IntoLua, Lua, UserDataMethods, Variadic};
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::tap::Pipe;
 
-use crate::Skeleton;
+use crate::{Skeleton, init_table};
 
 #[derive(Debug, Clone)]
 struct Command {
@@ -127,9 +127,12 @@ impl Command {
             (status.code(), stdout, stderr)
         };
 
-        table.set("status", status)?;
-        table.set("stdout", lua.create_string(stdout)?)?;
-        table.set("stderr", lua.create_string(stderr)?)?;
+        init_table! {
+            table:
+                status = status,
+                stdout = lua.create_string(stdout)?,
+                stderr = lua.create_string(stderr)?,
+        }?;
 
         Ok(table)
     }

@@ -15,6 +15,27 @@ mod misc;
 mod print;
 mod yaml;
 
+/// Set values for a table.
+/// The result is an ::mlua::Result which should be handled.
+///
+/// ```
+/// let lua = ::mlua::Lua::new().unwrap();
+/// let table = lua.create_table().unwrap();
+/// init_table! {
+///     table:
+///         a = 53,
+///         b = Some(5.3),
+///         c = ::mlua::Value::NULL,
+/// }.unwrap()
+/// ```
+macro_rules! init_table {
+    ($tbl:ident: $( $id:ident = $val:expr ),+ $(,)?) => {(|| {
+        $( $tbl.set(stringify!($id), $val)?; )*
+        Ok::<_, ::mlua::Error>(())
+    })()};
+}
+pub(crate) use init_table;
+
 /// Module skeleton, used to access objects.
 #[derive(Debug, Clone)]
 struct Skeleton {
