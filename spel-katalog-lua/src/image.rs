@@ -8,7 +8,7 @@ use ::rayon::prelude::*;
 use ::rusqlite::{Connection, OptionalExtension, params};
 use ::tap::Pipe;
 
-use crate::{Skeleton, color};
+use crate::{Skeleton, color, lua_result::LuaResult};
 
 fn get_conn<'c>(
     conn: &'c OnceCell<::rusqlite::Connection>,
@@ -128,7 +128,7 @@ impl Image {
         slug: String,
         db_path: &Path,
         conn: &OnceCell<::rusqlite::Connection>,
-    ) -> ::mlua::Result<(Option<Self>, Option<String>)> {
+    ) -> ::mlua::Result<LuaResult<Self, String>> {
         let conn = get_conn(conn, db_path)?;
         let buf = conn
             .prepare_cached(r"SELECT image FROM images WHERE slug = ?1")
@@ -138,35 +138,27 @@ impl Image {
             .map_err(::mlua::Error::runtime)?;
 
         let Some(buf) = buf else {
-            return Ok((
-                None,
-                Some(format!("could nod load cover for slug {slug:?}")),
-            ));
+            return LuaResult::Err(format!("could nod load cover for slug {slug:?}")).wrap_ok();
         };
 
         let image = ::image::load_from_memory_with_format(&buf, Png)
             .map_err(::mlua::Error::runtime)?
             .pipe(Self);
 
-        Ok((Some(image), None))
+        LuaResult::Ok(image).wrap_ok()
     }
 
-    fn load(
-        _c: &::mlua::Table,
-        path: ::mlua::String,
-    ) -> ::mlua::Result<(Option<Self>, Option<String>)> {
+    fn load(_c: &::mlua::Table, path: ::mlua::String) -> ::mlua::Result<LuaResult<Self, String>> {
         let image = ImageReader::open(OsStr::from_bytes(&path.as_bytes()))
             .map_err(|err| format!("could not open image {path:?}, {err}"))
             .and_then(|image| {
                 image
                     .decode()
                     .map_err(|err| format!("could not decode image {path:?}, {err}"))
-            });
+            })
+            .map(Self);
 
-        Ok(match image {
-            Ok(image) => (Some(Self(image)), None),
-            Err(err) => (None, Some(err)),
-        })
+        LuaResult::from(image).wrap_ok()
     }
 
     #[inline]
