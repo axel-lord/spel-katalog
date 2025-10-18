@@ -1,25 +1,18 @@
 use ::std::{
     ffi::{OsStr, OsString},
-    mem,
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
-use ::iced::{
-    Task,
-    futures::{TryStreamExt, stream::FuturesOrdered},
-};
+use ::iced::Task;
 use ::mlua::Lua;
-use ::rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use ::serde::Serialize;
 use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::status;
 use ::spel_katalog_info::formats::{self, Additional};
-use ::spel_katalog_script::script_file::ScriptFile;
 use ::spel_katalog_settings::{
     CacheDir, ExtraConfigDir, FirejailExe, LutrisExe, Network, ScriptConfigDir, YmlDir,
 };
 use ::spel_katalog_sink::SinkIdentity;
-use ::tap::Pipe;
 
 use crate::{App, Message, QuickMessage, Safety};
 
@@ -28,20 +21,10 @@ enum ScriptGatherError {
     /// Forwarded io error.
     #[error(transparent)]
     Io(#[from] ::std::io::Error),
-    /// Forwarded script run error.
-    #[error(transparent)]
-    Script(#[from] ::spel_katalog_script::Error),
-    /// Forwarded parse error.
-    #[error(transparent)]
-    ParseRead(#[from] ::spel_katalog_script::ReadError),
-    /// Forwarded string interpolation error.
-    #[error("while interpolating {1:?}\n{0}")]
-    Interpolate(
-        #[source] ::spel_katalog_parse::InterpolationError<String>,
-        String,
-    ),
+    /// Lua error.
     #[error(transparent)]
     Lua(#[from] LuaError),
+    /// Error reading lua script.
     #[error("clould not read file {1:?}\n{0}")]
     ReadLuaScript(#[source] ::std::io::Error, PathBuf),
 }
@@ -58,41 +41,11 @@ enum ConfigError {
     Scan(#[from] ::yaml_rust2::ScanError),
 }
 
-#[derive(Debug, Clone, Copy)]
-enum ScriptExt {
-    Json,
-    Toml,
-    Lua,
-}
-
-impl ScriptExt {
-    pub fn from_path(path: &Path) -> Option<Self> {
-        let ext = path.extension()?.to_str()?;
-
-        if ext.eq_ignore_ascii_case("toml") {
-            Some(Self::Toml)
-        } else if ext.eq_ignore_ascii_case("json") {
-            Some(Self::Json)
-        } else if ext.eq_ignore_ascii_case("lua") {
-            Some(Self::Lua)
-        } else {
-            None
-        }
-    }
-}
-
-#[derive(Debug, Default)]
-struct Gathered {
-    scripts: Vec<PathBuf>,
-    lua_scripts: Vec<PathBuf>,
-}
-
-async fn gather_scripts(script_dir: PathBuf) -> Result<Gathered, ScriptGatherError> {
+async fn gather_scripts(script_dir: PathBuf) -> Result<Vec<PathBuf>, ScriptGatherError> {
     if !script_dir.exists() {
         ::log::info!("no script dir, skipping");
-        return Ok(Gathered::default());
+        return Ok(Vec::new());
     }
-    let mut scripts = Vec::new();
     let mut lua_scripts = Vec::new();
     let mut stack = Vec::new();
 
@@ -108,10 +61,12 @@ async fn gather_scripts(script_dir: PathBuf) -> Result<Gathered, ScriptGatherErr
             if ft.is_dir() {
                 stack.push(path);
             } else if ft.is_file() {
-                match ScriptExt::from_path(&path) {
-                    Some(ScriptExt::Lua) => lua_scripts.push(path),
-                    Some(_) => scripts.push(path),
-                    None => ::log::info!("unknown script extension of path {path:?}"),
+                if path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"))
+                {
+                    lua_scripts.push(path);
                 }
             } else {
                 ::log::warn!("non file or directory path in script dir, {path:?}")
@@ -119,23 +74,9 @@ async fn gather_scripts(script_dir: PathBuf) -> Result<Gathered, ScriptGatherErr
         }
     }
 
-    scripts.sort_unstable();
     lua_scripts.sort_unstable();
 
-    Ok(Gathered {
-        scripts,
-        lua_scripts,
-    })
-}
-
-async fn read_scripts(script_paths: Vec<PathBuf>) -> Result<Vec<ScriptFile>, ScriptGatherError> {
-    script_paths
-        .iter()
-        .map(|path| ScriptFile::read(path))
-        .collect::<FuturesOrdered<_>>()
-        .try_collect::<Vec<_>>()
-        .await?
-        .pipe(Ok)
+    Ok(lua_scripts)
 }
 
 impl App {
@@ -218,66 +159,7 @@ impl App {
             };
 
             let scripts_result = async {
-                let Gathered {
-                    scripts,
-                    lua_scripts,
-                } = gather_scripts(script_dir).await?;
-                let mut scripts = read_scripts(scripts).await?;
-
-                scripts
-                    .par_iter_mut()
-                    .try_for_each(|script| -> Result<_, ScriptGatherError> {
-                        let globals = mem::take(&mut script.global);
-                        script
-                            .visit_strings(|s| {
-                                *s =
-                                    ::spel_katalog_parse::interpolate_string(s, |key| match key {
-                                        "HOME" => Some(::spel_katalog_settings::HOME.to_string()),
-                                        "ID" => Some(id.to_string()),
-                                        "SLUG" => Some(slug.clone()),
-                                        "NAME" => Some(name.clone()),
-                                        "RUNNER" => Some(runner.to_string()),
-                                        "HIDDEN" => Some(hidden.to_string()),
-                                        "EXE" => Some(config.game.exe.display().to_string()),
-                                        "PREFIX" => Some(config.game.prefix.as_ref().map_or_else(
-                                            || String::new(),
-                                            |pfx| pfx.display().to_string(),
-                                        )),
-                                        "ARCH" => {
-                                            Some(config.game.arch.clone().unwrap_or_default())
-                                        }
-                                        key => {
-                                            if let Some(global) = key.strip_prefix("GLOBAL.")
-                                                && let Some(value) = globals.get(global)
-                                            {
-                                                value.clone().pipe(Some)
-                                            } else if let Some(attr) = key.strip_prefix("ATTR.") {
-                                                extra_config
-                                                    .as_ref()
-                                                    .and_then(|extra_config| {
-                                                        extra_config.attrs.get(attr).cloned()
-                                                    })
-                                                    .unwrap_or_default()
-                                                    .pipe(Some)
-                                            } else {
-                                                None
-                                            }
-                                        }
-                                    })?;
-                                Ok(())
-                            })
-                            .map_err(|err| {
-                                ScriptGatherError::Interpolate(
-                                    err,
-                                    script.source.as_ref().map_or_else(
-                                        || script.id().to_owned(),
-                                        |source| source.display().to_string(),
-                                    ),
-                                )
-                            })?;
-
-                        Ok(())
-                    })?;
+                let lua_scripts = gather_scripts(script_dir).await?;
 
                 if !lua_scripts.is_empty() {
                     let batch_info = BatchInfo {
@@ -326,7 +208,6 @@ impl App {
                         .map_err(|err| LuaError(err.to_string()))?;
                 }
 
-                ScriptFile::run_all(&scripts, &sink_builder).await?;
                 Ok::<_, ScriptGatherError>(())
             };
 
