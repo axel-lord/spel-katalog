@@ -127,7 +127,6 @@ impl App {
                     }
                 }
             }
-            Message::RunGame(id, safety) => return self.run_game(id, safety, false),
             Message::Quick(quick) => match quick {
                 QuickMessage::CloseAll => {
                     self.process_list = None;

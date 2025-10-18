@@ -29,7 +29,6 @@ pub enum Message {
     #[from]
     Resized(pane_grid::ResizeEvent),
     Settings(bool),
-    Info(bool),
 }
 
 impl State {
@@ -73,7 +72,6 @@ impl State {
                 self.panes.resize(split, ratio);
             }
             Message::Settings(show_settings) => self.show_settings(show_settings),
-            Message::Info(show_info) => self.show_info(show_info),
         };
         Task::none()
     }
