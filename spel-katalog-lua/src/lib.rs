@@ -43,6 +43,8 @@ struct Skeleton {
     pub module: Table,
     /// Color class table.
     pub color: Table,
+    /// Rect class table.
+    pub rect: Table,
 }
 
 impl Skeleton {
@@ -50,6 +52,7 @@ impl Skeleton {
         Ok(Self {
             module,
             color: create_class(lua)?,
+            rect: create_class(lua)?,
         })
     }
 }

@@ -1,3 +1,4 @@
+use ::image::Rgba;
 use ::mlua::{FromLua, Lua, Table, Value};
 
 use crate::{Skeleton, class_instance, init_table};
@@ -25,6 +26,34 @@ impl Color {
         }?;
 
         class_instance(class, initial)
+    }
+}
+
+impl From<[u8; 4]> for Color {
+    #[inline]
+    fn from(value: [u8; 4]) -> Self {
+        let [r, g, b, a] = value;
+        Self { r, g, b, a }
+    }
+}
+
+impl From<Rgba<u8>> for Color {
+    #[inline]
+    fn from(value: Rgba<u8>) -> Self {
+        Self::from(value.0)
+    }
+}
+
+impl From<Color> for [u8; 4] {
+    fn from(value: Color) -> Self {
+        let Color { r, g, b, a } = value;
+        [r, g, b, a]
+    }
+}
+
+impl From<Color> for Rgba<u8> {
+    fn from(value: Color) -> Self {
+        Rgba(value.into())
     }
 }
 
