@@ -15,9 +15,7 @@ env_logger.workspace = true
 log.workspace = true
 clap = { workspace = true, features = ["derive"] }
 rand.workspace = true
-derive_more = { workspace = true, features = ["full"] }
 tap.workspace = true
-bon.workspace = true
 color-eyre.workspace = true
 tokio = { workspace = true, features = ["time"] }
 
