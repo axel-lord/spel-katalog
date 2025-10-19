@@ -50,7 +50,10 @@ pub enum Message {
     #[from]
     Quick(QuickMessage),
     ProcessInfo(Option<Vec<process_info::ProcessInfo>>),
-    Kill(i64),
+    Kill {
+        pid: i64,
+        terminate: bool,
+    },
     #[from]
     Batch(OrRequest<::spel_katalog_batch::Message, ::spel_katalog_batch::Request>),
     OpenWindow(window::Id, WindowType),

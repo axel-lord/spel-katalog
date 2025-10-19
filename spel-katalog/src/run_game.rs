@@ -27,6 +27,9 @@ enum ScriptGatherError {
     /// Error reading lua script.
     #[error("clould not read file {1:?}\n{0}")]
     ReadLuaScript(#[source] ::std::io::Error, PathBuf),
+    /// Spawned blocking task could not be joined.
+    #[error(transparent)]
+    JoinError(#[from] ::tokio::task::JoinError),
 }
 
 #[derive(Debug, ::thiserror::Error)]
@@ -175,37 +178,42 @@ impl App {
                         hidden,
                     };
 
-                    let scripts = lua_scripts
-                        .into_iter()
-                        .map(|path| match ::std::fs::read_to_string(&path) {
-                            Ok(content) => Ok(content),
-                            Err(err) => Err(ScriptGatherError::ReadLuaScript(err, path)),
-                        })
-                        .collect::<Result<Vec<_>, _>>()?;
+                    let sink_builder = sink_builder.clone();
+                    ::tokio::task::spawn_blocking(move || {
+                        let scripts = lua_scripts
+                            .into_iter()
+                            .map(|path| match ::std::fs::read_to_string(&path) {
+                                Ok(content) => Ok(content),
+                                Err(err) => Err(ScriptGatherError::ReadLuaScript(err, path)),
+                            })
+                            .collect::<Result<Vec<_>, _>>()?;
 
-                    let lua = Lua::new();
-                    batch_info
-                        .serialize(::mlua::serde::Serializer::new(&lua))
-                        .and_then(|game| {
-                            let module = lua.create_table()?;
-                            let settings =
-                                settings_generic.serialize(::mlua::serde::Serializer::new(&lua))?;
-                            module.set("settings", settings)?;
-                            module.set("game", game)?;
-                            ::spel_katalog_lua::register_module(
-                                &lua,
-                                &thumb_db_path,
-                                &sink_builder,
-                                Some(module),
-                            )?;
+                        let lua = Lua::new();
+                        batch_info
+                            .serialize(::mlua::serde::Serializer::new(&lua))
+                            .and_then(|game| {
+                                let module = lua.create_table()?;
+                                let settings = settings_generic
+                                    .serialize(::mlua::serde::Serializer::new(&lua))?;
+                                module.set("settings", settings)?;
+                                module.set("game", game)?;
+                                ::spel_katalog_lua::register_module(
+                                    &lua,
+                                    &thumb_db_path,
+                                    &sink_builder,
+                                    Some(module),
+                                )?;
 
-                            for script in scripts {
-                                lua.load(script).exec()?;
-                            }
+                                for script in scripts {
+                                    lua.load(script).exec()?;
+                                }
 
-                            Ok(())
-                        })
-                        .map_err(|err| LuaError(err.to_string()))?;
+                                Ok(())
+                            })
+                            .map_err(|err| LuaError(err.to_string()))?;
+                        Ok::<_, ScriptGatherError>(())
+                    })
+                    .await??;
                 }
 
                 Ok::<_, ScriptGatherError>(())
