@@ -307,6 +307,16 @@ impl App {
                     }
                 },
             },
+            Message::OpenWindow(id, window_type) => {
+                self.windows.insert(id, window_type);
+            }
+            Message::CloseWindow(id) => {
+                self.windows.remove(&id);
+
+                if self.windows.is_empty() {
+                    return ::iced::exit();
+                }
+            }
         }
         Task::none()
     }

@@ -1,7 +1,8 @@
 use ::derive_more::{From, IsVariant};
+use ::iced::window;
 use ::spel_katalog_common::OrRequest;
 
-use crate::{process_info, view};
+use crate::{app::WindowType, process_info, view};
 
 #[derive(Debug, Clone, Copy, Default, IsVariant, PartialEq, Eq, Hash)]
 pub enum Safety {
@@ -51,4 +52,6 @@ pub enum Message {
     Kill(i64),
     #[from]
     Batch(OrRequest<::spel_katalog_batch::Message, ::spel_katalog_batch::Request>),
+    OpenWindow(window::Id, WindowType),
+    CloseWindow(window::Id),
 }

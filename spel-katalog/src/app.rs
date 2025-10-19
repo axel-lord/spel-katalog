@@ -10,7 +10,9 @@ use ::iced::{
     Length::Fill,
     Task,
     widget::{self, horizontal_rule, stack, text, text_input, toggler, value, vertical_space},
+    window,
 };
+use ::rustc_hash::FxHashMap;
 use ::spel_katalog_common::{OrRequest, StatusSender, w};
 use ::spel_katalog_info::image_buffer::ImageBuffer;
 use ::spel_katalog_settings::{FilterMode, LutrisDb, Network, Theme};
@@ -18,6 +20,13 @@ use ::spel_katalog_sink::SinkBuilder;
 use ::tap::Pipe;
 
 use crate::{Cli, ExitReceiver, Message, cli::Subcmd, process_info, view};
+
+/// Specific kind of window.
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum WindowType {
+    /// Window is the main window.
+    Main,
+}
 
 #[derive(Debug)]
 pub(crate) struct App {
@@ -33,117 +42,105 @@ pub(crate) struct App {
     pub sender: StatusSender,
     pub process_list: Option<Vec<process_info::ProcessInfo>>,
     pub sink_builder: SinkBuilder,
+    pub windows: FxHashMap<window::Id, WindowType>,
 }
 
 impl App {
-    pub fn run(
+    fn new(
         cli: Cli,
         sink_builder: SinkBuilder,
-        exit_recv: Option<ExitReceiver>,
-    ) -> ::color_eyre::Result<()> {
-        let rx;
-        let app = {
-            let Cli {
-                settings,
-                show_settings,
-                config,
-                action,
-                advanced_terminal: _,
-                keep_terminal: _,
-            } = cli;
+    ) -> ::color_eyre::Result<(Self, ::tokio::sync::mpsc::Receiver<String>)> {
+        let Cli {
+            settings,
+            show_settings,
+            config,
+            action,
+            advanced_terminal: _,
+            keep_terminal: _,
+        } = cli;
 
-            fn read_settings(
-                path: &Path,
-            ) -> ::color_eyre::Result<::spel_katalog_settings::Settings> {
-                ::std::fs::read_to_string(path)
-                    .map_err(|err| {
-                        eyre!(err).suggestion(format!("does {path:?} exist, and is it readable"))
-                    })?
-                    .pipe_deref(::toml::from_str::<::spel_katalog_settings::Settings>)
-                    .map_err(|err| eyre!(err).suggestion(format!("is {path:?} a toml file")))
-            }
+        fn read_settings(path: &Path) -> ::color_eyre::Result<::spel_katalog_settings::Settings> {
+            ::std::fs::read_to_string(path)
+                .map_err(|err| {
+                    eyre!(err).suggestion(format!("does {path:?} exist, and is it readable"))
+                })?
+                .pipe_deref(::toml::from_str::<::spel_katalog_settings::Settings>)
+                .map_err(|err| eyre!(err).suggestion(format!("is {path:?} a toml file")))
+        }
 
-            let overrides = settings;
-            let settings = read_settings(&config)
-                .map_err(|err| ::log::error!("could not read config file {config:?}\n{err}"))
-                .unwrap_or_default()
-                .apply(::spel_katalog_settings::Delta::create(overrides));
+        let overrides = settings;
+        let settings = read_settings(&config)
+            .map_err(|err| ::log::error!("could not read config file {config:?}\n{err}"))
+            .unwrap_or_default()
+            .apply(::spel_katalog_settings::Delta::create(overrides));
 
-            if let Some(action) = action {
-                match action {
-                    Subcmd::Skeleton { output } => {
-                        let mut stdout;
-                        let mut file;
-                        let writer: &mut dyn Write;
-                        if output.as_os_str().to_str() == Some("-") {
-                            stdout = ::std::io::stdout().lock();
-                            writer = &mut stdout;
-                        } else {
-                            file = ::std::fs::File::create(&output)
-                                .map(BufWriter::new)
-                                .map_err(|err| {
-                                    eyre!("could not create/open {output:?}").error(err)
-                                })?;
-                            writer = &mut file;
-                        }
-                        ::std::io::copy(
-                            &mut ::std::io::Cursor::new(
-                                ::toml::to_string_pretty(&settings.skeleton())
-                                    .map_err(|err| eyre!(err))?,
-                            ),
-                            writer,
-                        )
-                        .map_err(|err| eyre!(err))?;
-                        writer
-                            .flush()
-                            .map_err(|err| eyre!("could not close/flush {output:?}").error(err))?;
-                        ::std::process::exit(0)
+        if let Some(action) = action {
+            match action {
+                Subcmd::Skeleton { output } => {
+                    let mut stdout;
+                    let mut file;
+                    let writer: &mut dyn Write;
+                    if output.as_os_str().to_str() == Some("-") {
+                        stdout = ::std::io::stdout().lock();
+                        writer = &mut stdout;
+                    } else {
+                        file = ::std::fs::File::create(&output)
+                            .map(BufWriter::new)
+                            .map_err(|err| eyre!("could not create/open {output:?}").error(err))?;
+                        writer = &mut file;
                     }
-                    Subcmd::Completions {
-                        shell,
-                        name,
-                        output,
-                    } => {
-                        if output.as_os_str().to_str() == Some("-") {
-                            ::clap_complete::generate(
-                                shell,
-                                &mut Cli::command(),
-                                name,
-                                &mut ::std::io::stdout().lock(),
-                            );
-                        } else {
-                            let mut writer = ::std::fs::File::create(&output)
-                                .map(BufWriter::new)
-                                .map_err(|err| {
-                                eyre!("could not create/open {output:?}").error(err)
-                            })?;
-                            ::clap_complete::generate(
-                                shell,
-                                &mut Cli::command(),
-                                name,
-                                &mut writer,
-                            );
-                        }
-                        ::std::process::exit(0)
+                    ::std::io::copy(
+                        &mut ::std::io::Cursor::new(
+                            ::toml::to_string_pretty(&settings.skeleton())
+                                .map_err(|err| eyre!(err))?,
+                        ),
+                        writer,
+                    )
+                    .map_err(|err| eyre!(err))?;
+                    writer
+                        .flush()
+                        .map_err(|err| eyre!("could not close/flush {output:?}").error(err))?;
+                    ::std::process::exit(0)
+                }
+                Subcmd::Completions {
+                    shell,
+                    name,
+                    output,
+                } => {
+                    if output.as_os_str().to_str() == Some("-") {
+                        ::clap_complete::generate(
+                            shell,
+                            &mut Cli::command(),
+                            name,
+                            &mut ::std::io::stdout().lock(),
+                        );
+                    } else {
+                        let mut writer = ::std::fs::File::create(&output)
+                            .map(BufWriter::new)
+                            .map_err(|err| eyre!("could not create/open {output:?}").error(err))?;
+                        ::clap_complete::generate(shell, &mut Cli::command(), name, &mut writer);
                     }
+                    ::std::process::exit(0)
                 }
             }
+        }
 
-            let tx;
-            (tx, rx) = ::tokio::sync::mpsc::channel(64);
+        let (tx, rx) = ::tokio::sync::mpsc::channel(64);
 
-            let filter = String::new();
-            let status = String::new();
-            let view = view::State::new(show_settings);
-            let settings = ::spel_katalog_settings::State { settings, config };
-            let games = ::spel_katalog_games::State::default();
-            let image_buffer = ImageBuffer::empty();
-            let info = ::spel_katalog_info::State::default();
-            let sender = tx.into();
-            let process_list = None;
-            let show_batch = false;
-            let batch = Default::default();
+        let filter = String::new();
+        let status = String::new();
+        let view = view::State::new(show_settings);
+        let settings = ::spel_katalog_settings::State { settings, config };
+        let games = ::spel_katalog_games::State::default();
+        let image_buffer = ImageBuffer::empty();
+        let info = ::spel_katalog_info::State::default();
+        let sender = tx.into();
+        let process_list = None;
+        let show_batch = false;
+        let windows = FxHashMap::default();
+        let batch = Default::default();
 
+        Ok((
             App {
                 process_list,
                 settings,
@@ -157,15 +154,24 @@ impl App {
                 batch,
                 show_batch,
                 sink_builder,
-            }
-        };
+                windows,
+            },
+            rx,
+        ))
+    }
 
-        ::iced::application("Lutris Games", Self::update, Self::view)
-            .theme(|app| ::iced::Theme::from(*app.settings.settings.get::<Theme>()))
-            .centered()
+    pub fn run(
+        cli: Cli,
+        sink_builder: SinkBuilder,
+        exit_recv: Option<ExitReceiver>,
+    ) -> ::color_eyre::Result<()> {
+        let (app, rx) = Self::new(cli, sink_builder)?;
+
+        ::iced::daemon("Lutris Games", Self::update, Self::view)
+            .theme(|app, _| ::iced::Theme::from(*app.settings.settings.get::<Theme>()))
             .subscription(Self::subscription)
             .executor::<::tokio::runtime::Runtime>()
-            .run_with(|| {
+            .run_with(move || {
                 let load_db = app
                     .settings
                     .get::<LutrisDb>()
@@ -177,10 +183,16 @@ impl App {
                 let receive_status =
                     Task::stream(::tokio_stream::wrappers::ReceiverStream::new(rx))
                         .map(Message::Status);
+                let (_, open_main) = window::open(::iced::window::Settings::default());
+                let open_main = open_main.map(|id| Message::OpenWindow(id, WindowType::Main));
                 let exit_recv = exit_recv
                     .map(|exit_recv| Task::future(exit_recv.recv()).then(|_| ::iced::exit()));
 
-                let batch = Task::batch([receive_status, load_db].into_iter().chain(exit_recv));
+                let batch = Task::batch(
+                    [receive_status, load_db, open_main]
+                        .into_iter()
+                        .chain(exit_recv),
+                );
 
                 (app, batch)
             })
@@ -207,7 +219,17 @@ impl App {
         self.status = status;
     }
 
-    pub fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self, id: window::Id) -> Element<'_, Message> {
+        let Some(ty) = self.windows.get(&id) else {
+            return widget::Space::new(10, 10).into();
+        };
+
+        match ty {
+            WindowType::Main => self.view_main(),
+        }
+    }
+
+    pub fn view_main(&self) -> Element<'_, Message> {
         w::col()
             .padding(5)
             .spacing(0)

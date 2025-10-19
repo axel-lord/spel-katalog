@@ -3,6 +3,7 @@ use ::std::time::Duration;
 use ::iced::{
     Subscription,
     keyboard::{self, Modifiers, key::Named, on_key_press},
+    window,
 };
 use ::spel_katalog_common::OrRequest;
 use ::spel_katalog_games::SelDir;
@@ -62,9 +63,11 @@ impl App {
             None
         };
 
-        [Some(on_key), refresh]
+        let window_close = window::close_events().map(Message::CloseWindow);
+
+        [on_key, window_close]
             .into_iter()
-            .flatten()
+            .chain(refresh)
             .pipe(Subscription::batch)
     }
 }
