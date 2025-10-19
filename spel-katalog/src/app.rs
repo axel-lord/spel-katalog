@@ -26,6 +26,8 @@ use crate::{Cli, ExitReceiver, Message, cli::Subcmd, process_info, view};
 pub enum WindowType {
     /// Window is the main window.
     Main,
+    /// Show lua api.
+    LuaApi,
 }
 
 #[derive(Debug)]
@@ -43,6 +45,7 @@ pub(crate) struct App {
     pub process_list: Option<Vec<process_info::ProcessInfo>>,
     pub sink_builder: SinkBuilder,
     pub windows: FxHashMap<window::Id, WindowType>,
+    pub api_markdown: Box<[widget::markdown::Item]>,
 }
 
 impl App {
@@ -139,6 +142,8 @@ impl App {
         let show_batch = false;
         let windows = FxHashMap::default();
         let batch = Default::default();
+        let markdown =
+            widget::markdown::parse(&include_str!("../../lua_api.md").replace("`", "**")).collect();
 
         Ok((
             App {
@@ -155,6 +160,7 @@ impl App {
                 show_batch,
                 sink_builder,
                 windows,
+                api_markdown: markdown,
             },
             rx,
         ))
@@ -221,11 +227,18 @@ impl App {
 
     pub fn view(&self, id: window::Id) -> Element<'_, Message> {
         let Some(ty) = self.windows.get(&id) else {
-            return widget::Space::new(10, 10).into();
+            return widget::container("No Window Type").center(Fill).into();
         };
 
         match ty {
             WindowType::Main => self.view_main(),
+            WindowType::LuaApi => crate::api_window::view(
+                &self.api_markdown,
+                (*self.settings.get::<Theme>())
+                    .pipe(::iced::Theme::from)
+                    .palette(),
+            )
+            .map(Message::Url),
         }
     }
 

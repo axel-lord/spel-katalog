@@ -1,5 +1,5 @@
 use ::derive_more::{From, IsVariant};
-use ::iced::window;
+use ::iced::{widget, window};
 use ::spel_katalog_common::OrRequest;
 
 use crate::{app::WindowType, process_info, view};
@@ -31,6 +31,7 @@ pub enum QuickMessage {
     Next,
     Prev,
     ToggleBatch,
+    OpenLua,
 }
 
 #[derive(Debug, IsVariant, From, Clone)]
@@ -54,4 +55,5 @@ pub enum Message {
     Batch(OrRequest<::spel_katalog_batch::Message, ::spel_katalog_batch::Request>),
     OpenWindow(window::Id, WindowType),
     CloseWindow(window::Id),
+    Url(widget::markdown::Url),
 }

@@ -33,6 +33,7 @@ impl App {
                 Named::Enter | Named::Space if modifiers.is_empty() => {
                     Some(Message::Quick(QuickMessage::RunSelected))
                 }
+                Named::F1 => Some(Message::Quick(QuickMessage::OpenLua)),
                 _ => None,
             },
             keyboard::Key::Character(chr) => match chr {
