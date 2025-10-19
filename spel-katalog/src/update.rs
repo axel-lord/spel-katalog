@@ -199,7 +199,7 @@ impl App {
             Message::ProcessInfo(process_infos) => {
                 self.process_list = process_infos.filter(|infos| !infos.is_empty())
             }
-            Message::Kill(pid) => {
+            Message::Kill { pid, terminate } => {
                 let Ok(pid) = RawPid::try_from(pid) else {
                     return Task::none();
                 };
@@ -209,7 +209,14 @@ impl App {
 
                 return Task::future(async move {
                     match ::tokio::task::spawn_blocking(move || {
-                        ::rustix::process::kill_process(pid, ::rustix::process::Signal::TERM)
+                        ::rustix::process::kill_process(
+                            pid,
+                            if terminate {
+                                ::rustix::process::Signal::TERM
+                            } else {
+                                ::rustix::process::Signal::KILL
+                            },
+                        )
                     })
                     .await
                     {

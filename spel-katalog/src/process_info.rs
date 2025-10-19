@@ -53,7 +53,19 @@ impl ProcessInfo {
                 button("X")
                     .padding(3)
                     .style(button::danger)
-                    .on_press_with(move || Message::Kill(pid)),
+                    .on_press_with(move || Message::Kill {
+                        pid,
+                        terminate: true,
+                    }),
+            )
+            .push(
+                button("K")
+                    .padding(3)
+                    .style(button::secondary)
+                    .on_press_with(move || Message::Kill {
+                        pid,
+                        terminate: false,
+                    }),
             )
             .push(value(pid))
             .push_maybe(name.as_ref().map(text))
