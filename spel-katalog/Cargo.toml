@@ -11,7 +11,7 @@ clap_complete.workspace = true
 color-eyre.workspace = true
 derive_more = { workspace = true, features = ["from", "is_variant", "display", "into_iterator", "as_ref", "deref", "into", "deref_mut"] }
 env_logger.workspace = true
-iced = { workspace = true, features = ["tokio", "lazy", "image", "advanced"] }
+iced = { workspace = true, features = ["tokio", "lazy", "image", "advanced", "markdown"] }
 image.workspace = true
 itertools.workspace = true
 log = { workspace = true, features = ["max_level_debug", "release_max_level_info"] }

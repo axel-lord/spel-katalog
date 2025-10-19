@@ -3,6 +3,7 @@ use ::std::time::Duration;
 use ::iced::{
     Subscription,
     keyboard::{self, Modifiers, key::Named, on_key_press},
+    window,
 };
 use ::spel_katalog_common::OrRequest;
 use ::spel_katalog_games::SelDir;
@@ -32,6 +33,7 @@ impl App {
                 Named::Enter | Named::Space if modifiers.is_empty() => {
                     Some(Message::Quick(QuickMessage::RunSelected))
                 }
+                Named::F1 => Some(Message::Quick(QuickMessage::OpenLua)),
                 _ => None,
             },
             keyboard::Key::Character(chr) => match chr {
@@ -62,9 +64,11 @@ impl App {
             None
         };
 
-        [Some(on_key), refresh]
+        let window_close = window::close_events().map(Message::CloseWindow);
+
+        [on_key, window_close]
             .into_iter()
-            .flatten()
+            .chain(refresh)
             .pipe(Subscription::batch)
     }
 }

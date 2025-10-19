@@ -3,6 +3,7 @@ use ::std::{convert::identity, path::Path};
 use ::iced::{
     Task,
     widget::{self},
+    window,
 };
 use ::rustc_hash::FxHashMap;
 use ::rustix::process::{Pid, RawPid};
@@ -15,7 +16,7 @@ use ::spel_katalog_settings::{
 };
 use ::tap::Pipe;
 
-use crate::{App, Message, QuickMessage, Safety};
+use crate::{App, Message, QuickMessage, Safety, app::WindowType};
 
 impl App {
     pub fn update(&mut self, msg: Message) -> Task<Message> {
@@ -127,7 +128,6 @@ impl App {
                     }
                 }
             }
-            Message::RunGame(id, safety) => return self.run_game(id, safety, false),
             Message::Quick(quick) => match quick {
                 QuickMessage::CloseAll => {
                     self.process_list = None;
@@ -191,6 +191,10 @@ impl App {
                     }
                 }
                 QuickMessage::ToggleBatch => self.show_batch = !self.show_batch,
+                QuickMessage::OpenLua => {
+                    let (_, task) = window::open(window::Settings::default());
+                    return task.map(|id| Message::OpenWindow(id, WindowType::LuaApi));
+                }
             },
             Message::ProcessInfo(process_infos) => {
                 self.process_list = process_infos.filter(|infos| !infos.is_empty())
@@ -308,6 +312,19 @@ impl App {
                     }
                 },
             },
+            Message::OpenWindow(id, window_type) => {
+                self.windows.insert(id, window_type);
+            }
+            Message::CloseWindow(id) => {
+                self.windows.remove(&id);
+
+                if self.windows.is_empty() {
+                    return ::iced::exit();
+                }
+            }
+            Message::Url(url) => {
+                ::log::info!("markdown url clicked {url}");
+            }
         }
         Task::none()
     }
