@@ -8,6 +8,7 @@ use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 
 mod cmd;
 mod color;
+mod dialog;
 mod fs;
 mod image;
 mod lua_result;
@@ -35,6 +36,9 @@ macro_rules! init_table {
     })()};
 }
 pub(crate) use init_table;
+
+/// A boxed function which creates and waits on dialogs.
+pub type DialogOpener = dyn Fn(String, Vec<String>) -> ::mlua::Result<Option<String>>;
 
 /// Module skeleton, used to access objects.
 #[derive(Debug, Clone)]
@@ -91,12 +95,20 @@ fn create_class(lua: &Lua) -> ::mlua::Result<Table> {
     Ok(class)
 }
 
+/// Functionality caller needs to provide.
+pub trait Virtual {
+    /// Create an object which may request dialogs to be opened. In which case the object blocks
+    /// until a choice is made.
+    fn dialog_opener(&mut self) -> Box<DialogOpener>;
+}
+
 /// Register `@spel-katalog` module with lua interpreter.
 pub fn register_module(
     lua: &Lua,
     thumb_db_path: &Path,
     sink_builder: &SinkBuilder,
     module: Option<Table>,
+    mut vt: Box<dyn Send + Virtual>,
 ) -> ::mlua::Result<()> {
     let sink_builder =
         sink_builder.with_locked_channel(|| SinkIdentity::StaticName("Lua Script"))?;
@@ -111,6 +123,7 @@ pub fn register_module(
     cmd::register(&lua, &skeleton, &sink_builder)?;
     misc::register(&lua, &skeleton)?;
     yaml::register(&lua, &skeleton)?;
+    dialog::register(&lua, &skeleton, vt.dialog_opener())?;
 
     let Skeleton { module, .. } = skeleton;
 

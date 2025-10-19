@@ -2,7 +2,11 @@ use ::derive_more::{From, IsVariant};
 use ::iced::{widget, window};
 use ::spel_katalog_common::OrRequest;
 
-use crate::{app::WindowType, process_info, view};
+use crate::{
+    app::WindowType,
+    dialog::{self, Dialog},
+    process_info, view,
+};
 
 #[derive(Debug, Clone, Copy, Default, IsVariant, PartialEq, Eq, Hash)]
 pub enum Safety {
@@ -59,4 +63,7 @@ pub enum Message {
     OpenWindow(window::Id, WindowType),
     CloseWindow(window::Id),
     Url(widget::markdown::Url),
+    DialogRequest(window::Id, dialog::Request),
+    DialogMessage(window::Id, dialog::Message),
+    Dialog(Dialog),
 }

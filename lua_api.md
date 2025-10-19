@@ -44,6 +44,10 @@ Has four fields of type u32, `x`, `y`, `w`, `h`.
 If the class constructor is used they default to 0, which may not have
 a valid area for some image operations.
 
+### `Dialog`
+A table/class representing a dialog boc.
+Has two fields, an array of strings `buttons` and text to display `text`.
+
 ### `Letterbox`
 The input to `Image:letterbox` may be one of several other types.
 Ratio is expected to be width / height.
@@ -170,6 +174,16 @@ rules as new binary and initial arguments.
 ### `output(self, input: String..) -> Output`
 Run the command with the given optional input (given to command separated by newlines),
 returning a table with exit status, stderr and stdout.
+
+## Dialog
+Functions provided for `Dialog`.
+
+### `new(class, initial: Table..) -> Dialog..`
+Crate new dialogs either by adding the class to given tables, or
+if no tables are provided by creating a new table with the class.
+
+### `open(self) -> String | nil`
+Open the dialog and wait for result, if closed nil is returned.
 
 ## Values
 

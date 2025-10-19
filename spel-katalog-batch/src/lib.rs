@@ -36,6 +36,7 @@ pub fn lua_batch(
     settings: ::spel_katalog_settings::Generic,
     thumb_db_path: &Path,
     sink_builder: &SinkBuilder,
+    vt: Box<dyn Send + spel_katalog_lua::Virtual>,
 ) -> ::mlua::Result<()> {
     let sink_builder =
         sink_builder.with_locked_channel(|| SinkIdentity::StaticName("Lua Batch Script"))?;
@@ -47,7 +48,7 @@ pub fn lua_batch(
     module.set("settings", settings)?;
     module.set("data", data)?;
 
-    ::spel_katalog_lua::register_module(&lua, thumb_db_path, &sink_builder, Some(module))?;
+    ::spel_katalog_lua::register_module(&lua, thumb_db_path, &sink_builder, Some(module), vt)?;
 
     lua.load(script).exec()?;
 
@@ -172,6 +173,7 @@ impl State {
         tx: &StatusSender,
         settings: &::spel_katalog_settings::Settings,
         sink_builder: &SinkBuilder,
+        create_lua_vt: &dyn Fn() -> Box<dyn Send + ::spel_katalog_lua::Virtual>,
     ) -> Task<OrRequest<Message, Request>> {
         match msg {
             Message::Action(action) => {
@@ -193,6 +195,7 @@ impl State {
                     .join("thumbnails.db");
                 let settings = settings.generic();
                 let sink_builder = sink_builder.clone();
+                let lua_vt = create_lua_vt();
                 let task = Task::future(::tokio::task::spawn_blocking(move || {
                     let mut command = match lang {
                         Language::Zsh => {
@@ -223,6 +226,7 @@ impl State {
                                 settings,
                                 &thumb_db_path,
                                 &sink_builder,
+                                lua_vt,
                             )
                             .map_err(|err| ::std::io::Error::other(err.to_string()));
                         }

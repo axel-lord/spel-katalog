@@ -1,7 +1,7 @@
 use ::std::{convert::identity, path::Path};
 
 use ::iced::{
-    Task,
+    Size, Task,
     widget::{self},
     window,
 };
@@ -237,9 +237,16 @@ impl App {
             }
             Message::Batch(or_request) => match or_request {
                 OrRequest::Message(msg) => {
+                    let lua_vt = self.lua_vt();
                     return self
                         .batch
-                        .update(msg, &self.sender, &self.settings, &self.sink_builder)
+                        .update(
+                            msg,
+                            &self.sender,
+                            &self.settings,
+                            &self.sink_builder,
+                            &|| Box::new(lua_vt.clone()),
+                        )
                         .map(From::from);
                 }
                 OrRequest::Request(req) => match req {
@@ -331,6 +338,28 @@ impl App {
             }
             Message::Url(url) => {
                 ::log::info!("markdown url clicked {url}");
+            }
+            Message::DialogRequest(id, request) => match request {
+                crate::dialog::Request::Close => return window::close(id),
+            },
+            Message::DialogMessage(id, msg) => {
+                if let Some(WindowType::Dialog(dialog)) = self.windows.get_mut(&id) {
+                    return dialog
+                        .update(msg)
+                        .map(move |request| Message::DialogRequest(id, request));
+                }
+            }
+            Message::Dialog(dialog) => {
+                let (_, task) = window::open(window::Settings {
+                    size: Size {
+                        width: 500.0,
+                        height: 250.0,
+                    },
+                    position: window::Position::Centered,
+                    ..Default::default()
+                });
+                return task
+                    .map(move |id| Message::OpenWindow(id, WindowType::Dialog(dialog.clone())));
             }
         }
         Task::none()
