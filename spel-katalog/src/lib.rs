@@ -13,6 +13,7 @@ pub(crate) use self::{
 mod api_window;
 mod app;
 mod cli;
+mod dialog;
 mod exit_channel;
 mod message;
 mod process_info;

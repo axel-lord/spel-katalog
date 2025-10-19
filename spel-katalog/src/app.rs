@@ -18,16 +18,20 @@ use ::spel_katalog_info::image_buffer::ImageBuffer;
 use ::spel_katalog_settings::{FilterMode, LutrisDb, Network, Theme};
 use ::spel_katalog_sink::SinkBuilder;
 use ::tap::Pipe;
+use ::tokio::sync::mpsc::{Receiver, Sender, channel};
+use ::tokio_stream::wrappers::ReceiverStream;
 
-use crate::{Cli, ExitReceiver, Message, cli::Subcmd, process_info, view};
+use crate::{Cli, ExitReceiver, Message, cli::Subcmd, dialog::Dialog, process_info, view};
 
 /// Specific kind of window.
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone)]
 pub enum WindowType {
     /// Window is the main window.
     Main,
     /// Show lua api.
     LuaApi,
+    /// Show a dialog window.
+    Dialog(Dialog),
 }
 
 #[derive(Debug)]
@@ -46,13 +50,41 @@ pub(crate) struct App {
     pub sink_builder: SinkBuilder,
     pub windows: FxHashMap<window::Id, WindowType>,
     pub api_markdown: Box<[widget::markdown::Item]>,
+    pub lua_vt: LuaVt,
+}
+
+/// Virtual table passed to lua.
+#[derive(Debug, Clone)]
+pub struct LuaVt {
+    sender: Sender<Dialog>,
+}
+
+impl LuaVt {
+    fn new() -> (Self, Receiver<Dialog>) {
+        let (sender, rx) = channel(64);
+
+        (Self { sender }, rx)
+    }
+}
+
+impl ::spel_katalog_lua::Virtual for LuaVt {
+    fn dialog_opener(&mut self) -> Box<::spel_katalog_lua::DialogOpener> {
+        let sender = self.sender.clone();
+        Box::new(move |text, buttons| {
+            let (dialog, mut rx) = Dialog::new(text, buttons);
+            sender
+                .blocking_send(dialog)
+                .map_err(::mlua::Error::external)?;
+            Ok(rx.blocking_recv())
+        })
+    }
 }
 
 impl App {
     fn new(
         cli: Cli,
         sink_builder: SinkBuilder,
-    ) -> ::color_eyre::Result<(Self, ::tokio::sync::mpsc::Receiver<String>)> {
+    ) -> ::color_eyre::Result<(Self, Receiver<String>, Receiver<Dialog>)> {
         let Cli {
             settings,
             show_settings,
@@ -128,7 +160,7 @@ impl App {
             }
         }
 
-        let (tx, rx) = ::tokio::sync::mpsc::channel(64);
+        let (status_tx, status_rx) = ::tokio::sync::mpsc::channel(64);
 
         let filter = String::new();
         let status = String::new();
@@ -137,13 +169,14 @@ impl App {
         let games = ::spel_katalog_games::State::default();
         let image_buffer = ImageBuffer::empty();
         let info = ::spel_katalog_info::State::default();
-        let sender = tx.into();
+        let sender = status_tx.into();
         let process_list = None;
         let show_batch = false;
         let windows = FxHashMap::default();
         let batch = Default::default();
-        let markdown =
+        let api_markdown =
             widget::markdown::parse(&include_str!("../../lua_api.md").replace("`", "**")).collect();
+        let (lua_vt, dialog_rx) = LuaVt::new();
 
         Ok((
             App {
@@ -160,9 +193,11 @@ impl App {
                 show_batch,
                 sink_builder,
                 windows,
-                api_markdown: markdown,
+                api_markdown,
+                lua_vt,
             },
-            rx,
+            status_rx,
+            dialog_rx,
         ))
     }
 
@@ -171,7 +206,7 @@ impl App {
         sink_builder: SinkBuilder,
         exit_recv: Option<ExitReceiver>,
     ) -> ::color_eyre::Result<()> {
-        let (app, rx) = Self::new(cli, sink_builder)?;
+        let (app, status_rx, dialog_rx) = Self::new(cli, sink_builder)?;
 
         ::iced::daemon("Lutris Games", Self::update, Self::view)
             .theme(|app, _| ::iced::Theme::from(*app.settings.settings.get::<Theme>()))
@@ -187,15 +222,16 @@ impl App {
                     .pipe(Message::Games)
                     .pipe(Task::done);
                 let receive_status =
-                    Task::stream(::tokio_stream::wrappers::ReceiverStream::new(rx))
-                        .map(Message::Status);
+                    Task::stream(ReceiverStream::new(status_rx)).map(Message::Status);
+                let receive_dialog =
+                    Task::stream(ReceiverStream::new(dialog_rx)).map(Message::Dialog);
                 let (_, open_main) = window::open(::iced::window::Settings::default());
                 let open_main = open_main.map(|id| Message::OpenWindow(id, WindowType::Main));
                 let exit_recv = exit_recv
                     .map(|exit_recv| Task::future(exit_recv.recv()).then(|_| ::iced::exit()));
 
                 let batch = Task::batch(
-                    [receive_status, load_db, open_main]
+                    [receive_status, receive_dialog, load_db, open_main]
                         .into_iter()
                         .chain(exit_recv),
                 );
@@ -203,6 +239,10 @@ impl App {
                 (app, batch)
             })
             .map_err(Report::from)
+    }
+
+    pub fn lua_vt(&self) -> LuaVt {
+        self.lua_vt.clone()
     }
 
     pub async fn collect_process_info() -> Task<Message> {
@@ -239,6 +279,9 @@ impl App {
                     .palette(),
             )
             .map(Message::Url),
+            WindowType::Dialog(dialog) => dialog
+                .view()
+                .map(move |msg| Message::DialogMessage(id, msg)),
         }
     }
 

@@ -125,6 +125,7 @@ impl App {
         })
         .then(|msg| msg.map_or_else(Task::none, Task::done));
 
+        let lua_vt = self.lua_vt();
         let task = Task::future(async move {
             let config = async {
                 let config = ::tokio::fs::read_to_string(&configpath).await?;
@@ -202,6 +203,7 @@ impl App {
                                     &thumb_db_path,
                                     &sink_builder,
                                     Some(module),
+                                    Box::new(lua_vt),
                                 )?;
 
                                 for script in scripts {
