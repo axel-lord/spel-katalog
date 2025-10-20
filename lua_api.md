@@ -46,7 +46,8 @@ a valid area for some image operations.
 
 ### `Dialog`
 A table/class representing a dialog boc.
-Has two fields, an array of strings `buttons` and text to display `text`.
+Has three fields, an array of strings `buttons` and text to display `text`, and optionally an array of
+strings to ignore, that is return nil for `ignore`.
 
 ### `Letterbox`
 The input to `Image:letterbox` may be one of several other types.

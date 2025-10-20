@@ -1,6 +1,6 @@
 //! Lua api in use by project.
 
-use ::std::{path::Path, rc::Rc};
+use ::std::{path::Path, rc::Rc, sync::Arc};
 
 use ::mlua::{Lua, Table, Variadic};
 use ::once_cell::unsync::OnceCell;
@@ -99,7 +99,7 @@ fn create_class(lua: &Lua) -> ::mlua::Result<Table> {
 pub trait Virtual {
     /// Create an object which may request dialogs to be opened. In which case the object blocks
     /// until a choice is made.
-    fn dialog_opener(&mut self) -> Box<DialogOpener>;
+    fn dialog_opener(&self) -> Box<DialogOpener>;
 }
 
 /// Register `@spel-katalog` module with lua interpreter.
@@ -108,7 +108,7 @@ pub fn register_module(
     thumb_db_path: &Path,
     sink_builder: &SinkBuilder,
     module: Option<Table>,
-    mut vt: Box<dyn Send + Virtual>,
+    vt: Arc<dyn Virtual>,
 ) -> ::mlua::Result<()> {
     let sink_builder =
         sink_builder.with_locked_channel(|| SinkIdentity::StaticName("Lua Script"))?;

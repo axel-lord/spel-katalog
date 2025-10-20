@@ -36,7 +36,7 @@ pub fn lua_batch(
     settings: ::spel_katalog_settings::Generic,
     thumb_db_path: &Path,
     sink_builder: &SinkBuilder,
-    vt: Box<dyn Send + spel_katalog_lua::Virtual>,
+    vt: Arc<dyn spel_katalog_lua::Virtual>,
 ) -> ::mlua::Result<()> {
     let sink_builder =
         sink_builder.with_locked_channel(|| SinkIdentity::StaticName("Lua Batch Script"))?;
@@ -173,7 +173,7 @@ impl State {
         tx: &StatusSender,
         settings: &::spel_katalog_settings::Settings,
         sink_builder: &SinkBuilder,
-        create_lua_vt: &dyn Fn() -> Box<dyn Send + ::spel_katalog_lua::Virtual>,
+        create_lua_vt: &dyn Fn() -> Arc<dyn Send + Sync + ::spel_katalog_lua::Virtual>,
     ) -> Task<OrRequest<Message, Request>> {
         match msg {
             Message::Action(action) => {

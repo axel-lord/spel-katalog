@@ -4,7 +4,7 @@ use ::spel_katalog_common::OrRequest;
 
 use crate::{
     app::WindowType,
-    dialog::{self, Dialog},
+    dialog::{self, DialogBuilder},
     process_info, view,
 };
 
@@ -65,5 +65,5 @@ pub enum Message {
     Url(widget::markdown::Url),
     DialogRequest(window::Id, dialog::Request),
     DialogMessage(window::Id, dialog::Message),
-    Dialog(Dialog),
+    Dialog(DialogBuilder),
 }

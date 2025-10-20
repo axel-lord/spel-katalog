@@ -1,6 +1,7 @@
 use ::std::{
     io::{BufWriter, Write},
     path::Path,
+    sync::Arc,
 };
 
 use ::clap::CommandFactory;
@@ -21,7 +22,12 @@ use ::tap::Pipe;
 use ::tokio::sync::mpsc::{Receiver, Sender, channel};
 use ::tokio_stream::wrappers::ReceiverStream;
 
-use crate::{Cli, ExitReceiver, Message, cli::Subcmd, dialog::Dialog, process_info, view};
+use crate::{
+    Cli, ExitReceiver, Message,
+    cli::Subcmd,
+    dialog::{Dialog, DialogBuilder},
+    process_info, view,
+};
 
 /// Specific kind of window.
 #[derive(Debug, Clone)]
@@ -50,17 +56,17 @@ pub(crate) struct App {
     pub sink_builder: SinkBuilder,
     pub windows: FxHashMap<window::Id, WindowType>,
     pub api_markdown: Box<[widget::markdown::Item]>,
-    pub lua_vt: LuaVt,
+    pub lua_vt: Arc<LuaVt>,
 }
 
 /// Virtual table passed to lua.
 #[derive(Debug, Clone)]
 pub struct LuaVt {
-    sender: Sender<Dialog>,
+    sender: Sender<DialogBuilder>,
 }
 
 impl LuaVt {
-    fn new() -> (Self, Receiver<Dialog>) {
+    fn new() -> (Self, Receiver<DialogBuilder>) {
         let (sender, rx) = channel(64);
 
         (Self { sender }, rx)
@@ -68,10 +74,10 @@ impl LuaVt {
 }
 
 impl ::spel_katalog_lua::Virtual for LuaVt {
-    fn dialog_opener(&mut self) -> Box<::spel_katalog_lua::DialogOpener> {
+    fn dialog_opener(&self) -> Box<::spel_katalog_lua::DialogOpener> {
         let sender = self.sender.clone();
         Box::new(move |text, buttons| {
-            let (dialog, mut rx) = Dialog::new(text, buttons);
+            let (dialog, mut rx) = DialogBuilder::new(text, buttons);
             sender
                 .blocking_send(dialog)
                 .map_err(::mlua::Error::external)?;
@@ -84,7 +90,7 @@ impl App {
     fn new(
         cli: Cli,
         sink_builder: SinkBuilder,
-    ) -> ::color_eyre::Result<(Self, Receiver<String>, Receiver<Dialog>)> {
+    ) -> ::color_eyre::Result<(Self, Receiver<String>, Receiver<DialogBuilder>)> {
         let Cli {
             settings,
             show_settings,
@@ -177,6 +183,7 @@ impl App {
         let api_markdown =
             widget::markdown::parse(&include_str!("../../lua_api.md").replace("`", "**")).collect();
         let (lua_vt, dialog_rx) = LuaVt::new();
+        let lua_vt = Arc::new(lua_vt);
 
         Ok((
             App {
@@ -241,7 +248,7 @@ impl App {
             .map_err(Report::from)
     }
 
-    pub fn lua_vt(&self) -> LuaVt {
+    pub fn lua_vt(&self) -> Arc<LuaVt> {
         self.lua_vt.clone()
     }
 

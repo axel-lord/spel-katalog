@@ -245,7 +245,7 @@ impl App {
                             &self.sender,
                             &self.settings,
                             &self.sink_builder,
-                            &|| Box::new(lua_vt.clone()),
+                            &|| lua_vt.clone(),
                         )
                         .map(From::from);
                 }
@@ -358,8 +358,9 @@ impl App {
                     position: window::Position::Centered,
                     ..Default::default()
                 });
-                return task
-                    .map(move |id| Message::OpenWindow(id, WindowType::Dialog(dialog.clone())));
+                return task.map(move |id| {
+                    Message::OpenWindow(id, WindowType::Dialog(dialog.clone().build()))
+                });
             }
         }
         Task::none()

@@ -203,7 +203,7 @@ impl App {
                                     &thumb_db_path,
                                     &sink_builder,
                                     Some(module),
-                                    Box::new(lua_vt),
+                                    lua_vt,
                                 )?;
 
                                 for script in scripts {
