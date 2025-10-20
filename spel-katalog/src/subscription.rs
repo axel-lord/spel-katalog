@@ -9,7 +9,7 @@ use ::spel_katalog_common::OrRequest;
 use ::spel_katalog_games::SelDir;
 use ::tap::Pipe;
 
-use crate::{App, Message, QuickMessage, dialog::Dialog};
+use crate::{App, Message, QuickMessage, dialog::DialogBuilder};
 
 impl App {
     pub fn subscription(&self) -> Subscription<Message> {
@@ -35,7 +35,7 @@ impl App {
                 }
                 Named::F1 => Some(Message::Quick(QuickMessage::OpenLua)),
                 Named::F2 => {
-                    let (dialog, _) = Dialog::new("Sample Dialog", ["Ok", "Cancel"]);
+                    let (dialog, _) = DialogBuilder::new("Sample Dialog", ["Ok", "Cancel"]);
                     Some(Message::Dialog(dialog))
                 }
                 _ => None,

@@ -18,7 +18,18 @@ pub fn register(
     dialog.set(
         "open",
         lua.create_function(move |_lua, table: Table| {
-            Ok(dialog_opener(table.get("text")?, table.get("buttons")?))
+            let mut result = dialog_opener(table.get("text")?, table.get("buttons")?)?;
+
+            if let Some(r) = &result {
+                let ignored = table.get::<Vec<String>>("ignore").ok();
+                if let Some(ignored) = ignored {
+                    if ignored.contains(r) {
+                        result = None;
+                    }
+                }
+            }
+
+            Ok(result)
         })?,
     )?;
 
