@@ -204,6 +204,13 @@ impl Games {
         }
     }
 
+    /// Remove the thumbnail of a game.
+    pub(crate) fn remove_image(&mut self, slug: &str) {
+        if let Some(game) = self.by_slug_mut(slug) {
+            game.image = None;
+        }
+    }
+
     /// Set current games to the ones provided, then update lookups and display.
     pub fn set(&mut self, games: Box<[Game]>, settings: &Settings, filter: &str) {
         let (slug_lookup, id_lookup) = games

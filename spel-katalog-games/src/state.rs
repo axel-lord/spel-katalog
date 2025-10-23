@@ -78,6 +78,11 @@ pub enum Message {
         /// Image.
         image: Handle,
     },
+    /// Remove a thumbnail from game and cache.
+    RemoveImage {
+        /// Game slug.
+        slug: String,
+    },
     /// Move selection.
     Select(SelDir),
     /// Select an id.
@@ -251,6 +256,11 @@ impl State {
                 let cache_path = settings.get::<CacheDir>().to_path_buf();
                 Task::future(cache_image(slug, image, cache_path, tx.clone()))
                     .then(|_| Task::none())
+            }
+            Message::RemoveImage { slug } => {
+                self.remove_image(&slug);
+                let cache_path = settings.get::<CacheDir>().to_path_buf();
+                Task::future(uncache_image(slug, cache_path)).then(|_| Task::none())
             }
             Message::Select(sel_dir) => {
                 self.select(sel_dir);
@@ -552,6 +562,24 @@ fn handle_cache_result(result: Result<Result<(), ::rusqlite::Error>, JoinError>)
     }
 }
 
+fn handle_uncache_result(result: Result<Result<(), ::rusqlite::Error>, JoinError>) {
+    match result {
+        Ok(result) => match result {
+            Ok(_) => {}
+            Err(err) => ::log::error!("could not uncache thumbnails\n{err}"),
+        },
+        Err(err) => ::log::error!("uncache thread failed\n{err}"),
+    }
+}
+
+async fn uncache_image(slug: String, cache_path: PathBuf) {
+    if !::tokio::fs::try_exists(&cache_path).await.unwrap_or(false) {
+        return;
+    }
+
+    handle_uncache_result(spawn_blocking(move || uncache_image_blocking(slug, cache_path)).await);
+}
+
 async fn cache_image(slug: String, image: Handle, cache_path: PathBuf, tx: StatusSender) {
     if create_cache_dir(&cache_path, tx).await.is_break() {
         return;
@@ -588,6 +616,10 @@ const INSERT_IMAGE: &str = r#"
 INSERT INTO images (slug, image) VALUES (:slug, :image)   
 "#;
 
+const REMOVE_IMAGE: &str = r#"
+DELETE FROM images WHERE slug = :slug
+"#;
+
 fn convert_slug_image(slug: String, image: Handle) -> Option<(String, Vec<u8>)> {
     let Handle::Rgba {
         id: _,
@@ -615,6 +647,24 @@ fn insert_image(stmt: &mut Statement<'_>, slug: String, image: Vec<u8>) {
     }
 }
 
+fn remove_image(stmt: &mut Statement<'_>, slug: String) {
+    if let Err(err) = stmt.execute(named_params! {":slug": slug}) {
+        ::log::error!("failed to remove thumbnail for {slug} from cache\n{err}");
+    }
+}
+
+fn uncache_image_blocking(slug: String, cache_path: PathBuf) -> Result<(), ::rusqlite::Error> {
+    let cache_path = cache_path.join(THUMBNAILS_FILENAME);
+    let db = Connection::open(&cache_path)?;
+
+    let mut stmt = db.prepare_cached(CREATE_IMAGE_TABLE)?;
+    stmt.execute([])?;
+
+    let mut stmt = db.prepare_cached(REMOVE_IMAGE)?;
+    remove_image(&mut stmt, slug);
+    Ok(())
+}
+
 fn cache_image_blocking(
     slug: String,
     image: Handle,
@@ -623,8 +673,10 @@ fn cache_image_blocking(
     let cache_path = cache_path.join(THUMBNAILS_FILENAME);
     let db = Connection::open(&cache_path)?;
 
-    db.execute(CREATE_IMAGE_TABLE, [])?;
-    let mut stmt = db.prepare(INSERT_IMAGE)?;
+    let mut stmt = db.prepare_cached(CREATE_IMAGE_TABLE)?;
+    stmt.execute([])?;
+
+    let mut stmt = db.prepare_cached(INSERT_IMAGE)?;
 
     if let Some((slug, image)) = convert_slug_image(slug, image) {
         insert_image(&mut stmt, slug, image);
@@ -641,8 +693,10 @@ fn cache_images_blocking(
     let cache_path = cache_path.join(THUMBNAILS_FILENAME);
     let db = Connection::open(&cache_path)?;
 
-    db.execute(CREATE_IMAGE_TABLE, [])?;
-    let mut stmt = db.prepare(INSERT_IMAGE)?;
+    let mut stmt = db.prepare_cached(CREATE_IMAGE_TABLE)?;
+    stmt.execute([])?;
+
+    let mut stmt = db.prepare_cached(INSERT_IMAGE)?;
 
     let mut slugs_images = Vec::new();
     slugs

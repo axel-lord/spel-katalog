@@ -109,6 +109,17 @@ impl App {
                     ::spel_katalog_info::Request::ShowInfo(show) => {
                         self.view.show_info(show);
                     }
+                    ::spel_katalog_info::Request::RemoveImage { slug } => {
+                        return self
+                            .games
+                            .update(
+                                ::spel_katalog_games::Message::RemoveImage { slug },
+                                &self.sender,
+                                &self.settings,
+                                &self.filter,
+                            )
+                            .map(Message::Games);
+                    }
                     ::spel_katalog_info::Request::SetImage { slug, image } => {
                         return self
                             .games
