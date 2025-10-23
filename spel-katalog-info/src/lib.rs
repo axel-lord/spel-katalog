@@ -83,6 +83,11 @@ pub enum Message {
         /// Game id to add thumbnail for
         id: i64,
     },
+
+    RemoveThumb {
+        /// Game id to removremovee thumbnail for
+        id: i64,
+    },
     SetExe {
         path: PathBuf,
     },
@@ -94,6 +99,7 @@ pub enum Message {
 pub enum Request {
     ShowInfo(bool),
     SetImage { slug: String, image: Handle },
+    RemoveImage { slug: String },
     RunGame { id: i64, sandbox: bool },
     RunLutrisInSandbox { id: i64 },
 }
@@ -318,6 +324,31 @@ impl State {
                 }
                 None => Task::none(),
             },
+            Message::RemoveThumb { id } => {
+                let Some(game) = games.by_id(id) else {
+                    return Task::none();
+                };
+
+                let dest = settings.get::<CoverartDir>().as_path().join(&game.slug);
+                let slug = game.slug.clone();
+                let tx = tx.clone();
+
+                let task = async move {
+                    const EXTENSIONS: &[&str] = &["png", "jpg", "jpeg"];
+
+                    for &ext in EXTENSIONS {
+                        let path = dest.with_extension(ext);
+                        if let Err(err) = ::tokio::fs::remove_file(&path).await {
+                            ::log::warn!("could not remove {path:?}\n{err}");
+                        } else {
+                            async_status!(tx, "removed {path:?}").await;
+                        }
+                    }
+
+                    OrRequest::Request(Request::RemoveImage { slug })
+                };
+                Task::future(task)
+            }
             Message::UpdateAdditionalRoots(action) => {
                 self.additional_roots_content.perform(action);
 
@@ -640,6 +671,16 @@ impl State {
                                 .is_none()
                                 .then(|| OrRequest::Message(Message::AddThumb { id })),
                         ),
+                    )
+                    .push(
+                        button("-Thumb")
+                            .padding(3)
+                            .style(widget::button::danger)
+                            .on_press_maybe(
+                                game.image
+                                    .is_some()
+                                    .then(|| OrRequest::Message(Message::RemoveThumb { id })),
+                            ),
                     )
                     .push(
                         button("Open")
