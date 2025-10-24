@@ -68,4 +68,12 @@ pub enum Subcmd {
         #[arg(short, long, default_value = "-")]
         output: PathBuf,
     },
+    /// Generate missing config. And/Or update lua definition.
+    InitConfig {
+        /// Path to config directory.
+        path: PathBuf,
+        /// Do not update lua definition.
+        #[arg(long)]
+        skip_lua_update: bool,
+    }
 }
