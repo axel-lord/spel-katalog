@@ -39,9 +39,6 @@ macro_rules! init_table {
 }
 pub(crate) use init_table;
 
-/// A boxed function which creates and waits on dialogs.
-pub type DialogOpener = dyn Fn(String, Vec<String>) -> ::mlua::Result<Option<String>>;
-
 /// Module skeleton, used to access objects.
 #[derive(Debug, Clone)]
 pub struct Skeleton {
@@ -104,10 +101,9 @@ fn make_class(lua: &Lua, class: &Table) -> ::mlua::Result<()> {
 }
 
 /// Functionality caller needs to provide.
-pub trait Virtual: Debug {
-    /// Create an object which may request dialogs to be opened. In which case the object blocks
-    /// until a choice is made.
-    fn dialog_opener(&self) -> Box<DialogOpener>;
+pub trait Virtual: 'static + Debug + Send + Sync {
+    /// Open a dialog window with the given text and buttons.
+    fn open_dialog(&self, text: String, buttons: Vec<String>) -> ::mlua::Result<Option<String>>;
 
     /// Create a dictionary of available lua modules and their source code.
     fn available_modules(&self) -> FxHashMap<String, String>;
@@ -155,7 +151,7 @@ fn register_module(
     cmd::register(&lua, &skeleton, &sink_builder)?;
     misc::register(&lua, &skeleton)?;
     yaml::register(&lua, &skeleton)?;
-    dialog::register(&lua, &skeleton, vt.dialog_opener())?;
+    dialog::register(&lua, &skeleton, vt.clone())?;
     game_data::register(&lua, &skeleton)?;
 
     let Skeleton { module, .. } = &skeleton;

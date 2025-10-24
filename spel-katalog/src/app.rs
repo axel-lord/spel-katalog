@@ -75,17 +75,6 @@ impl LuaVt {
 }
 
 impl ::spel_katalog_lua::Virtual for LuaVt {
-    fn dialog_opener(&self) -> Box<::spel_katalog_lua::DialogOpener> {
-        let sender = self.sender.clone();
-        Box::new(move |text, buttons| {
-            let (dialog, mut rx) = DialogBuilder::new(text, buttons);
-            sender
-                .blocking_send(dialog)
-                .map_err(::mlua::Error::external)?;
-            Ok(rx.blocking_recv())
-        })
-    }
-
     fn available_modules(&self) -> FxHashMap<String, String> {
         let lib_dir = AsRef::<Path>::as_ref(&self.lib_dir);
         ::std::fs::read_dir(lib_dir)
@@ -116,6 +105,14 @@ impl ::spel_katalog_lua::Virtual for LuaVt {
                 })
             })
             .collect()
+    }
+
+    fn open_dialog(&self, text: String, buttons: Vec<String>) -> mlua::Result<Option<String>> {
+        let (dialog, mut rx) = DialogBuilder::new(text, buttons);
+        self.sender
+            .blocking_send(dialog)
+            .map_err(::mlua::Error::external)?;
+        Ok(rx.blocking_recv())
     }
 }
 

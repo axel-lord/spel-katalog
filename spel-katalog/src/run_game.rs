@@ -201,7 +201,8 @@ impl App {
                                 let module = &skeleton.module;
 
                                 module.set("settings", settings)?;
-                                module.set("game", batch_info.to_lua(&lua, &skeleton.game_data)?)?;
+                                module
+                                    .set("game", batch_info.to_lua(&lua, &skeleton.game_data)?)?;
 
                                 for script in scripts {
                                     lua.load(script).exec()?;
