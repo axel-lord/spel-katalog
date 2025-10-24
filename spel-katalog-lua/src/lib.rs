@@ -15,6 +15,7 @@ mod game_data;
 mod image;
 mod lua_result;
 mod misc;
+mod path;
 mod print;
 mod yaml;
 
@@ -152,6 +153,7 @@ fn register_module(
     cmd::register(&lua, &skeleton, &sink_builder)?;
     misc::register(&lua, &skeleton)?;
     yaml::register(&lua, &skeleton)?;
+    path::register(&lua, &skeleton)?;
     dialog::register(&lua, &skeleton, vt.clone())?;
 
     let Skeleton { module, .. } = &skeleton;
