@@ -189,12 +189,9 @@ impl App {
                             .collect::<Result<Vec<_>, _>>()?;
 
                         let lua = Lua::new();
-                        batch_info
+                        settings_generic
                             .serialize(::mlua::serde::Serializer::new(&lua))
-                            .and_then(|game| {
-                                let settings = settings_generic
-                                    .serialize(::mlua::serde::Serializer::new(&lua))?;
-
+                            .and_then(|settings| {
                                 let skeleton = ::spel_katalog_lua::Module {
                                     thumb_db_path: &thumb_db_path,
                                     sink_builder: &sink_builder,
@@ -202,8 +199,9 @@ impl App {
                                 }
                                 .register(&lua)?;
                                 let module = &skeleton.module;
+
                                 module.set("settings", settings)?;
-                                module.set("game", game)?;
+                                module.set("game", batch_info.to_lua(&lua, &skeleton.game_data)?)?;
 
                                 for script in scripts {
                                     lua.load(script).exec()?;

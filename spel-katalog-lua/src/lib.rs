@@ -11,6 +11,7 @@ mod cmd;
 mod color;
 mod dialog;
 mod fs;
+mod game_data;
 mod image;
 mod lua_result;
 mod misc;
@@ -50,6 +51,8 @@ pub struct Skeleton {
     pub color: Table,
     /// Rect class table.
     pub rect: Table,
+    /// GameData class table.
+    pub game_data: Table,
 }
 
 impl Skeleton {
@@ -58,6 +61,7 @@ impl Skeleton {
             module,
             color: lua.create_table()?,
             rect: lua.create_table()?,
+            game_data: lua.create_table()?,
         })
     }
 }
@@ -152,6 +156,7 @@ fn register_module(
     misc::register(&lua, &skeleton)?;
     yaml::register(&lua, &skeleton)?;
     dialog::register(&lua, &skeleton, vt.dialog_opener())?;
+    game_data::register(&lua, &skeleton)?;
 
     let Skeleton { module, .. } = &skeleton;
 

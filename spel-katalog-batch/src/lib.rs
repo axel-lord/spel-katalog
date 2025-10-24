@@ -21,17 +21,18 @@ use ::iced::{
     },
 };
 use ::iced_highlighter::Highlighter;
-use ::mlua::Lua;
+use ::mlua::{Lua, Table};
 use ::rustc_hash::FxHashMap;
 use ::serde::Serialize;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status};
+use ::spel_katalog_lua::set_class;
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::strum::VariantArray;
 use ::tap::Pipe;
 
 /// Run a lua script with a batch.
 pub fn lua_batch(
-    data: Vec<BatchInfo>,
+    batch_data: Vec<BatchInfo>,
     script: String,
     settings: ::spel_katalog_settings::Generic,
     thumb_db_path: &Path,
@@ -42,7 +43,6 @@ pub fn lua_batch(
         sink_builder.with_locked_channel(|| SinkIdentity::StaticName("Lua Batch Script"))?;
     let sink_builder = &sink_builder;
     let lua = Lua::new();
-    let data = data.serialize(::mlua::serde::Serializer::new(&lua))?;
     let settings = settings.serialize(::mlua::serde::Serializer::new(&lua))?;
 
     let skeleton = ::spel_katalog_lua::Module {
@@ -52,6 +52,11 @@ pub fn lua_batch(
     }
     .register(&lua)?;
     let module = &skeleton.module;
+
+    let data = lua.create_table_with_capacity(batch_data.len(), 0)?;
+    for game in batch_data {
+        data.push(game.to_lua(&lua, &skeleton.game_data)?)?;
+    }
 
     module.set("settings", settings)?;
     module.set("data", data)?;
@@ -78,6 +83,36 @@ pub struct BatchInfo {
     pub hidden: bool,
     /// Custom attributes set for game.
     pub attrs: FxHashMap<String, String>,
+}
+
+impl BatchInfo {
+    /// Convert batch info to a lua value.
+    pub fn to_lua(&self, lua: &Lua, class: &Table) -> ::mlua::Result<::mlua::Table> {
+        let Self {
+            id,
+            slug,
+            name,
+            runner,
+            config,
+            hidden,
+            attrs,
+        } = self;
+        let table = lua.create_table()?;
+        set_class(&table, class)?;
+
+        table.set("id", *id)?;
+        table.set("slug", slug.as_str())?;
+        table.set("name", name.as_str())?;
+        table.set("runner", runner.as_str())?;
+        table.set("config", config.as_str())?;
+        table.set("hidden", *hidden)?;
+        table.set(
+            "attrs",
+            lua.create_table_from(attrs.iter().map(|(k, v)| (k.as_str(), v.as_str())))?,
+        )?;
+
+        Ok(table)
+    }
 }
 
 /// Message for batch view.
