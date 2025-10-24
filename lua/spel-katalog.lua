@@ -204,8 +204,25 @@ local None
 ---@field slug string Slug of game.
 local GameData = {}
 
+---Settings givent to batch and pre-launch scripts.
+---@class Settings
+---@field Theme string
+---@field Show ("Apparent" | "Hidden" | "All")
+---@field FilterMode ("Filter" | "Search" | "Regex")
+---@field SortBy ("Id" | "Name" | "Slug")
+---@field SortDir ("Forward" | "Reverse")
+---@field Network ("Disabled" | "Enabled")
+---@field LutrisExe string
+---@field FirejailExe string
+---@field CoverartDir string
+---@field LutrisDb string
+---@field YmlDir string
+---@field ConfigDir string
+---@field CacheDir string
+local Settings = {}
+
 ---Current settings as a table. Provided as a member of the module.
----@type table
+---@type Settings
 local settings
 
 ---Data for a single game, same format as values of batch data.
