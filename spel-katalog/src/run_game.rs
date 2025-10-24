@@ -193,18 +193,18 @@ impl App {
                         batch_info
                             .serialize(::mlua::serde::Serializer::new(&lua))
                             .and_then(|game| {
-                                let module = lua.create_table()?;
                                 let settings = settings_generic
                                     .serialize(::mlua::serde::Serializer::new(&lua))?;
+
+                                let skeleton = ::spel_katalog_lua::Module {
+                                    thumb_db_path: &thumb_db_path,
+                                    sink_builder: &sink_builder,
+                                    vt: lua_vt,
+                                }
+                                .register(&lua)?;
+                                let module = &skeleton.module;
                                 module.set("settings", settings)?;
                                 module.set("game", game)?;
-                                ::spel_katalog_lua::register_module(
-                                    &lua,
-                                    &thumb_db_path,
-                                    &sink_builder,
-                                    Some(module),
-                                    lua_vt,
-                                )?;
 
                                 for script in scripts {
                                     lua.load(script).exec()?;

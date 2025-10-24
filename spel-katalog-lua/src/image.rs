@@ -11,7 +11,7 @@ use ::rayon::prelude::*;
 use ::rusqlite::{Connection, OptionalExtension, params};
 use ::tap::Pipe;
 
-use crate::{Skeleton, color, init_table, lua_result::LuaResult};
+use crate::{Skeleton, color, init_table, lua_result::LuaResult, make_class};
 
 fn get_conn<'c>(
     conn: &'c OnceCell<::rusqlite::Connection>,
@@ -482,6 +482,7 @@ pub fn register(
     skeleton: &Skeleton,
 ) -> ::mlua::Result<()> {
     let rect = &skeleton.rect;
+    make_class(lua, rect)?;
     init_table! {
         rect:
             x = 0,

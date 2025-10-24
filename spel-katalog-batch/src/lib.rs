@@ -40,15 +40,21 @@ pub fn lua_batch(
 ) -> ::mlua::Result<()> {
     let sink_builder =
         sink_builder.with_locked_channel(|| SinkIdentity::StaticName("Lua Batch Script"))?;
+    let sink_builder = &sink_builder;
     let lua = Lua::new();
     let data = data.serialize(::mlua::serde::Serializer::new(&lua))?;
     let settings = settings.serialize(::mlua::serde::Serializer::new(&lua))?;
-    let module = lua.create_table()?;
+
+    let skeleton = ::spel_katalog_lua::Module {
+        thumb_db_path,
+        sink_builder,
+        vt,
+    }
+    .register(&lua)?;
+    let module = &skeleton.module;
 
     module.set("settings", settings)?;
     module.set("data", data)?;
-
-    ::spel_katalog_lua::register_module(&lua, thumb_db_path, &sink_builder, Some(module), vt)?;
 
     lua.load(script).exec()?;
 

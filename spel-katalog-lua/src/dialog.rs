@@ -1,13 +1,14 @@
 use ::mlua::{Lua, Table};
 
-use crate::{DialogOpener, Skeleton, create_class, init_table};
+use crate::{DialogOpener, Skeleton, init_table, make_class};
 
 pub fn register(
     lua: &Lua,
     skeleton: &Skeleton,
     dialog_opener: Box<DialogOpener>,
 ) -> ::mlua::Result<()> {
-    let dialog = create_class(lua)?;
+    let dialog = lua.create_table()?;
+    make_class(lua, &dialog)?;
 
     init_table! {
         dialog:

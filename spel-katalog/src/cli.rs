@@ -75,5 +75,5 @@ pub enum Subcmd {
         /// Do not update lua definition.
         #[arg(long)]
         skip_lua_update: bool,
-    }
+    },
 }
