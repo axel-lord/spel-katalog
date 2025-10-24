@@ -147,12 +147,12 @@ fn register_module(
     let skeleton = Skeleton::new(lua, lua.create_table()?)?;
 
     color::register(&lua, &skeleton)?;
+    game_data::register(&lua, &skeleton, conn.clone(), thumb_db_path.clone())?;
     image::register(&lua, conn, thumb_db_path, &skeleton)?;
     cmd::register(&lua, &skeleton, &sink_builder)?;
     misc::register(&lua, &skeleton)?;
     yaml::register(&lua, &skeleton)?;
     dialog::register(&lua, &skeleton, vt.clone())?;
-    game_data::register(&lua, &skeleton)?;
 
     let Skeleton { module, .. } = &skeleton;
 

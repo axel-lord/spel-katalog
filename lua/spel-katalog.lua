@@ -204,6 +204,18 @@ local None
 ---@field slug string Slug of game.
 local GameData = {}
 
+---Load lutris yml config for game.
+---@return any
+function GameData:loadConfig() end
+
+---Load cached cover used by game.
+---@return (Image | [nil, string])
+function GameData:loadCover() end
+
+---Save image to cover cache for this game.
+---@param image Image
+function GameData:saveCover(image) end
+
 ---Settings givent to batch and pre-launch scripts.
 ---@class Settings
 ---@field Theme string
