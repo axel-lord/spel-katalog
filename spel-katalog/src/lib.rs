@@ -21,6 +21,7 @@ mod run_game;
 mod subscription;
 mod update;
 mod view;
+mod init_config;
 
 /// Run application.
 pub fn run(

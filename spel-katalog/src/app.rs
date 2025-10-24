@@ -26,6 +26,7 @@ use crate::{
     Cli, ExitReceiver, Message,
     cli::Subcmd,
     dialog::{Dialog, DialogBuilder},
+    init_config::init_config,
     process_info, view,
 };
 
@@ -163,6 +164,13 @@ impl App {
                     }
                     ::std::process::exit(0)
                 }
+                Subcmd::InitConfig {
+                    path,
+                    skip_lua_update,
+                } => {
+                    init_config(path, skip_lua_update);
+                    ::std::process::exit(0)
+                }
             }
         }
 
@@ -180,8 +188,7 @@ impl App {
         let show_batch = false;
         let windows = FxHashMap::default();
         let batch = Default::default();
-        let api_markdown =
-            widget::markdown::parse(&include_str!("../../lua_api.md").replace("`", "**")).collect();
+        let api_markdown = widget::markdown::parse(include_str!("../../lua/docs.md")).collect();
         let (lua_vt, dialog_rx) = LuaVt::new();
         let lua_vt = Arc::new(lua_vt);
 

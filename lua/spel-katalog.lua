@@ -2,10 +2,10 @@
 
 ---A color with a red, green, blue and alpha value.
 ---@class Color
----@field r number
----@field g number
----@field b number
----@field a number
+---@field r number Red value of color between 0 an 255.
+---@field g number Green value of color between 0 and 255.
+---@field b number Blue value of color between 0 and 255.
+---@field a number Alpha value of color between 0 and 1.
 local Color = {}
 
 ---Add color metatable to given table, or create a new table with the metatable.
@@ -19,10 +19,10 @@ function Color:new(tbl) end
 function Color:new(...) end
 
 ---@class Rect
----@field x number
----@field y number
----@field w number
----@field h number
+---@field x number X position of rectangle.
+---@field y number Y position of rectangle.
+---@field w number Width of rectangle.
+---@field h number height of rectangle.
 local Rect = {}
 
 ---Add rect metatable to given table, or create a new table with the metatable.
@@ -36,19 +36,19 @@ function Rect:new(tbl) end
 function Rect:new(...) end
 
 ---Letterboxing parameters.
----@alias Letterbox
+---@alias Letterbox # How to letterbox an image.
 ---| nil # Use all defaults.
 ---| Color # Use provided color.
 ---| { ratio: number?, color: Color? } # Use provided values for ratio and color, or defaults.
 ---| number # Use provided ratio.
 
 ---Stretch/resize filter.
----@alias Filter
----| "nearest"
----| "triangle"
----| "catmullrom"
----| "gaussian"
----| "lanczos3
+---@alias Filter # How to filter during resize.
+---| "nearest" # Nearest filtering.
+---| "triangle" # Triangle filtering.
+---| "catmullrom" # Catmullrom filtering.
+---| "gaussian" # Gaussian filtering.
+---| "lanczos3" #  Lanczos3 filtering
 
 ---An in-memory image.
 ---@class Image
@@ -193,6 +193,16 @@ function Dialog:open() end
 ---@type lightuserdata
 local None
 
+---Game data given to batch and pre-launch scripts.
+---@class GameData
+---@field attrs {[string]: string} Custom attributes set for game.
+---@field config string Path to game lutris yaml.
+---@field hidden boolean Set to true if game is hidden.
+---@field id number Lutris numeric id of game.
+---@field name string Name of game.
+---@field runner string Runner used by game.
+---@field slug string Slug of game.
+local GameData = {}
 
 ---Current settings as a table. Provided as a member of the module.
 ---@type table
@@ -200,12 +210,12 @@ local settings
 
 ---Data for a single game, same format as values of batch data.
 ---Only available when running as a pre-launch script.
----@type table?
+---@type GameData?
 local game
 
 ---Batch data, provided as a table/vector in module.
 ---Only available when running batch scripts.
----@type table[]?
+---@type GameData[]?
 local data
 
 local spelkatalog = {
