@@ -295,6 +295,7 @@ local spelkatalog = {
 	Rect = Rect,
 	Image = Image,
 	Dialog = Dialog,
+	GameData = GameData,
 	None = None,
 	settings = settings,
 	game = game,

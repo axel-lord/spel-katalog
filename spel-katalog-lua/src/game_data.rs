@@ -38,5 +38,7 @@ pub fn register(
         })?,
     )?;
 
+    skeleton.module.set("GameData", game_data)?;
+
     Ok(())
 }
