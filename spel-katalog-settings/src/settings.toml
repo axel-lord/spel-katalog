@@ -78,20 +78,10 @@ title = "Game Config Directory"
 help = "Path to lutris game yml config directory"
 path = "{CONFIG}/lutris/games"
 
-[ExtraConfigDir]
-title = "Extra Config Directory"
-help = "Path to additional game configuration directory"
-path = "{CONFIG}/spel-katalog/games"
-
-[ScriptConfigDir]
-title = "Script Config Directory"
-help = "Path to script config directory"
-path = "{CONFIG}/spel-katalog/scripts"
-
-[BatchScriptDir]
-title = "Batch Script Directory"
-help = "Path to batch script directory"
-path = "{CONFIG}/spel-katalog/batch"
+[ConfigDir]
+title = "Config Directory"
+help = "Path application configuration directory"
+path = "{CONFIG}/spel-katalog/"
 
 [CacheDir]
 title = "Cache Directory"

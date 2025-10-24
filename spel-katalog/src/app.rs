@@ -16,7 +16,7 @@ use ::iced::{
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog_common::{OrRequest, StatusSender, w};
 use ::spel_katalog_info::image_buffer::ImageBuffer;
-use ::spel_katalog_settings::{FilterMode, LutrisDb, Network, Theme};
+use ::spel_katalog_settings::{ConfigDir, FilterMode, LutrisDb, Network, Theme};
 use ::spel_katalog_sink::SinkBuilder;
 use ::tap::Pipe;
 use ::tokio::sync::mpsc::{Receiver, Sender, channel};
@@ -64,13 +64,13 @@ pub(crate) struct App {
 #[derive(Debug, Clone)]
 pub struct LuaVt {
     sender: Sender<DialogBuilder>,
+    lib_dir: Arc<Path>,
 }
 
 impl LuaVt {
-    fn new() -> (Self, Receiver<DialogBuilder>) {
+    fn new(lib_dir: Arc<Path>) -> (Self, Receiver<DialogBuilder>) {
         let (sender, rx) = channel(64);
-
-        (Self { sender }, rx)
+        (Self { sender, lib_dir }, rx)
     }
 }
 
@@ -84,6 +84,38 @@ impl ::spel_katalog_lua::Virtual for LuaVt {
                 .map_err(::mlua::Error::external)?;
             Ok(rx.blocking_recv())
         })
+    }
+
+    fn available_modules(&self) -> FxHashMap<String, String> {
+        let lib_dir = AsRef::<Path>::as_ref(&self.lib_dir);
+        ::std::fs::read_dir(lib_dir)
+            .map_err(|err| ::log::error!("could not read directory {lib_dir:?}\n{err}"))
+            .ok()
+            .into_iter()
+            .flat_map(|read_dir| {
+                read_dir.filter_map(|entry| {
+                    let entry = entry
+                        .map_err(|err| {
+                            ::log::error!("failed to get read_dir entry in {lib_dir:?}\n{err}")
+                        })
+                        .ok()?;
+
+                    let path = entry.path();
+                    let name = path.file_stem();
+                    if name.is_none() {
+                        ::log::error!("could not get file stem for {path:?}")
+                    }
+                    let name = name?;
+                    let content = ::std::fs::read_to_string(&path)
+                        .map_err(|err| {
+                            ::log::error!("could not read content of {path:?} to a string\n{err}");
+                        })
+                        .ok()?;
+
+                    Some((name.to_string_lossy().into_owned(), content))
+                })
+            })
+            .collect()
     }
 }
 
@@ -188,8 +220,9 @@ impl App {
         let show_batch = false;
         let windows = FxHashMap::default();
         let batch = Default::default();
+        let lib_path = Arc::from(settings.get::<ConfigDir>().as_path().join("lib"));
         let api_markdown = widget::markdown::parse(include_str!("../../lua/docs.md")).collect();
-        let (lua_vt, dialog_rx) = LuaVt::new();
+        let (lua_vt, dialog_rx) = LuaVt::new(lib_path);
         let lua_vt = Arc::new(lua_vt);
 
         Ok((

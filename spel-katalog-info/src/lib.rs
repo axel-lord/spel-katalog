@@ -26,7 +26,7 @@ use ::image::ImageError;
 use ::open::that;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, styling, w};
 use ::spel_katalog_games::Games;
-use ::spel_katalog_settings::{CoverartDir, ExtraConfigDir, Settings, YmlDir};
+use ::spel_katalog_settings::{ConfigDir, CoverartDir, Settings, YmlDir};
 use ::tap::Pipe;
 use ::yaml_rust2::Yaml;
 
@@ -126,8 +126,9 @@ impl State {
                         .with_extension("yml");
 
                     let additional_path = settings
-                        .get::<ExtraConfigDir>()
+                        .get::<ConfigDir>()
                         .as_path()
+                        .join("games")
                         .join(format!("{id}.toml"));
 
                     async fn read_additional(path: &Path) -> Option<formats::Additional> {
@@ -391,7 +392,7 @@ impl State {
 
                 let id = self.id;
                 let additional = self.additional.clone();
-                let extra_config_dir = settings.get::<ExtraConfigDir>().to_path_buf();
+                let extra_config_dir = settings.get::<ConfigDir>().as_path().join("games");
 
                 let tx = tx.clone();
                 Task::future(async move {

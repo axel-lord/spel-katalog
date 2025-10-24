@@ -6,17 +6,18 @@ authors = ["Axel Lord"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
+either = { workspace = true, features = ["std"] }
 image = { workspace = true, features = ["rayon"] }
 log.workspace = true
-either = { workspace = true, features = ["std"] }
 mlua = { workspace = true, features = ["luau", "luau-jit", "vendored", "macros"]}
 nalgebra.workspace = true
+once_cell.workspace = true
 rayon.workspace = true
 rusqlite.workspace = true
-spel-katalog-sink.workspace = true
+rustc-hash.workspace = true
 shell-words.workspace = true
+spel-katalog-sink.workspace = true
 tap.workspace = true
-once_cell.workspace = true
 yaml-rust2.workspace = true
 
 [lints]

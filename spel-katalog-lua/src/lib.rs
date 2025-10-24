@@ -4,6 +4,7 @@ use ::std::{fmt::Debug, path::Path, rc::Rc, sync::Arc};
 
 use ::mlua::{Lua, Table, Variadic};
 use ::once_cell::unsync::OnceCell;
+use ::rustc_hash::FxHashMap;
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 
 mod cmd;
@@ -103,6 +104,9 @@ pub trait Virtual: Debug {
     /// Create an object which may request dialogs to be opened. In which case the object blocks
     /// until a choice is made.
     fn dialog_opener(&self) -> Box<DialogOpener>;
+
+    /// Create a dictionary of available lua modules and their source code.
+    fn available_modules(&self) -> FxHashMap<String, String>;
 }
 
 /// Module info used for registration,
@@ -156,7 +160,28 @@ fn register_module(
 
     module.set("None", ::mlua::Value::NULL)?;
 
-    lua.register_module("@spel-katalog", module)?;
+    let module = module.clone();
+    let mut available = vt.available_modules();
+    let mut loaded = FxHashMap::<String, ::mlua::Value>::default();
+    lua.globals().set(
+        "require",
+        lua.create_function_mut(move |lua, name: String| match name.as_str() {
+            "@spel-katalog" | "spel-katalog" => Ok(::mlua::Value::Table(module.clone())),
+            other => {
+                if let Some(source) = available.remove(other) {
+                    let module = lua.load(source).call::<::mlua::Value>(())?;
+                    loaded.insert(name, module.clone());
+                    Ok(module)
+                } else if let Some(module) = loaded.get(other) {
+                    Ok(module.clone())
+                } else {
+                    Err(::mlua::Error::RuntimeError(format!(
+                        "could not find module {other:?}"
+                    )))
+                }
+            }
+        })?,
+    )?;
 
     Ok(skeleton)
 }

@@ -283,9 +283,9 @@ impl State {
             Message::Open => {
                 let tx = tx.clone();
                 let batch_dir = settings
-                    .get::<::spel_katalog_settings::BatchScriptDir>()
+                    .get::<::spel_katalog_settings::ConfigDir>()
                     .as_path()
-                    .to_path_buf();
+                    .join("batch");
                 Task::future(async move {
                     let file_path = ::rfd::AsyncFileDialog::new()
                         .set_title("Save Batch Script")
@@ -340,9 +340,9 @@ impl State {
                 let content = self.script.text();
                 let tx = tx.clone();
                 let batch_dir = settings
-                    .get::<::spel_katalog_settings::BatchScriptDir>()
+                    .get::<::spel_katalog_settings::ConfigDir>()
                     .as_path()
-                    .to_path_buf();
+                    .join("batch");
                 Task::future(async move {
                     let file_path = ::rfd::AsyncFileDialog::new()
                         .set_title("Save Batch Script")

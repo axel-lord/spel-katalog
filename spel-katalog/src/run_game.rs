@@ -9,9 +9,7 @@ use ::serde::Serialize;
 use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::status;
 use ::spel_katalog_info::formats::{self, Additional};
-use ::spel_katalog_settings::{
-    CacheDir, ExtraConfigDir, FirejailExe, LutrisExe, Network, ScriptConfigDir, YmlDir,
-};
+use ::spel_katalog_settings::{CacheDir, ConfigDir, FirejailExe, LutrisExe, Network, YmlDir};
 use ::spel_katalog_sink::SinkIdentity;
 
 use crate::{App, Message, QuickMessage, Safety};
@@ -101,10 +99,11 @@ impl App {
         let configpath = format!("{yml_dir}/{}.yml", game.configpath);
         let extra_config_path = self
             .settings
-            .get::<ExtraConfigDir>()
+            .get::<ConfigDir>()
             .as_path()
+            .join("games")
             .join(format!("{id}.toml"));
-        let script_dir = self.settings.get::<ScriptConfigDir>().to_path_buf();
+        let script_dir = self.settings.get::<ConfigDir>().as_path().join("scripts");
         let thumb_db_path = self
             .settings
             .get::<CacheDir>()
