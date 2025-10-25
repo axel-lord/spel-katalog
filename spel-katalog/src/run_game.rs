@@ -7,7 +7,8 @@ use ::iced::Task;
 use ::mlua::Lua;
 use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::status;
-use ::spel_katalog_info::formats::{self, Additional};
+use ::spel_katalog_formats::AdditionalConfig;
+use ::spel_katalog_info::formats;
 use ::spel_katalog_settings::{ConfigDir, FirejailExe, LutrisExe, Network, YmlDir};
 use ::spel_katalog_sink::SinkIdentity;
 
@@ -142,7 +143,7 @@ impl App {
                 else {
                     return format!("could not read {extra_config_path:?}").into();
                 };
-                let Some(additional) = ::toml::from_str::<Additional>(&content)
+                let Some(additional) = ::toml::from_str::<AdditionalConfig>(&content)
                     .map_err(|err| ::log::error!("could not parse {extra_config_path:?}\n{err}"))
                     .ok()
                 else {

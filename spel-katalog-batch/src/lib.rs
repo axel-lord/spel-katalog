@@ -20,7 +20,7 @@ use ::iced::{
     },
 };
 use ::iced_highlighter::Highlighter;
-use ::mlua::{Lua, Table};
+use ::mlua::{Lua, LuaSerdeExt, Table};
 use ::rustc_hash::FxHashMap;
 use ::serde::Serialize;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status};
@@ -96,10 +96,7 @@ impl BatchInfo {
         table.set("runner", runner.as_str())?;
         table.set("config", config.as_str())?;
         table.set("hidden", *hidden)?;
-        table.set(
-            "attrs",
-            lua.create_table_from(attrs.iter().map(|(k, v)| (k.as_str(), v.as_str())))?,
-        )?;
+        table.set("attrs", lua.to_value(attrs)?)?;
 
         Ok(table)
     }

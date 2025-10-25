@@ -4899,6 +4899,7 @@ dependencies = [
  "spel-katalog-batch",
  "spel-katalog-build",
  "spel-katalog-common",
+ "spel-katalog-formats",
  "spel-katalog-games",
  "spel-katalog-info",
  "spel-katalog-lua",
@@ -4963,6 +4964,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "spel-katalog-formats"
+version = "0.1.0"
+dependencies = [
+ "rustc-hash 2.1.1",
+ "serde",
+]
+
+[[package]]
 name = "spel-katalog-games"
 version = "0.1.0"
 dependencies = [
@@ -5000,6 +5009,7 @@ dependencies = [
  "rustc-hash 2.1.1",
  "serde",
  "spel-katalog-common",
+ "spel-katalog-formats",
  "spel-katalog-games",
  "spel-katalog-settings",
  "tap",
@@ -5024,6 +5034,7 @@ dependencies = [
  "rusqlite",
  "rustc-hash 2.1.1",
  "shell-words",
+ "spel-katalog-formats",
  "spel-katalog-sink",
  "tap",
  "yaml-rust2",

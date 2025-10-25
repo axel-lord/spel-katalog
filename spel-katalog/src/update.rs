@@ -9,8 +9,8 @@ use ::rustc_hash::FxHashMap;
 use ::rustix::process::{Pid, RawPid};
 use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::OrRequest;
+use ::spel_katalog_formats::AdditionalConfig;
 use ::spel_katalog_games::SelDir;
-use ::spel_katalog_info::formats::Additional;
 use ::spel_katalog_settings::{
     ConfigDir, CoverartDir, FilterMode, Network, Show, Variants, YmlDir,
 };
@@ -44,7 +44,7 @@ fn gather<'a>(
                     .map_err(|err| ::log::error!("could not read additional path {path:?}\n{err}"))
                     .ok()
                     .and_then(|content| {
-                        let additional = ::toml::from_str::<Additional>(&content)
+                        let additional = ::toml::from_str::<AdditionalConfig>(&content)
                             .map_err(|err| ::log::error!("could not parse toml of {path:?}\n{err}"))
                             .ok()?;
                         Some(additional.attrs)

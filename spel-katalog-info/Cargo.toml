@@ -12,6 +12,7 @@ image.workspace = true
 log.workspace = true
 rfd = { workspace = true, features = ["xdg-portal","tokio"] }
 spel-katalog-common.workspace = true
+spel-katalog-formats.workspace = true
 spel-katalog-games.workspace = true
 spel-katalog-settings.workspace = true
 tap.workspace = true

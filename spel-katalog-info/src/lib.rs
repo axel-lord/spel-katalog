@@ -25,6 +25,7 @@ use ::iced_highlighter::Highlighter;
 use ::image::ImageError;
 use ::open::that;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, styling, w};
+use ::spel_katalog_formats::AdditionalConfig;
 use ::spel_katalog_games::Games;
 use ::spel_katalog_settings::{ConfigDir, CoverartDir, Settings, YmlDir};
 use ::tap::Pipe;
@@ -44,7 +45,7 @@ pub struct State {
     config_path: Option<PathBuf>,
     common_parent: PathBuf,
     additional_roots_content: widget::text_editor::Content,
-    additional: formats::Additional,
+    additional: AdditionalConfig,
     attrs: attrs::State,
 }
 
@@ -56,7 +57,7 @@ impl Default for State {
             additional_roots_content: Default::default(),
             config_path: None,
             common_parent: PathBuf::from("/"),
-            additional: formats::Additional::default(),
+            additional: AdditionalConfig::default(),
             attrs: attrs::State::default(),
         }
     }
@@ -71,7 +72,7 @@ pub enum Message {
         id: i64,
         content: String,
         path: PathBuf,
-        additional: formats::Additional,
+        additional: AdditionalConfig,
     },
     #[from]
     UpdateContent(widget::text_editor::Action),
@@ -131,7 +132,7 @@ impl State {
                         .join("games")
                         .join(format!("{id}.toml"));
 
-                    async fn read_additional(path: &Path) -> Option<formats::Additional> {
+                    async fn read_additional(path: &Path) -> Option<AdditionalConfig> {
                         // Usually a bad idea however since we deal with it not existing correctly
                         // anyways this is just some redundancy that prevents log spam.
                         if !path.exists() {
@@ -375,10 +376,7 @@ impl State {
                 task.map(Message::UpdateAttrs).map(OrRequest::Message)
             }
             Message::SaveAdditional => {
-                async fn write_additional(
-                    path: &Path,
-                    additional: formats::Additional,
-                ) -> Option<()> {
+                async fn write_additional(path: &Path, additional: AdditionalConfig) -> Option<()> {
                     let content = ::toml::to_string(&additional)
                         .map_err(|err| {
                             ::log::error!("could not serialize additional to {path:?}\n{err}")
