@@ -350,4 +350,9 @@ function spelkatalog.saveFile(path, content) end
 ---@return table<string, string>
 function spelkatalog.setAttr(game_id, attr, value) end
 
+---Resolve a nested path, returning nil as soon as encountered.
+---@param tbl (table | userdata) Object to resolve path for.
+---@param ... any Components of path to resolve.
+function spelkatalog.resolve(tbl, ...) end
+
 return spelkatalog

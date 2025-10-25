@@ -1,6 +1,6 @@
 use ::std::{ffi::OsStr, os::unix::ffi::OsStrExt, sync::Arc};
 
-use ::mlua::{Lua, LuaSerdeExt, Variadic};
+use ::mlua::{Lua, LuaSerdeExt, MultiValue, ObjectLike, Variadic};
 use ::spel_katalog_formats::AdditionalConfig;
 
 use crate::{Skeleton, Virtual};
@@ -46,6 +46,25 @@ pub fn set_attr(
     Ok(table)
 }
 
+pub fn resolve(
+    _lua: &Lua,
+    mut init: ::mlua::Value,
+    keys: MultiValue,
+) -> ::mlua::Result<::mlua::Value> {
+    for key in keys {
+        match init {
+            ::mlua::Value::Table(table) => {
+                init = table.get(key)?;
+            }
+            ::mlua::Value::UserData(any_user_data) => {
+                init = any_user_data.get(key)?;
+            }
+            _ => return Ok(::mlua::Value::Nil),
+        }
+    }
+    Ok(init)
+}
+
 pub fn register(lua: &Lua, skeleton: &Skeleton, vt: Arc<dyn Virtual>) -> ::mlua::Result<()> {
     let module = &skeleton.module;
     module.set("getEnv", lua.create_function(get_env)?)?;
@@ -55,6 +74,10 @@ pub fn register(lua: &Lua, skeleton: &Skeleton, vt: Arc<dyn Virtual>) -> ::mlua:
         lua.create_function(move |lua, (id, attr, value)| {
             set_attr(lua, id, attr, value, vt.as_ref())
         })?,
+    )?;
+    module.set(
+        "resolve",
+        lua.create_function(|lua, (init, keys)| resolve(lua, init, keys))?,
     )?;
     Ok(())
 }
