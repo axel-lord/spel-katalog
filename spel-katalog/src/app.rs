@@ -1,4 +1,5 @@
 use ::std::{
+    collections::HashMap,
     convert::identity,
     io::{BufWriter, Write},
     path::{Path, PathBuf},
@@ -122,6 +123,10 @@ impl ::spel_katalog_lua::Virtual for LuaVt {
             .get::<CacheDir>()
             .as_path()
             .join("thumbnails.db"))
+    }
+
+    fn settings(&self) -> mlua::Result<HashMap<&'_ str, String>> {
+        Ok(self.settings.generic())
     }
 }
 

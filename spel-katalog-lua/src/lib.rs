@@ -1,13 +1,14 @@
 //! Lua api in use by project.
 
 use ::std::{
+    collections::HashMap,
     fmt::Debug,
     path::{Path, PathBuf},
     rc::Rc,
     sync::Arc,
 };
 
-use ::mlua::{Lua, Table, Variadic};
+use ::mlua::{Lua, LuaSerdeExt, Table, Variadic};
 use ::once_cell::unsync::OnceCell;
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
@@ -116,6 +117,9 @@ pub trait Virtual: 'static + Debug + Send + Sync {
 
     /// Get a connection to the thumbnail databse.
     fn thumb_db_path(&self) -> ::mlua::Result<PathBuf>;
+
+    /// Get settings as a hash map.
+    fn settings(&self) -> ::mlua::Result<HashMap<&'_ str, String>>;
 }
 
 /// Module info used for registration,
@@ -163,6 +167,8 @@ fn register_module(
     print::register(&lua, &module, &sink_builder)?;
 
     module.set("None", ::mlua::Value::NULL)?;
+
+    module.set("settings", lua.to_value(&vt.settings()?)?)?;
 
     let module = module.clone();
     let mut available = vt.available_modules();

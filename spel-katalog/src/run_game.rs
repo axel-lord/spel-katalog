@@ -5,7 +5,6 @@ use ::std::{
 
 use ::iced::Task;
 use ::mlua::Lua;
-use ::serde::Serialize;
 use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::status;
 use ::spel_katalog_info::formats::{self, Additional};
@@ -104,7 +103,6 @@ impl App {
             .join("games")
             .join(format!("{id}.toml"));
         let script_dir = self.settings.get::<ConfigDir>().as_path().join("scripts");
-        let settings_generic = self.settings.generic();
 
         let (send_open, recv_open) = ::tokio::sync::oneshot::channel();
 
@@ -184,27 +182,24 @@ impl App {
                             .collect::<Result<Vec<_>, _>>()?;
 
                         let lua = Lua::new();
-                        settings_generic
-                            .serialize(::mlua::serde::Serializer::new(&lua))
-                            .and_then(|settings| {
-                                let skeleton = ::spel_katalog_lua::Module {
-                                    sink_builder: &sink_builder,
-                                    vt: lua_vt,
-                                }
-                                .register(&lua)?;
-                                let module = &skeleton.module;
+                        ::spel_katalog_lua::Module {
+                            sink_builder: &sink_builder,
+                            vt: lua_vt,
+                        }
+                        .register(&lua)
+                        .and_then(|skeleton| {
+                            let module = &skeleton.module;
+                            let game = batch_info.to_lua(&lua, &skeleton.game_data)?;
 
-                                module.set("settings", settings)?;
-                                module
-                                    .set("game", batch_info.to_lua(&lua, &skeleton.game_data)?)?;
+                            module.set("game", game)?;
 
-                                for script in scripts {
-                                    lua.load(script).exec()?;
-                                }
+                            for script in scripts {
+                                lua.load(script).exec()?;
+                            }
 
-                                Ok(())
-                            })
-                            .map_err(|err| LuaError(err.to_string()))?;
+                            Ok(())
+                        })
+                        .map_err(|err| LuaError(err.to_string()))?;
                         Ok::<_, ScriptGatherError>(())
                     })
                     .await??;

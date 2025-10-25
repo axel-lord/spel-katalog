@@ -33,7 +33,6 @@ use ::tap::Pipe;
 pub fn lua_batch(
     batch_data: Vec<BatchInfo>,
     script: String,
-    settings: ::spel_katalog_settings::Generic,
     sink_builder: &SinkBuilder,
     vt: Arc<dyn spel_katalog_lua::Virtual>,
 ) -> ::mlua::Result<()> {
@@ -41,7 +40,6 @@ pub fn lua_batch(
         sink_builder.with_locked_channel(|| SinkIdentity::StaticName("Lua Batch Script"))?;
     let sink_builder = &sink_builder;
     let lua = Lua::new();
-    let settings = settings.serialize(::mlua::serde::Serializer::new(&lua))?;
 
     let skeleton = ::spel_katalog_lua::Module { sink_builder, vt }.register(&lua)?;
     let module = &skeleton.module;
@@ -51,7 +49,6 @@ pub fn lua_batch(
         data.push(game.to_lua(&lua, &skeleton.game_data)?)?;
     }
 
-    module.set("settings", settings)?;
     module.set("data", data)?;
 
     lua.load(script).exec()?;
@@ -223,7 +220,6 @@ impl State {
                 let lang = self.lang;
                 let script = self.script.text();
                 let title = Some(self.script_title.clone()).filter(|s| !s.is_empty());
-                let settings = settings.generic();
                 let sink_builder = sink_builder.clone();
                 let lua_vt = create_lua_vt();
                 let task = Task::future(::tokio::task::spawn_blocking(move || {
@@ -250,7 +246,7 @@ impl State {
                             command
                         }
                         Language::Lua => {
-                            return lua_batch(batch_infos, script, settings, &sink_builder, lua_vt)
+                            return lua_batch(batch_infos, script, &sink_builder, lua_vt)
                                 .map_err(|err| ::std::io::Error::other(err.to_string()));
                         }
                     };

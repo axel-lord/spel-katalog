@@ -375,7 +375,6 @@ impl App {
                     ::log::warn!("batch run attempted without source, should not happen");
                     return Task::none();
                 };
-                let settings = self.settings.generic();
                 let games = gather(
                     &self.settings.get::<YmlDir>(),
                     &self.settings.get::<ConfigDir>(),
@@ -385,7 +384,7 @@ impl App {
                 let vt = self.lua_vt();
                 let future = async move {
                     ::tokio::task::spawn_blocking(move || {
-                        ::spel_katalog_batch::lua_batch(games, src, settings, &sink_builder, vt)
+                        ::spel_katalog_batch::lua_batch(games, src, &sink_builder, vt)
                             .map_err(|err| err.to_string())
                     })
                     .await
