@@ -39,12 +39,16 @@ pub struct Cli {
     pub advanced_terminal: bool,
 
     /// Keep terminal open.
-    #[arg(long, visible_alias = "kt", requires("advanced_terminal"))]
+    #[arg(long, visible_alias = "kt", requires = "advanced_terminal")]
     pub keep_terminal: bool,
 
     /// Run the given batch script, then exit.
     #[arg(long, short, conflicts_with = "advanced_terminal")]
     pub batch: Option<PathBuf>,
+
+    /// At most how long to wait for application initialization to finish before running batch.
+    #[arg(long, requires = "batch", required = false, default_value_t = 120)]
+    pub batch_init_timeout: u16,
 
     /// Perform an action other than opening gui.
     #[command(subcommand)]

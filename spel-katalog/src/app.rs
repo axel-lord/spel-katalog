@@ -3,6 +3,7 @@ use ::std::{
     io::{BufWriter, Write},
     path::Path,
     sync::Arc,
+    time::Duration,
 };
 
 use ::clap::CommandFactory;
@@ -15,7 +16,11 @@ use ::iced::{
     window,
 };
 use ::rustc_hash::FxHashMap;
-use ::spel_katalog_common::{OrRequest, StatusSender, tracker::create_tracker_monitor, w};
+use ::spel_katalog_common::{
+    OrRequest, StatusSender,
+    tracker::{self, create_tracker_monitor},
+    w,
+};
 use ::spel_katalog_info::image_buffer::ImageBuffer;
 use ::spel_katalog_settings::{ConfigDir, FilterMode, LutrisDb, Network, Theme};
 use ::spel_katalog_sink::SinkBuilder;
@@ -60,6 +65,7 @@ pub(crate) struct App {
     pub api_markdown: Box<[widget::markdown::Item]>,
     pub lua_vt: Arc<LuaVt>,
     pub batch_source: Option<String>,
+    pub batch_init_timeout: u16,
 }
 
 /// Virtual table passed to lua.
@@ -131,6 +137,7 @@ impl App {
             advanced_terminal: _,
             keep_terminal: _,
             batch,
+            batch_init_timeout,
         } = cli;
 
         let batch_source = batch
@@ -248,6 +255,7 @@ impl App {
                 api_markdown,
                 lua_vt,
                 batch_source,
+                batch_init_timeout,
             },
             status_rx,
             dialog_rx,
@@ -264,7 +272,20 @@ impl App {
         let (tracker, run_batch) = if app.batch_source.is_some() {
             let (tracker, monitor) = create_tracker_monitor();
 
-            let run_batch = Task::future(monitor.wait()).then(move |response| {
+            let timeout = Duration::from_secs(app.batch_init_timeout.into());
+            let run_batch = Task::future(async move {
+                match ::tokio::time::timeout(timeout, monitor.wait()).await {
+                    Ok(response) => response,
+                    Err(err) => {
+                        ::log::warn!(
+                            "initialization did not finish before timout {timeout}, {err}",
+                            timeout = timeout.as_secs()
+                        );
+                        tracker::Response::Lost
+                    }
+                }
+            })
+            .then(move |response| {
                 if !response.is_finished() {
                     ::log::warn!("initialization tracker was lost");
                 }
