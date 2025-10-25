@@ -12,7 +12,7 @@ use ::spel_katalog_common::OrRequest;
 use ::spel_katalog_games::SelDir;
 use ::spel_katalog_info::formats::Additional;
 use ::spel_katalog_settings::{
-    CacheDir, ConfigDir, CoverartDir, FilterMode, Network, Show, Variants, YmlDir,
+    ConfigDir, CoverartDir, FilterMode, Network, Show, Variants, YmlDir,
 };
 use ::tap::Pipe;
 
@@ -376,11 +376,6 @@ impl App {
                     return Task::none();
                 };
                 let settings = self.settings.generic();
-                let thumb_db_path = self
-                    .settings
-                    .get::<CacheDir>()
-                    .as_path()
-                    .join("thumbnails.db");
                 let games = gather(
                     &self.settings.get::<YmlDir>(),
                     &self.settings.get::<ConfigDir>(),
@@ -390,15 +385,8 @@ impl App {
                 let vt = self.lua_vt();
                 let future = async move {
                     ::tokio::task::spawn_blocking(move || {
-                        ::spel_katalog_batch::lua_batch(
-                            games,
-                            src,
-                            settings,
-                            &thumb_db_path,
-                            &sink_builder,
-                            vt,
-                        )
-                        .map_err(|err| err.to_string())
+                        ::spel_katalog_batch::lua_batch(games, src, settings, &sink_builder, vt)
+                            .map_err(|err| err.to_string())
                     })
                     .await
                 };

@@ -9,7 +9,7 @@ use ::serde::Serialize;
 use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::status;
 use ::spel_katalog_info::formats::{self, Additional};
-use ::spel_katalog_settings::{CacheDir, ConfigDir, FirejailExe, LutrisExe, Network, YmlDir};
+use ::spel_katalog_settings::{ConfigDir, FirejailExe, LutrisExe, Network, YmlDir};
 use ::spel_katalog_sink::SinkIdentity;
 
 use crate::{App, Message, QuickMessage, Safety};
@@ -104,11 +104,6 @@ impl App {
             .join("games")
             .join(format!("{id}.toml"));
         let script_dir = self.settings.get::<ConfigDir>().as_path().join("scripts");
-        let thumb_db_path = self
-            .settings
-            .get::<CacheDir>()
-            .as_path()
-            .join("thumbnails.db");
         let settings_generic = self.settings.generic();
 
         let (send_open, recv_open) = ::tokio::sync::oneshot::channel();
@@ -193,7 +188,6 @@ impl App {
                             .serialize(::mlua::serde::Serializer::new(&lua))
                             .and_then(|settings| {
                                 let skeleton = ::spel_katalog_lua::Module {
-                                    thumb_db_path: &thumb_db_path,
                                     sink_builder: &sink_builder,
                                     vt: lua_vt,
                                 }

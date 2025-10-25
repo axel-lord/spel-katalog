@@ -1,6 +1,11 @@
 //! Lua api in use by project.
 
-use ::std::{fmt::Debug, path::Path, rc::Rc, sync::Arc};
+use ::std::{
+    fmt::Debug,
+    path::{Path, PathBuf},
+    rc::Rc,
+    sync::Arc,
+};
 
 use ::mlua::{Lua, Table, Variadic};
 use ::once_cell::unsync::OnceCell;
@@ -108,13 +113,14 @@ pub trait Virtual: 'static + Debug + Send + Sync {
 
     /// Create a dictionary of available lua modules and their source code.
     fn available_modules(&self) -> FxHashMap<String, String>;
+
+    /// Get a connection to the thumbnail databse.
+    fn thumb_db_path(&self) -> ::mlua::Result<PathBuf>;
 }
 
 /// Module info used for registration,
 #[derive(Debug, Clone)]
 pub struct Module<'dep> {
-    /// Path to thumbnail database.
-    pub thumb_db_path: &'dep Path,
     /// Sink builder.
     pub sink_builder: &'dep SinkBuilder,
     /// Virtual table to use for external functions.
@@ -124,19 +130,15 @@ pub struct Module<'dep> {
 impl Module<'_> {
     /// Register module to lua instance.
     pub fn register(self, lua: &Lua) -> ::mlua::Result<Skeleton> {
-        let Self {
-            thumb_db_path,
-            sink_builder,
-            vt,
-        } = self;
-        register_module(lua, thumb_db_path, sink_builder, vt)
+        let Self { sink_builder, vt } = self;
+        register_module(lua, Rc::from(vt.thumb_db_path()?), sink_builder, vt)
     }
 }
 
 /// Register `spel-katalog` module with lua interpreter.
 fn register_module(
     lua: &Lua,
-    thumb_db_path: &Path,
+    thumb_db_path: Rc<Path>,
     sink_builder: &SinkBuilder,
     vt: Arc<dyn Virtual>,
 ) -> ::mlua::Result<Skeleton> {
@@ -144,7 +146,6 @@ fn register_module(
         sink_builder.with_locked_channel(|| SinkIdentity::StaticName("Lua Script"))?;
 
     let conn = Rc::new(OnceCell::new());
-    let thumb_db_path = Rc::<Path>::from(thumb_db_path);
     let skeleton = Skeleton::new(lua, lua.create_table()?)?;
 
     color::register(&lua, &skeleton)?;

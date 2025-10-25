@@ -1,7 +1,7 @@
 use ::std::{
     convert::identity,
     io::{BufWriter, Write},
-    path::Path,
+    path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
@@ -22,7 +22,7 @@ use ::spel_katalog_common::{
     w,
 };
 use ::spel_katalog_info::image_buffer::ImageBuffer;
-use ::spel_katalog_settings::{ConfigDir, FilterMode, LutrisDb, Network, Theme};
+use ::spel_katalog_settings::{CacheDir, ConfigDir, FilterMode, LutrisDb, Network, Theme};
 use ::spel_katalog_sink::SinkBuilder;
 use ::tap::Pipe;
 use ::tokio::sync::mpsc::{Receiver, Sender, channel};
@@ -63,29 +63,22 @@ pub(crate) struct App {
     pub sink_builder: SinkBuilder,
     pub windows: FxHashMap<window::Id, WindowType>,
     pub api_markdown: Box<[widget::markdown::Item]>,
-    pub lua_vt: Arc<LuaVt>,
+    pub dialog_tx: Sender<DialogBuilder>,
     pub batch_source: Option<String>,
     pub batch_init_timeout: u16,
 }
 
 /// Virtual table passed to lua.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct LuaVt {
-    sender: Sender<DialogBuilder>,
-    lib_dir: Arc<Path>,
-}
-
-impl LuaVt {
-    fn new(lib_dir: Arc<Path>) -> (Self, Receiver<DialogBuilder>) {
-        let (sender, rx) = channel(64);
-        (Self { sender, lib_dir }, rx)
-    }
+    pub sender: Sender<DialogBuilder>,
+    pub settings: ::spel_katalog_settings::Settings,
 }
 
 impl ::spel_katalog_lua::Virtual for LuaVt {
     fn available_modules(&self) -> FxHashMap<String, String> {
-        let lib_dir = AsRef::<Path>::as_ref(&self.lib_dir);
-        ::std::fs::read_dir(lib_dir)
+        let lib_dir = self.settings.get::<ConfigDir>().as_path().join("lib");
+        ::std::fs::read_dir(&lib_dir)
             .map_err(|err| ::log::error!("could not read directory {lib_dir:?}\n{err}"))
             .ok()
             .into_iter()
@@ -121,6 +114,14 @@ impl ::spel_katalog_lua::Virtual for LuaVt {
             .blocking_send(dialog)
             .map_err(::mlua::Error::external)?;
         Ok(rx.blocking_recv())
+    }
+
+    fn thumb_db_path(&self) -> mlua::Result<PathBuf> {
+        Ok(self
+            .settings
+            .get::<CacheDir>()
+            .as_path()
+            .join("thumbnails.db"))
     }
 }
 
@@ -232,10 +233,8 @@ impl App {
         let show_batch = false;
         let windows = FxHashMap::default();
         let batch = Default::default();
-        let lib_path = Arc::from(settings.get::<ConfigDir>().as_path().join("lib"));
         let api_markdown = widget::markdown::parse(include_str!("../../lua/docs.md")).collect();
-        let (lua_vt, dialog_rx) = LuaVt::new(lib_path);
-        let lua_vt = Arc::new(lua_vt);
+        let (dialog_tx, dialog_rx) = channel(64);
 
         Ok((
             App {
@@ -253,7 +252,7 @@ impl App {
                 sink_builder,
                 windows,
                 api_markdown,
-                lua_vt,
+                dialog_tx,
                 batch_source,
                 batch_init_timeout,
             },
@@ -334,7 +333,10 @@ impl App {
     }
 
     pub fn lua_vt(&self) -> Arc<LuaVt> {
-        self.lua_vt.clone()
+        Arc::new(LuaVt {
+            sender: self.dialog_tx.clone(),
+            settings: self.settings.settings.clone(),
+        })
     }
 
     pub async fn collect_process_info() -> Task<Message> {
