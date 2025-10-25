@@ -1,11 +1,13 @@
-use ::mlua::{IntoLua, Lua};
+use ::std::{ffi::OsStr, os::unix::ffi::OsStrExt};
+
+use ::mlua::{BString, IntoLua, Lua};
 use ::yaml_rust2::{Yaml, YamlLoader};
 
 use crate::Skeleton;
 
-fn load_yaml(lua: &Lua, path: String) -> ::mlua::Result<::mlua::Value> {
+pub fn load_yaml(lua: &Lua, path: BString) -> ::mlua::Result<::mlua::Value> {
     let yml = YamlLoader::load_from_str(
-        &::std::fs::read_to_string(&path).map_err(::mlua::Error::runtime)?,
+        &::std::fs::read_to_string(OsStr::from_bytes(&path)).map_err(::mlua::Error::runtime)?,
     )
     .map_err(::mlua::Error::runtime)?
     .into_iter()

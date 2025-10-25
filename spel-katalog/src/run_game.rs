@@ -5,13 +5,11 @@ use ::std::{
 
 use ::iced::Task;
 use ::mlua::Lua;
-use ::serde::Serialize;
 use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::status;
-use ::spel_katalog_info::formats::{self, Additional};
-use ::spel_katalog_settings::{
-    CacheDir, ExtraConfigDir, FirejailExe, LutrisExe, Network, ScriptConfigDir, YmlDir,
-};
+use ::spel_katalog_formats::AdditionalConfig;
+use ::spel_katalog_info::formats;
+use ::spel_katalog_settings::{ConfigDir, FirejailExe, LutrisExe, Network, YmlDir};
 use ::spel_katalog_sink::SinkIdentity;
 
 use crate::{App, Message, QuickMessage, Safety};
@@ -101,16 +99,11 @@ impl App {
         let configpath = format!("{yml_dir}/{}.yml", game.configpath);
         let extra_config_path = self
             .settings
-            .get::<ExtraConfigDir>()
+            .get::<ConfigDir>()
             .as_path()
+            .join("games")
             .join(format!("{id}.toml"));
-        let script_dir = self.settings.get::<ScriptConfigDir>().to_path_buf();
-        let thumb_db_path = self
-            .settings
-            .get::<CacheDir>()
-            .as_path()
-            .join("thumbnails.db");
-        let settings_generic = self.settings.generic();
+        let script_dir = self.settings.get::<ConfigDir>().as_path().join("scripts");
 
         let (send_open, recv_open) = ::tokio::sync::oneshot::channel();
 
@@ -150,7 +143,7 @@ impl App {
                 else {
                     return format!("could not read {extra_config_path:?}").into();
                 };
-                let Some(additional) = ::toml::from_str::<Additional>(&content)
+                let Some(additional) = ::toml::from_str::<AdditionalConfig>(&content)
                     .map_err(|err| ::log::error!("could not parse {extra_config_path:?}\n{err}"))
                     .ok()
                 else {
@@ -190,29 +183,24 @@ impl App {
                             .collect::<Result<Vec<_>, _>>()?;
 
                         let lua = Lua::new();
-                        batch_info
-                            .serialize(::mlua::serde::Serializer::new(&lua))
-                            .and_then(|game| {
-                                let module = lua.create_table()?;
-                                let settings = settings_generic
-                                    .serialize(::mlua::serde::Serializer::new(&lua))?;
-                                module.set("settings", settings)?;
-                                module.set("game", game)?;
-                                ::spel_katalog_lua::register_module(
-                                    &lua,
-                                    &thumb_db_path,
-                                    &sink_builder,
-                                    Some(module),
-                                    lua_vt,
-                                )?;
+                        ::spel_katalog_lua::Module {
+                            sink_builder: &sink_builder,
+                            vt: lua_vt,
+                        }
+                        .register(&lua)
+                        .and_then(|skeleton| {
+                            let module = &skeleton.module;
+                            let game = batch_info.to_lua(&lua, &skeleton.game_data)?;
 
-                                for script in scripts {
-                                    lua.load(script).exec()?;
-                                }
+                            module.set("game", game)?;
 
-                                Ok(())
-                            })
-                            .map_err(|err| LuaError(err.to_string()))?;
+                            for script in scripts {
+                                lua.load(script).exec()?;
+                            }
+
+                            Ok(())
+                        })
+                        .map_err(|err| LuaError(err.to_string()))?;
                         Ok::<_, ScriptGatherError>(())
                     })
                     .await??;

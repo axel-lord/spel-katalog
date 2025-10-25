@@ -195,7 +195,7 @@ local None
 
 ---Game data given to batch and pre-launch scripts.
 ---@class GameData
----@field attrs {[string]: string} Custom attributes set for game.
+---@field attrs table<string, string> Custom attributes set for game.
 ---@field config string Path to game lutris yaml.
 ---@field hidden boolean Set to true if game is hidden.
 ---@field id number Lutris numeric id of game.
@@ -204,8 +204,42 @@ local None
 ---@field slug string Slug of game.
 local GameData = {}
 
+---Load lutris yml config for game.
+---@return any
+function GameData:loadConfig() end
+
+---Load cached cover used by game.
+---@return (Image | [nil, string])
+function GameData:loadCover() end
+
+---Save image to cover cache for this game.
+---@param image Image
+function GameData:saveCover(image) end
+
+---Set an attribute, and update this GameData.
+---@param attr string Name of attribute to set.
+---@param value string Value to set attribute to.
+function GameData:setAttr(attr, value) end
+
+---Settings givent to batch and pre-launch scripts.
+---@class Settings
+---@field Theme string
+---@field Show ("Apparent" | "Hidden" | "All")
+---@field FilterMode ("Filter" | "Search" | "Regex")
+---@field SortBy ("Id" | "Name" | "Slug")
+---@field SortDir ("Forward" | "Reverse")
+---@field Network ("Disabled" | "Enabled")
+---@field LutrisExe string
+---@field FirejailExe string
+---@field CoverartDir string
+---@field LutrisDb string
+---@field YmlDir string
+---@field ConfigDir string
+---@field CacheDir string
+local Settings = {}
+
 ---Current settings as a table. Provided as a member of the module.
----@type table
+---@type Settings
 local settings
 
 ---Data for a single game, same format as values of batch data.
@@ -218,15 +252,60 @@ local game
 ---@type GameData[]?
 local data
 
+---Path functions.
+local path = {}
+
+---Check if given path exists.
+---@param path string Path to check.
+---@return boolean
+function path.exists(path) end
+
+---Get parent of a path.
+---@param path string Path to get parent of.
+---@return string?
+function path.parent(path) end
+
+---Join multiple paths.
+---@param ... string Paths to join.
+---@return string
+function path.join(...) end
+
+---Canonicalize a path.
+---@param path string Path to canonicalize.
+---@return string?
+function path.canonicalize(path) end
+
+---Get file name of a path.
+---@param path string Path to get file name of.
+---@return string?
+function path.fileName(path) end
+
+---Get file name without extension of path.
+---@param path string Path to get file stem of.
+---@return string?
+function path.fileStem(path) end
+
+---Get file extension of path.
+---@param path string Path to get file ext of.
+---@return string?
+function path.extension(path) end
+
+---Split a path into it's components.
+---@param path string Path to split.
+---@return string[]
+function path.split(path) end
+
 local spelkatalog = {
 	Color = Color,
 	Rect = Rect,
 	Image = Image,
 	Dialog = Dialog,
+	GameData = GameData,
 	None = None,
 	settings = settings,
 	game = game,
 	data = data,
+	path = path,
 }
 
 ---Debug print and return input values.
@@ -264,9 +343,11 @@ function spelkatalog.loadFile(path) end
 ---@param content string Content to save.
 function spelkatalog.saveFile(path, content) end
 
----Check if given path exists.
----@param path string Path to check
----@return boolean
-function spelkatalog.pathExists(path) end
+---Set a custom attribute for a game, does not update any GameData.
+---@param game_id number
+---@param attr string
+---@param value string
+---@return table<string, string>
+function spelkatalog.setAttr(game_id, attr, value) end
 
 return spelkatalog

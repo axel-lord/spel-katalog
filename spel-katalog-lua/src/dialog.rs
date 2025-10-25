@@ -1,13 +1,12 @@
+use ::std::sync::Arc;
+
 use ::mlua::{Lua, Table};
 
-use crate::{DialogOpener, Skeleton, create_class, init_table};
+use crate::{Skeleton, Virtual, init_table, make_class};
 
-pub fn register(
-    lua: &Lua,
-    skeleton: &Skeleton,
-    dialog_opener: Box<DialogOpener>,
-) -> ::mlua::Result<()> {
-    let dialog = create_class(lua)?;
+pub fn register(lua: &Lua, skeleton: &Skeleton, vt: Arc<dyn Virtual>) -> ::mlua::Result<()> {
+    let dialog = lua.create_table()?;
+    make_class(lua, &dialog)?;
 
     init_table! {
         dialog:
@@ -18,7 +17,7 @@ pub fn register(
     dialog.set(
         "open",
         lua.create_function(move |_lua, table: Table| {
-            let mut result = dialog_opener(table.get("text")?, table.get("buttons")?)?;
+            let mut result = vt.open_dialog(table.get("text")?, table.get("buttons")?)?;
 
             if let Some(r) = &result {
                 let ignored = table.get::<Vec<String>>("ignore").ok();

@@ -1,18 +1,27 @@
 //! Lua api in use by project.
 
-use ::std::{path::Path, rc::Rc, sync::Arc};
+use ::std::{
+    collections::HashMap,
+    fmt::Debug,
+    path::{Path, PathBuf},
+    rc::Rc,
+    sync::Arc,
+};
 
-use ::mlua::{Lua, Table, Variadic};
+use ::mlua::{Lua, LuaSerdeExt, Table, Variadic};
 use ::once_cell::unsync::OnceCell;
+use ::rustc_hash::FxHashMap;
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 
 mod cmd;
 mod color;
 mod dialog;
 mod fs;
+mod game_data;
 mod image;
 mod lua_result;
 mod misc;
+mod path;
 mod print;
 mod yaml;
 
@@ -37,26 +46,26 @@ macro_rules! init_table {
 }
 pub(crate) use init_table;
 
-/// A boxed function which creates and waits on dialogs.
-pub type DialogOpener = dyn Fn(String, Vec<String>) -> ::mlua::Result<Option<String>>;
-
 /// Module skeleton, used to access objects.
 #[derive(Debug, Clone)]
-struct Skeleton {
+pub struct Skeleton {
     /// Module table.
     pub module: Table,
     /// Color class table.
     pub color: Table,
     /// Rect class table.
     pub rect: Table,
+    /// GameData class table.
+    pub game_data: Table,
 }
 
 impl Skeleton {
-    pub fn new(lua: &Lua, module: Table) -> ::mlua::Result<Self> {
+    fn new(lua: &Lua, module: Table) -> ::mlua::Result<Self> {
         Ok(Self {
             module,
-            color: create_class(lua)?,
-            rect: create_class(lua)?,
+            color: lua.create_table()?,
+            rect: lua.create_table()?,
+            game_data: lua.create_table()?,
         })
     }
 }
@@ -68,10 +77,14 @@ fn class_instance(class: &Table, initial: Table) -> ::mlua::Result<Table> {
     Ok(initial)
 }
 
-/// Create a class with `__index` set to self, and a new function.
-fn create_class(lua: &Lua) -> ::mlua::Result<Table> {
-    let class = lua.create_table()?;
-    class.set("__index", &class)?;
+/// Set the class of a table.
+pub fn set_class(tbl: &Table, class: &Table) -> ::mlua::Result<()> {
+    tbl.set_metatable(Some(class.clone()))
+}
+
+/// Make the given table into a class with `__index` set to self, and a new function.
+fn make_class(lua: &Lua, class: &Table) -> ::mlua::Result<()> {
+    class.set("__index", class)?;
 
     fn new(lua: &Lua, class: Table, tables: Variadic<Table>) -> ::mlua::Result<Variadic<Table>> {
         if tables.is_empty() {
@@ -91,48 +104,103 @@ fn create_class(lua: &Lua) -> ::mlua::Result<Table> {
         "new",
         lua.create_function(move |lua, (class, tables)| new(lua, class, tables))?,
     )?;
-
-    Ok(class)
+    Ok(())
 }
 
 /// Functionality caller needs to provide.
-pub trait Virtual {
-    /// Create an object which may request dialogs to be opened. In which case the object blocks
-    /// until a choice is made.
-    fn dialog_opener(&self) -> Box<DialogOpener>;
+pub trait Virtual: 'static + Debug + Send + Sync {
+    /// Open a dialog window with the given text and buttons.
+    fn open_dialog(&self, text: String, buttons: Vec<String>) -> ::mlua::Result<Option<String>>;
+
+    /// Create a dictionary of available lua modules and their source code.
+    fn available_modules(&self) -> FxHashMap<String, String>;
+
+    /// Get path to thumbnail cache db.
+    fn thumb_db_path(&self) -> ::mlua::Result<PathBuf>;
+
+    /// Get path to additional config dir for a game.
+    fn additional_config_path(&self, game_id: i64) -> ::mlua::Result<PathBuf>;
+
+    /// Get settings as a hash map.
+    fn settings(&self) -> ::mlua::Result<HashMap<&'_ str, String>>;
 }
 
-/// Register `@spel-katalog` module with lua interpreter.
-pub fn register_module(
+/// Module info used for registration,
+#[derive(Debug, Clone)]
+pub struct Module<'dep> {
+    /// Sink builder.
+    pub sink_builder: &'dep SinkBuilder,
+    /// Virtual table to use for external functions.
+    pub vt: Arc<dyn Virtual>,
+}
+
+impl Module<'_> {
+    /// Register module to lua instance.
+    pub fn register(self, lua: &Lua) -> ::mlua::Result<Skeleton> {
+        let Self { sink_builder, vt } = self;
+        register_module(lua, Rc::from(vt.thumb_db_path()?), sink_builder, vt)
+    }
+}
+
+/// Register `spel-katalog` module with lua interpreter.
+fn register_module(
     lua: &Lua,
-    thumb_db_path: &Path,
+    thumb_db_path: Rc<Path>,
     sink_builder: &SinkBuilder,
-    module: Option<Table>,
     vt: Arc<dyn Virtual>,
-) -> ::mlua::Result<()> {
+) -> ::mlua::Result<Skeleton> {
     let sink_builder =
         sink_builder.with_locked_channel(|| SinkIdentity::StaticName("Lua Script"))?;
 
     let conn = Rc::new(OnceCell::new());
-    let thumb_db_path = Rc::<Path>::from(thumb_db_path);
-    let module = module.map(Ok).unwrap_or_else(|| lua.create_table())?;
-    let skeleton = Skeleton::new(lua, module)?;
+    let skeleton = Skeleton::new(lua, lua.create_table()?)?;
 
     color::register(&lua, &skeleton)?;
+    game_data::register(
+        &lua,
+        &skeleton,
+        conn.clone(),
+        thumb_db_path.clone(),
+        vt.clone(),
+    )?;
     image::register(&lua, conn, thumb_db_path, &skeleton)?;
     cmd::register(&lua, &skeleton, &sink_builder)?;
-    misc::register(&lua, &skeleton)?;
+    misc::register(&lua, &skeleton, vt.clone())?;
     yaml::register(&lua, &skeleton)?;
-    dialog::register(&lua, &skeleton, vt.dialog_opener())?;
+    path::register(&lua, &skeleton)?;
+    dialog::register(&lua, &skeleton, vt.clone())?;
 
-    let Skeleton { module, .. } = skeleton;
+    let Skeleton { module, .. } = &skeleton;
 
     fs::register(&lua, &module)?;
     print::register(&lua, &module, &sink_builder)?;
 
     module.set("None", ::mlua::Value::NULL)?;
 
-    lua.register_module("@spel-katalog", module)?;
+    module.set("settings", lua.to_value(&vt.settings()?)?)?;
 
-    Ok(())
+    let module = module.clone();
+    let mut available = vt.available_modules();
+    let mut loaded = FxHashMap::<String, ::mlua::Value>::default();
+    lua.globals().set(
+        "require",
+        lua.create_function_mut(move |lua, name: String| match name.as_str() {
+            "@spel-katalog" | "spel-katalog" => Ok(::mlua::Value::Table(module.clone())),
+            other => {
+                if let Some(source) = available.remove(other) {
+                    let module = lua.load(source).call::<::mlua::Value>(())?;
+                    loaded.insert(name, module.clone());
+                    Ok(module)
+                } else if let Some(module) = loaded.get(other) {
+                    Ok(module.clone())
+                } else {
+                    Err(::mlua::Error::RuntimeError(format!(
+                        "could not find module {other:?}"
+                    )))
+                }
+            }
+        })?,
+    )?;
+
+    Ok(skeleton)
 }

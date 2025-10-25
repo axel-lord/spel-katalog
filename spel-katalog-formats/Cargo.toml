@@ -1,0 +1,13 @@
+[package]
+name = "spel-katalog-formats"
+version = "0.1.0"
+edition = "2024"
+authors = ["Axel Lord"]
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+rustc-hash.workspace = true
+
+[lints]
+workspace = true

@@ -3,7 +3,6 @@
 use ::std::{
     collections::HashMap,
     io::{Write, pipe},
-    path::Path,
     process::Command,
     sync::Arc,
 };
@@ -21,34 +20,36 @@ use ::iced::{
     },
 };
 use ::iced_highlighter::Highlighter;
-use ::mlua::Lua;
+use ::mlua::{Lua, LuaSerdeExt, Table};
 use ::rustc_hash::FxHashMap;
 use ::serde::Serialize;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status};
+use ::spel_katalog_lua::set_class;
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::strum::VariantArray;
 use ::tap::Pipe;
 
 /// Run a lua script with a batch.
 pub fn lua_batch(
-    data: Vec<BatchInfo>,
+    batch_data: Vec<BatchInfo>,
     script: String,
-    settings: ::spel_katalog_settings::Generic,
-    thumb_db_path: &Path,
     sink_builder: &SinkBuilder,
     vt: Arc<dyn spel_katalog_lua::Virtual>,
 ) -> ::mlua::Result<()> {
     let sink_builder =
         sink_builder.with_locked_channel(|| SinkIdentity::StaticName("Lua Batch Script"))?;
+    let sink_builder = &sink_builder;
     let lua = Lua::new();
-    let data = data.serialize(::mlua::serde::Serializer::new(&lua))?;
-    let settings = settings.serialize(::mlua::serde::Serializer::new(&lua))?;
-    let module = lua.create_table()?;
 
-    module.set("settings", settings)?;
+    let skeleton = ::spel_katalog_lua::Module { sink_builder, vt }.register(&lua)?;
+    let module = &skeleton.module;
+
+    let data = lua.create_table_with_capacity(batch_data.len(), 0)?;
+    for game in batch_data {
+        data.push(game.to_lua(&lua, &skeleton.game_data)?)?;
+    }
+
     module.set("data", data)?;
-
-    ::spel_katalog_lua::register_module(&lua, thumb_db_path, &sink_builder, Some(module), vt)?;
 
     lua.load(script).exec()?;
 
@@ -72,6 +73,33 @@ pub struct BatchInfo {
     pub hidden: bool,
     /// Custom attributes set for game.
     pub attrs: FxHashMap<String, String>,
+}
+
+impl BatchInfo {
+    /// Convert batch info to a lua value.
+    pub fn to_lua(&self, lua: &Lua, class: &Table) -> ::mlua::Result<::mlua::Table> {
+        let Self {
+            id,
+            slug,
+            name,
+            runner,
+            config,
+            hidden,
+            attrs,
+        } = self;
+        let table = lua.create_table()?;
+        set_class(&table, class)?;
+
+        table.set("id", *id)?;
+        table.set("slug", slug.as_str())?;
+        table.set("name", name.as_str())?;
+        table.set("runner", runner.as_str())?;
+        table.set("config", config.as_str())?;
+        table.set("hidden", *hidden)?;
+        table.set("attrs", lua.to_value(attrs)?)?;
+
+        Ok(table)
+    }
 }
 
 /// Message for batch view.
@@ -189,11 +217,6 @@ impl State {
                 let lang = self.lang;
                 let script = self.script.text();
                 let title = Some(self.script_title.clone()).filter(|s| !s.is_empty());
-                let thumb_db_path = settings
-                    .get::<::spel_katalog_settings::CacheDir>()
-                    .as_path()
-                    .join("thumbnails.db");
-                let settings = settings.generic();
                 let sink_builder = sink_builder.clone();
                 let lua_vt = create_lua_vt();
                 let task = Task::future(::tokio::task::spawn_blocking(move || {
@@ -220,15 +243,8 @@ impl State {
                             command
                         }
                         Language::Lua => {
-                            return lua_batch(
-                                batch_infos,
-                                script,
-                                settings,
-                                &thumb_db_path,
-                                &sink_builder,
-                                lua_vt,
-                            )
-                            .map_err(|err| ::std::io::Error::other(err.to_string()));
+                            return lua_batch(batch_infos, script, &sink_builder, lua_vt)
+                                .map_err(|err| ::std::io::Error::other(err.to_string()));
                         }
                     };
 
@@ -277,9 +293,9 @@ impl State {
             Message::Open => {
                 let tx = tx.clone();
                 let batch_dir = settings
-                    .get::<::spel_katalog_settings::BatchScriptDir>()
+                    .get::<::spel_katalog_settings::ConfigDir>()
                     .as_path()
-                    .to_path_buf();
+                    .join("batch");
                 Task::future(async move {
                     let file_path = ::rfd::AsyncFileDialog::new()
                         .set_title("Save Batch Script")
@@ -334,9 +350,9 @@ impl State {
                 let content = self.script.text();
                 let tx = tx.clone();
                 let batch_dir = settings
-                    .get::<::spel_katalog_settings::BatchScriptDir>()
+                    .get::<::spel_katalog_settings::ConfigDir>()
                     .as_path()
-                    .to_path_buf();
+                    .join("batch");
                 Task::future(async move {
                     let file_path = ::rfd::AsyncFileDialog::new()
                         .set_title("Save Batch Script")

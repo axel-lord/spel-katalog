@@ -11,7 +11,7 @@ use ::rayon::prelude::*;
 use ::rusqlite::{Connection, OptionalExtension, params};
 use ::tap::Pipe;
 
-use crate::{Skeleton, color, init_table, lua_result::LuaResult};
+use crate::{Skeleton, color, init_table, lua_result::LuaResult, make_class};
 
 fn get_conn<'c>(
     conn: &'c OnceCell<::rusqlite::Connection>,
@@ -132,7 +132,7 @@ impl FromLua for Filter {
 }
 
 #[derive(Debug, Clone, FromLua)]
-struct Image(DynamicImage);
+pub struct Image(DynamicImage);
 
 impl IntoLua for Image {
     fn into_lua(self, lua: &Lua) -> mlua::Result<Value> {
@@ -278,8 +278,7 @@ impl Image {
         Ok(Self(DynamicImage::from(outimg)))
     }
 
-    fn load_cover(
-        _c: &::mlua::Table,
+    pub fn load_cover(
         slug: String,
         db_path: &Path,
         conn: &OnceCell<::rusqlite::Connection>,
@@ -387,7 +386,7 @@ impl Image {
             .map_err(::mlua::Error::runtime)
     }
 
-    fn save_cover(
+    pub fn save_cover(
         &self,
         slug: String,
         db_path: &Path,
@@ -422,7 +421,7 @@ impl Image {
             let db_path = Rc::clone(&db_path);
             let conn = Rc::clone(&conn);
 
-            move |_, (c, slug)| Image::load_cover(&c, slug, &db_path, &conn)
+            move |_, (_, slug): (::mlua::Table, _)| Image::load_cover(slug, &db_path, &conn)
         })?;
         let new_image = lua.create_function(|_, (c, w, h)| Image::new(&c, w, h))?;
         let load_image = lua.create_function(|_, (c, path)| Image::load(&c, path))?;
@@ -482,6 +481,7 @@ pub fn register(
     skeleton: &Skeleton,
 ) -> ::mlua::Result<()> {
     let rect = &skeleton.rect;
+    make_class(lua, rect)?;
     init_table! {
         rect:
             x = 0,

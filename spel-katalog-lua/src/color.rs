@@ -1,7 +1,7 @@
 use ::image::Rgba;
 use ::mlua::{FromLua, Lua, Table, Value};
 
-use crate::{Skeleton, class_instance, init_table};
+use crate::{Skeleton, class_instance, init_table, make_class};
 
 /// A color as a rust type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,8 +81,9 @@ impl FromLua for Color {
     }
 }
 
-pub fn register(_lua: &Lua, skeleton: &Skeleton) -> ::mlua::Result<()> {
+pub fn register(lua: &Lua, skeleton: &Skeleton) -> ::mlua::Result<()> {
     let color = &skeleton.color;
+    make_class(lua, color)?;
 
     init_table! {
         color:

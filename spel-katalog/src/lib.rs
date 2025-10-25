@@ -15,13 +15,13 @@ mod app;
 mod cli;
 mod dialog;
 mod exit_channel;
+mod init_config;
 mod message;
 mod process_info;
 mod run_game;
 mod subscription;
 mod update;
 mod view;
-mod init_config;
 
 /// Run application.
 pub fn run(

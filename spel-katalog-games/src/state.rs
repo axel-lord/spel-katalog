@@ -21,7 +21,7 @@ use ::itertools::Itertools;
 use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use ::rusqlite::{Connection, OpenFlags, Statement, named_params};
 use ::rustc_hash::{FxHashMap, FxHashSet};
-use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, w};
+use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, tracker::Tracker, w};
 use ::spel_katalog_settings::{CacheDir, Settings};
 use ::tap::Pipe;
 use ::tokio::task::{JoinError, spawn_blocking};
@@ -56,12 +56,22 @@ pub enum SelDir {
 }
 
 /// Internal message used for games element.
-#[derive(Debug, Clone, IsVariant)]
+#[derive(Debug, IsVariant)]
 pub enum Message {
     /// Load games from local lutris database.
-    LoadDb(PathBuf),
+    LoadDb {
+        /// Path to database to load.
+        db_path: PathBuf,
+        /// Tracker to activate when loading has finished.
+        tracker: Option<Tracker>,
+    },
     /// Set loaded games.
-    SetGames(Vec<Game>),
+    SetGames {
+        /// Games to set content to.
+        games: Vec<Game>,
+        /// Tracker to activate on finished loading.
+        tracker: Option<Tracker>,
+    },
     /// Set thumbnails.
     SetImages {
         /// Slugs for games to set thumbnails for.
@@ -70,6 +80,8 @@ pub enum Message {
         images: Vec<Handle>,
         /// True if image comes from cache file.
         from_cache: bool,
+        /// Tracker to activate when finished.
+        tracker: Option<Tracker>,
     },
     /// Set a single thumbnail.
     SetImage {
@@ -92,7 +104,7 @@ pub enum Message {
 }
 
 /// Requests for other widgets.
-#[derive(Debug, Clone, IsVariant)]
+#[derive(Debug, IsVariant)]
 pub enum Request {
     /// Set currently chosen game.
     SetId {
@@ -110,9 +122,29 @@ pub enum Request {
     FindImages {
         /// Slugs of thumbnails to find.
         slugs: Vec<String>,
+        /// Tracker to activate when finished.
+        tracker: Option<Tracker>,
     },
     /// Close game info
     CloseInfo,
+}
+
+/// Messages produced by game areas.
+#[derive(Debug, Clone, Copy)]
+pub enum AreaMessage {
+    Select { id: i64 },
+    BatchSelect { id: i64 },
+    Run { id: i64, sandbox: bool },
+}
+
+impl From<AreaMessage> for OrRequest<Message, Request> {
+    fn from(value: AreaMessage) -> Self {
+        match value {
+            AreaMessage::Select { id } => OrRequest::Message(Message::SelectId(id)),
+            AreaMessage::BatchSelect { id } => OrRequest::Message(Message::BatchSelect(id)),
+            AreaMessage::Run { id, sandbox } => OrRequest::Request(Request::Run { id, sandbox }),
+        }
+    }
 }
 
 #[derive(Debug, ::thiserror::Error)]
@@ -199,13 +231,13 @@ impl State {
         filter: &str,
     ) -> Task<OrRequest<Message, Request>> {
         match msg {
-            Message::LoadDb(path_buf) => {
+            Message::LoadDb { db_path, tracker } => {
                 let tx = tx.clone();
                 Task::future(async move {
-                    match spawn_blocking(move || load_db(&path_buf)).await {
+                    match spawn_blocking(move || load_db(&db_path)).await {
                         Ok(result) => match result {
                             Ok(games) => games
-                                .pipe(Message::SetGames)
+                                .pipe(|games| Message::SetGames { games, tracker })
                                 .pipe(OrRequest::Message)
                                 .pipe(Task::done),
                             Err(err) => match err {
@@ -225,17 +257,18 @@ impl State {
                 })
                 .then(identity)
             }
-            Message::SetGames(games) => {
+            Message::SetGames { games, tracker } => {
                 self.set(games.into(), settings, filter);
 
                 status!(tx, "read games from database");
 
-                self.find_cached(settings)
+                self.find_cached(settings, tracker)
             }
             Message::SetImages {
                 slugs,
                 images,
                 from_cache,
+                tracker,
             } => {
                 if from_cache {
                     for (slug, image) in slugs.into_iter().zip(images) {
@@ -247,7 +280,7 @@ impl State {
                         self.set_image(slug, image.clone());
                     }
                     let cache_path = settings.get::<CacheDir>().to_path_buf();
-                    Task::future(cache_images(slugs, images, cache_path, tx.clone()))
+                    Task::future(cache_images(slugs, images, cache_path, tx.clone(), tracker))
                         .then(|_| Task::none())
                 }
             }
@@ -280,7 +313,11 @@ impl State {
     }
 
     /// Find cached images.
-    pub fn find_cached(&mut self, settings: &Settings) -> Task<OrRequest<Message, Request>> {
+    pub fn find_cached(
+        &mut self,
+        settings: &Settings,
+        mut tracker: Option<Tracker>,
+    ) -> Task<OrRequest<Message, Request>> {
         let game_slugs = self
             .all()
             .iter()
@@ -366,18 +403,20 @@ impl State {
                     slugs,
                     images,
                     from_cache: true,
+                    tracker: None,
                 }),
                 game_slugs,
             ))
         });
 
-        Task::future(find_cached).then(|found| match found {
+        Task::future(find_cached).then(move |found| match found {
             Ok(result) => match result {
                 Ok((set_images, slugs)) => Task::batch(
                     [
                         set_images.map(OrRequest::Message),
                         Request::FindImages {
                             slugs: slugs.into_iter().collect::<Vec<_>>(),
+                            tracker: tracker.take(),
                         }
                         .pipe(OrRequest::Request)
                         .pipe(Some),
@@ -515,12 +554,13 @@ impl State {
                 if shadowed {
                     area
                 } else {
-                    area.on_release(OrRequest::Message(Message::SelectId(id)))
-                        .on_middle_release(OrRequest::Request(Request::Run { id, sandbox: true }))
-                        .on_right_release(OrRequest::Message(Message::BatchSelect(id)))
+                    area.on_release(AreaMessage::Select { id })
+                        .on_middle_release(AreaMessage::Run { id, sandbox: true })
+                        .on_right_release(AreaMessage::BatchSelect { id })
                 }
             })
-            .into()
+            .pipe(Element::from)
+            .map(Into::into)
         }
 
         widget::responsive(move |size| {
@@ -595,6 +635,7 @@ async fn cache_images(
     images: Vec<Handle>,
     cache_path: PathBuf,
     tx: StatusSender,
+    tracker: Option<Tracker>,
 ) {
     if create_cache_dir(&cache_path, tx).await.is_break() {
         return;
@@ -603,6 +644,10 @@ async fn cache_images(
     handle_cache_result(
         spawn_blocking(move || cache_images_blocking(slugs, images, cache_path)).await,
     );
+
+    if let Some(tracker) = tracker {
+        tracker.finish();
+    }
 }
 
 const CREATE_IMAGE_TABLE: &str = r#"
