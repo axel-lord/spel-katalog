@@ -7,7 +7,7 @@ use ::std::{
 use ::mlua::{BString, Lua, Variadic};
 use ::tap::{Conv, Pipe};
 
-use crate::Skeleton;
+use crate::{Skeleton, make_module};
 
 fn bytes_as_path(bytes: &[u8]) -> &Path {
     Path::new(OsStr::from_bytes(bytes))
@@ -104,6 +104,7 @@ pub fn register(lua: &Lua, skeleton: &Skeleton) -> ::mlua::Result<()> {
         })?,
     )?;
 
+    make_module(lua, &module)?;
     skeleton.module.set("path", module)?;
     Ok(())
 }

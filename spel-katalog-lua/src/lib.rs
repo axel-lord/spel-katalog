@@ -82,6 +82,23 @@ pub fn set_class(tbl: &Table, class: &Table) -> ::mlua::Result<()> {
     tbl.set_metatable(Some(class.clone()))
 }
 
+/// Make the given table into a module by dissalowing access of unknown values.
+fn make_module(lua: &Lua, module: &Table) -> ::mlua::Result<()> {
+    let mt = lua.create_table()?;
+    mt.set(
+        "__index",
+        lua.create_function(
+            |_lua, (_, key): (::mlua::Value, String)| -> ::mlua::Result<::mlua::Value> {
+                Err(::mlua::Error::RuntimeError(format!(
+                    "module has no {key:?} entry"
+                )))
+            },
+        )?,
+    )?;
+    module.set_metatable(Some(mt))?;
+    Ok(())
+}
+
 /// Make the given table into a class with `__index` set to self, and a new function.
 fn make_class(lua: &Lua, class: &Table) -> ::mlua::Result<()> {
     class.set("__index", class)?;
@@ -176,8 +193,8 @@ fn register_module(
     print::register(&lua, &module, &sink_builder)?;
 
     module.set("None", ::mlua::Value::NULL)?;
-
     module.set("settings", lua.to_value(&vt.settings()?)?)?;
+    make_module(lua, module)?;
 
     let module = module.clone();
     let mut available = vt.available_modules();

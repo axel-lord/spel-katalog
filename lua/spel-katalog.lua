@@ -244,12 +244,12 @@ local settings
 
 ---Data for a single game, same format as values of batch data.
 ---Only available when running as a pre-launch script.
----@type GameData?
+---@type GameData
 local game
 
 ---Batch data, provided as a table/vector in module.
 ---Only available when running batch scripts.
----@type GameData[]?
+---@type GameData[]
 local data
 
 ---Path functions.
