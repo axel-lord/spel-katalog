@@ -74,7 +74,7 @@ ratatui = "0.29.0"
 rayon = "1.11.0"
 regex = "1.12.2"
 rfd = { version = "0.15.4", default-features = false }
-rusqlite = "0.36.0"
+rusqlite = "0.37.0"
 rustc-hash = "2.1.1"
 rustix = "1.1.2"
 serde = "1.0.228"
@@ -99,7 +99,7 @@ tap = "1.0.1"
 thiserror = "2.0.17"
 tokio = { version = "1.48.0" }
 tokio-stream = { version = "0.1.17" }
-toml = "0.8.23"
+toml = "0.9.8"
 vte = "0.15.0"
 whoami = { version = "1.6.1", default-features = false }
 yaml-rust2 = "0.10.4"
