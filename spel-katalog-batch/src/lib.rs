@@ -1,11 +1,6 @@
 //! Batch command runner.
 
-use ::std::{
-    collections::HashMap,
-    io::{Write, pipe},
-    process::Command,
-    sync::Arc,
-};
+use ::std::{collections::HashMap, sync::Arc};
 
 use ::derive_more::Display;
 use ::iced::{
@@ -107,14 +102,12 @@ impl BatchInfo {
 pub enum Message {
     /// Text Editor action.
     Action(Action),
-    /// Set language in use.
-    Lang(Language),
     /// Set scope in use.
     Scope(Scope),
     /// Run batch script on info.
     RunBatch(Vec<BatchInfo>),
     /// Set script content.
-    SetContent(String, String, Language),
+    SetContent(String, String),
     /// Clear batch script.
     Clear,
     /// Open batch script.
@@ -143,7 +136,6 @@ pub enum Request {
 pub struct State {
     script: text_editor::Content,
     hl_settings: ::iced_highlighter::Settings,
-    lang: Language,
     scope: Scope,
     script_title: String,
 }
@@ -151,34 +143,15 @@ pub struct State {
 impl Default for State {
     fn default() -> Self {
         Self {
-            script: widget::text_editor::Content::with_text(include_str!("./sample.zsh")),
+            script: widget::text_editor::Content::with_text(include_str!("../../lua/sample.lua")),
             hl_settings: ::iced_highlighter::Settings {
                 theme: ::iced_highlighter::Theme::SolarizedDark,
-                token: String::from("zsh"),
+                token: String::from("lua"),
             },
-            lang: Language::Zsh,
             scope: Scope::default(),
-            script_title: "samle.zsh".to_owned(),
+            script_title: "sample.lua".to_owned(),
         }
     }
-}
-
-/// Language to execute using.
-#[derive(Debug, Clone, Copy, Default, VariantArray, Display, PartialEq, Eq)]
-pub enum Language {
-    /// Execute as a zsh script.
-    #[display("zsh")]
-    Zsh,
-    /// Execute as a bash script.
-    #[default]
-    #[display("bash")]
-    Bash,
-    /// Execute as a python script.
-    #[display("python")]
-    Python,
-    /// Execute as a lua script.
-    #[display("lua")]
-    Lua,
 }
 
 /// What games to use as input.
@@ -208,66 +181,13 @@ impl State {
                 self.script.perform(action);
                 Task::none()
             }
-            Message::Lang(language) => {
-                self.hl_settings.token = language.to_string();
-                self.lang = language;
-                Task::none()
-            }
             Message::RunBatch(batch_infos) => {
-                let lang = self.lang;
                 let script = self.script.text();
-                let title = Some(self.script_title.clone()).filter(|s| !s.is_empty());
                 let sink_builder = sink_builder.clone();
                 let lua_vt = create_lua_vt();
                 let task = Task::future(::tokio::task::spawn_blocking(move || {
-                    let mut command = match lang {
-                        Language::Zsh => {
-                            let mut command = Command::new("zsh");
-                            command
-                                .args(["--emulate", "zsh", "-c"])
-                                .arg(script)
-                                .arg(title.unwrap_or_else(|| "batch-script-zsh".to_owned()));
-                            command
-                        }
-                        Language::Bash => {
-                            let mut command = Command::new("bash");
-                            command
-                                .arg("-c")
-                                .arg(script)
-                                .arg(title.unwrap_or_else(|| "batch-script-bash".to_owned()));
-                            command
-                        }
-                        Language::Python => {
-                            let mut command = Command::new("python3");
-                            command.arg("-c").arg(script);
-                            command
-                        }
-                        Language::Lua => {
-                            return lua_batch(batch_infos, script, &sink_builder, lua_vt)
-                                .map_err(|err| ::std::io::Error::other(err.to_string()));
-                        }
-                    };
-
-                    let [stdout, stderr] = sink_builder
-                        .build_double(|| SinkIdentity::Name(format!("{lang} batch script")))?;
-
-                    let (r, mut w) = pipe()?;
-                    let mut child = command.stdin(r).stdout(stdout).stderr(stderr).spawn()?;
-
-                    for info in batch_infos {
-                        ::serde_json::to_writer(&mut w, &info)
-                            .map_err(|err| ::std::io::Error::other(err))?;
-                        w.write_all(b"\n")?;
-                    }
-
-                    w.flush()?;
-                    drop(w);
-
-                    let status = child.wait()?;
-
-                    ::log::info!("batch script finished, {status}");
-
-                    Ok::<_, ::std::io::Error>(())
+                    lua_batch(batch_infos, script, &sink_builder, lua_vt)
+                        .map_err(|err| ::std::io::Error::other(err.to_string()))
                 }))
                 .then(|result| match result {
                     Ok(Ok(..)) => Task::done(OrRequest::Request(Request::ReloadCache)),
@@ -315,30 +235,13 @@ impl State {
                             async_status!(tx, "could not open script {file_path:?}").await;
                             None
                         }
-                        Ok(content) => {
-                            let ext = file_path
-                                .extension()
-                                .and_then(|ext| ext.to_str())
-                                .unwrap_or_default();
-                            let ext = if ext.eq_ignore_ascii_case("zsh") {
-                                Language::Zsh
-                            } else if ext.eq_ignore_ascii_case("lua") {
-                                Language::Lua
-                            } else if ext.eq_ignore_ascii_case("py") {
-                                Language::Python
-                            } else {
-                                Language::Bash
-                            };
-
-                            Some(OrRequest::Message(Message::SetContent(
-                                content,
-                                file_path
-                                    .file_name()
-                                    .map(|name| name.display().to_string())
-                                    .unwrap_or_default(),
-                                ext,
-                            )))
-                        }
+                        Ok(content) => Some(OrRequest::Message(Message::SetContent(
+                            content,
+                            file_path
+                                .file_name()
+                                .map(|name| name.display().to_string())
+                                .unwrap_or_default(),
+                        ))),
                     }
                 })
                 .then(|result| match result {
@@ -379,10 +282,8 @@ impl State {
                 }
                 Task::none()
             }
-            Message::SetContent(content, title, language) => {
+            Message::SetContent(content, title) => {
                 self.script_title = title;
-                self.lang = language;
-                self.hl_settings.token = language.to_string();
                 [
                     Action::SelectAll,
                     Action::Edit(Edit::Backspace),
@@ -406,12 +307,6 @@ impl State {
                 .push(
                     widget::Row::new()
                         .align_y(Center)
-                        .push(
-                            widget::pick_list(Language::VARIANTS, Some(self.lang), |l| {
-                                OrRequest::Message(Message::Lang(l))
-                            })
-                            .padding(3),
-                        )
                         .push(text(&self.script_title).center().width(Fill))
                         .push(
                             widget::pick_list(Scope::VARIANTS, Some(self.scope), |s| {
