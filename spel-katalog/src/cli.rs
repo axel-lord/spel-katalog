@@ -42,6 +42,10 @@ pub struct Cli {
     #[arg(long, visible_alias = "kt", requires("advanced_terminal"))]
     pub keep_terminal: bool,
 
+    /// Run the given batch script, then exit.
+    #[arg(long, short, conflicts_with = "advanced_terminal")]
+    pub batch: Option<PathBuf>,
+
     /// Perform an action other than opening gui.
     #[command(subcommand)]
     pub action: Option<Subcmd>,

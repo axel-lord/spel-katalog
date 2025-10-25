@@ -46,23 +46,32 @@ impl ProcessInfo {
         } = self;
         let pid = *pid;
         let level = *level;
+
+        #[derive(Debug, Clone, Copy)]
+        struct Kill {
+            pid: i64,
+            terminate: bool,
+        }
+
+        impl From<Kill> for Message {
+            fn from(value: Kill) -> Self {
+                let Kill { pid, terminate } = value;
+                Message::Kill { pid, terminate }
+            }
+        }
+
         w::row()
             .spacing(6)
             .push(horizontal_space().width(Length::Fixed(level.min(24).mul(12) as f32)))
-            .push(
-                button("X")
-                    .padding(3)
-                    .style(button::danger)
-                    .on_press_with(move || Message::Kill {
-                        pid,
-                        terminate: true,
-                    }),
-            )
+            .push(button("X").padding(3).style(button::danger).on_press(Kill {
+                pid,
+                terminate: true,
+            }))
             .push(
                 button("K")
                     .padding(3)
                     .style(button::secondary)
-                    .on_press_with(move || Message::Kill {
+                    .on_press(Kill {
                         pid,
                         terminate: false,
                     }),
@@ -75,7 +84,8 @@ impl ProcessInfo {
                     .padding(3)
                     .style(|t| styling::box_border(t).background(t.palette().background)),
             )
-            .into()
+            .pipe(Element::from)
+            .map(Into::into)
     }
 
     pub async fn open() -> Result<Vec<ProcessInfo>, io::Error> {

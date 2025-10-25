@@ -38,7 +38,7 @@ pub enum QuickMessage {
     OpenLua,
 }
 
-#[derive(Debug, IsVariant, From, Clone)]
+#[derive(Debug, IsVariant, From)]
 pub enum Message {
     #[from]
     Status(String),
@@ -66,4 +66,5 @@ pub enum Message {
     DialogRequest(window::Id, dialog::Request),
     DialogMessage(window::Id, dialog::Message),
     Dialog(DialogBuilder),
+    BatchRun,
 }

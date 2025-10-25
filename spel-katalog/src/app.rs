@@ -1,4 +1,5 @@
 use ::std::{
+    convert::identity,
     io::{BufWriter, Write},
     path::Path,
     sync::Arc,
@@ -14,7 +15,7 @@ use ::iced::{
     window,
 };
 use ::rustc_hash::FxHashMap;
-use ::spel_katalog_common::{OrRequest, StatusSender, w};
+use ::spel_katalog_common::{OrRequest, StatusSender, tracker::create_tracker_monitor, w};
 use ::spel_katalog_info::image_buffer::ImageBuffer;
 use ::spel_katalog_settings::{ConfigDir, FilterMode, LutrisDb, Network, Theme};
 use ::spel_katalog_sink::SinkBuilder;
@@ -58,6 +59,7 @@ pub(crate) struct App {
     pub windows: FxHashMap<window::Id, WindowType>,
     pub api_markdown: Box<[widget::markdown::Item]>,
     pub lua_vt: Arc<LuaVt>,
+    pub batch_source: Option<String>,
 }
 
 /// Virtual table passed to lua.
@@ -128,7 +130,13 @@ impl App {
             action,
             advanced_terminal: _,
             keep_terminal: _,
+            batch,
         } = cli;
+
+        let batch_source = batch
+            .map(::std::fs::read_to_string)
+            .transpose()
+            .map_err(|err| eyre!("could not read given batch script to a string").wrap_err(err))?;
 
         fn read_settings(path: &Path) -> ::color_eyre::Result<::spel_katalog_settings::Settings> {
             ::std::fs::read_to_string(path)
@@ -239,6 +247,7 @@ impl App {
                 windows,
                 api_markdown,
                 lua_vt,
+                batch_source,
             },
             status_rx,
             dialog_rx,
@@ -252,6 +261,29 @@ impl App {
     ) -> ::color_eyre::Result<()> {
         let (app, status_rx, dialog_rx) = Self::new(cli, sink_builder)?;
 
+        let (tracker, run_batch) = if app.batch_source.is_some() {
+            let (tracker, monitor) = create_tracker_monitor();
+
+            let run_batch = Task::future(monitor.wait()).then(move |response| {
+                if !response.is_finished() {
+                    ::log::warn!("initialization tracker was lost");
+                }
+
+                Task::done(Message::BatchRun)
+            });
+
+            (Some(tracker), Some(run_batch))
+        } else {
+            (None, None)
+        };
+
+        let main = if let Some(run_batch) = run_batch {
+            run_batch
+        } else {
+            let (_, open_main) = window::open(::iced::window::Settings::default());
+            open_main.map(|id| Message::OpenWindow(id, WindowType::Main))
+        };
+
         ::iced::daemon("Lutris Games", Self::update, Self::view)
             .theme(|app, _| ::iced::Theme::from(*app.settings.settings.get::<Theme>()))
             .subscription(Self::subscription)
@@ -261,7 +293,7 @@ impl App {
                     .settings
                     .get::<LutrisDb>()
                     .to_path_buf()
-                    .pipe(spel_katalog_games::Message::LoadDb)
+                    .pipe(move |db_path| spel_katalog_games::Message::LoadDb { db_path, tracker })
                     .pipe(OrRequest::Message)
                     .pipe(Message::Games)
                     .pipe(Task::done);
@@ -269,16 +301,11 @@ impl App {
                     Task::stream(ReceiverStream::new(status_rx)).map(Message::Status);
                 let receive_dialog =
                     Task::stream(ReceiverStream::new(dialog_rx)).map(Message::Dialog);
-                let (_, open_main) = window::open(::iced::window::Settings::default());
-                let open_main = open_main.map(|id| Message::OpenWindow(id, WindowType::Main));
                 let exit_recv = exit_recv
-                    .map(|exit_recv| Task::future(exit_recv.recv()).then(|_| ::iced::exit()));
+                    .map(|exit_recv| Task::future(exit_recv.recv()).then(|_| ::iced::exit()))
+                    .unwrap_or_else(Task::none);
 
-                let batch = Task::batch(
-                    [receive_status, receive_dialog, load_db, open_main]
-                        .into_iter()
-                        .chain(exit_recv),
-                );
+                let batch = Task::batch([receive_status, receive_dialog, load_db, main, exit_recv]);
 
                 (app, batch)
             })
@@ -344,7 +371,9 @@ impl App {
                 )
                 .width(Fill)
                 .padding(3)
-                .on_input(Message::Filter),
+                .on_input(identity)
+                .pipe(Element::from)
+                .map(Message::Filter),
             )
             .push(vertical_space().height(5))
             .push(

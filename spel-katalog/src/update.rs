@@ -12,11 +12,48 @@ use ::spel_katalog_common::OrRequest;
 use ::spel_katalog_games::SelDir;
 use ::spel_katalog_info::formats::Additional;
 use ::spel_katalog_settings::{
-    ConfigDir, CoverartDir, FilterMode, Network, Show, Variants, YmlDir,
+    CacheDir, ConfigDir, CoverartDir, FilterMode, Network, Show, Variants, YmlDir,
 };
 use ::tap::Pipe;
 
 use crate::{App, Message, QuickMessage, Safety, app::WindowType};
+
+fn gather<'a>(
+    yml_dir: &str,
+    config_dir: &str,
+    games: impl IntoIterator<Item = &'a ::spel_katalog_games::Game>,
+) -> Vec<BatchInfo> {
+    games
+        .into_iter()
+        .map(|game| BatchInfo {
+            id: game.id,
+            slug: game.slug.clone(),
+            name: game.name.clone(),
+            runner: game.runner.to_string(),
+            config: format!("{yml_dir}/{}.yml", game.configpath),
+            hidden: game.hidden,
+            attrs: 'attrs: {
+                let path = format!("{config_dir}/games/{}.toml", game.id);
+                let path = Path::new(&path);
+
+                if !path.exists() {
+                    break 'attrs FxHashMap::default();
+                }
+
+                ::std::fs::read_to_string(path)
+                    .map_err(|err| ::log::error!("could not read additional path {path:?}\n{err}"))
+                    .ok()
+                    .and_then(|content| {
+                        let additional = ::toml::from_str::<Additional>(&content)
+                            .map_err(|err| ::log::error!("could not parse toml of {path:?}\n{err}"))
+                            .ok()?;
+                        Some(additional.attrs)
+                    })
+                    .unwrap_or_default()
+            },
+        })
+        .collect()
+}
 
 impl App {
     pub fn update(&mut self, msg: Message) -> Task<Message> {
@@ -82,10 +119,14 @@ impl App {
                             false,
                         );
                     }
-                    ::spel_katalog_games::Request::FindImages { slugs } => {
+                    ::spel_katalog_games::Request::FindImages { slugs, tracker } => {
                         return self
                             .image_buffer
-                            .find_images(slugs, self.settings.get::<CoverartDir>().to_path_buf())
+                            .find_images(
+                                slugs,
+                                self.settings.get::<CoverartDir>().to_path_buf(),
+                                tracker,
+                            )
                             .map(OrRequest::Message)
                             .map(Message::Games);
                     }
@@ -266,56 +307,6 @@ impl App {
                     }
                     ::spel_katalog_batch::Request::HideBatch => self.show_batch = false,
                     ::spel_katalog_batch::Request::GatherBatchInfo(scope) => {
-                        fn gather<'a>(
-                            yml_dir: &str,
-                            config_dir: &str,
-                            games: impl IntoIterator<Item = &'a ::spel_katalog_games::Game>,
-                        ) -> Task<Message> {
-                            games
-                                .into_iter()
-                                .map(|game| BatchInfo {
-                                    id: game.id,
-                                    slug: game.slug.clone(),
-                                    name: game.name.clone(),
-                                    runner: game.runner.to_string(),
-                                    config: format!("{yml_dir}/{}.yml", game.configpath),
-                                    hidden: game.hidden,
-                                    attrs: 'attrs: {
-                                        let path = format!("{config_dir}/games/{}.toml", game.id);
-                                        let path = Path::new(&path);
-
-                                        if !path.exists() {
-                                            break 'attrs FxHashMap::default();
-                                        }
-
-                                        ::std::fs::read_to_string(path)
-                                            .map_err(|err| {
-                                                ::log::error!(
-                                                    "could not read additional path {path:?}\n{err}"
-                                                )
-                                            })
-                                            .ok()
-                                            .and_then(|content| {
-                                                let additional = ::toml::from_str::<Additional>(
-                                                    &content,
-                                                )
-                                                .map_err(|err| {
-                                                    ::log::error!(
-                                                        "could not parse toml of {path:?}\n{err}"
-                                                    )
-                                                })
-                                                .ok()?;
-                                                Some(additional.attrs)
-                                            })
-                                            .unwrap_or_default()
-                                    },
-                                })
-                                .collect::<Vec<_>>()
-                                .pipe(::spel_katalog_batch::Message::RunBatch)
-                                .pipe(OrRequest::Message)
-                                .pipe(Message::Batch)
-                                .pipe(Task::done)
-                        }
                         let yml_dir = self.settings.get::<YmlDir>();
                         let yml_dir = yml_dir.as_str();
                         let config_dir = self.settings.get::<ConfigDir>().as_str();
@@ -329,10 +320,17 @@ impl App {
                             ::spel_katalog_batch::Scope::Batch => {
                                 gather(yml_dir, config_dir, self.games.batch_selected())
                             }
-                        };
+                        }
+                        .pipe(::spel_katalog_batch::Message::RunBatch)
+                        .pipe(OrRequest::Message)
+                        .pipe(Message::Batch)
+                        .pipe(Task::done);
                     }
                     ::spel_katalog_batch::Request::ReloadCache => {
-                        return self.games.find_cached(&self.settings).map(Message::Games);
+                        return self
+                            .games
+                            .find_cached(&self.settings, None)
+                            .map(Message::Games);
                     }
                 },
             },
@@ -370,6 +368,48 @@ impl App {
                 });
                 return task.map(move |id| {
                     Message::OpenWindow(id, WindowType::Dialog(dialog.clone().build()))
+                });
+            }
+            Message::BatchRun => {
+                let Some(src) = self.batch_source.take() else {
+                    ::log::warn!("batch run attempted without source, should not happen");
+                    return Task::none();
+                };
+                let settings = self.settings.generic();
+                let thumb_db_path = self
+                    .settings
+                    .get::<CacheDir>()
+                    .as_path()
+                    .join("thumbnails.db");
+                let games = gather(
+                    &self.settings.get::<YmlDir>(),
+                    &self.settings.get::<ConfigDir>(),
+                    self.games.all(),
+                );
+                let sink_builder = self.sink_builder.clone();
+                let vt = self.lua_vt();
+                let future = async move {
+                    ::tokio::task::spawn_blocking(move || {
+                        ::spel_katalog_batch::lua_batch(
+                            games,
+                            src,
+                            settings,
+                            &thumb_db_path,
+                            &sink_builder,
+                            vt,
+                        )
+                        .map_err(|err| err.to_string())
+                    })
+                    .await
+                };
+
+                return Task::future(future).then(|result| {
+                    match result {
+                        Ok(Ok(_)) => ::log::info!("batch script finished"),
+                        Ok(Err(err)) => ::log::error!("batch script error\n{err}"),
+                        Err(err) => ::log::error!("thread could not be joined\n{err}"),
+                    };
+                    ::iced::exit()
                 });
             }
         }
