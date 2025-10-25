@@ -10,7 +10,7 @@ use ::std::{
 use ::iced::{Task, widget::image::Handle};
 use ::image::{RgbaImage, imageops::FilterType::Gaussian};
 use ::rayon::iter::{IntoParallelIterator, ParallelIterator};
-use ::spel_katalog_common::tracker::Tracker;
+use ::spel_katalog_tracker::Tracker;
 use ::tap::{Conv, Pipe};
 use ::tokio_stream::wrappers::IntervalStream;
 

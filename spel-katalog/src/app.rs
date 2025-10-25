@@ -17,14 +17,11 @@ use ::iced::{
     window,
 };
 use ::rustc_hash::FxHashMap;
-use ::spel_katalog_common::{
-    OrRequest, StatusSender,
-    tracker::{self, create_tracker_monitor},
-    w,
-};
+use ::spel_katalog_common::{OrRequest, StatusSender, w};
 use ::spel_katalog_info::image_buffer::ImageBuffer;
 use ::spel_katalog_settings::{CacheDir, ConfigDir, FilterMode, LutrisDb, Network, Theme};
 use ::spel_katalog_sink::SinkBuilder;
+use ::spel_katalog_tracker::{Response, create_tracker_monitor};
 use ::tap::Pipe;
 use ::tokio::sync::mpsc::{Receiver, Sender, channel};
 use ::tokio_stream::wrappers::ReceiverStream;
@@ -293,7 +290,7 @@ impl App {
                             "initialization did not finish before timout {timeout}, {err}",
                             timeout = timeout.as_secs()
                         );
-                        tracker::Response::Lost
+                        Response::Lost
                     }
                 }
             })
