@@ -115,8 +115,11 @@ pub trait Virtual: 'static + Debug + Send + Sync {
     /// Create a dictionary of available lua modules and their source code.
     fn available_modules(&self) -> FxHashMap<String, String>;
 
-    /// Get a connection to the thumbnail databse.
+    /// Get path to thumbnail cache db.
     fn thumb_db_path(&self) -> ::mlua::Result<PathBuf>;
+
+    /// Get path to additional config dir for a game.
+    fn additional_config_path(&self, game_id: i64) -> ::mlua::Result<PathBuf>;
 
     /// Get settings as a hash map.
     fn settings(&self) -> ::mlua::Result<HashMap<&'_ str, String>>;
@@ -153,10 +156,16 @@ fn register_module(
     let skeleton = Skeleton::new(lua, lua.create_table()?)?;
 
     color::register(&lua, &skeleton)?;
-    game_data::register(&lua, &skeleton, conn.clone(), thumb_db_path.clone())?;
+    game_data::register(
+        &lua,
+        &skeleton,
+        conn.clone(),
+        thumb_db_path.clone(),
+        vt.clone(),
+    )?;
     image::register(&lua, conn, thumb_db_path, &skeleton)?;
     cmd::register(&lua, &skeleton, &sink_builder)?;
-    misc::register(&lua, &skeleton)?;
+    misc::register(&lua, &skeleton, vt.clone())?;
     yaml::register(&lua, &skeleton)?;
     path::register(&lua, &skeleton)?;
     dialog::register(&lua, &skeleton, vt.clone())?;

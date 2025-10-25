@@ -19,6 +19,7 @@ shell-words.workspace = true
 spel-katalog-formats.workspace = true
 spel-katalog-sink.workspace = true
 tap.workspace = true
+toml.workspace = true
 yaml-rust2.workspace = true
 
 [lints]

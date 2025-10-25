@@ -195,7 +195,7 @@ local None
 
 ---Game data given to batch and pre-launch scripts.
 ---@class GameData
----@field attrs {[string]: string} Custom attributes set for game.
+---@field attrs table<string, string> Custom attributes set for game.
 ---@field config string Path to game lutris yaml.
 ---@field hidden boolean Set to true if game is hidden.
 ---@field id number Lutris numeric id of game.
@@ -215,6 +215,11 @@ function GameData:loadCover() end
 ---Save image to cover cache for this game.
 ---@param image Image
 function GameData:saveCover(image) end
+
+---Set an attribute, and update this GameData.
+---@param attr string Name of attribute to set.
+---@param value string Value to set attribute to.
+function GameData:setAttr(attr, value) end
 
 ---Settings givent to batch and pre-launch scripts.
 ---@class Settings
@@ -337,5 +342,12 @@ function spelkatalog.loadFile(path) end
 ---@param path string Path to file.
 ---@param content string Content to save.
 function spelkatalog.saveFile(path, content) end
+
+---Set a custom attribute for a game, does not update any GameData.
+---@param game_id number
+---@param attr string
+---@param value string
+---@return table<string, string>
+function spelkatalog.setAttr(game_id, attr, value) end
 
 return spelkatalog

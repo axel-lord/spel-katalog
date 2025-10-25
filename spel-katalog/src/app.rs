@@ -128,6 +128,14 @@ impl ::spel_katalog_lua::Virtual for LuaVt {
     fn settings(&self) -> mlua::Result<HashMap<&'_ str, String>> {
         Ok(self.settings.generic())
     }
+
+    fn additional_config_path(&self, game_id: i64) -> mlua::Result<PathBuf> {
+        Ok(self
+            .settings
+            .get::<ConfigDir>()
+            .as_path()
+            .join(format!("games/{game_id}.toml")))
+    }
 }
 
 impl App {
