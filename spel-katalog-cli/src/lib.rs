@@ -25,7 +25,7 @@ fn default_config() -> &'static Path {
 
 /// Application Cli.
 #[derive(Debug, Parser)]
-#[command(author, version)]
+#[command(author, version, args_conflicts_with_subcommands = true)]
 pub struct Cli {
     /// Settings to set for this run.
     #[command(flatten)]
