@@ -1,16 +1,23 @@
 //! SubCmd impl.
 
-use ::std::{
-    io::{BufWriter, Write},
-    path::{Path, PathBuf},
-};
+use ::std::path::{Path, PathBuf};
 
-use ::clap::{CommandFactory, Subcommand};
+use ::clap::Subcommand;
 
-use crate::{Cli, init_config::init_config};
+use crate::{completions::completions, init_config::init_config, skeleton::skeleton};
 
 fn get_shell() -> ::clap_complete::Shell {
     ::clap_complete::Shell::from_env().unwrap_or_else(|| ::clap_complete::Shell::Bash)
+}
+
+/// Callbacks required when performing subcommand.
+#[derive(Debug)]
+pub struct SubcmdCallbacks<E> {
+    /// Callback to use when running application.
+    pub run: fn(crate::Run) -> Result<(), E>,
+
+    /// Callback that is called before other subcommands.
+    pub other: fn() -> Result<(), E>,
 }
 
 /// Error returned whe subcmd perform fails.
@@ -50,7 +57,7 @@ pub enum SubCmdError {
 
 impl SubCmdError {
     /// Create a closure mapping io errors to self using provided path.
-    fn close_flush(path: &Path) -> impl FnOnce(::std::io::Error) -> Self {
+    pub(crate) fn close_flush(path: &Path) -> impl FnOnce(::std::io::Error) -> Self {
         |source| Self::CloseFlush {
             source,
             path: path.to_path_buf(),
@@ -58,14 +65,14 @@ impl SubCmdError {
     }
 
     /// Create a closure mapping io errors to self using provided path.
-    fn open_create(path: &Path) -> impl FnOnce(::std::io::Error) -> Self {
+    pub(crate) fn open_create(path: &Path) -> impl FnOnce(::std::io::Error) -> Self {
         |source| Self::OpenCreate {
             source,
             path: path.to_path_buf(),
         }
     }
     /// Create a closure mapping io errors to self using provided path.
-    fn write_skeleton(path: &Path) -> impl FnOnce(::std::io::Error) -> Self {
+    pub(crate) fn write_skeleton(path: &Path) -> impl FnOnce(::std::io::Error) -> Self {
         |source| Self::WriteSkeleton {
             source,
             path: path.to_path_buf(),
@@ -76,8 +83,14 @@ impl SubCmdError {
 /// Use cases other than launching gui.
 #[derive(Debug, Subcommand)]
 pub enum Subcmd {
+    /// Run application.
+    Run(#[command(flatten)] crate::Run),
     /// Output a skeleton config.
     Skeleton {
+        /// Settings to set for skeleton.
+        #[command(flatten)]
+        settings: ::spel_katalog_settings::Settings,
+
         /// Where to write skeleton to.
         #[arg(long, short, default_value = "-")]
         output: PathBuf,
@@ -104,58 +117,40 @@ pub enum Subcmd {
     },
 }
 
+impl Default for Subcmd {
+    fn default() -> Self {
+        Self::Run(crate::Run::default())
+    }
+}
+
 impl Subcmd {
     /// Perform action tied to subcommand.
-    pub fn perform(self, settings: &::spel_katalog_settings::Settings) -> Result<(), SubCmdError> {
+    pub fn perform<E>(self, callbacks: SubcmdCallbacks<E>) -> Result<(), E>
+    where
+        E: From<SubCmdError>,
+    {
+        let SubcmdCallbacks { run, other } = callbacks;
         match self {
-            Subcmd::Skeleton { output } => {
-                let mut stdout;
-                let mut file;
-                let writer: &mut dyn Write;
-                if output.as_os_str().to_str() == Some("-") {
-                    stdout = ::std::io::stdout().lock();
-                    writer = &mut stdout;
-                } else {
-                    file = ::std::fs::File::create(&output)
-                        .map(BufWriter::new)
-                        .map_err(SubCmdError::open_create(&output))?;
-                    writer = &mut file;
-                }
-                ::std::io::copy(
-                    &mut ::std::io::Cursor::new(
-                        ::toml::to_string_pretty(&settings.skeleton())
-                            .map_err(SubCmdError::SkeletonToToml)?,
-                    ),
-                    writer,
-                )
-                .map_err(SubCmdError::write_skeleton(&output))?;
-                writer.flush().map_err(SubCmdError::close_flush(&output))?;
+            Subcmd::Skeleton { output, settings } => {
+                other()?;
+                skeleton(output, settings)?;
             }
             Subcmd::Completions {
                 shell,
                 name,
                 output,
             } => {
-                if output.as_os_str().to_str() == Some("-") {
-                    ::clap_complete::generate(
-                        shell,
-                        &mut Cli::command(),
-                        name,
-                        &mut ::std::io::stdout().lock(),
-                    );
-                } else {
-                    let mut writer = ::std::fs::File::create(&output)
-                        .map(BufWriter::new)
-                        .map_err(SubCmdError::open_create(&output))?;
-                    ::clap_complete::generate(shell, &mut Cli::command(), name, &mut writer);
-                }
+                other()?;
+                completions(shell, name, output)?;
             }
             Subcmd::InitConfig {
                 path,
                 skip_lua_update,
             } => {
+                other()?;
                 init_config(path, skip_lua_update);
             }
+            Subcmd::Run(cli) => run(cli)?,
         }
         Ok(())
     }

@@ -15,7 +15,7 @@ use ::iced::{
     window,
 };
 use ::rustc_hash::FxHashMap;
-use ::spel_katalog_cli::Cli;
+use ::spel_katalog_cli::Run;
 use ::spel_katalog_common::{OrRequest, StatusSender, w};
 use ::spel_katalog_info::image_buffer::ImageBuffer;
 use ::spel_katalog_settings::{CacheDir, ConfigDir, FilterMode, LutrisDb, Network, Theme};
@@ -141,17 +141,16 @@ struct Initial {
 }
 
 impl Initial {
-    fn new(cli: Cli, sink_builder: SinkBuilder) -> ::color_eyre::Result<Self> {
-        let Cli {
+    fn new(run: Run, sink_builder: SinkBuilder) -> ::color_eyre::Result<Self> {
+        let Run {
             settings,
             show_settings,
             config,
-            action,
             advanced_terminal: _,
             keep_terminal: _,
             batch,
             batch_init_timeout,
-        } = cli;
+        } = run;
 
         let batch_source = batch
             .map(::std::fs::read_to_string)
@@ -172,11 +171,6 @@ impl Initial {
             .map_err(|err| ::log::error!("could not read config file {config:?}\n{err}"))
             .unwrap_or_default()
             .apply(::spel_katalog_settings::Delta::create(overrides));
-
-        if let Some(action) = action {
-            action.perform(&settings)?;
-            ::std::process::exit(0);
-        }
 
         let (status_tx, status_rx) = ::tokio::sync::mpsc::channel(64);
 
@@ -224,7 +218,7 @@ impl Initial {
 
 impl App {
     pub fn run(
-        cli: Cli,
+        run: Run,
         sink_builder: SinkBuilder,
         exit_recv: Option<ExitReceiver>,
     ) -> ::color_eyre::Result<()> {
@@ -232,7 +226,7 @@ impl App {
             app,
             status_rx,
             dialog_rx,
-        } = Initial::new(cli, sink_builder)?;
+        } = Initial::new(run, sink_builder)?;
 
         let (tracker, run_batch) = if app.batch_source.is_some() {
             let (tracker, monitor) = create_tracker_monitor();

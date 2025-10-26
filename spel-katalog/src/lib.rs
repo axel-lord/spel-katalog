@@ -1,4 +1,4 @@
-use ::spel_katalog_cli::Cli;
+use ::spel_katalog_cli::Run;
 use ::spel_katalog_sink::SinkBuilder;
 
 pub use self::exit_channel::{ExitReceiver, ExitSender, exit_channel};
@@ -21,9 +21,9 @@ mod view;
 
 /// Run application.
 pub fn run(
-    cli: Cli,
+    run: Run,
     sink_builder: SinkBuilder,
     exit_recv: Option<ExitReceiver>,
 ) -> ::color_eyre::Result<()> {
-    App::run(cli, sink_builder, exit_recv)
+    App::run(run, sink_builder, exit_recv)
 }
