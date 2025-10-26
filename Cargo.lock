@@ -4919,8 +4919,6 @@ dependencies = [
 name = "spel-katalog"
 version = "0.1.0"
 dependencies = [
- "clap",
- "clap_complete",
  "color-eyre",
  "derive_more",
  "env_logger",
@@ -4940,6 +4938,7 @@ dependencies = [
  "shell-words",
  "spel-katalog-batch",
  "spel-katalog-build",
+ "spel-katalog-cli",
  "spel-katalog-common",
  "spel-katalog-formats",
  "spel-katalog-games",
@@ -4993,6 +4992,18 @@ dependencies = [
  "rustc-hash 2.1.1",
  "serde",
  "syn 2.0.108",
+ "toml 0.9.8",
+]
+
+[[package]]
+name = "spel-katalog-cli"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "clap_complete",
+ "spel-katalog-settings",
+ "tap",
+ "thiserror 2.0.17",
  "toml 0.9.8",
 ]
 

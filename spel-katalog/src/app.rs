@@ -1,13 +1,11 @@
 use ::std::{
     collections::HashMap,
     convert::identity,
-    io::{BufWriter, Write},
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
 
-use ::clap::CommandFactory;
 use ::color_eyre::{Report, Section, eyre::eyre};
 use ::iced::{
     Element,
@@ -17,6 +15,7 @@ use ::iced::{
     window,
 };
 use ::rustc_hash::FxHashMap;
+use ::spel_katalog_cli::Cli;
 use ::spel_katalog_common::{OrRequest, StatusSender, w};
 use ::spel_katalog_info::image_buffer::ImageBuffer;
 use ::spel_katalog_settings::{CacheDir, ConfigDir, FilterMode, LutrisDb, Network, Theme};
@@ -27,10 +26,8 @@ use ::tokio::sync::mpsc::{Receiver, Sender, channel};
 use ::tokio_stream::wrappers::ReceiverStream;
 
 use crate::{
-    Cli, ExitReceiver, Message,
-    cli::Subcmd,
+    ExitReceiver, Message,
     dialog::{Dialog, DialogBuilder},
-    init_config::init_config,
     process_info, view,
 };
 
@@ -172,61 +169,8 @@ impl App {
             .apply(::spel_katalog_settings::Delta::create(overrides));
 
         if let Some(action) = action {
-            match action {
-                Subcmd::Skeleton { output } => {
-                    let mut stdout;
-                    let mut file;
-                    let writer: &mut dyn Write;
-                    if output.as_os_str().to_str() == Some("-") {
-                        stdout = ::std::io::stdout().lock();
-                        writer = &mut stdout;
-                    } else {
-                        file = ::std::fs::File::create(&output)
-                            .map(BufWriter::new)
-                            .map_err(|err| eyre!("could not create/open {output:?}").error(err))?;
-                        writer = &mut file;
-                    }
-                    ::std::io::copy(
-                        &mut ::std::io::Cursor::new(
-                            ::toml::to_string_pretty(&settings.skeleton())
-                                .map_err(|err| eyre!(err))?,
-                        ),
-                        writer,
-                    )
-                    .map_err(|err| eyre!(err))?;
-                    writer
-                        .flush()
-                        .map_err(|err| eyre!("could not close/flush {output:?}").error(err))?;
-                    ::std::process::exit(0)
-                }
-                Subcmd::Completions {
-                    shell,
-                    name,
-                    output,
-                } => {
-                    if output.as_os_str().to_str() == Some("-") {
-                        ::clap_complete::generate(
-                            shell,
-                            &mut Cli::command(),
-                            name,
-                            &mut ::std::io::stdout().lock(),
-                        );
-                    } else {
-                        let mut writer = ::std::fs::File::create(&output)
-                            .map(BufWriter::new)
-                            .map_err(|err| eyre!("could not create/open {output:?}").error(err))?;
-                        ::clap_complete::generate(shell, &mut Cli::command(), name, &mut writer);
-                    }
-                    ::std::process::exit(0)
-                }
-                Subcmd::InitConfig {
-                    path,
-                    skip_lua_update,
-                } => {
-                    init_config(path, skip_lua_update);
-                    ::std::process::exit(0)
-                }
-            }
+            action.perform(&settings)?;
+            ::std::process::exit(0);
         }
 
         let (status_tx, status_rx) = ::tokio::sync::mpsc::channel(64);

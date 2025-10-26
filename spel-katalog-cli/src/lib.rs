@@ -1,9 +1,16 @@
+//! Cli spec for project.
+
 use ::std::{
     path::{Path, PathBuf},
     sync::OnceLock,
 };
 
-use ::clap::{Parser, Subcommand};
+use ::clap::Parser;
+
+pub use self::subcmd::{SubCmdError, Subcmd};
+
+mod init_config;
+mod subcmd;
 
 fn default_config() -> &'static Path {
     static LAZY: OnceLock<PathBuf> = OnceLock::new();
@@ -16,13 +23,11 @@ fn default_config() -> &'static Path {
     })
 }
 
-fn get_shell() -> ::clap_complete::Shell {
-    ::clap_complete::Shell::from_env().unwrap_or_else(|| ::clap_complete::Shell::Bash)
-}
-
+/// Application Cli.
 #[derive(Debug, Parser)]
 #[command(author, version)]
 pub struct Cli {
+    /// Settings to set for this run.
     #[command(flatten)]
     pub settings: ::spel_katalog_settings::Settings,
 
@@ -55,33 +60,9 @@ pub struct Cli {
     pub action: Option<Subcmd>,
 }
 
-/// Use cases other than launching gui.
-#[derive(Debug, Subcommand)]
-pub enum Subcmd {
-    /// Output a skeleton config.
-    Skeleton {
-        /// Where to write skeleton to.
-        #[arg(long, short, default_value = "-")]
-        output: PathBuf,
-    },
-    /// Output completions.
-    Completions {
-        /// Shell to use.
-        #[arg(short, long, value_enum, default_value_t = get_shell())]
-        shell: ::clap_complete::Shell,
-        /// Name of the binary completions should be generated for.
-        #[arg(short, long, default_value = "spel-katalog")]
-        name: String,
-        /// Where to write completions to.
-        #[arg(short, long, default_value = "-")]
-        output: PathBuf,
-    },
-    /// Generate missing config. And/Or update lua definition.
-    InitConfig {
-        /// Path to config directory.
-        path: PathBuf,
-        /// Do not update lua definition.
-        #[arg(long)]
-        skip_lua_update: bool,
-    },
+impl Cli {
+    /// Parse Cli.
+    pub fn parse() -> Self {
+        Parser::parse()
+    }
 }

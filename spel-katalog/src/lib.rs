@@ -1,9 +1,7 @@
+use ::spel_katalog_cli::Cli;
 use ::spel_katalog_sink::SinkBuilder;
 
-pub use self::{
-    cli::Cli,
-    exit_channel::{ExitReceiver, ExitSender, exit_channel},
-};
+pub use self::exit_channel::{ExitReceiver, ExitSender, exit_channel};
 
 pub(crate) use self::{
     app::App,
@@ -12,10 +10,8 @@ pub(crate) use self::{
 
 mod api_window;
 mod app;
-mod cli;
 mod dialog;
 mod exit_channel;
-mod init_config;
 mod message;
 mod process_info;
 mod run_game;

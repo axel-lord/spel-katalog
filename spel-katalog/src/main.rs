@@ -1,7 +1,7 @@
 use ::std::sync::mpsc::channel;
 
-use ::clap::Parser;
-use ::spel_katalog::{Cli, exit_channel, run};
+use ::spel_katalog::{exit_channel, run};
+use ::spel_katalog_cli::Cli;
 use ::spel_katalog_sink::SinkBuilder;
 use ::spel_katalog_terminal::{Channels, line_channel};
 

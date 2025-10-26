@@ -3,6 +3,7 @@ members = [
 	"spel-katalog",
 	"spel-katalog-batch",
 	"spel-katalog-build",
+	"spel-katalog-cli",
 	"spel-katalog-common",
 	"spel-katalog-formats",
 	"spel-katalog-games",
@@ -83,6 +84,7 @@ shell-words = "1.1.0"
 smallvec = "1.15.1"
 spel-katalog-batch = { path = "spel-katalog-batch" }
 spel-katalog-build = { path = "spel-katalog-build" }
+spel-katalog-cli = { path = "spel-katalog-cli" }
 spel-katalog-common = { path = "spel-katalog-common" }
 spel-katalog-formats = { path = "spel-katalog-formats" }
 spel-katalog-games = { path = "spel-katalog-games" }
