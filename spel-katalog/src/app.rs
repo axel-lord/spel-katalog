@@ -132,11 +132,16 @@ impl ::spel_katalog_lua::Virtual for LuaVt {
     }
 }
 
-impl App {
-    fn new(
-        cli: Cli,
-        sink_builder: SinkBuilder,
-    ) -> ::color_eyre::Result<(Self, Receiver<String>, Receiver<DialogBuilder>)> {
+/// Initial state created by new.
+#[derive(Debug)]
+struct Initial {
+    app: App,
+    status_rx: Receiver<String>,
+    dialog_rx: Receiver<DialogBuilder>,
+}
+
+impl Initial {
+    fn new(cli: Cli, sink_builder: SinkBuilder) -> ::color_eyre::Result<Self> {
         let Cli {
             settings,
             show_settings,
@@ -189,38 +194,45 @@ impl App {
         let batch = Default::default();
         let api_markdown = widget::markdown::parse(include_str!("../../lua/docs.md")).collect();
         let (dialog_tx, dialog_rx) = channel(64);
+        let app = App {
+            process_list,
+            settings,
+            status,
+            filter,
+            view,
+            games,
+            image_buffer,
+            info,
+            sender,
+            batch,
+            show_batch,
+            sink_builder,
+            windows,
+            api_markdown,
+            dialog_tx,
+            batch_source,
+            batch_init_timeout,
+        };
 
-        Ok((
-            App {
-                process_list,
-                settings,
-                status,
-                filter,
-                view,
-                games,
-                image_buffer,
-                info,
-                sender,
-                batch,
-                show_batch,
-                sink_builder,
-                windows,
-                api_markdown,
-                dialog_tx,
-                batch_source,
-                batch_init_timeout,
-            },
+        Ok(Self {
+            app,
             status_rx,
             dialog_rx,
-        ))
+        })
     }
+}
 
+impl App {
     pub fn run(
         cli: Cli,
         sink_builder: SinkBuilder,
         exit_recv: Option<ExitReceiver>,
     ) -> ::color_eyre::Result<()> {
-        let (app, status_rx, dialog_rx) = Self::new(cli, sink_builder)?;
+        let Initial {
+            app,
+            status_rx,
+            dialog_rx,
+        } = Initial::new(cli, sink_builder)?;
 
         let (tracker, run_batch) = if app.batch_source.is_some() {
             let (tracker, monitor) = create_tracker_monitor();
