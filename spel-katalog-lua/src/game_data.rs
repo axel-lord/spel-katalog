@@ -4,7 +4,13 @@ use ::mlua::{Lua, Table};
 use ::once_cell::unsync::OnceCell;
 use ::rusqlite::Connection;
 
-use crate::{Skeleton, Virtual, image::Image, make_class, misc::set_attr, yaml::load_yaml};
+use crate::{
+    Skeleton, Virtual,
+    image::Image,
+    make_class,
+    misc::{set_attr, set_attrs},
+    yaml::load_yaml,
+};
 
 pub fn register(
     lua: &Lua,
@@ -39,11 +45,22 @@ pub fn register(
         })?,
     )?;
 
+    let vt1 = vt.clone();
     game_data.set(
         "setAttr",
         lua.create_function(move |lua, (this, attr, value): (Table, _, _)| {
             let game_id = this.get("id")?;
-            let new_attrs = set_attr(lua, game_id, attr, value, vt.as_ref())?;
+            let new_attrs = set_attr(lua, game_id, attr, value, vt1.as_ref())?;
+            this.set("attrs", new_attrs)?;
+            Ok(())
+        })?,
+    )?;
+
+    game_data.set(
+        "setAttrs",
+        lua.create_function(move |lua, (this, attrs): (Table, _)| {
+            let game_id = this.get("id")?;
+            let new_attrs = set_attrs(lua, game_id, attrs, vt.as_ref())?;
             this.set("attrs", new_attrs)?;
             Ok(())
         })?,

@@ -221,6 +221,10 @@ function GameData:saveCover(image) end
 ---@param value string Value to set attribute to.
 function GameData:setAttr(attr, value) end
 
+---Set multiple attributes, and update this GameData.
+---@param attrs table<string, string> Table of attributes to set.
+function GameData:setAttrs(attrs) end
+
 ---Settings givent to batch and pre-launch scripts.
 ---@class Settings
 ---@field Theme string

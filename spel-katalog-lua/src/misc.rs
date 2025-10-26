@@ -1,6 +1,7 @@
 use ::std::{ffi::OsStr, os::unix::ffi::OsStrExt, sync::Arc};
 
 use ::mlua::{Lua, LuaSerdeExt, MultiValue, ObjectLike, Variadic};
+use ::rustc_hash::FxHashMap;
 use ::spel_katalog_formats::AdditionalConfig;
 
 use crate::{Skeleton, Virtual};
@@ -37,6 +38,32 @@ pub fn set_attr(
     )?;
 
     initial.attrs.insert(attr, value);
+
+    let content = ::toml::to_string_pretty(&initial).map_err(::mlua::Error::external)?;
+    let table = lua.to_value(&initial.attrs)?;
+
+    ::std::fs::write(&path, content.as_bytes()).map_err(::mlua::Error::external)?;
+
+    Ok(table)
+}
+
+pub fn set_attrs(
+    lua: &Lua,
+    id: i64,
+    attrs: ::mlua::Value,
+    vt: &dyn Virtual,
+) -> ::mlua::Result<::mlua::Value> {
+    let attrs = lua.from_value::<FxHashMap<String, String>>(attrs)?;
+    let path = vt.additional_config_path(id)?;
+    let mut initial = ::std::fs::read_to_string(&path).map_or_else(
+        |err| match err.kind() {
+            ::std::io::ErrorKind::NotFound => Ok(AdditionalConfig::default()),
+            _ => Err(::mlua::Error::external(err)),
+        },
+        |content| ::toml::from_str(&content).map_err(::mlua::Error::external),
+    )?;
+
+    initial.attrs.extend(attrs);
 
     let content = ::toml::to_string_pretty(&initial).map_err(::mlua::Error::external)?;
     let table = lua.to_value(&initial.attrs)?;
