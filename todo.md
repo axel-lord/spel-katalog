@@ -7,6 +7,7 @@
 - [ ] Expand lua api, remove cover, get lutris cover
 - [ ] Keybinds, and control scheme docs
 - [ ] Split settings to dedicated window, info should be kept as-is
+- [ ] Console Window
 
 # Future Goals/Possibilities
 - [ ] Run exe files in prefix without lutris
