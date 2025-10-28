@@ -4946,8 +4946,8 @@ dependencies = [
  "spel-katalog-lua",
  "spel-katalog-settings",
  "spel-katalog-sink",
- "spel-katalog-terminal",
  "spel-katalog-tracker",
+ "spel-katalog-tui",
  "strsim",
  "tap",
  "thiserror 2.0.17",
@@ -5122,21 +5122,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "spel-katalog-terminal"
-version = "0.1.0"
-dependencies = [
- "derive-new",
- "derive_more",
- "log",
- "memchr",
- "ratatui",
- "smallvec",
- "spel-katalog-sink",
- "tap",
- "vte",
-]
-
-[[package]]
 name = "spel-katalog-test"
 version = "0.1.0"
 dependencies = [
@@ -5157,6 +5142,21 @@ version = "0.1.0"
 dependencies = [
  "derive_more",
  "tokio",
+]
+
+[[package]]
+name = "spel-katalog-tui"
+version = "0.1.0"
+dependencies = [
+ "derive-new",
+ "derive_more",
+ "log",
+ "memchr",
+ "ratatui",
+ "smallvec",
+ "spel-katalog-sink",
+ "tap",
+ "vte",
 ]
 
 [[package]]

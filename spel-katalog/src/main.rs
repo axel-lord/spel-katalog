@@ -3,7 +3,7 @@ use ::std::sync::mpsc::channel;
 use ::spel_katalog::{exit_channel, run as run_app};
 use ::spel_katalog_cli::{Cli, Subcmd, SubcmdCallbacks};
 use ::spel_katalog_sink::SinkBuilder;
-use ::spel_katalog_terminal::{Channels, line_channel};
+use ::spel_katalog_tui::{Channels, line_channel};
 
 fn init_log(target: Option<::env_logger::Target>) {
     let mut log_builder = ::env_logger::builder();
@@ -16,7 +16,7 @@ fn init_log(target: Option<::env_logger::Target>) {
         "spel_katalog_parse",
         "spel_katalog_script",
         "spel_katalog_settings",
-        "spel_katalog_terminal",
+        "spel_katalog_tui",
     ]
     .into_iter()
     .fold(&mut log_builder, |builder, module| {
@@ -47,7 +47,7 @@ fn run(cli: ::spel_katalog_cli::Run) -> ::color_eyre::Result<()> {
         let app_handle = ::std::thread::Builder::new()
             .name("spel-katalog-app".to_owned())
             .spawn(move || {
-                ::spel_katalog_terminal::tui(
+                ::spel_katalog_tui::tui(
                     Channels {
                         exit_tx: Box::new(|| exit_tx.send()),
                         pipe_rx,

@@ -1,5 +1,5 @@
 [package]
-name = "spel-katalog-terminal"
+name = "spel-katalog-tui"
 version = "0.1.0"
 edition = "2024"
 authors = ["Axel Lord"]
