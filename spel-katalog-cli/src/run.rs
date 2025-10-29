@@ -37,7 +37,7 @@ pub struct Run {
     pub advanced_terminal: bool,
 
     /// Keep terminal open.
-    #[arg(long, visible_alias = "kt", requires = "advanced_terminal")]
+    #[arg(long, visible_alias = "kt", conflicts_with = "batch")]
     pub keep_terminal: bool,
 
     /// Run the given batch script, then exit.

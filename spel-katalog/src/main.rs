@@ -1,4 +1,7 @@
-use ::std::sync::mpsc::channel;
+use ::std::{
+    io::{IsTerminal, Read},
+    sync::mpsc::channel,
+};
 
 use ::spel_katalog::{exit_channel, run as run_app};
 use ::spel_katalog_cli::{Cli, Subcmd, SubcmdCallbacks};
@@ -66,7 +69,16 @@ fn run(cli: ::spel_katalog_cli::Run) -> ::color_eyre::Result<()> {
         Ok(())
     } else {
         init_log(None);
-        run_app(cli, SinkBuilder::Inherit, None)
+        let keep_terminal = cli.keep_terminal;
+        run_app(cli, SinkBuilder::Inherit, None)?;
+
+        if keep_terminal && ::std::io::stdin().is_terminal() {
+            println!("Press enter to exit...");
+            let mut buf = [0u8; 1];
+            ::std::io::stdin().read_exact(&mut buf)?;
+        }
+
+        Ok(())
     }
 }
 
