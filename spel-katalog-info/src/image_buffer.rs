@@ -7,7 +7,7 @@ use ::std::{
     time::Duration,
 };
 
-use ::iced::{Task, widget::image::Handle};
+use ::iced::Task;
 use ::image::{RgbaImage, imageops::FilterType::Gaussian};
 use ::rayon::iter::{IntoParallelIterator, ParallelIterator};
 use ::spel_katalog_tracker::Tracker;
@@ -22,7 +22,7 @@ pub struct ImageBuffer {
 #[derive(Debug, Clone)]
 pub struct ImageBufferMsg {
     slugs: Vec<String>,
-    images: Vec<Handle>,
+    images: Vec<::spel_katalog_formats::Image>,
     is_final: bool,
 }
 
@@ -43,7 +43,7 @@ impl ImageBuffer {
         }
     }
 
-    pub fn take(&self) -> Option<(Vec<String>, Vec<Handle>)> {
+    pub fn take(&self) -> Option<(Vec<String>, Vec<::spel_katalog_formats::Image>)> {
         match &mut *self.values.lock() {
             Some(ImageBufferMsg {
                 slugs,
@@ -68,7 +68,7 @@ impl ImageBuffer {
         *self.values.lock() = None;
     }
 
-    pub fn push(&self, slug: String, image: Handle) -> Result<(), ()> {
+    pub fn push(&self, slug: String, image: ::spel_katalog_formats::Image) -> Result<(), ()> {
         match &mut *self.values.lock() {
             Some(ImageBufferMsg { slugs, images, .. }) => {
                 slugs.push(slug);
@@ -79,26 +79,30 @@ impl ImageBuffer {
         }
     }
 
-    pub fn process_single(path: &Path) -> Result<Handle, ::image::ImageError> {
+    pub fn process_single(
+        path: &Path,
+    ) -> Result<::spel_katalog_formats::Image, ::image::ImageError> {
         let resized = ::image::open(path)?
             .resize(150, 150, Gaussian)
             .conv::<RgbaImage>();
-        Ok(Handle::from_rgba(
-            resized.width(),
-            resized.height(),
-            resized.into_raw(),
-        ))
+        Ok(::spel_katalog_formats::Image {
+            width: resized.width(),
+            height: resized.height(),
+            bytes: resized.into_raw().into(),
+        })
     }
 
-    pub fn process_bytes(bytes: &[u8]) -> Result<Handle, ::image::ImageError> {
+    pub fn process_bytes(
+        bytes: &[u8],
+    ) -> Result<::spel_katalog_formats::Image, ::image::ImageError> {
         let resized = ::image::load_from_memory(bytes)?
             .resize(150, 150, Gaussian)
             .conv::<RgbaImage>();
-        Ok(Handle::from_rgba(
-            resized.width(),
-            resized.height(),
-            resized.into_raw(),
-        ))
+        Ok(::spel_katalog_formats::Image {
+            width: resized.width(),
+            height: resized.height(),
+            bytes: resized.into_raw().into(),
+        })
     }
 
     pub fn find_images(
@@ -124,7 +128,10 @@ impl ImageBuffer {
             }
         }
 
-        fn get_image(slug: &str, coverart: &Path) -> Result<Handle, ImageOpenError> {
+        fn get_image(
+            slug: &str,
+            coverart: &Path,
+        ) -> Result<::spel_katalog_formats::Image, ImageOpenError> {
             let mut open_error = ImageOpenError::default();
             for ext in ["png", "jpg", "jpeg"] {
                 let path = coverart.join(slug).with_extension(ext);
@@ -154,7 +161,10 @@ impl ImageBuffer {
         });
 
         async fn work(
-            mut rx: ::tokio::sync::mpsc::Receiver<(String, Result<Handle, ImageOpenError>)>,
+            mut rx: ::tokio::sync::mpsc::Receiver<(
+                String,
+                Result<::spel_katalog_formats::Image, ImageOpenError>,
+            )>,
             tx: ImageBuffer,
         ) {
             while let Some((slug, value)) = rx.recv().await {

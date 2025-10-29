@@ -21,7 +21,7 @@ use crate::{App, Message, QuickMessage, Safety, app::WindowType};
 fn gather<'a>(
     yml_dir: &str,
     config_dir: &str,
-    games: impl IntoIterator<Item = &'a ::spel_katalog_games::Game>,
+    games: impl IntoIterator<Item = &'a ::spel_katalog_formats::Game>,
 ) -> Vec<BatchInfo> {
     games
         .into_iter()

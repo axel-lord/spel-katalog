@@ -16,7 +16,6 @@ use ::iced::{
     Task,
     widget::{
         self, button, horizontal_rule, horizontal_space,
-        image::Handle,
         text_editor::{Action, Edit},
         vertical_rule,
     },
@@ -99,10 +98,20 @@ pub enum Message {
 #[derive(Debug, Clone, IsVariant)]
 pub enum Request {
     ShowInfo(bool),
-    SetImage { slug: String, image: Handle },
-    RemoveImage { slug: String },
-    RunGame { id: i64, sandbox: bool },
-    RunLutrisInSandbox { id: i64 },
+    SetImage {
+        slug: String,
+        image: ::spel_katalog_formats::Image,
+    },
+    RemoveImage {
+        slug: String,
+    },
+    RunGame {
+        id: i64,
+        sandbox: bool,
+    },
+    RunLutrisInSandbox {
+        id: i64,
+    },
 }
 
 impl State {
@@ -599,7 +608,13 @@ impl State {
                 w::row()
                     .align_y(Alignment::Start)
                     .height(150)
-                    .push_maybe(game.image.as_ref().map(|image| widget::image(image)))
+                    .push_maybe(game.image.as_ref().map(|image| {
+                        widget::image(::iced::advanced::image::Handle::from_rgba(
+                            image.width,
+                            image.height,
+                            image.bytes.clone(),
+                        ))
+                    }))
                     .push_maybe(game.image.is_some().then(|| widget::vertical_rule(2)))
                     .push(
                         w::col()

@@ -616,6 +616,9 @@ name = "bytes"
 version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "calloop"
@@ -4640,6 +4643,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_bytes"
+version = "0.11.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5d440709e79d88e51ac01c4b72fc6cb7314017bb7da9eeff678aa94c10e3ea8"
+dependencies = [
+ "serde",
+ "serde_core",
+]
+
+[[package]]
 name = "serde_core"
 version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5022,8 +5035,12 @@ dependencies = [
 name = "spel-katalog-formats"
 version = "0.1.0"
 dependencies = [
+ "bytes",
+ "derive_more",
+ "indexmap",
  "rustc-hash 2.1.1",
  "serde",
+ "serde_bytes",
 ]
 
 [[package]]
@@ -5041,6 +5058,7 @@ dependencies = [
  "rustc-hash 2.1.1",
  "shell-words",
  "spel-katalog-common",
+ "spel-katalog-formats",
  "spel-katalog-settings",
  "spel-katalog-tracker",
  "strsim",

@@ -14,7 +14,7 @@ use ::iced::{
     Border, Element,
     Length::Fill,
     Task,
-    widget::{self, container, image::Handle, stack},
+    widget::{self, container, stack},
 };
 use ::image::ImageFormat;
 use ::itertools::Itertools;
@@ -22,12 +22,13 @@ use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelItera
 use ::rusqlite::{Connection, OpenFlags, Statement, named_params};
 use ::rustc_hash::{FxHashMap, FxHashSet};
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, w};
+use ::spel_katalog_formats::Game;
 use ::spel_katalog_settings::{CacheDir, Settings};
 use ::spel_katalog_tracker::Tracker;
 use ::tap::Pipe;
 use ::tokio::task::{JoinError, spawn_blocking};
 
-use crate::{Game, Games};
+use crate::{Games, games::game_from_row};
 
 const THUMBNAILS_FILENAME: &str = "thumbnails.db";
 
@@ -78,7 +79,7 @@ pub enum Message {
         /// Slugs for games to set thumbnails for.
         slugs: Vec<String>,
         /// Thumbnails to set.
-        images: Vec<Handle>,
+        images: Vec<::spel_katalog_formats::Image>,
         /// True if image comes from cache file.
         from_cache: bool,
         /// Tracker to activate when finished.
@@ -89,7 +90,7 @@ pub enum Message {
         /// Slug.
         slug: String,
         /// Image.
-        image: Handle,
+        image: ::spel_katalog_formats::Image,
     },
     /// Remove a thumbnail from game and cache.
     RemoveImage {
@@ -194,7 +195,7 @@ fn load_db(path: &Path) -> Result<Vec<Game>, LoadDbError> {
     let mut games = Vec::new();
 
     while let Some(row) = rows.next()? {
-        let Some(mut game) = Game::from_row(row) else {
+        let Some(mut game) = game_from_row(row) else {
             continue;
         };
 
@@ -384,7 +385,7 @@ impl State {
                                     },
                                 };
 
-                                Some((slug, Handle::from_rgba(image.width(), image.height(), image.into_raw())))
+                                Some((slug, ::spel_katalog_formats::Image { width: image.width(), height: image.height(), bytes: image.into_raw().into() }))
 
                             }).collect_into_vec(&mut slugs_images);
 
@@ -538,10 +539,14 @@ impl State {
 
             match handle {
                 Some(handle) => {
-                    let image = widget::image(handle)
-                        .width(width)
-                        .height(width)
-                        .content_fit(::iced::ContentFit::Contain);
+                    let image = widget::image(::iced::advanced::image::Handle::from_rgba(
+                        handle.width,
+                        handle.height,
+                        handle.bytes.clone(),
+                    ))
+                    .width(width)
+                    .height(width)
+                    .content_fit(::iced::ContentFit::Contain);
                     widget::mouse_area(stack([image.into(), text.into()]))
                 }
                 None => widget::mouse_area(text),
@@ -621,7 +626,12 @@ async fn uncache_image(slug: String, cache_path: PathBuf) {
     handle_uncache_result(spawn_blocking(move || uncache_image_blocking(slug, cache_path)).await);
 }
 
-async fn cache_image(slug: String, image: Handle, cache_path: PathBuf, tx: StatusSender) {
+async fn cache_image(
+    slug: String,
+    image: ::spel_katalog_formats::Image,
+    cache_path: PathBuf,
+    tx: StatusSender,
+) {
     if create_cache_dir(&cache_path, tx).await.is_break() {
         return;
     }
@@ -633,7 +643,7 @@ async fn cache_image(slug: String, image: Handle, cache_path: PathBuf, tx: Statu
 
 async fn cache_images(
     slugs: Vec<String>,
-    images: Vec<Handle>,
+    images: Vec<::spel_katalog_formats::Image>,
     cache_path: PathBuf,
     tx: StatusSender,
     tracker: Option<Tracker>,
@@ -666,17 +676,16 @@ const REMOVE_IMAGE: &str = r#"
 DELETE FROM images WHERE slug = :slug
 "#;
 
-fn convert_slug_image(slug: String, image: Handle) -> Option<(String, Vec<u8>)> {
-    let Handle::Rgba {
-        id: _,
+fn convert_slug_image(
+    slug: String,
+    image: ::spel_katalog_formats::Image,
+) -> Option<(String, Vec<u8>)> {
+    let ::spel_katalog_formats::Image {
         width,
         height,
-        pixels,
-    } = image
-    else {
-        return None;
-    };
-    let image = ::image::RgbaImage::from_raw(width, height, pixels.into())?;
+        bytes,
+    } = image;
+    let image = ::image::RgbaImage::from_raw(width, height, bytes.into())?;
     let mut buf = Vec::<u8>::new();
 
     if let Err(err) = image.write_to(&mut Cursor::new(&mut buf), ImageFormat::Png) {
@@ -713,7 +722,7 @@ fn uncache_image_blocking(slug: String, cache_path: PathBuf) -> Result<(), ::rus
 
 fn cache_image_blocking(
     slug: String,
-    image: Handle,
+    image: ::spel_katalog_formats::Image,
     cache_path: PathBuf,
 ) -> Result<(), ::rusqlite::Error> {
     let cache_path = cache_path.join(THUMBNAILS_FILENAME);
@@ -733,7 +742,7 @@ fn cache_image_blocking(
 
 fn cache_images_blocking(
     slugs: Vec<String>,
-    images: Vec<Handle>,
+    images: Vec<::spel_katalog_formats::Image>,
     cache_path: PathBuf,
 ) -> Result<(), ::rusqlite::Error> {
     let cache_path = cache_path.join(THUMBNAILS_FILENAME);

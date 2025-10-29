@@ -2,14 +2,12 @@
 
 use ::std::iter::{self, FusedIterator};
 
-use ::iced::widget::image::Handle;
 use ::itertools::izip;
 use ::regex::RegexBuilder;
 use ::rustc_hash::FxHashMap;
+use ::spel_katalog_formats::Game;
 use ::spel_katalog_settings::{AsIndex, FilterMode, Settings, Show, SortBy, SortDir};
 use ::tap::TapFallible;
-
-use crate::Game;
 
 #[derive(Debug)]
 struct GameCache {
@@ -198,7 +196,7 @@ impl Games {
     }
 
     /// Set the thumbnail of a game.
-    pub(crate) fn set_image(&mut self, slug: &str, image: Handle) {
+    pub(crate) fn set_image(&mut self, slug: &str, image: ::spel_katalog_formats::Image) {
         if let Some(game) = self.by_slug_mut(slug) {
             game.image = Some(image);
         }
@@ -230,4 +228,43 @@ impl Games {
         };
         self.sort(settings, filter);
     }
+}
+
+/// Read a game from a database row.
+pub fn game_from_row(row: &::rusqlite::Row) -> Option<Game> {
+    let slug = row
+        .get("slug")
+        .map_err(|err| ::log::error!("could not read slug of row\n{err}"))
+        .ok()?;
+    let id = row
+        .get("id")
+        .map_err(|err| ::log::error!("could not read id of row\n{err}"))
+        .ok()?;
+    let name = row
+        .get("name")
+        .map_err(|err| ::log::error!("could not read name of row\n{err}"))
+        .ok()?;
+    let runner = row
+        .get_ref("runner")
+        .map_err(|err| ::log::error!("could not read runner of row\n{err}"))
+        .ok()?
+        .as_str()
+        .map_err(|err| ::log::error!("could not get runner of row as a string\n{err}"))
+        .ok()?
+        .into();
+    let configpath = row
+        .get("configpath")
+        .map_err(|err| ::log::error!("could not read configpath of row\n{err}"))
+        .ok()?;
+
+    Some(Game {
+        slug,
+        id,
+        name,
+        runner,
+        configpath,
+        hidden: false,
+        image: None,
+        batch_selected: false,
+    })
 }
