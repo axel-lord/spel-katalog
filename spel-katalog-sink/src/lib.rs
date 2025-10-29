@@ -10,7 +10,7 @@ use ::derive_more::Display;
 
 /// The identity of a sink.
 /// Used when choosing output.
-#[derive(Debug, Clone, Display)]
+#[derive(Debug, Clone, Display, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SinkIdentity {
     /// A Static string.
     StaticName(&'static str),

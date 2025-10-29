@@ -53,6 +53,9 @@ impl App {
                 "b" if modifiers == Modifiers::CTRL | Modifiers::SHIFT => {
                     Some(QuickMessage::ToggleBatch)
                 }
+                "m" if modifiers == Modifiers::CTRL | Modifiers::SHIFT => {
+                    Some(QuickMessage::ShowMain)
+                }
                 _ => None,
             }
             .map(Message::Quick),

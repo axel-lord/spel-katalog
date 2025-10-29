@@ -44,6 +44,10 @@ pub struct Run {
     #[arg(long, short, conflicts_with = "advanced_terminal")]
     pub batch: Option<PathBuf>,
 
+    /// Show a terminal dialog.
+    #[arg(long, visible_alias = "st", conflicts_with = "advanced_terminal")]
+    pub show_terminal: bool,
+
     /// At most how long to wait for application initialization to finish before running batch.
     #[arg(long, requires = "batch", required = false, default_value_t = 120)]
     pub batch_init_timeout: u16,
@@ -59,6 +63,7 @@ impl Default for Run {
             keep_terminal: false,
             batch: None,
             batch_init_timeout: 120,
+            show_terminal: false,
         }
     }
 }

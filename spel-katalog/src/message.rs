@@ -36,6 +36,7 @@ pub enum QuickMessage {
     Prev,
     ToggleBatch,
     OpenLua,
+    ShowMain,
 }
 
 #[derive(Debug, IsVariant, From)]
@@ -66,5 +67,7 @@ pub enum Message {
     DialogRequest(window::Id, dialog::Request),
     DialogMessage(window::Id, dialog::Message),
     Dialog(DialogBuilder),
+    #[from]
+    Terminal(::spel_katalog_terminal::Message),
     BatchRun,
 }
