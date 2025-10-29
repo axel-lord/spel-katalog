@@ -1,6 +1,7 @@
 use ::std::{
     collections::HashMap,
     convert::identity,
+    io::PipeReader,
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
@@ -19,7 +20,7 @@ use ::spel_katalog_cli::Run;
 use ::spel_katalog_common::{OrRequest, StatusSender, w};
 use ::spel_katalog_info::image_buffer::ImageBuffer;
 use ::spel_katalog_settings::{CacheDir, ConfigDir, FilterMode, LutrisDb, Network, Theme};
-use ::spel_katalog_sink::SinkBuilder;
+use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::spel_katalog_tracker::{Response, create_tracker_monitor};
 use ::tap::Pipe;
 use ::tokio::sync::mpsc::{Receiver, Sender, channel};
@@ -38,6 +39,8 @@ pub enum WindowType {
     Main,
     /// Show lua api.
     LuaApi,
+    /// Show terminal.
+    Term,
     /// Show a dialog window.
     Dialog(Dialog),
 }
@@ -61,6 +64,7 @@ pub(crate) struct App {
     pub dialog_tx: Sender<DialogBuilder>,
     pub batch_source: Option<String>,
     pub batch_init_timeout: u16,
+    pub terminal: ::spel_katalog_terminal::Terminal,
 }
 
 /// Virtual table passed to lua.
@@ -138,18 +142,20 @@ struct Initial {
     app: App,
     status_rx: Receiver<String>,
     dialog_rx: Receiver<DialogBuilder>,
+    terminal_rx: Option<::std::sync::mpsc::Receiver<(PipeReader, SinkIdentity)>>,
 }
 
 impl Initial {
     fn new(run: Run, sink_builder: SinkBuilder) -> ::color_eyre::Result<Self> {
         let Run {
-            settings,
-            show_settings,
-            config,
             advanced_terminal: _,
-            keep_terminal: _,
             batch,
             batch_init_timeout,
+            config,
+            keep_terminal: _,
+            settings,
+            show_settings,
+            show_terminal,
         } = run;
 
         let batch_source = batch
@@ -188,30 +194,41 @@ impl Initial {
         let batch = Default::default();
         let api_markdown = widget::markdown::parse(include_str!("../../lua/docs.md")).collect();
         let (dialog_tx, dialog_rx) = channel(64);
+        let terminal = ::spel_katalog_terminal::Terminal::default().with_limit(256);
+
+        let (sink_builder, terminal_rx) = if show_terminal {
+            let (terminal_tx, terminal_rx) = ::std::sync::mpsc::channel();
+            (SinkBuilder::CreatePipe(terminal_tx), Some(terminal_rx))
+        } else {
+            (sink_builder, None)
+        };
+
         let app = App {
-            process_list,
-            settings,
-            status,
+            api_markdown,
+            batch,
+            batch_init_timeout,
+            batch_source,
+            dialog_tx,
             filter,
-            view,
             games,
             image_buffer,
             info,
+            process_list,
             sender,
-            batch,
+            settings,
             show_batch,
             sink_builder,
+            status,
+            terminal,
+            view,
             windows,
-            api_markdown,
-            dialog_tx,
-            batch_source,
-            batch_init_timeout,
         };
 
         Ok(Self {
             app,
-            status_rx,
             dialog_rx,
+            status_rx,
+            terminal_rx,
         })
     }
 }
@@ -226,6 +243,7 @@ impl App {
             app,
             status_rx,
             dialog_rx,
+            terminal_rx,
         } = Initial::new(run, sink_builder)?;
 
         let (tracker, run_batch) = if app.batch_source.is_some() {
@@ -257,18 +275,17 @@ impl App {
             (None, None)
         };
 
-        let main = if let Some(run_batch) = run_batch {
-            run_batch
-        } else {
-            let (_, open_main) = window::open(::iced::window::Settings::default());
-            open_main.map(|id| Message::OpenWindow(id, WindowType::Main))
-        };
-
         ::iced::daemon("Lutris Games", Self::update, Self::view)
             .theme(|app, _| ::iced::Theme::from(*app.settings.settings.get::<Theme>()))
             .subscription(Self::subscription)
             .executor::<::tokio::runtime::Runtime>()
             .run_with(move || {
+                let main = if let Some(run_batch) = run_batch {
+                    run_batch
+                } else {
+                    let (_, open_main) = window::open(::iced::window::Settings::default());
+                    open_main.map(|id| Message::OpenWindow(id, WindowType::Main))
+                };
                 let load_db = app
                     .settings
                     .get::<LutrisDb>()
@@ -284,8 +301,25 @@ impl App {
                 let exit_recv = exit_recv
                     .map(|exit_recv| Task::future(exit_recv.recv()).then(|_| ::iced::exit()))
                     .unwrap_or_else(Task::none);
+                let window_recv = terminal_rx
+                    .map(|terminal_rx| {
+                        let (_, task) = window::open(Default::default());
+                        Task::batch([
+                            ::spel_katalog_terminal::Message::sink_receiver(terminal_rx)
+                                .map(Message::from),
+                            task.map(|id| Message::OpenWindow(id, WindowType::Term)),
+                        ])
+                    })
+                    .unwrap_or_else(Task::none);
 
-                let batch = Task::batch([receive_status, receive_dialog, load_db, main, exit_recv]);
+                let batch = Task::batch([
+                    receive_status,
+                    receive_dialog,
+                    load_db,
+                    main,
+                    exit_recv,
+                    window_recv,
+                ]);
 
                 (app, batch)
             })
@@ -336,6 +370,7 @@ impl App {
             WindowType::Dialog(dialog) => dialog
                 .view()
                 .map(move |msg| Message::DialogMessage(id, msg)),
+            WindowType::Term => self.terminal.view().map(From::from),
         }
     }
 

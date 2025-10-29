@@ -86,6 +86,7 @@ impl App {
                 return task.map(From::from);
             }
             Message::View(message) => return self.view.update(message),
+            Message::Terminal(message) => return self.terminal.update(message).map(From::from),
             Message::Games(message) => {
                 let request = match message {
                     OrRequest::Message(message) => {
@@ -247,6 +248,16 @@ impl App {
                     let (_, task) = window::open(window::Settings::default());
                     return task.map(|id| Message::OpenWindow(id, WindowType::LuaApi));
                 }
+                QuickMessage::ShowMain => {
+                    if !self
+                        .windows
+                        .values()
+                        .any(|ty| matches!(ty, WindowType::Main))
+                    {
+                        let (_, task) = window::open(Default::default());
+                        return task.map(|id| Message::OpenWindow(id, WindowType::Main));
+                    }
+                }
             },
             Message::ProcessInfo(process_infos) => {
                 self.process_list = process_infos.filter(|infos| !infos.is_empty())
@@ -338,9 +349,10 @@ impl App {
                 self.windows.insert(id, window_type);
             }
             Message::CloseWindow(id) => {
-                self.windows.remove(&id);
+                let closed = self.windows.remove(&id);
 
-                if self.windows.is_empty() {
+                if self.windows.is_empty() || matches!(closed, Some(WindowType::Term)) {
+                    self.sink_builder = ::spel_katalog_sink::SinkBuilder::Inherit;
                     return ::iced::exit();
                 }
             }
