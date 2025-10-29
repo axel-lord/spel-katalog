@@ -1,0 +1,17 @@
+[package]
+name = "spel-katalog-cli"
+version = "0.1.0"
+edition = "2024"
+authors = ["Axel Lord"]
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+clap = { workspace = true, features = ["derive"] }
+clap_complete.workspace = true
+spel-katalog-settings.workspace = true
+tap.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+
+[lints]
+workspace = true

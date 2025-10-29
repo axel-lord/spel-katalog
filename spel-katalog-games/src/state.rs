@@ -21,8 +21,9 @@ use ::itertools::Itertools;
 use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use ::rusqlite::{Connection, OpenFlags, Statement, named_params};
 use ::rustc_hash::{FxHashMap, FxHashSet};
-use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, tracker::Tracker, w};
+use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, w};
 use ::spel_katalog_settings::{CacheDir, Settings};
+use ::spel_katalog_tracker::Tracker;
 use ::tap::Pipe;
 use ::tokio::task::{JoinError, spawn_blocking};
 

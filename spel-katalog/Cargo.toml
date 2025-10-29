@@ -6,8 +6,6 @@ authors = ["Axel Lord"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-clap = { workspace = true, features = ["derive"] }
-clap_complete.workspace = true
 color-eyre.workspace = true
 derive_more = { workspace = true, features = ["from", "is_variant", "display", "into_iterator", "as_ref", "deref", "into", "deref_mut"] }
 env_logger.workspace = true
@@ -26,14 +24,16 @@ rustix = { workspace = true, features = ["process"] }
 serde = { workspace = true, features = ["derive"] }
 shell-words.workspace = true
 spel-katalog-batch.workspace = true
+spel-katalog-cli.workspace = true
 spel-katalog-common.workspace = true
 spel-katalog-games.workspace = true
 spel-katalog-info.workspace = true
 spel-katalog-lua.workspace = true
 spel-katalog-settings.workspace = true
 spel-katalog-sink.workspace = true
-spel-katalog-terminal.workspace = true
+spel-katalog-tui.workspace = true
 spel-katalog-formats.workspace = true
+spel-katalog-tracker.workspace = true
 strsim.workspace = true
 tap.workspace = true
 thiserror.workspace = true

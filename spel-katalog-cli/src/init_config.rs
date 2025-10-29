@@ -1,4 +1,4 @@
-//! Config initialization code.
+//! Function to initialize config.
 
 use ::std::{io::Write, path::PathBuf};
 

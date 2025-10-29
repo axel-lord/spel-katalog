@@ -221,6 +221,10 @@ function GameData:saveCover(image) end
 ---@param value string Value to set attribute to.
 function GameData:setAttr(attr, value) end
 
+---Set multiple attributes, and update this GameData.
+---@param attrs table<string, string> Table of attributes to set.
+function GameData:setAttrs(attrs) end
+
 ---Settings givent to batch and pre-launch scripts.
 ---@class Settings
 ---@field Theme string
@@ -349,5 +353,10 @@ function spelkatalog.saveFile(path, content) end
 ---@param value string
 ---@return table<string, string>
 function spelkatalog.setAttr(game_id, attr, value) end
+
+---Resolve a nested path, returning nil as soon as encountered.
+---@param tbl (table | userdata) Object to resolve path for.
+---@param ... any Components of path to resolve.
+function spelkatalog.resolve(tbl, ...) end
 
 return spelkatalog

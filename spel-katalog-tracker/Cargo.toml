@@ -1,0 +1,13 @@
+[package]
+name = "spel-katalog-tracker"
+version = "0.1.0"
+edition = "2024"
+authors = ["Axel Lord"]
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+tokio = { workspace = true, features = ["sync", "time"] }
+derive_more = { workspace = true, features = ["is_variant"] }
+
+[lints]
+workspace = true
