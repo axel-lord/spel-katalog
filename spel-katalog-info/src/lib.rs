@@ -608,14 +608,8 @@ impl State {
                 w::row()
                     .align_y(Alignment::Start)
                     .height(150)
-                    .push_maybe(game.image.as_ref().map(|image| {
-                        widget::image(::iced::advanced::image::Handle::from_rgba(
-                            image.width,
-                            image.height,
-                            image.bytes.clone(),
-                        ))
-                    }))
-                    .push_maybe(game.image.is_some().then(|| widget::vertical_rule(2)))
+                    .push_maybe(game.thumb.as_ref().map(|image| widget::image(image)))
+                    .push_maybe(game.thumb.is_some().then(|| widget::vertical_rule(2)))
                     .push(
                         w::col()
                             .push(
@@ -681,7 +675,7 @@ impl State {
                     )
                     .push(
                         button("+Thumb").padding(3).on_press_maybe(
-                            game.image
+                            game.thumb
                                 .is_none()
                                 .then(|| OrRequest::Message(Message::AddThumb { id })),
                         ),
@@ -691,7 +685,7 @@ impl State {
                             .padding(3)
                             .style(widget::button::danger)
                             .on_press_maybe(
-                                game.image
+                                game.thumb
                                     .is_some()
                                     .then(|| OrRequest::Message(Message::RemoveThumb { id })),
                             ),

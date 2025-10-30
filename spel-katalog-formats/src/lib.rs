@@ -45,8 +45,6 @@ pub struct Game {
     pub configpath: String,
     /// Is the game hidden.
     pub hidden: bool,
-    /// Thumbnail in use.
-    pub image: Option<Image>,
     /// Is the game selected for batch commands.
     pub batch_selected: bool,
 }

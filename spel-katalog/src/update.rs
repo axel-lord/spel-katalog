@@ -322,15 +322,21 @@ impl App {
                         let yml_dir = yml_dir.as_str();
                         let config_dir = self.settings.get::<ConfigDir>().as_str();
                         return match scope {
-                            ::spel_katalog_batch::Scope::All => {
-                                gather(yml_dir, config_dir, self.games.all())
-                            }
-                            ::spel_katalog_batch::Scope::Shown => {
-                                gather(yml_dir, config_dir, self.games.displayed())
-                            }
-                            ::spel_katalog_batch::Scope::Batch => {
-                                gather(yml_dir, config_dir, self.games.batch_selected())
-                            }
+                            ::spel_katalog_batch::Scope::All => gather(
+                                yml_dir,
+                                config_dir,
+                                self.games.all().iter().map(|game| &game.game),
+                            ),
+                            ::spel_katalog_batch::Scope::Shown => gather(
+                                yml_dir,
+                                config_dir,
+                                self.games.displayed().map(|game| &game.game),
+                            ),
+                            ::spel_katalog_batch::Scope::Batch => gather(
+                                yml_dir,
+                                config_dir,
+                                self.games.batch_selected().map(|game| &game.game),
+                            ),
                         }
                         .pipe(::spel_katalog_batch::Message::RunBatch)
                         .pipe(OrRequest::Message)
@@ -390,7 +396,7 @@ impl App {
                 let games = gather(
                     &self.settings.get::<YmlDir>(),
                     &self.settings.get::<ConfigDir>(),
-                    self.games.all(),
+                    self.games.all().iter().map(|game| &game.game),
                 );
                 let sink_builder = self.sink_builder.clone();
                 let vt = self.lua_vt();

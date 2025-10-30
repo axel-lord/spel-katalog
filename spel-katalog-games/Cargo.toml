@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 workspace = true
 
 [dependencies]
-derive_more = { workspace = true, features = ["is_variant", "display"] }
+derive_more = { workspace = true, features = ["is_variant", "display", "deref", "deref_mut"] }
 iced = { workspace = true, features = ["tokio", "lazy", "image", "advanced"] }
 image.workspace = true
 itertools.workspace = true

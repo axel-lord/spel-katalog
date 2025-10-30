@@ -2,6 +2,7 @@
 
 use ::std::iter::{self, FusedIterator};
 
+use ::derive_more::{Deref, DerefMut};
 use ::itertools::izip;
 use ::regex::RegexBuilder;
 use ::rustc_hash::FxHashMap;
@@ -15,11 +16,34 @@ struct GameCache {
     name: String,
 }
 
+/// A Game with an attached thumbnail.
+#[derive(Debug, Deref, DerefMut)]
+pub struct WithThumb {
+    /// Game.
+    #[deref]
+    #[deref_mut]
+    pub game: Game,
+    /// Thumbnail.
+    pub thumb: Option<::iced::advanced::image::Handle>,
+}
+
+impl From<Game> for WithThumb {
+    fn from(game: Game) -> Self {
+        Self { game, thumb: None }
+    }
+}
+
+impl From<WithThumb> for Game {
+    fn from(WithThumb { game, .. }: WithThumb) -> Self {
+        game
+    }
+}
+
 /// Collection of games.
 #[derive(Debug, Default)]
 pub struct Games {
     cache: Box<[Option<GameCache>]>,
-    games: Box<[Game]>,
+    games: Box<[WithThumb]>,
     displayed: Vec<usize>,
     slug_lookup: FxHashMap<String, usize>,
     id_lookup: FxHashMap<i64, usize>,
@@ -29,24 +53,24 @@ impl Games {
     /// Games that are currently to be displayed.
     pub fn displayed(
         &self,
-    ) -> impl Iterator<Item = &'_ Game> + DoubleEndedIterator + FusedIterator + Clone {
+    ) -> impl Iterator<Item = &'_ WithThumb> + DoubleEndedIterator + FusedIterator + Clone {
         self.displayed.iter().filter_map(|idx| self.games.get(*idx))
     }
 
     /// Games that are batch selected.
     pub fn batch_selected(
         &self,
-    ) -> impl Iterator<Item = &'_ Game> + DoubleEndedIterator + FusedIterator + Clone {
+    ) -> impl Iterator<Item = &'_ WithThumb> + DoubleEndedIterator + FusedIterator + Clone {
         self.games.iter().filter(|game| game.batch_selected)
     }
 
     /// All games.
-    pub fn all(&self) -> &[Game] {
+    pub fn all(&self) -> &[WithThumb] {
         &self.games
     }
 
     /// All games as mutable.
-    pub fn all_mut(&mut self) -> &mut [Game] {
+    pub fn all_mut(&mut self) -> &mut [WithThumb] {
         &mut self.games
     }
 
@@ -70,7 +94,9 @@ impl Games {
             cache,
         } = self;
 
-        let mut to_be = izip!(0.., games, cache).collect::<Vec<_>>();
+        let mut to_be = izip!(0.., games, cache)
+            .map(|(i, WithThumb { game, .. }, cache)| (i, game, cache))
+            .collect::<Vec<_>>();
 
         fn filter_hidden<'a>(
             to_be: Vec<(usize, &'a mut Game, &'a mut Option<GameCache>)>,
@@ -178,19 +204,19 @@ impl Games {
         *displayed = to_be.into_iter().map(|(i, ..)| i).collect();
     }
 
-    fn by_slug_mut(&mut self, slug: &str) -> Option<&mut Game> {
+    fn by_slug_mut(&mut self, slug: &str) -> Option<&mut WithThumb> {
         let idx = *self.slug_lookup.get(slug)?;
         self.games.get_mut(idx)
     }
 
     /// Get a game by it's id.
-    pub fn by_id(&self, id: i64) -> Option<&Game> {
+    pub fn by_id(&self, id: i64) -> Option<&WithThumb> {
         let idx = *self.id_lookup.get(&id)?;
         self.games.get(idx)
     }
 
     /// Get a game by it's id as mutable.
-    pub fn by_id_mut(&mut self, id: i64) -> Option<&mut Game> {
+    pub fn by_id_mut(&mut self, id: i64) -> Option<&mut WithThumb> {
         let idx = *self.id_lookup.get(&id)?;
         self.games.get_mut(idx)
     }
@@ -198,19 +224,23 @@ impl Games {
     /// Set the thumbnail of a game.
     pub(crate) fn set_image(&mut self, slug: &str, image: ::spel_katalog_formats::Image) {
         if let Some(game) = self.by_slug_mut(slug) {
-            game.image = Some(image);
+            game.thumb = Some(::iced::advanced::image::Handle::from_rgba(
+                image.width,
+                image.height,
+                image.bytes,
+            ))
         }
     }
 
     /// Remove the thumbnail of a game.
     pub(crate) fn remove_image(&mut self, slug: &str) {
         if let Some(game) = self.by_slug_mut(slug) {
-            game.image = None;
+            game.thumb = None;
         }
     }
 
     /// Set current games to the ones provided, then update lookups and display.
-    pub fn set(&mut self, games: Box<[Game]>, settings: &Settings, filter: &str) {
+    pub fn set(&mut self, games: Box<[WithThumb]>, settings: &Settings, filter: &str) {
         let (slug_lookup, id_lookup) = games
             .iter()
             .enumerate()
@@ -264,7 +294,6 @@ pub fn game_from_row(row: &::rusqlite::Row) -> Option<Game> {
         runner,
         configpath,
         hidden: false,
-        image: None,
         batch_selected: false,
     })
 }

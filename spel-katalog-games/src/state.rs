@@ -28,7 +28,10 @@ use ::spel_katalog_tracker::Tracker;
 use ::tap::Pipe;
 use ::tokio::task::{JoinError, spawn_blocking};
 
-use crate::{Games, games::game_from_row};
+use crate::{
+    Games,
+    games::{WithThumb, game_from_row},
+};
 
 const THUMBNAILS_FILENAME: &str = "thumbnails.db";
 
@@ -260,7 +263,11 @@ impl State {
                 .then(identity)
             }
             Message::SetGames { games, tracker } => {
-                self.set(games.into(), settings, filter);
+                self.set(
+                    games.into_iter().map(WithThumb::from).collect(),
+                    settings,
+                    filter,
+                );
 
                 status!(tx, "read games from database");
 
@@ -461,7 +468,7 @@ impl State {
             return;
         };
 
-        let m = |game: &Game| game.id == selected;
+        let m = |game: &WithThumb| game.id == selected;
 
         let idx = match sel_dir {
             Up | Left => self.displayed().rev().position(m),
@@ -493,12 +500,12 @@ impl State {
     /// Render elements.
     pub fn view(&self, shadowed: bool) -> Element<'_, OrRequest<Message, Request>> {
         fn card<'a>(
-            game: &'a Game,
+            game: &'a WithThumb,
             width: f32,
             shadowed: bool,
             selected: Option<i64>,
         ) -> Element<'a, OrRequest<Message, Request>> {
-            let handle = game.image.as_ref();
+            let handle = game.thumb.as_ref();
             let name = game.name.as_str();
             let id = game.id;
 
@@ -539,14 +546,10 @@ impl State {
 
             match handle {
                 Some(handle) => {
-                    let image = widget::image(::iced::advanced::image::Handle::from_rgba(
-                        handle.width,
-                        handle.height,
-                        handle.bytes.clone(),
-                    ))
-                    .width(width)
-                    .height(width)
-                    .content_fit(::iced::ContentFit::Contain);
+                    let image = widget::image(handle)
+                        .width(width)
+                        .height(width)
+                        .content_fit(::iced::ContentFit::Contain);
                     widget::mouse_area(stack([image.into(), text.into()]))
                 }
                 None => widget::mouse_area(text),
