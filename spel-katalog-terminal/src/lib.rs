@@ -515,11 +515,14 @@ impl Terminal {
                     .push(widget::horizontal_space())
                     .push("Size")
                     .push(
-                        Element::from(widget::pick_list(
-                            [8, 9, 10, 11, 12, 14, 16, 18, 20],
-                            Some(self.text_size),
-                            convert::identity,
-                        ))
+                        Element::from(
+                            widget::pick_list(
+                                [8, 9, 10, 11, 12, 14, 16, 18, 20],
+                                Some(self.text_size),
+                                convert::identity,
+                            )
+                            .padding(3),
+                        )
                         .map(Message::SetTextSize),
                     )
                     .push("Wrapping:")
