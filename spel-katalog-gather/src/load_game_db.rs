@@ -4,13 +4,7 @@ use ::rusqlite::{Connection, OpenFlags};
 use ::rustc_hash::{FxHashMap, FxHashSet};
 use ::spel_katalog_formats::Game;
 
-/// Errors occuring during database load.
-#[derive(Debug, ::thiserror::Error)]
-pub enum LoadDbError {
-    /// A forwarded sqlite error.
-    #[error("an sqlite error occurred\n{0}")]
-    Sqlite(#[from] ::rusqlite::Error),
-}
+use crate::LoadDbError;
 
 /// Attempt to load games from lutris database.
 pub fn load_games_from_database(db_path: &Path) -> Result<Vec<Game>, LoadDbError> {

@@ -6,11 +6,13 @@ authors = ["Axel Lord"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-spel-katalog-formats.workspace = true
-rusqlite.workspace = true
-thiserror.workspace = true
-rustc-hash.workspace = true
+image.workspace = true
 log.workspace = true
+rayon.workspace = true
+rusqlite.workspace = true
+rustc-hash.workspace = true
+spel-katalog-formats.workspace = true
+thiserror.workspace = true
 
 [lints]
 workspace = true

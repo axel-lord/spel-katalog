@@ -5072,7 +5072,9 @@ dependencies = [
 name = "spel-katalog-gather"
 version = "0.1.0"
 dependencies = [
+ "image 0.25.8",
  "log",
+ "rayon",
  "rusqlite",
  "rustc-hash 2.1.1",
  "spel-katalog-formats",

@@ -19,11 +19,11 @@ use ::iced::{
 use ::image::ImageFormat;
 use ::itertools::Itertools;
 use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
-use ::rusqlite::{Connection, OpenFlags, Statement, named_params};
+use ::rusqlite::{Connection, Statement, named_params};
 use ::rustc_hash::FxHashSet;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, w};
 use ::spel_katalog_formats::Game;
-use ::spel_katalog_gather::{LoadDbError, load_games_from_database};
+use ::spel_katalog_gather::{LoadDbError, load_games_from_database, load_thumbnail_database};
 use ::spel_katalog_settings::{CacheDir, Settings};
 use ::spel_katalog_tracker::Tracker;
 use ::tap::Pipe;
@@ -270,67 +270,10 @@ impl State {
         let cache_dir = settings.get::<CacheDir>().to_path_buf();
         let find_cached = spawn_blocking(move || {
             let thumbnail_cache_path = cache_dir.join(THUMBNAILS_FILENAME);
-            let db = match Connection::open_with_flags(
-                &thumbnail_cache_path,
-                OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-            ) {
-                Ok(db) => db,
-                Err(err) => {
-                    ::log::info!("could not open thumbnail cache {thumbnail_cache_path:?}\n{err}");
-                    return Ok((None, game_slugs));
-                }
-            };
 
-            let mut stmt = db.prepare("SELECT slug, image FROM images")?;
-            let mut rows = stmt.query([])?;
+            let slugs_images = load_thumbnail_database(&thumbnail_cache_path)?;
 
-            fn get_slug_image(
-                row: &::rusqlite::Row<'_>,
-                thumbnail_cache_path: &Path,
-            ) -> Option<(String, Vec<u8>)> {
-                let slug = row
-                    .get("slug")
-                    .map_err(|err| {
-                        ::log::error!(
-                            "could not get slug for row in {thumbnail_cache_path:?}\n{err}"
-                        )
-                    })
-                    .ok()?;
-                let image = row
-                    .get("image")
-                    .map_err(|err| {
-                        ::log::error!(
-                            "could not get image for row in {thumbnail_cache_path:?}\n{err}"
-                        )
-                    })
-                    .ok()?;
-                Some((slug, image))
-            }
-
-            let mut slugs_bytes = Vec::new();
-            while let Some(row) = rows.next()? {
-                slugs_bytes.extend(get_slug_image(row, &thumbnail_cache_path));
-            }
-            let mut slugs_images = Vec::new();
-            slugs_bytes.into_par_iter().map(|(slug, image)| {
-                                if !game_slugs.contains(&slug) {
-                                    return None;
-                                }
-                                let image = match ::image::load_from_memory_with_format(&image, ImageFormat::Png) {
-                                    Ok(image) => image.into_rgba8(),
-                                    Err(err) => {
-                                        ::log::error!(
-                                            "could not parse image for slug {slug} in {thumbnail_cache_path:?}\n{err}"
-                                        );
-                                        return None;
-                                    },
-                                };
-
-                                Some((slug, ::spel_katalog_formats::Image { width: image.width(), height: image.height(), bytes: image.into_raw().into() }))
-
-                            }).collect_into_vec(&mut slugs_images);
-
-            let (slugs, images) = slugs_images.into_iter().flatten().unzip();
+            let (slugs, images) = slugs_images.into_iter().unzip();
 
             let mut game_slugs = game_slugs;
             for slug in &slugs {
@@ -341,7 +284,7 @@ impl State {
                 }
             }
 
-            Ok::<_, ::rusqlite::Error>((
+            Ok::<_, LoadDbError>((
                 Some(Message::SetImages {
                     slugs,
                     images,
