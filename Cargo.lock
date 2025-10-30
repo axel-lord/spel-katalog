@@ -5059,12 +5059,24 @@ dependencies = [
  "shell-words",
  "spel-katalog-common",
  "spel-katalog-formats",
+ "spel-katalog-gather",
  "spel-katalog-settings",
  "spel-katalog-tracker",
  "strsim",
  "tap",
  "thiserror 2.0.17",
  "tokio",
+]
+
+[[package]]
+name = "spel-katalog-gather"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "rusqlite",
+ "rustc-hash 2.1.1",
+ "spel-katalog-formats",
+ "thiserror 2.0.17",
 ]
 
 [[package]]

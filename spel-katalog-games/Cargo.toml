@@ -21,6 +21,7 @@ rustc-hash.workspace = true
 shell-words.workspace = true
 spel-katalog-common.workspace = true
 spel-katalog-formats.workspace = true
+spel-katalog-gather.workspace = true
 spel-katalog-settings.workspace = true
 spel-katalog-tracker.workspace = true
 strsim.workspace = true

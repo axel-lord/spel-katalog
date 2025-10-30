@@ -20,18 +20,16 @@ use ::image::ImageFormat;
 use ::itertools::Itertools;
 use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use ::rusqlite::{Connection, OpenFlags, Statement, named_params};
-use ::rustc_hash::{FxHashMap, FxHashSet};
+use ::rustc_hash::FxHashSet;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, w};
 use ::spel_katalog_formats::Game;
+use ::spel_katalog_gather::{LoadDbError, load_games_from_database};
 use ::spel_katalog_settings::{CacheDir, Settings};
 use ::spel_katalog_tracker::Tracker;
 use ::tap::Pipe;
 use ::tokio::task::{JoinError, spawn_blocking};
 
-use crate::{
-    Games,
-    games::{WithThumb, game_from_row},
-};
+use crate::{Games, games::WithThumb};
 
 const THUMBNAILS_FILENAME: &str = "thumbnails.db";
 
@@ -152,70 +150,6 @@ impl From<AreaMessage> for OrRequest<Message, Request> {
     }
 }
 
-#[derive(Debug, ::thiserror::Error)]
-pub enum LoadDbError {
-    #[error("an sqlite error occurred\n{0}")]
-    Sqlite(#[from] ::rusqlite::Error),
-}
-
-fn load_db(path: &Path) -> Result<Vec<Game>, LoadDbError> {
-    let db = Connection::open_with_flags(
-        path,
-        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )?;
-
-    let cats = db
-        .prepare("SELECT id, name FROM categories")?
-        .query_map([], |row| Ok((row.get("name")?, row.get("id")?)))?
-        .collect::<Result<FxHashMap<String, i64>, ::rusqlite::Error>>();
-
-    let hidden_cat = cats
-        .as_ref()
-        .as_ref()
-        .ok()
-        .and_then(|cats| cats.get(".hidden").copied())
-        .unwrap_or(i64::MAX);
-
-    let game_cats = db
-        .prepare("SELECT game_id, category_id FROM games_categories")?
-        .query_map([], |row| Ok((row.get("game_id")?, row.get("category_id")?)))?
-        .fold(
-            FxHashMap::<i64, Vec<i64>>::default(),
-            |mut map, result| match result {
-                Ok((game, cat)) => {
-                    map.entry(game).or_default().push(cat);
-                    map
-                }
-                Err(err) => {
-                    ::log::error!("reading categories\n{err}");
-                    map
-                }
-            },
-        );
-
-    let mut stmt = db.prepare("SELECT id,name,slug,runner,configpath FROM games")?;
-    let mut rows = stmt.query([])?;
-    let mut games = Vec::new();
-
-    while let Some(row) = rows.next()? {
-        let Some(mut game) = game_from_row(row) else {
-            continue;
-        };
-
-        if let Some(cats) = game_cats.get(&game.id) {
-            if cats.iter().contains(&hidden_cat) {
-                game.hidden = true;
-            }
-        }
-
-        games.push(game);
-    }
-
-    games.sort_by_key(|game| -game.id);
-
-    Ok(games)
-}
-
 impl State {
     /// Get current amount of columns.
     pub fn columns(&self) -> usize {
@@ -239,7 +173,7 @@ impl State {
             Message::LoadDb { db_path, tracker } => {
                 let tx = tx.clone();
                 Task::future(async move {
-                    match spawn_blocking(move || load_db(&db_path)).await {
+                    match spawn_blocking(move || load_games_from_database(&db_path)).await {
                         Ok(result) => match result {
                             Ok(games) => games
                                 .pipe(|games| Message::SetGames { games, tracker })
