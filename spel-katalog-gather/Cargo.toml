@@ -6,8 +6,8 @@ authors = ["Axel Lord"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-flume = { version = "0.11.1", features = ["async"] }
-futures = "0.3.31"
+flume = { workspace = true, features = ["async"] }
+futures.workspace = true
 image.workspace = true
 log.workspace = true
 rayon.workspace = true
