@@ -166,7 +166,11 @@ impl App {
                         return self
                             .games
                             .update(
-                                ::spel_katalog_games::Message::SetImage { slug, image },
+                                ::spel_katalog_games::Message::SetImage {
+                                    slug,
+                                    image,
+                                    to_cache: true,
+                                },
                                 &self.sender,
                                 &self.settings,
                                 &self.filter,

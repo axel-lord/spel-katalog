@@ -92,6 +92,8 @@ pub enum Message {
         slug: String,
         /// Image.
         image: ::spel_katalog_formats::Image,
+        /// If true image should be cached.
+        to_cache: bool,
     },
     /// Remove a thumbnail from game and cache.
     RemoveImage {
@@ -227,11 +229,20 @@ impl State {
                         .then(|_| Task::none())
                 }
             }
-            Message::SetImage { slug, image } => {
+            Message::SetImage {
+                slug,
+                image,
+                to_cache,
+            } => {
                 self.set_image(&slug, image.clone());
                 let cache_path = settings.get::<CacheDir>().to_path_buf();
-                Task::future(cache_image(slug, image, cache_path, tx.clone()))
-                    .then(|_| Task::none())
+
+                if to_cache {
+                    Task::future(cache_image(slug, image, cache_path, tx.clone()))
+                        .then(|_| Task::none())
+                } else {
+                    Task::none()
+                }
             }
             Message::RemoveImage { slug } => {
                 self.remove_image(&slug);

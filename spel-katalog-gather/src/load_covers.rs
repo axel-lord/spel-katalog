@@ -16,17 +16,17 @@ pub struct CoverGathererOptions {
     /// Iterable of slugs to find covers for.
     /// If none find all covers in directory.
     /// (default: None)
-    slugs: Option<Vec<String>>,
+    pub slugs: Option<Vec<String>>,
 
     /// Size of bounded channel found covers are sent through.
     /// If 0 use an unbounded channel.
     /// (default: 64)
-    channel_size: usize,
+    pub channel_size: usize,
 
     /// Max Width and height to scale cover to.
     /// If 0 do not scale.
     /// (default: 150)
-    dimensions: u32,
+    pub dimensions: u32,
 }
 
 impl Default for CoverGathererOptions {

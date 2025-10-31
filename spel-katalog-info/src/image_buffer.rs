@@ -4,15 +4,13 @@ use ::std::{
     mem,
     path::{Path, PathBuf},
     sync::Arc,
-    time::Duration,
 };
 
 use ::iced::Task;
 use ::image::{RgbaImage, imageops::FilterType::Gaussian};
-use ::rayon::iter::{IntoParallelIterator, ParallelIterator};
+use ::spel_katalog_gather::{CoverGatherer, CoverGathererOptions};
 use ::spel_katalog_tracker::Tracker;
 use ::tap::{Conv, Pipe};
-use ::tokio_stream::wrappers::IntervalStream;
 
 #[derive(Debug, Clone)]
 pub struct ImageBuffer {
@@ -109,107 +107,24 @@ impl ImageBuffer {
         &mut self,
         slugs: Vec<String>,
         coverart: PathBuf,
-        mut tracker: Option<Tracker>,
+        mut _tracker: Option<Tracker>,
     ) -> Task<::spel_katalog_games::Message> {
-        #[derive(Debug, Default)]
-        struct ImageOpenError {
-            list: Vec<(PathBuf, ::image::ImageError)>,
-        }
-
-        impl ::std::error::Error for ImageOpenError {}
-
-        impl ::std::fmt::Display for ImageOpenError {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                writeln!(f, "could not process image")?;
-                for (path, err) in &self.list {
-                    writeln!(f, "{path:?}\n{err}")?;
-                }
-                Ok(())
-            }
-        }
-
-        fn get_image(
-            slug: &str,
-            coverart: &Path,
-        ) -> Result<::spel_katalog_formats::Image, ImageOpenError> {
-            let mut open_error = ImageOpenError::default();
-            for ext in ["png", "jpg", "jpeg"] {
-                let path = coverart.join(slug).with_extension(ext);
-                match ImageBuffer::process_single(&path) {
-                    Ok(handle) => return Ok(handle),
-                    Err(err) => open_error.list.push((path, err)),
-                }
-            }
-            Err(open_error.into())
-        }
-
-        let image_buffer = ImageBuffer::default();
-        let rx = ImageBuffer::clone(&image_buffer);
-        let tx = ImageBuffer::clone(&image_buffer);
-
-        self.close();
-        *self = image_buffer;
-
-        let (r_tx, r_rx) = ::tokio::sync::mpsc::channel(24);
-        ::rayon::spawn(move || {
-            let tx = r_tx;
-            let coverart = coverart;
-            _ = slugs.into_par_iter().try_for_each(|slug| {
-                let image = get_image(&slug, &coverart);
-                tx.blocking_send((slug, image))
-            });
-        });
-
-        async fn work(
-            mut rx: ::tokio::sync::mpsc::Receiver<(
-                String,
-                Result<::spel_katalog_formats::Image, ImageOpenError>,
-            )>,
-            tx: ImageBuffer,
-        ) {
-            while let Some((slug, value)) = rx.recv().await {
-                match value {
-                    Ok(image) => {
-                        if tx.push(slug, image).is_err() {
-                            ::log::info!("image processing iterrupted");
-                            return;
-                        }
-                    }
-                    Err(err) => {
-                        ::log::warn!("while processing image for {slug}\n{err}")
-                    }
-                }
-            }
-            tx.set_final();
-        }
-
-        let work = work(r_rx, tx).pipe(Task::future).then(|_| Task::none());
-
-        let (stream, handle) = Duration::from_millis(200)
-            .pipe(::tokio::time::interval)
-            .pipe(IntervalStream::new)
-            .pipe(Task::stream)
-            .abortable();
-
-        let stream = stream.then(move |_| {
-            rx.take().map_or_else(
-                || {
-                    handle.abort();
-                    Task::none()
-                },
-                |(slugs, images)| {
-                    ::spel_katalog_games::Message::SetImages {
-                        slugs,
-                        images,
-                        from_cache: false,
-                        tracker: tracker.take(),
-                    }
-                    .pipe(Task::done)
-                },
-            )
-        });
-
-        return Task::batch([stream, work]);
+        CoverGatherer::with_options(
+            &coverart,
+            CoverGathererOptions {
+                slugs: Some(slugs),
+                dimensions: 150,
+                ..Default::default()
+            },
+        )
+        .map(|stream| Task::stream(stream.into_stream()))
+        .ok()
+        .unwrap_or_else(Task::none)
+        .map(|(slug, image)| ::spel_katalog_games::Message::SetImage {
+            slug,
+            image,
+            to_cache: true,
+        })
     }
 }
 

@@ -5124,6 +5124,7 @@ dependencies = [
  "spel-katalog-common",
  "spel-katalog-formats",
  "spel-katalog-games",
+ "spel-katalog-gather",
  "spel-katalog-settings",
  "spel-katalog-tracker",
  "tap",
