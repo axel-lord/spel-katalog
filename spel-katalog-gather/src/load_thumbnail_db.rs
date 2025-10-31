@@ -60,5 +60,7 @@ pub fn load_thumbnail_database(
         })
         .collect::<Vec<_>>();
 
+    ::log::info!("loaded {} thumbnails from database", loaded.len());
+
     Ok(loaded)
 }

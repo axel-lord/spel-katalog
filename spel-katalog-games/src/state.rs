@@ -23,8 +23,11 @@ use ::rusqlite::{Connection, Statement, named_params};
 use ::rustc_hash::FxHashSet;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, w};
 use ::spel_katalog_formats::Game;
-use ::spel_katalog_gather::{LoadDbError, load_games_from_database, load_thumbnail_database};
-use ::spel_katalog_settings::{CacheDir, Settings};
+use ::spel_katalog_gather::{
+    CoverGatherer, CoverGathererOptions, LoadDbError, load_games_from_database,
+    load_thumbnail_database,
+};
+use ::spel_katalog_settings::{CacheDir, CoverartDir, Settings};
 use ::spel_katalog_tracker::Tracker;
 use ::tap::Pipe;
 use ::tokio::task::{JoinError, spawn_blocking};
@@ -122,13 +125,6 @@ pub enum Request {
         id: i64,
         /// Should the game be sandboxed.
         sandbox: bool,
-    },
-    /// Find thumbnails.
-    FindImages {
-        /// Slugs of thumbnails to find.
-        slugs: Vec<String>,
-        /// Tracker to activate when finished.
-        tracker: Option<Tracker>,
     },
     /// Close game info
     CloseInfo,
@@ -272,21 +268,20 @@ impl State {
         settings: &Settings,
         mut tracker: Option<Tracker>,
     ) -> Task<OrRequest<Message, Request>> {
+        let cache_dir = settings.get::<CacheDir>().to_path_buf();
+        let cover_dir = settings.get::<CoverartDir>().to_path_buf();
+
         let game_slugs = self
             .all()
             .iter()
-            .map(|game| &game.slug)
-            .cloned()
-            .collect::<FxHashSet<_>>();
-        let cache_dir = settings.get::<CacheDir>().to_path_buf();
-        let find_cached = spawn_blocking(move || {
-            let thumbnail_cache_path = cache_dir.join(THUMBNAILS_FILENAME);
+            .map(|game| game.slug.clone())
+            .collect::<Vec<_>>();
 
-            let slugs_images = load_thumbnail_database(&thumbnail_cache_path)?;
+        let find_cached = spawn_blocking(move || -> Result<_, LoadDbError> {
+            let db_path = cache_dir.join(THUMBNAILS_FILENAME);
+            let (slugs, images) = load_thumbnail_database(&db_path)?.into_iter().unzip();
+            let mut game_slugs = FxHashSet::from_iter(game_slugs);
 
-            let (slugs, images) = slugs_images.into_iter().unzip();
-
-            let mut game_slugs = game_slugs;
             for slug in &slugs {
                 if !game_slugs.remove(slug) {
                     ::log::warn!(
@@ -295,41 +290,55 @@ impl State {
                 }
             }
 
-            Ok::<_, LoadDbError>((
-                Some(Message::SetImages {
-                    slugs,
-                    images,
-                    from_cache: true,
-                    tracker: None,
-                }),
-                game_slugs,
-            ))
+            let game_slugs = Vec::from_iter(game_slugs);
+
+            Ok((game_slugs, slugs, images))
         });
 
-        Task::future(find_cached).then(move |found| match found {
-            Ok(result) => match result {
-                Ok((set_images, slugs)) => Task::batch(
-                    [
-                        set_images.map(OrRequest::Message),
-                        Request::FindImages {
-                            slugs: slugs.into_iter().collect::<Vec<_>>(),
-                            tracker: tracker.take(),
-                        }
-                        .pipe(OrRequest::Request)
-                        .pipe(Some),
-                    ]
-                    .into_iter()
-                    .flatten()
-                    .map(Task::done),
-                ),
-                Err(err) => {
-                    ::log::error!("image cache collection failed\n{err}");
-                    Task::none()
-                }
-            },
+        Task::future(find_cached).then(move |result| match result {
             Err(err) => {
                 ::log::error!("image cache thread did not finish\n{err}");
                 Task::none()
+            }
+            Ok(Err(err)) => {
+                ::log::error!("image cache collection failed\n{err}");
+                Task::none()
+            }
+            Ok(Ok((game_slugs, slugs, images))) => {
+                let set_images = Message::SetImages {
+                    slugs,
+                    images,
+                    from_cache: true,
+                    tracker: tracker.take(),
+                }
+                .pipe(OrRequest::Message)
+                .pipe(Task::done);
+
+                let load_covers = if !game_slugs.is_empty() {
+                    CoverGatherer::with_options(
+                        &cover_dir,
+                        CoverGathererOptions {
+                            dimensions: 150,
+                            slugs: Some(game_slugs),
+                            ..Default::default()
+                        },
+                    )
+                    .map_err(|err| ::log::warn!("could not read cover dir {cover_dir:?}\n{err}"))
+                    .map(|cover_gatherer| cover_gatherer.into_stream().pipe(Task::stream))
+                    .ok()
+                    .unwrap_or_else(Task::none)
+                    .map(|(slug, image)| Message::SetImage {
+                        slug,
+                        image,
+                        to_cache: true,
+                    })
+                    .map(OrRequest::Message)
+                } else {
+                    ::log::info!("no need to load covers from filesystem");
+                    Task::none()
+                };
+
+                Task::batch([set_images, load_covers])
             }
         })
     }

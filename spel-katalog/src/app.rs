@@ -18,7 +18,6 @@ use ::iced::{
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog_cli::Run;
 use ::spel_katalog_common::{OrRequest, StatusSender, w};
-use ::spel_katalog_info::image_buffer::ImageBuffer;
 use ::spel_katalog_settings::{CacheDir, ConfigDir, FilterMode, LutrisDb, Network, Theme};
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::spel_katalog_tracker::{Response, create_tracker_monitor};
@@ -55,7 +54,6 @@ pub(crate) struct App {
     pub info: ::spel_katalog_info::State,
     pub batch: ::spel_katalog_batch::State,
     pub show_batch: bool,
-    pub image_buffer: ImageBuffer,
     pub sender: StatusSender,
     pub process_list: Option<Vec<process_info::ProcessInfo>>,
     pub sink_builder: SinkBuilder,
@@ -185,7 +183,6 @@ impl Initial {
         let view = view::State::new(show_settings);
         let settings = ::spel_katalog_settings::State { settings, config };
         let games = ::spel_katalog_games::State::default();
-        let image_buffer = ImageBuffer::empty();
         let info = ::spel_katalog_info::State::default();
         let sender = status_tx.into();
         let process_list = None;
@@ -211,7 +208,6 @@ impl Initial {
             dialog_tx,
             filter,
             games,
-            image_buffer,
             info,
             process_list,
             sender,

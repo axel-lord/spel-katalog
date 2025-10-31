@@ -137,7 +137,7 @@ impl State {
                         .height(Fill)
                         .into(),
                     Pane::GameInfo => info
-                        .view(settings, games)
+                        .view(|id| games.by_id(id).map(|g| (&g.game, g.thumb.as_ref())))
                         .map(crate::Message::from)
                         .pipe(widget::container)
                         .padding(5)

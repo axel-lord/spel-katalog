@@ -11,9 +11,7 @@ use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::OrRequest;
 use ::spel_katalog_formats::AdditionalConfig;
 use ::spel_katalog_games::SelDir;
-use ::spel_katalog_settings::{
-    ConfigDir, CoverartDir, FilterMode, Network, Show, Variants, YmlDir,
-};
+use ::spel_katalog_settings::{ConfigDir, FilterMode, Network, Show, Variants, YmlDir};
 use ::tap::Pipe;
 
 use crate::{App, Message, QuickMessage, Safety, app::WindowType};
@@ -105,7 +103,7 @@ impl App {
                                 ::spel_katalog_info::Message::SetId { id },
                                 &self.sender,
                                 &self.settings,
-                                &self.games,
+                                |id| self.games.by_id(id).map(|g| &g.game),
                             )
                             .map(Message::Info);
                     }
@@ -120,17 +118,6 @@ impl App {
                             false,
                         );
                     }
-                    ::spel_katalog_games::Request::FindImages { slugs, tracker } => {
-                        return self
-                            .image_buffer
-                            .find_images(
-                                slugs,
-                                self.settings.get::<CoverartDir>().to_path_buf(),
-                                tracker,
-                            )
-                            .map(OrRequest::Message)
-                            .map(Message::Games);
-                    }
                     ::spel_katalog_games::Request::CloseInfo => {
                         self.view.show_info(false);
                         self.games.select(SelDir::None);
@@ -142,7 +129,9 @@ impl App {
                     OrRequest::Message(message) => {
                         return self
                             .info
-                            .update(message, &self.sender, &self.settings, &self.games)
+                            .update(message, &self.sender, &self.settings, |id| {
+                                self.games.by_id(id).map(|g| &g.game)
+                            })
                             .map(Message::Info);
                     }
                     OrRequest::Request(request) => request,

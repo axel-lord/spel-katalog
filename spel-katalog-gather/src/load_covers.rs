@@ -6,7 +6,7 @@ use ::std::{
 };
 
 use ::futures::Stream;
-use ::image::imageops::FilterType::Lanczos3;
+use ::image::{DynamicImage, imageops::FilterType::Lanczos3};
 use ::rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 use ::rustc_hash::FxHashMap;
 
@@ -95,6 +95,21 @@ fn gather_covers(dir: ReadDir) -> FxHashMap<String, PathBuf> {
         })
 }
 
+/// Process a single image into a thumbnail.
+pub fn thumbnail(image: DynamicImage, dimensions: u32) -> ::spel_katalog_formats::Image {
+    let image = if dimensions != 0 && (image.width() > dimensions || image.height() > dimensions) {
+        image.resize(dimensions, dimensions, Lanczos3).into_rgba8()
+    } else {
+        image.into_rgba8()
+    };
+
+    ::spel_katalog_formats::Image {
+        width: image.width(),
+        height: image.height(),
+        bytes: image.into_raw().into(),
+    }
+}
+
 impl CoverGatherer {
     /// Create a new CoverGatherer for finding the given slugs.
     pub fn new(cover_dir: &Path, slugs: Vec<String>) -> ::std::io::Result<Self> {
@@ -141,40 +156,38 @@ impl CoverGatherer {
                     .collect::<Vec<_>>()
             };
 
-            _ = covers.into_par_iter().try_for_each(|(slug, path)| {
-                let path = path.as_ref();
-                let image = match ::image::open(path) {
-                    Err(err) => {
-                        ::log::warn!("could not read image for {slug} from {path:?}\n{err}");
-                        return Ok(());
-                    }
-                    Ok(image) => image,
-                };
+            let result = covers
+                .into_par_iter()
+                .try_fold(
+                    || 0usize,
+                    |c, (slug, path)| {
+                        let path = path.as_ref();
+                        let image = match ::image::open(path) {
+                            Err(err) => {
+                                ::log::warn!(
+                                    "could not read image for {slug} from {path:?}\n{err}"
+                                );
+                                return Ok(c);
+                            }
+                            Ok(image) => image,
+                        };
 
-                let image = if dimensions != 0
-                    && (image.width() > dimensions || image.height() > dimensions)
-                {
-                    image.resize(dimensions, dimensions, Lanczos3).into_rgba8()
-                } else {
-                    image.into_rgba8()
-                };
+                        let image = thumbnail(image, dimensions);
 
-                match tx.send((
-                    slug,
-                    ::spel_katalog_formats::Image {
-                        width: image.width(),
-                        height: image.height(),
-                        bytes: image.into_raw().into(),
+                        match tx.send((slug, image)) {
+                            Ok(..) => Ok(c + 1),
+                            Err(err) => {
+                                let slug = &err.0.0;
+                                ::log::warn!("could not send image for {slug}\n{err}");
+                                Err(())
+                            }
+                        }
                     },
-                )) {
-                    Ok(..) => Ok(()),
-                    Err(err) => {
-                        let slug = &err.0.0;
-                        ::log::warn!("could not send image for {slug}\n{err}");
-                        Err(())
-                    }
-                }
-            });
+                )
+                .try_reduce(|| 0, |a, b| Ok(a + b));
+            if let Ok(result) = result {
+                ::log::info!("loaded {result} covers from filesystem");
+            }
         });
 
         Ok(Self { receiver: rx })

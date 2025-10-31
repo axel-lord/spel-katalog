@@ -5,7 +5,7 @@ mod load_game_db;
 mod load_thumbnail_db;
 
 pub use self::{
-    load_covers::{CoverGatherer, CoverGathererOptions},
+    load_covers::{CoverGatherer, CoverGathererOptions, thumbnail},
     load_game_db::load_games_from_database,
     load_thumbnail_db::load_thumbnail_database,
 };
