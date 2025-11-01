@@ -15,7 +15,6 @@ spel-katalog-common.workspace = true
 spel-katalog-formats.workspace = true
 spel-katalog-gather.workspace = true
 spel-katalog-settings.workspace = true
-spel-katalog-tracker.workspace = true
 tap.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["fs"] }

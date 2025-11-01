@@ -16,7 +16,7 @@ use ::tap::Pipe;
 
 use crate::{App, Message, QuickMessage, Safety, app::WindowType};
 
-fn gather<'a>(
+pub fn gather<'a>(
     yml_dir: &str,
     config_dir: &str,
     games: impl IntoIterator<Item = &'a ::spel_katalog_formats::Game>,
@@ -376,35 +376,6 @@ impl App {
                 });
                 return task.map(move |id| {
                     Message::OpenWindow(id, WindowType::Dialog(dialog.clone().build()))
-                });
-            }
-            Message::BatchRun => {
-                let Some(src) = self.batch_source.take() else {
-                    ::log::warn!("batch run attempted without source, should not happen");
-                    return Task::none();
-                };
-                let games = gather(
-                    &self.settings.get::<YmlDir>(),
-                    &self.settings.get::<ConfigDir>(),
-                    self.games.all().iter().map(|game| &game.game),
-                );
-                let sink_builder = self.sink_builder.clone();
-                let vt = self.lua_vt();
-                let future = async move {
-                    ::tokio::task::spawn_blocking(move || {
-                        ::spel_katalog_batch::lua_batch(games, src, &sink_builder, vt)
-                            .map_err(|err| err.to_string())
-                    })
-                    .await
-                };
-
-                return Task::future(future).then(|result| {
-                    match result {
-                        Ok(Ok(_)) => ::log::info!("batch script finished"),
-                        Ok(Err(err)) => ::log::error!("batch script error\n{err}"),
-                        Err(err) => ::log::error!("thread could not be joined\n{err}"),
-                    };
-                    ::iced::exit()
                 });
             }
         }

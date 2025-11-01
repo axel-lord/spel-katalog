@@ -30,7 +30,6 @@ use ::spel_katalog_gather::{
     load_thumbnail_database,
 };
 use ::spel_katalog_settings::{CacheDir, CoverartDir, Settings};
-use ::spel_katalog_tracker::Tracker;
 use ::tap::Pipe;
 use ::tokio::task::{JoinError, spawn_blocking};
 
@@ -71,15 +70,11 @@ pub enum Message {
     LoadDb {
         /// Path to database to load.
         db_path: PathBuf,
-        /// Tracker to activate when loading has finished.
-        tracker: Option<Tracker>,
     },
     /// Set loaded games.
     SetGames {
         /// Games to set content to.
         games: Vec<Game>,
-        /// Tracker to activate on finished loading.
-        tracker: Option<Tracker>,
     },
     /// Set thumbnails.
     SetImages {
@@ -180,13 +175,13 @@ impl State {
         filter: &str,
     ) -> Task<OrRequest<Message, Request>> {
         match msg {
-            Message::LoadDb { db_path, tracker } => {
+            Message::LoadDb { db_path } => {
                 let tx = tx.clone();
                 Task::future(async move {
                     match spawn_blocking(move || load_games_from_database(&db_path)).await {
                         Ok(result) => match result {
                             Ok(games) => games
-                                .pipe(|games| Message::SetGames { games, tracker })
+                                .pipe(|games| Message::SetGames { games })
                                 .pipe(OrRequest::Message)
                                 .pipe(Task::done),
                             Err(err) => match err {
@@ -206,7 +201,7 @@ impl State {
                 })
                 .then(identity)
             }
-            Message::SetGames { games, tracker: _ } => {
+            Message::SetGames { games } => {
                 self.set(
                     games.into_iter().map(WithThumb::from).collect(),
                     settings,
@@ -252,7 +247,7 @@ impl State {
             Message::FlushCache => {
                 let (slugs, images) = mem::take(&mut self.cache_queue);
                 let cache_path = settings.get::<CacheDir>().to_path_buf();
-                Task::future(cache_images(slugs, images, cache_path, tx.clone(), None))
+                Task::future(cache_images(slugs, images, cache_path, tx.clone()))
                     .then(|_| Task::none())
             }
             Message::RemoveImage { slug } => {
@@ -545,7 +540,6 @@ async fn cache_images(
     images: Vec<::spel_katalog_formats::Image>,
     cache_path: PathBuf,
     tx: StatusSender,
-    tracker: Option<Tracker>,
 ) {
     if create_cache_dir(&cache_path, tx).await.is_break() {
         return;
@@ -554,10 +548,6 @@ async fn cache_images(
     handle_cache_result(
         spawn_blocking(move || cache_images_blocking(slugs, images, cache_path)).await,
     );
-
-    if let Some(tracker) = tracker {
-        tracker.finish();
-    }
 }
 
 const CREATE_IMAGE_TABLE: &str = r#"

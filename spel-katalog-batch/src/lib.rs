@@ -24,6 +24,43 @@ use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::strum::VariantArray;
 use ::tap::Pipe;
 
+/// Struct for setting up initial state and running batch scripts.
+#[derive(Debug)]
+pub struct Batcher {
+    lua: Lua,
+}
+
+impl Batcher {
+    /// Create a new lua batcher.
+    pub fn new(
+        batch_data: Vec<BatchInfo>,
+        sink_builder: &SinkBuilder,
+        vt: Arc<dyn spel_katalog_lua::Virtual>,
+    ) -> ::mlua::Result<Self> {
+        let sink_builder =
+            sink_builder.with_locked_channel(|| SinkIdentity::StaticName("Lua Batch Script"))?;
+        let sink_builder = &sink_builder;
+        let lua = Lua::new();
+
+        let skeleton = ::spel_katalog_lua::Module { sink_builder, vt }.register(&lua)?;
+        let module = &skeleton.module;
+
+        let data = lua.create_table_with_capacity(batch_data.len(), 0)?;
+        for game in batch_data {
+            data.push(game.to_lua(&lua, &skeleton.game_data)?)?;
+        }
+
+        module.set("data", data)?;
+        Ok(Self { lua })
+    }
+
+    /// Run a script using batcher.
+    pub fn run_script(&self, content: String) -> ::mlua::Result<()> {
+        self.lua.load(content).exec()?;
+        Ok(())
+    }
+}
+
 /// Run a lua script with a batch.
 pub fn lua_batch(
     batch_data: Vec<BatchInfo>,
@@ -31,24 +68,7 @@ pub fn lua_batch(
     sink_builder: &SinkBuilder,
     vt: Arc<dyn spel_katalog_lua::Virtual>,
 ) -> ::mlua::Result<()> {
-    let sink_builder =
-        sink_builder.with_locked_channel(|| SinkIdentity::StaticName("Lua Batch Script"))?;
-    let sink_builder = &sink_builder;
-    let lua = Lua::new();
-
-    let skeleton = ::spel_katalog_lua::Module { sink_builder, vt }.register(&lua)?;
-    let module = &skeleton.module;
-
-    let data = lua.create_table_with_capacity(batch_data.len(), 0)?;
-    for game in batch_data {
-        data.push(game.to_lua(&lua, &skeleton.game_data)?)?;
-    }
-
-    module.set("data", data)?;
-
-    lua.load(script).exec()?;
-
-    Ok(())
+    Batcher::new(batch_data, sink_builder, vt)?.run_script(script)
 }
 
 /// One entry to be sent to batch script.

@@ -1,7 +1,7 @@
 # TODO List For Application Improvements
 - [x] Add dedicated crate for information gathering (thumbnails, lutris, additional)
-- [ ] Detangle batch running from other application state (possibly remove tracker)
-- [ ] Move dedicated batch run to subcommand
+- [x] Detangle batch running from other application state (possibly remove tracker)
+- [x] Move dedicated batch run to subcommand
 - [ ] Dedicated lua api docs widget
 - [ ] Expand dialog functionality
 - [ ] Expand lua api, remove cover, get lutris cover

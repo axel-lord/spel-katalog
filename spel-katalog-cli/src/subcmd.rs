@@ -4,7 +4,7 @@ use ::std::path::{Path, PathBuf};
 
 use ::clap::Subcommand;
 
-use crate::{completions::completions, init_config::init_config, skeleton::skeleton};
+use crate::{batch::Batch, completions::completions, init_config::init_config, skeleton::skeleton};
 
 fn get_shell() -> ::clap_complete::Shell {
     ::clap_complete::Shell::from_env().unwrap_or_else(|| ::clap_complete::Shell::Bash)
@@ -18,6 +18,9 @@ pub struct SubcmdCallbacks<E> {
 
     /// Callback that is called before other subcommands.
     pub other: fn() -> Result<(), E>,
+
+    /// Callback to use when running batch.
+    pub batch: fn(Batch) -> Result<(), E>,
 }
 
 /// Error returned whe subcmd perform fails.
@@ -115,6 +118,8 @@ pub enum Subcmd {
         #[arg(long)]
         skip_lua_update: bool,
     },
+    /// Run a batch script without starting full application.
+    Batch(#[command(flatten)] Batch),
 }
 
 impl Default for Subcmd {
@@ -129,7 +134,7 @@ impl Subcmd {
     where
         E: From<SubCmdError>,
     {
-        let SubcmdCallbacks { run, other } = callbacks;
+        let SubcmdCallbacks { run, other, batch } = callbacks;
         match self {
             Subcmd::Skeleton { output, settings } => {
                 other()?;
@@ -151,6 +156,7 @@ impl Subcmd {
                 init_config(path, skip_lua_update);
             }
             Subcmd::Run(cli) => run(cli)?,
+            Subcmd::Batch(cli) => batch(cli)?,
         }
         Ok(())
     }
