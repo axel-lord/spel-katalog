@@ -313,7 +313,10 @@ impl State {
                             }
                         };
 
-                        let image = ::spel_katalog_gather::thumbnail(image, 300);
+                        let image = ::spel_katalog_gather::thumbnail(
+                            image,
+                            ::spel_katalog_gather::CoverGathererOptions::default().dimensions,
+                        );
 
                         Ok(OrRequest::Request(Request::SetImage { slug, image }))
                     };

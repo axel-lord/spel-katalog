@@ -7,6 +7,7 @@ use ::std::{
     mem,
     ops::ControlFlow,
     path::{Path, PathBuf},
+    sync::LazyLock,
     time::Duration,
 };
 
@@ -20,6 +21,7 @@ use ::iced::{
 };
 use ::image::ImageFormat;
 use ::itertools::Itertools;
+use ::parking_lot::Mutex;
 use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use ::rusqlite::{Connection, Statement, named_params};
 use ::rustc_hash::FxHashSet;
@@ -613,6 +615,10 @@ fn cache_images_blocking(
     images: Vec<::spel_katalog_formats::Image>,
     cache_path: PathBuf,
 ) -> Result<(), ::rusqlite::Error> {
+    const LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+    let lock = &*LOCK;
+    let lock = lock.lock();
+
     let cache_path = cache_path.join(THUMBNAILS_FILENAME);
     let db = Connection::open(&cache_path)?;
 
@@ -634,5 +640,6 @@ fn cache_images_blocking(
         insert_image(&mut stmt, slug, image);
     }
 
+    drop(lock);
     Ok(())
 }

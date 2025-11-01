@@ -5075,6 +5075,7 @@ dependencies = [
  "image 0.25.8",
  "itertools 0.14.0",
  "log",
+ "parking_lot 0.12.5",
  "rayon",
  "regex",
  "rusqlite",

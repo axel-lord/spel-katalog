@@ -14,6 +14,7 @@ iced = { workspace = true, features = ["tokio", "lazy", "image", "advanced"] }
 image.workspace = true
 itertools.workspace = true
 log.workspace = true
+parking_lot.workspace = true
 rayon.workspace = true
 regex.workspace = true
 rusqlite.workspace = true
