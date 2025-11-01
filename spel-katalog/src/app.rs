@@ -1,13 +1,6 @@
-use ::std::{
-    collections::HashMap,
-    convert::identity,
-    io::PipeReader,
-    path::{Path, PathBuf},
-    sync::Arc,
-    time::Duration,
-};
+use ::std::{collections::HashMap, convert::identity, io::PipeReader, path::PathBuf, sync::Arc};
 
-use ::color_eyre::{Report, Section, eyre::eyre};
+use ::color_eyre::Report;
 use ::iced::{
     Element,
     Length::Fill,
@@ -18,10 +11,8 @@ use ::iced::{
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog_cli::Run;
 use ::spel_katalog_common::{OrRequest, StatusSender, w};
-use ::spel_katalog_info::image_buffer::ImageBuffer;
 use ::spel_katalog_settings::{CacheDir, ConfigDir, FilterMode, LutrisDb, Network, Theme};
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
-use ::spel_katalog_tracker::{Response, create_tracker_monitor};
 use ::tap::Pipe;
 use ::tokio::sync::mpsc::{Receiver, Sender, channel};
 use ::tokio_stream::wrappers::ReceiverStream;
@@ -29,7 +20,7 @@ use ::tokio_stream::wrappers::ReceiverStream;
 use crate::{
     ExitReceiver, Message,
     dialog::{Dialog, DialogBuilder},
-    process_info, view,
+    get_modules, get_settings, process_info, view,
 };
 
 /// Specific kind of window.
@@ -55,15 +46,12 @@ pub(crate) struct App {
     pub info: ::spel_katalog_info::State,
     pub batch: ::spel_katalog_batch::State,
     pub show_batch: bool,
-    pub image_buffer: ImageBuffer,
     pub sender: StatusSender,
     pub process_list: Option<Vec<process_info::ProcessInfo>>,
     pub sink_builder: SinkBuilder,
     pub windows: FxHashMap<window::Id, WindowType>,
     pub api_markdown: Box<[widget::markdown::Item]>,
     pub dialog_tx: Sender<DialogBuilder>,
-    pub batch_source: Option<String>,
-    pub batch_init_timeout: u16,
     pub terminal: ::spel_katalog_terminal::Terminal,
 }
 
@@ -76,35 +64,7 @@ pub struct LuaVt {
 
 impl ::spel_katalog_lua::Virtual for LuaVt {
     fn available_modules(&self) -> FxHashMap<String, String> {
-        let lib_dir = self.settings.get::<ConfigDir>().as_path().join("lib");
-        ::std::fs::read_dir(&lib_dir)
-            .map_err(|err| ::log::error!("could not read directory {lib_dir:?}\n{err}"))
-            .ok()
-            .into_iter()
-            .flat_map(|read_dir| {
-                read_dir.filter_map(|entry| {
-                    let entry = entry
-                        .map_err(|err| {
-                            ::log::error!("failed to get read_dir entry in {lib_dir:?}\n{err}")
-                        })
-                        .ok()?;
-
-                    let path = entry.path();
-                    let name = path.file_stem();
-                    if name.is_none() {
-                        ::log::error!("could not get file stem for {path:?}")
-                    }
-                    let name = name?;
-                    let content = ::std::fs::read_to_string(&path)
-                        .map_err(|err| {
-                            ::log::error!("could not read content of {path:?} to a string\n{err}");
-                        })
-                        .ok()?;
-
-                    Some((name.to_string_lossy().into_owned(), content))
-                })
-            })
-            .collect()
+        get_modules(&self.settings)
     }
 
     fn open_dialog(&self, text: String, buttons: Vec<String>) -> mlua::Result<Option<String>> {
@@ -149,8 +109,6 @@ impl Initial {
     fn new(run: Run, sink_builder: SinkBuilder) -> ::color_eyre::Result<Self> {
         let Run {
             advanced_terminal: _,
-            batch,
-            batch_init_timeout,
             config,
             keep_terminal: _,
             settings,
@@ -158,25 +116,7 @@ impl Initial {
             show_terminal,
         } = run;
 
-        let batch_source = batch
-            .map(::std::fs::read_to_string)
-            .transpose()
-            .map_err(|err| eyre!("could not read given batch script to a string").wrap_err(err))?;
-
-        fn read_settings(path: &Path) -> ::color_eyre::Result<::spel_katalog_settings::Settings> {
-            ::std::fs::read_to_string(path)
-                .map_err(|err| {
-                    eyre!(err).suggestion(format!("does {path:?} exist, and is it readable"))
-                })?
-                .pipe_deref(::toml::from_str::<::spel_katalog_settings::Settings>)
-                .map_err(|err| eyre!(err).suggestion(format!("is {path:?} a toml file")))
-        }
-
-        let overrides = settings;
-        let settings = read_settings(&config)
-            .map_err(|err| ::log::error!("could not read config file {config:?}\n{err}"))
-            .unwrap_or_default()
-            .apply(::spel_katalog_settings::Delta::create(overrides));
+        let settings = get_settings(&config, settings);
 
         let (status_tx, status_rx) = ::tokio::sync::mpsc::channel(64);
 
@@ -185,7 +125,6 @@ impl Initial {
         let view = view::State::new(show_settings);
         let settings = ::spel_katalog_settings::State { settings, config };
         let games = ::spel_katalog_games::State::default();
-        let image_buffer = ImageBuffer::empty();
         let info = ::spel_katalog_info::State::default();
         let sender = status_tx.into();
         let process_list = None;
@@ -206,12 +145,9 @@ impl Initial {
         let app = App {
             api_markdown,
             batch,
-            batch_init_timeout,
-            batch_source,
             dialog_tx,
             filter,
             games,
-            image_buffer,
             info,
             process_list,
             sender,
@@ -246,51 +182,18 @@ impl App {
             terminal_rx,
         } = Initial::new(run, sink_builder)?;
 
-        let (tracker, run_batch) = if app.batch_source.is_some() {
-            let (tracker, monitor) = create_tracker_monitor();
-
-            let timeout = Duration::from_secs(app.batch_init_timeout.into());
-            let run_batch = Task::future(async move {
-                match ::tokio::time::timeout(timeout, monitor.wait()).await {
-                    Ok(response) => response,
-                    Err(err) => {
-                        ::log::warn!(
-                            "initialization did not finish before timout {timeout}, {err}",
-                            timeout = timeout.as_secs()
-                        );
-                        Response::Lost
-                    }
-                }
-            })
-            .then(move |response| {
-                if !response.is_finished() {
-                    ::log::warn!("initialization tracker was lost");
-                }
-
-                Task::done(Message::BatchRun)
-            });
-
-            (Some(tracker), Some(run_batch))
-        } else {
-            (None, None)
-        };
-
         ::iced::daemon("Lutris Games", Self::update, Self::view)
             .theme(|app, _| ::iced::Theme::from(*app.settings.settings.get::<Theme>()))
             .subscription(Self::subscription)
             .executor::<::tokio::runtime::Runtime>()
             .run_with(move || {
-                let main = if let Some(run_batch) = run_batch {
-                    run_batch
-                } else {
-                    let (_, open_main) = window::open(::iced::window::Settings::default());
-                    open_main.map(|id| Message::OpenWindow(id, WindowType::Main))
-                };
+                let (_, open_main) = window::open(::iced::window::Settings::default());
+                let main = open_main.map(|id| Message::OpenWindow(id, WindowType::Main));
                 let load_db = app
                     .settings
                     .get::<LutrisDb>()
                     .to_path_buf()
-                    .pipe(move |db_path| spel_katalog_games::Message::LoadDb { db_path, tracker })
+                    .pipe(move |db_path| spel_katalog_games::Message::LoadDb { db_path })
                     .pipe(OrRequest::Message)
                     .pipe(Message::Games)
                     .pipe(Task::done);

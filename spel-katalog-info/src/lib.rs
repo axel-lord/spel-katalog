@@ -16,7 +16,6 @@ use ::iced::{
     Task,
     widget::{
         self, button, horizontal_rule, horizontal_space,
-        image::Handle,
         text_editor::{Action, Edit},
         vertical_rule,
     },
@@ -26,15 +25,11 @@ use ::image::ImageError;
 use ::open::that;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, styling, w};
 use ::spel_katalog_formats::AdditionalConfig;
-use ::spel_katalog_games::Games;
 use ::spel_katalog_settings::{ConfigDir, CoverartDir, Settings, YmlDir};
 use ::tap::Pipe;
 use ::yaml_rust2::Yaml;
 
-use crate::image_buffer::ImageBuffer;
-
 pub mod formats;
-pub mod image_buffer;
 
 mod attrs;
 
@@ -99,19 +94,30 @@ pub enum Message {
 #[derive(Debug, Clone, IsVariant)]
 pub enum Request {
     ShowInfo(bool),
-    SetImage { slug: String, image: Handle },
-    RemoveImage { slug: String },
-    RunGame { id: i64, sandbox: bool },
-    RunLutrisInSandbox { id: i64 },
+    SetImage {
+        slug: String,
+        image: ::spel_katalog_formats::Image,
+    },
+    RemoveImage {
+        slug: String,
+    },
+    RunGame {
+        id: i64,
+        sandbox: bool,
+    },
+    RunLutrisInSandbox {
+        id: i64,
+    },
 }
 
 impl State {
-    pub fn update(
-        &mut self,
+    pub fn update<'a>(
+        &'a mut self,
         message: Message,
-        tx: &StatusSender,
-        settings: &Settings,
-        games: &Games,
+        tx: &'a StatusSender,
+        settings: &'a Settings,
+        game_by_id: impl Fn(i64) -> Option<&'a ::spel_katalog_formats::Game>,
+        // games: &Games,
     ) -> Task<OrRequest<Message, Request>> {
         match message {
             Message::SetId { id } => {
@@ -119,7 +125,7 @@ impl State {
 
                 let fill_content;
 
-                if let Some(game) = games.by_id(id) {
+                if let Some(game) = game_by_id(id) {
                     let path = settings
                         .get::<YmlDir>()
                         .as_path()
@@ -244,7 +250,7 @@ impl State {
                     Task::none()
                 }
             }
-            Message::AddThumb { id } => match games.by_id(id) {
+            Message::AddThumb { id } => match game_by_id(id) {
                 Some(game) => {
                     #[derive(Debug, thiserror::Error)]
                     enum AddThumbError {
@@ -300,12 +306,17 @@ impl State {
                             Err(source) => return Err(AddThumbError::Read { source, path: dest }),
                         };
 
-                        let image = match ImageBuffer::process_bytes(&content) {
+                        let image = match ::image::load_from_memory(&content) {
                             Ok(handle) => handle,
                             Err(source) => {
                                 return Err(AddThumbError::Process { source, path: dest });
                             }
                         };
+
+                        let image = ::spel_katalog_gather::thumbnail(
+                            image,
+                            ::spel_katalog_gather::CoverGathererOptions::default().dimensions,
+                        );
 
                         Ok(OrRequest::Request(Request::SetImage { slug, image }))
                     };
@@ -327,7 +338,7 @@ impl State {
                 None => Task::none(),
             },
             Message::RemoveThumb { id } => {
-                let Some(game) = games.by_id(id) else {
+                let Some(game) = game_by_id(id) else {
                     return Task::none();
                 };
 
@@ -415,7 +426,7 @@ impl State {
             }
             Message::OpenExe => self.open_exe(tx).unwrap_or_else(Task::none),
             Message::OpenDir => {
-                let Some(game) = games.by_id(self.id) else {
+                let Some(game) = game_by_id(self.id) else {
                     status!(tx, "could not get game by id {}", self.id);
                     return Task::none();
                 };
@@ -582,10 +593,14 @@ impl State {
 
     pub fn view<'a>(
         &'a self,
-        _settings: &'a Settings,
-        games: &'a Games,
+        game_by_id: impl Fn(
+            i64,
+        ) -> Option<(
+            &'a ::spel_katalog_formats::Game,
+            Option<&'a ::iced::advanced::image::Handle>,
+        )>,
     ) -> Element<'a, OrRequest<Message, Request>> {
-        let Some(game) = games.by_id(self.id) else {
+        let Some((game, thumb)) = game_by_id(self.id) else {
             return w::col()
                 .align_x(Center)
                 .push("No Game Selected")
@@ -599,8 +614,8 @@ impl State {
                 w::row()
                     .align_y(Alignment::Start)
                     .height(150)
-                    .push_maybe(game.image.as_ref().map(|image| widget::image(image)))
-                    .push_maybe(game.image.is_some().then(|| widget::vertical_rule(2)))
+                    .push_maybe(thumb.map(|image| widget::image(image)))
+                    .push_maybe(thumb.is_some().then(|| widget::vertical_rule(2)))
                     .push(
                         w::col()
                             .push(
@@ -666,7 +681,7 @@ impl State {
                     )
                     .push(
                         button("+Thumb").padding(3).on_press_maybe(
-                            game.image
+                            thumb
                                 .is_none()
                                 .then(|| OrRequest::Message(Message::AddThumb { id })),
                         ),
@@ -676,7 +691,7 @@ impl State {
                             .padding(3)
                             .style(widget::button::danger)
                             .on_press_maybe(
-                                game.image
+                                thumb
                                     .is_some()
                                     .then(|| OrRequest::Message(Message::RemoveThumb { id })),
                             ),

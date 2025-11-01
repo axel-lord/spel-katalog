@@ -6,14 +6,13 @@ members = [
 	"spel-katalog-cli",
 	"spel-katalog-common",
 	"spel-katalog-formats",
-	"spel-katalog-games",
+	"spel-katalog-games", "spel-katalog-gather",
 	"spel-katalog-info",
 	"spel-katalog-lua",
 	"spel-katalog-settings",
 	"spel-katalog-sink",
 	"spel-katalog-terminal",
 	"spel-katalog-test",
-	"spel-katalog-tracker",
 	"spel-katalog-tui",
 ]
 resolver = "2"
@@ -46,6 +45,7 @@ future_not_send = "warn"
 missing_const_for_fn = "warn"
 
 [workspace.dependencies]
+bytes = "1.10.1"
 clap = "4.5.50"
 clap_complete = "4.5.59"
 color-eyre = "0.6.5"
@@ -80,6 +80,7 @@ rusqlite = "0.37.0"
 rustc-hash = "2.1.1"
 rustix = "1.1.2"
 serde = "1.0.228"
+serde_bytes = "0.11.19"
 serde_json = "1.0.145"
 shell-words = "1.1.0"
 smallvec = "1.15.1"
@@ -89,13 +90,13 @@ spel-katalog-cli = { path = "spel-katalog-cli" }
 spel-katalog-common = { path = "spel-katalog-common" }
 spel-katalog-formats = { path = "spel-katalog-formats" }
 spel-katalog-games = { path = "spel-katalog-games" }
+spel-katalog-gather = { path = "spel-katalog-gather" }
 spel-katalog-info = { path = "spel-katalog-info" }
 spel-katalog-lua = { path = "spel-katalog-lua" }
 spel-katalog-settings = { path = "spel-katalog-settings" }
 spel-katalog-sink = { path = "spel-katalog-sink" }
-spel-katalog-tui = { path = "spel-katalog-tui" }
-spel-katalog-tracker = { path = "spel-katalog-tracker" }
 spel-katalog-terminal = { path = "spel-katalog-terminal" }
+spel-katalog-tui = { path = "spel-katalog-tui" }
 strsim = "0.11.1"
 strum = "0.27.2"
 syn = { version = "2.0.108", default-features = false }
@@ -107,3 +108,5 @@ toml = "0.9.8"
 vte = "0.15.0"
 whoami = { version = "1.6.1", default-features = false }
 yaml-rust2 = "0.10.4"
+flume = "0.11.1"
+futures = "0.3.31"

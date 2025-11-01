@@ -69,5 +69,4 @@ pub enum Message {
     Dialog(DialogBuilder),
     #[from]
     Terminal(::spel_katalog_terminal::Message),
-    BatchRun,
 }

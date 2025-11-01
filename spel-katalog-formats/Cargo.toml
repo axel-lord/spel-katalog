@@ -6,8 +6,12 @@ authors = ["Axel Lord"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-serde = { workspace = true, features = ["derive"] }
+bytes = { workspace = true, features = ["serde"] }
+derive_more = { workspace = true, features = ["is_variant", "display"] }
+indexmap.workspace = true
 rustc-hash.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_bytes.workspace = true
 
 [lints]
 workspace = true

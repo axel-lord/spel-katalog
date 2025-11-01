@@ -10,21 +10,8 @@ use ::spel_katalog_tui::{Channels, line_channel};
 
 fn init_log(target: Option<::env_logger::Target>) {
     let mut log_builder = ::env_logger::builder();
-    let log_builder = [
-        "spel_katalog",
-        "spel_katalog_batch",
-        "spel_katalog_common",
-        "spel_katalog_games",
-        "spel_katalog_info",
-        "spel_katalog_parse",
-        "spel_katalog_script",
-        "spel_katalog_settings",
-        "spel_katalog_tui",
-    ]
-    .into_iter()
-    .fold(&mut log_builder, |builder, module| {
-        builder.filter_module(module, ::log::LevelFilter::Debug)
-    });
+
+    log_builder.filter_level(::log::LevelFilter::Info);
 
     if let Some(target) = target {
         log_builder.target(target).init();
@@ -82,9 +69,14 @@ fn run(cli: ::spel_katalog_cli::Run) -> ::color_eyre::Result<()> {
     }
 }
 
+fn batch(cli: ::spel_katalog_cli::Batch) -> ::color_eyre::Result<()> {
+    init_log(None);
+    ::spel_katalog::batch_run(cli)
+}
+
 fn main() -> ::color_eyre::Result<()> {
     ::color_eyre::install()?;
     let cli = Cli::parse();
     let cmd = Subcmd::from(cli);
-    cmd.perform(SubcmdCallbacks { run, other })
+    cmd.perform(SubcmdCallbacks { run, other, batch })
 }

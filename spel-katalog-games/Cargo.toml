@@ -9,19 +9,21 @@ license = "MIT OR Apache-2.0"
 workspace = true
 
 [dependencies]
-derive_more = { workspace = true, features = ["is_variant", "display"] }
+derive_more = { workspace = true, features = ["is_variant", "display", "deref", "deref_mut"] }
 iced = { workspace = true, features = ["tokio", "lazy", "image", "advanced"] }
 image.workspace = true
 itertools.workspace = true
 log.workspace = true
+parking_lot.workspace = true
 rayon.workspace = true
 regex.workspace = true
 rusqlite.workspace = true
 rustc-hash.workspace = true
 shell-words.workspace = true
 spel-katalog-common.workspace = true
+spel-katalog-formats.workspace = true
+spel-katalog-gather.workspace = true
 spel-katalog-settings.workspace = true
-spel-katalog-tracker.workspace = true
 strsim.workspace = true
 tap.workspace = true
 thiserror.workspace = true

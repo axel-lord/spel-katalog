@@ -37,20 +37,12 @@ pub struct Run {
     pub advanced_terminal: bool,
 
     /// Keep terminal open.
-    #[arg(long, visible_alias = "kt", conflicts_with = "batch")]
+    #[arg(long, visible_alias = "kt")]
     pub keep_terminal: bool,
-
-    /// Run the given batch script, then exit.
-    #[arg(long, short, conflicts_with = "advanced_terminal")]
-    pub batch: Option<PathBuf>,
 
     /// Show a terminal dialog.
     #[arg(long, visible_alias = "st", conflicts_with = "advanced_terminal")]
     pub show_terminal: bool,
-
-    /// At most how long to wait for application initialization to finish before running batch.
-    #[arg(long, requires = "batch", required = false, default_value_t = 120)]
-    pub batch_init_timeout: u16,
 }
 
 impl Default for Run {
@@ -61,8 +53,6 @@ impl Default for Run {
             config: default_config().to_path_buf(),
             advanced_terminal: false,
             keep_terminal: false,
-            batch: None,
-            batch_init_timeout: 120,
             show_terminal: false,
         }
     }

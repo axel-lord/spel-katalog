@@ -1,0 +1,20 @@
+[package]
+name = "spel-katalog-gather"
+version = "0.1.0"
+edition = "2024"
+authors = ["Axel Lord"]
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+flume = { workspace = true, features = ["async"] }
+futures.workspace = true
+image.workspace = true
+log.workspace = true
+rayon.workspace = true
+rusqlite.workspace = true
+rustc-hash.workspace = true
+spel-katalog-formats.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

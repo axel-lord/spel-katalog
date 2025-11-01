@@ -11,17 +11,15 @@ use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::OrRequest;
 use ::spel_katalog_formats::AdditionalConfig;
 use ::spel_katalog_games::SelDir;
-use ::spel_katalog_settings::{
-    ConfigDir, CoverartDir, FilterMode, Network, Show, Variants, YmlDir,
-};
+use ::spel_katalog_settings::{ConfigDir, FilterMode, Network, Show, Variants, YmlDir};
 use ::tap::Pipe;
 
 use crate::{App, Message, QuickMessage, Safety, app::WindowType};
 
-fn gather<'a>(
+pub fn gather<'a>(
     yml_dir: &str,
     config_dir: &str,
-    games: impl IntoIterator<Item = &'a ::spel_katalog_games::Game>,
+    games: impl IntoIterator<Item = &'a ::spel_katalog_formats::Game>,
 ) -> Vec<BatchInfo> {
     games
         .into_iter()
@@ -105,7 +103,7 @@ impl App {
                                 ::spel_katalog_info::Message::SetId { id },
                                 &self.sender,
                                 &self.settings,
-                                &self.games,
+                                |id| self.games.by_id(id).map(|g| &g.game),
                             )
                             .map(Message::Info);
                     }
@@ -120,17 +118,6 @@ impl App {
                             false,
                         );
                     }
-                    ::spel_katalog_games::Request::FindImages { slugs, tracker } => {
-                        return self
-                            .image_buffer
-                            .find_images(
-                                slugs,
-                                self.settings.get::<CoverartDir>().to_path_buf(),
-                                tracker,
-                            )
-                            .map(OrRequest::Message)
-                            .map(Message::Games);
-                    }
                     ::spel_katalog_games::Request::CloseInfo => {
                         self.view.show_info(false);
                         self.games.select(SelDir::None);
@@ -142,7 +129,9 @@ impl App {
                     OrRequest::Message(message) => {
                         return self
                             .info
-                            .update(message, &self.sender, &self.settings, &self.games)
+                            .update(message, &self.sender, &self.settings, |id| {
+                                self.games.by_id(id).map(|g| &g.game)
+                            })
                             .map(Message::Info);
                     }
                     OrRequest::Request(request) => request,
@@ -166,7 +155,11 @@ impl App {
                         return self
                             .games
                             .update(
-                                ::spel_katalog_games::Message::SetImage { slug, image },
+                                ::spel_katalog_games::Message::SetImage {
+                                    slug,
+                                    image,
+                                    add_to_cache: true,
+                                },
                                 &self.sender,
                                 &self.settings,
                                 &self.filter,
@@ -322,15 +315,21 @@ impl App {
                         let yml_dir = yml_dir.as_str();
                         let config_dir = self.settings.get::<ConfigDir>().as_str();
                         return match scope {
-                            ::spel_katalog_batch::Scope::All => {
-                                gather(yml_dir, config_dir, self.games.all())
-                            }
-                            ::spel_katalog_batch::Scope::Shown => {
-                                gather(yml_dir, config_dir, self.games.displayed())
-                            }
-                            ::spel_katalog_batch::Scope::Batch => {
-                                gather(yml_dir, config_dir, self.games.batch_selected())
-                            }
+                            ::spel_katalog_batch::Scope::All => gather(
+                                yml_dir,
+                                config_dir,
+                                self.games.all().iter().map(|game| &game.game),
+                            ),
+                            ::spel_katalog_batch::Scope::Shown => gather(
+                                yml_dir,
+                                config_dir,
+                                self.games.displayed().map(|game| &game.game),
+                            ),
+                            ::spel_katalog_batch::Scope::Batch => gather(
+                                yml_dir,
+                                config_dir,
+                                self.games.batch_selected().map(|game| &game.game),
+                            ),
                         }
                         .pipe(::spel_katalog_batch::Message::RunBatch)
                         .pipe(OrRequest::Message)
@@ -338,10 +337,7 @@ impl App {
                         .pipe(Task::done);
                     }
                     ::spel_katalog_batch::Request::ReloadCache => {
-                        return self
-                            .games
-                            .find_cached(&self.settings, None)
-                            .map(Message::Games);
+                        return self.games.find_cached(&self.settings).map(Message::Games);
                     }
                 },
             },
@@ -380,35 +376,6 @@ impl App {
                 });
                 return task.map(move |id| {
                     Message::OpenWindow(id, WindowType::Dialog(dialog.clone().build()))
-                });
-            }
-            Message::BatchRun => {
-                let Some(src) = self.batch_source.take() else {
-                    ::log::warn!("batch run attempted without source, should not happen");
-                    return Task::none();
-                };
-                let games = gather(
-                    &self.settings.get::<YmlDir>(),
-                    &self.settings.get::<ConfigDir>(),
-                    self.games.all(),
-                );
-                let sink_builder = self.sink_builder.clone();
-                let vt = self.lua_vt();
-                let future = async move {
-                    ::tokio::task::spawn_blocking(move || {
-                        ::spel_katalog_batch::lua_batch(games, src, &sink_builder, vt)
-                            .map_err(|err| err.to_string())
-                    })
-                    .await
-                };
-
-                return Task::future(future).then(|result| {
-                    match result {
-                        Ok(Ok(_)) => ::log::info!("batch script finished"),
-                        Ok(Err(err)) => ::log::error!("batch script error\n{err}"),
-                        Err(err) => ::log::error!("thread could not be joined\n{err}"),
-                    };
-                    ::iced::exit()
                 });
             }
         }
