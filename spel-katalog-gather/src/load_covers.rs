@@ -25,7 +25,7 @@ pub struct CoverGathererOptions {
 
     /// Max Width and height to scale cover to.
     /// If 0 do not scale.
-    /// (default: 150)
+    /// (default: 300)
     pub dimensions: u32,
 }
 
@@ -34,7 +34,7 @@ impl Default for CoverGathererOptions {
         Self {
             slugs: None,
             channel_size: 64,
-            dimensions: 150,
+            dimensions: 300,
         }
     }
 }

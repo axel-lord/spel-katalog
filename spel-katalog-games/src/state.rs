@@ -327,7 +327,6 @@ impl State {
                     CoverGatherer::with_options(
                         &cover_dir,
                         CoverGathererOptions {
-                            dimensions: 150,
                             slugs: Some(game_slugs),
                             ..Default::default()
                         },

@@ -313,7 +313,7 @@ impl State {
                             }
                         };
 
-                        let image = ::spel_katalog_gather::thumbnail(image, 150);
+                        let image = ::spel_katalog_gather::thumbnail(image, 300);
 
                         Ok(OrRequest::Request(Request::SetImage { slug, image }))
                     };
