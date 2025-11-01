@@ -51,11 +51,7 @@ fn gather_covers(dir: ReadDir) -> FxHashMap<String, PathBuf> {
             let entry = dir_entry.ok()?;
             let path = entry.path();
 
-            let slug = path
-                .with_extension("")
-                .into_os_string()
-                .into_string()
-                .ok()?;
+            let slug = path.file_stem()?.to_str()?.to_owned();
 
             let metadata = entry
                 .metadata()

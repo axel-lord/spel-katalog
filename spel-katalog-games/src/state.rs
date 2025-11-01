@@ -4,8 +4,10 @@ use ::std::{
     cell::Cell,
     convert::identity,
     io::Cursor,
+    mem,
     ops::ControlFlow,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 use ::derive_more::{Deref, DerefMut, IsVariant};
@@ -13,7 +15,7 @@ use ::iced::{
     Alignment::{self},
     Border, Element,
     Length::Fill,
-    Task,
+    Subscription, Task,
     widget::{self, container, stack},
 };
 use ::image::ImageFormat;
@@ -42,6 +44,7 @@ pub struct State {
     #[deref]
     #[deref_mut]
     games: Games,
+    cache_queue: (Vec<String>, Vec<::spel_katalog_formats::Image>),
     selected: Option<i64>,
     columns: Cell<usize>,
 }
@@ -84,10 +87,8 @@ pub enum Message {
         slugs: Vec<String>,
         /// Thumbnails to set.
         images: Vec<::spel_katalog_formats::Image>,
-        /// True if image comes from cache file.
-        from_cache: bool,
-        /// Tracker to activate when finished.
-        tracker: Option<Tracker>,
+        /// True if images should be added to cache.
+        add_to_cache: bool,
     },
     /// Set a single thumbnail.
     SetImage {
@@ -95,8 +96,8 @@ pub enum Message {
         slug: String,
         /// Image.
         image: ::spel_katalog_formats::Image,
-        /// If true image should be cached.
-        to_cache: bool,
+        /// If true image should be added to cache.
+        add_to_cache: bool,
     },
     /// Remove a thumbnail from game and cache.
     RemoveImage {
@@ -109,6 +110,8 @@ pub enum Message {
     SelectId(i64),
     /// Batch select game.
     BatchSelect(i64),
+    /// FLush thumbnail cache to database.
+    FlushCache,
 }
 
 /// Requests for other widgets.
@@ -159,6 +162,15 @@ impl State {
         self.selected
     }
 
+    /// Subscription used by games state.
+    pub fn subscription(&self) -> Subscription<Message> {
+        if !self.cache_queue.0.is_empty() {
+            ::iced::time::every(Duration::from_secs_f64(0.1)).map(|_| Message::FlushCache)
+        } else {
+            Subscription::none()
+        }
+    }
+
     /// Update internal state and send messages.
     pub fn update(
         &mut self,
@@ -194,7 +206,7 @@ impl State {
                 })
                 .then(identity)
             }
-            Message::SetGames { games, tracker } => {
+            Message::SetGames { games, tracker: _ } => {
                 self.set(
                     games.into_iter().map(WithThumb::from).collect(),
                     settings,
@@ -203,42 +215,45 @@ impl State {
 
                 status!(tx, "read games from database");
 
-                self.find_cached(settings, tracker)
+                self.find_cached(settings)
             }
             Message::SetImages {
                 slugs,
                 images,
-                from_cache,
-                tracker,
+                add_to_cache,
             } => {
-                if from_cache {
-                    for (slug, image) in slugs.into_iter().zip(images) {
-                        self.set_image(&slug, image);
-                    }
-                    Task::none()
-                } else {
-                    for (slug, image) in slugs.iter().zip(&images) {
-                        self.set_image(slug, image.clone());
-                    }
-                    let cache_path = settings.get::<CacheDir>().to_path_buf();
-                    Task::future(cache_images(slugs, images, cache_path, tx.clone(), tracker))
-                        .then(|_| Task::none())
+                for (slug, image) in slugs.iter().zip(&images) {
+                    self.set_image(slug, image.clone());
                 }
+
+                if add_to_cache {
+                    let (slug_queue, image_queue) = &mut self.cache_queue;
+                    slug_queue.extend(slugs);
+                    image_queue.extend(images);
+                }
+
+                Task::none()
             }
             Message::SetImage {
                 slug,
                 image,
-                to_cache,
+                add_to_cache,
             } => {
                 self.set_image(&slug, image.clone());
-                let cache_path = settings.get::<CacheDir>().to_path_buf();
 
-                if to_cache {
-                    Task::future(cache_image(slug, image, cache_path, tx.clone()))
-                        .then(|_| Task::none())
-                } else {
-                    Task::none()
+                if add_to_cache {
+                    let (slugs, images) = &mut self.cache_queue;
+                    slugs.push(slug);
+                    images.push(image);
                 }
+
+                Task::none()
+            }
+            Message::FlushCache => {
+                let (slugs, images) = mem::take(&mut self.cache_queue);
+                let cache_path = settings.get::<CacheDir>().to_path_buf();
+                Task::future(cache_images(slugs, images, cache_path, tx.clone(), None))
+                    .then(|_| Task::none())
             }
             Message::RemoveImage { slug } => {
                 self.remove_image(&slug);
@@ -263,11 +278,7 @@ impl State {
     }
 
     /// Find cached images.
-    pub fn find_cached(
-        &mut self,
-        settings: &Settings,
-        mut tracker: Option<Tracker>,
-    ) -> Task<OrRequest<Message, Request>> {
+    pub fn find_cached(&mut self, settings: &Settings) -> Task<OrRequest<Message, Request>> {
         let cache_dir = settings.get::<CacheDir>().to_path_buf();
         let cover_dir = settings.get::<CoverartDir>().to_path_buf();
 
@@ -277,9 +288,13 @@ impl State {
             .map(|game| game.slug.clone())
             .collect::<Vec<_>>();
 
-        let find_cached = spawn_blocking(move || -> Result<_, LoadDbError> {
+        let find_cached = spawn_blocking(move || {
             let db_path = cache_dir.join(THUMBNAILS_FILENAME);
-            let (slugs, images) = load_thumbnail_database(&db_path)?.into_iter().unzip();
+            let (slugs, images) = load_thumbnail_database(&db_path)
+                .map_err(|err| ::log::warn!("could not load thumbnail cache at {db_path:?}\n{err}"))
+                .unwrap_or_default()
+                .into_iter()
+                .unzip();
             let mut game_slugs = FxHashSet::from_iter(game_slugs);
 
             for slug in &slugs {
@@ -292,7 +307,7 @@ impl State {
 
             let game_slugs = Vec::from_iter(game_slugs);
 
-            Ok((game_slugs, slugs, images))
+            (game_slugs, slugs, images)
         });
 
         Task::future(find_cached).then(move |result| match result {
@@ -300,21 +315,20 @@ impl State {
                 ::log::error!("image cache thread did not finish\n{err}");
                 Task::none()
             }
-            Ok(Err(err)) => {
-                ::log::error!("image cache collection failed\n{err}");
-                Task::none()
-            }
-            Ok(Ok((game_slugs, slugs, images))) => {
+            Ok((game_slugs, slugs, images)) => {
                 let set_images = Message::SetImages {
                     slugs,
                     images,
-                    from_cache: true,
-                    tracker: tracker.take(),
+                    add_to_cache: false,
                 }
                 .pipe(OrRequest::Message)
                 .pipe(Task::done);
 
                 let load_covers = if !game_slugs.is_empty() {
+                    ::log::info!(
+                        "looking for {} thumbnails in {cover_dir:?}",
+                        game_slugs.len()
+                    );
                     CoverGatherer::with_options(
                         &cover_dir,
                         CoverGathererOptions {
@@ -330,11 +344,11 @@ impl State {
                     .map(|(slug, image)| Message::SetImage {
                         slug,
                         image,
-                        to_cache: true,
+                        add_to_cache: true,
                     })
                     .map(OrRequest::Message)
                 } else {
-                    ::log::info!("no need to load covers from filesystem");
+                    ::log::info!("no need to load covers from {cover_dir:?}");
                     Task::none()
                 };
 
@@ -526,21 +540,6 @@ async fn uncache_image(slug: String, cache_path: PathBuf) {
     handle_uncache_result(spawn_blocking(move || uncache_image_blocking(slug, cache_path)).await);
 }
 
-async fn cache_image(
-    slug: String,
-    image: ::spel_katalog_formats::Image,
-    cache_path: PathBuf,
-    tx: StatusSender,
-) {
-    if create_cache_dir(&cache_path, tx).await.is_break() {
-        return;
-    }
-
-    handle_cache_result(
-        spawn_blocking(move || cache_image_blocking(slug, image, cache_path)).await,
-    );
-}
-
 async fn cache_images(
     slugs: Vec<String>,
     images: Vec<::spel_katalog_formats::Image>,
@@ -617,26 +616,6 @@ fn uncache_image_blocking(slug: String, cache_path: PathBuf) -> Result<(), ::rus
 
     let mut stmt = db.prepare_cached(REMOVE_IMAGE)?;
     remove_image(&mut stmt, slug);
-    Ok(())
-}
-
-fn cache_image_blocking(
-    slug: String,
-    image: ::spel_katalog_formats::Image,
-    cache_path: PathBuf,
-) -> Result<(), ::rusqlite::Error> {
-    let cache_path = cache_path.join(THUMBNAILS_FILENAME);
-    let db = Connection::open(&cache_path)?;
-
-    let mut stmt = db.prepare_cached(CREATE_IMAGE_TABLE)?;
-    stmt.execute([])?;
-
-    let mut stmt = db.prepare_cached(INSERT_IMAGE)?;
-
-    if let Some((slug, image)) = convert_slug_image(slug, image) {
-        insert_image(&mut stmt, slug, image);
-    }
-
     Ok(())
 }
 

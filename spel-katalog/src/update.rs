@@ -158,7 +158,7 @@ impl App {
                                 ::spel_katalog_games::Message::SetImage {
                                     slug,
                                     image,
-                                    to_cache: true,
+                                    add_to_cache: true,
                                 },
                                 &self.sender,
                                 &self.settings,
@@ -337,10 +337,7 @@ impl App {
                         .pipe(Task::done);
                     }
                     ::spel_katalog_batch::Request::ReloadCache => {
-                        return self
-                            .games
-                            .find_cached(&self.settings, None)
-                            .map(Message::Games);
+                        return self.games.find_cached(&self.settings).map(Message::Games);
                     }
                 },
             },

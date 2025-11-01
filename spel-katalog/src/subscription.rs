@@ -63,19 +63,19 @@ impl App {
         });
 
         let refresh = if self.process_list.is_some() {
-            Some(
-                ::iced::time::every(Duration::from_millis(500))
-                    .map(|_| Message::Quick(QuickMessage::RefreshProcessInfo)),
-            )
+            ::iced::time::every(Duration::from_millis(500))
+                .map(|_| Message::Quick(QuickMessage::RefreshProcessInfo))
         } else {
-            None
+            Subscription::none()
         };
 
         let window_close = window::close_events().map(Message::CloseWindow);
+        let games = self
+            .games
+            .subscription()
+            .map(OrRequest::Message)
+            .map(Message::Games);
 
-        [on_key, window_close]
-            .into_iter()
-            .chain(refresh)
-            .pipe(Subscription::batch)
+        Subscription::batch([on_key, window_close, refresh, games])
     }
 }
