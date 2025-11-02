@@ -179,10 +179,10 @@ impl Item {
     }
 
     pub fn view<'a>(&'a self, name: &'a str) -> Element<'a, Message> {
+        let name = Span::new(name);
         match self {
             Item::Simple { doc, ty, attr: _ } => {
                 let ty = Span::new(ty).color(Color::new(0.5, 1.0, 0.5, 1.0));
-                let name = Span::new(name);
                 if let Some(doc) = doc {
                     let doc = Span::new(doc);
                     widget::rich_text([name, Span::new(": "), ty, Span::new(" "), doc]).into()
@@ -197,18 +197,42 @@ impl Item {
                 params,
                 r#return,
                 r#enum,
-            } => widget::Column::new()
-                .align_x(Horizontal::Left)
-                .push(widget::rich_text([Span::new(name), Span::new(": ")]))
-                .push(
-                    widget::Row::new()
-                        .align_y(Vertical::Top)
-                        .push(horizontal_space().width(20))
-                        .push(widget::Column::new()),
-                )
-                .into(),
+            } => {
+                widget::Column::new()
+                    .align_x(Horizontal::Left)
+                    .push(widget::rich_text([name, Span::new(": ")]))
+                    .push(indented(
+                        widget::Column::new()
+                            .push_maybe(doc.as_ref().map(String::as_str))
+                            .push_maybe((!union.is_empty()).then_some("Union"))
+                            .push_maybe((!union.is_empty()).then(|| {
+                                indented(union.iter().fold(widget::Column::new(), |col, item| {
+                                    col.push(item.view(""))
+                                }))
+                            }))
+                            .push_maybe((!fields.is_empty()).then_some("Fields"))
+                            .push_maybe((!fields.is_empty()).then(|| {
+                                indented(
+                                    fields
+                                        .iter()
+                                        .fold(widget::Column::new(), |col, (key, value)| {
+                                            col.push(value.view(&key))
+                                        }),
+                                )
+                            })),
+                    ))
+                    .into()
+            }
         }
     }
+}
+
+fn indented<'a, M: 'a>(elem: impl Into<Element<'a, M>>) -> Element<'a, M> {
+    widget::Row::new()
+        .align_y(Vertical::Top)
+        .push(horizontal_space().width(20))
+        .push(elem)
+        .into()
 }
 
 /// Message in use by [DocsViewer].
