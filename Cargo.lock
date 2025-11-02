@@ -5155,6 +5155,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "spel-katalog-lua-docs"
+version = "0.1.0"
+dependencies = [
+ "derive_more",
+ "iced",
+ "indexmap",
+ "log",
+ "rustc-hash 2.1.1",
+ "tap",
+ "thiserror 2.0.17",
+ "yaml-rust2",
+]
+
+[[package]]
 name = "spel-katalog-settings"
 version = "0.1.0"
 dependencies = [

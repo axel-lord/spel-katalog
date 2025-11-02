@@ -1,0 +1,44 @@
+--- # Lua api documentation
+Color:
+  doc: "A color with a red, green, blue and alpha value"
+  fields:
+    r: [number, "Red value of color in range [0, 255]"]
+    g: [number, "Green value of color in range [0, 255]"]
+    b: [number, "Blue value of color in range [0, 255]"]
+    a: [number, "Alpha value of color in range [0.0, 1.0]"]
+    new:
+      doc: "Add color metatable to given tables, or create a new table with the metatable"
+      params:
+        class: Color
+        tbl: ["table...", "Table to add class to"]
+      return: "Color..."
+Rect:
+  doc: "A rectangle"
+  fields:
+    x: [number, "X position of rectangle"]
+    y: [number, "Y position of rectangle"]
+    w: [number, "Width of rectangle"]
+    h: [number, "Height of rectangle"]
+    new:
+      doc: "Add Rect metatable to given tables, or create a new table with the metatable"
+      params:
+        class: Rect
+        tbl: ["table...", "Table to add class to"]
+      return: "Rect..."
+Letterbox:
+  doc: "Input to Image:Letterbox"
+  fields:
+    ratio: ["number?", "Ratio to use"]
+    color: ["Color?", "Color of background"]
+  union:
+    - [nil, "Use defaults"]
+    - [Color, "Use the provided Color"]
+    - [number, "Use the provided number for ratio"]
+Filter:
+  doc: "Stretch/resize filter"
+  enum:
+    - [nearest, "Nearest filtering"]
+    - [triangle, "Triangle filtering"]
+    - [catmullrom, "Catmullrom filtering"]
+    - [gaussian, "Gaussian filtering"]
+    - [lanczos3, "Lanczos3 filtering"]
