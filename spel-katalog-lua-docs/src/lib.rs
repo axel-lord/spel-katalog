@@ -4,9 +4,7 @@ use ::std::sync::LazyLock;
 
 use ::derive_more::From;
 use ::iced::{
-    Color, Element,
-    Length::Fill,
-    Task,
+    Color, Element, Task,
     alignment::{Horizontal, Vertical},
     widget::{self, horizontal_space, text::Span},
 };
@@ -14,26 +12,12 @@ use ::indexmap::IndexMap;
 use ::tap::TryConv;
 use ::yaml_rust2::Yaml;
 
+use crate::{simple::Simple, table::Table};
+
+mod simple;
+mod table;
+
 type Map<K, V> = IndexMap<K, V, ::rustc_hash::FxBuildHasher>;
-
-#[derive(Debug)]
-struct Keys {
-    doc: Yaml,
-    fields: Yaml,
-    params: Yaml,
-    r#return: Yaml,
-    union: Yaml,
-    r#enum: Yaml,
-}
-
-static KEYS: LazyLock<Keys> = LazyLock::new(|| Keys {
-    doc: Yaml::String("doc".to_owned()),
-    fields: Yaml::String("fields".to_owned()),
-    params: Yaml::String("params".to_owned()),
-    r#return: Yaml::String("return".to_owned()),
-    union: Yaml::String("union".to_owned()),
-    r#enum: Yaml::String("enum".to_owned()),
-});
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum Attr {
@@ -58,148 +42,6 @@ impl Attr {
     }
 }
 
-#[derive(Debug, Clone)]
-struct Simple {
-    doc: Option<String>,
-    ty: String,
-    attr: Attr,
-}
-
-impl TryFrom<Yaml> for Simple {
-    type Error = Yaml;
-
-    fn try_from(value: Yaml) -> Result<Self, Self::Error> {
-        match value {
-            Yaml::String(ty) => {
-                let (ty, attr) = Attr::split_ty(ty);
-                Ok(Self {
-                    doc: None,
-                    ty,
-                    attr,
-                })
-            }
-            Yaml::Array(yaml) => match yaml.as_slice() {
-                [Yaml::String(..), Yaml::String(..)] => {
-                    match <[Yaml; 2]>::try_from(yaml).map_err(Yaml::Array)? {
-                        [Yaml::String(ty), Yaml::String(doc)] => {
-                            let (ty, attr) = Attr::split_ty(ty);
-                            let doc = Some(doc);
-                            Ok(Self { ty, doc, attr })
-                        }
-                        other => Err(Yaml::Array(Vec::from(other))),
-                    }
-                }
-                _ => Err(Yaml::Array(yaml)),
-            },
-            other => Err(other),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct Table {
-    doc: Option<String>,
-    union: Vec<Item>,
-    fields: Map<String, Item>,
-    params: Map<String, Item>,
-    r#return: Vec<Item>,
-    r#enum: Vec<(String, Option<String>)>,
-}
-
-impl TryFrom<Yaml> for Table {
-    type Error = Yaml;
-
-    fn try_from(value: Yaml) -> Result<Self, Self::Error> {
-        let mut table = match value {
-            Yaml::Hash(hash) => hash,
-            other => return Err(other),
-        };
-        let doc = table.remove(&KEYS.doc).and_then(Yaml::into_string);
-
-        let union = table
-            .remove(&KEYS.union)
-            .and_then(Yaml::into_vec)
-            .map(|v| {
-                v.into_iter()
-                    .filter_map(|value| Item::try_from(value).ok())
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        let fields = table
-            .remove(&KEYS.fields)
-            .and_then(Yaml::into_hash)
-            .map(|hash| {
-                hash.into_iter()
-                    .filter_map(|(key, value)| {
-                        Some((key.into_string()?, Item::try_from(value).ok()?))
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        let params = table
-            .remove(&KEYS.params)
-            .and_then(Yaml::into_hash)
-            .map(|hash| {
-                hash.into_iter()
-                    .filter_map(|(key, value)| {
-                        Some((key.into_string()?, Item::try_from(value).ok()?))
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        let r#return = table
-            .remove(&KEYS.r#return)
-            .map(|value| match value {
-                value @ Yaml::String(..) => Item::try_from(value)
-                    .map(|item| vec![item])
-                    .unwrap_or_default(),
-                Yaml::Array(items) => items
-                    .into_iter()
-                    .filter_map(|value| Item::try_from(value).ok())
-                    .collect(),
-                _ => Vec::new(),
-            })
-            .unwrap_or_default();
-
-        let r#enum = table
-            .remove(&KEYS.r#enum)
-            .and_then(Yaml::into_vec)
-            .map(|values| {
-                let conv_value = |value: Yaml| match value {
-                    Yaml::Real(s) | Yaml::String(s) => Some(s),
-                    Yaml::Integer(n) => Some(n.to_string()),
-                    Yaml::Boolean(b) => Some(b.to_string()),
-                    _ => None,
-                };
-                values
-                    .into_iter()
-                    .filter_map(|value| match value {
-                        Yaml::Array(arr) => {
-                            let [value, doc] = <[Yaml; 2]>::try_from(arr).ok()?;
-                            let doc = doc.into_string()?;
-                            let value = conv_value(value)?;
-
-                            Some((value, Some(doc)))
-                        }
-                        value => Some((conv_value(value)?, None)),
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-        Ok(Self {
-            doc,
-            union,
-            fields,
-            params,
-            r#return,
-            r#enum,
-        })
-    }
-}
-
 #[derive(Debug, Clone, From)]
 enum Item {
     Simple(Simple),
@@ -218,17 +60,8 @@ impl TryFrom<Yaml> for Item {
 
 impl Item {
     pub fn view<'a>(&'a self, name: &'a str) -> Element<'a, Message> {
-        let name = Span::new(name);
         match self {
-            Item::Simple(Simple { doc, ty, attr: _ }) => {
-                let ty = Span::new(ty).color(Color::new(0.5, 1.0, 0.5, 1.0));
-                if let Some(doc) = doc {
-                    let doc = Span::new(doc);
-                    widget::rich_text([name, Span::new(": "), ty, Span::new(" "), doc]).into()
-                } else {
-                    widget::rich_text([name, Span::new(": "), ty]).into()
-                }
-            }
+            Item::Simple(simple) => simple.view(name),
             Item::Table(Table {
                 doc,
                 union,
@@ -237,6 +70,7 @@ impl Item {
                 r#return,
                 r#enum,
             }) => {
+                let name = Span::new(name);
                 widget::Column::new()
                     .align_x(Horizontal::Left)
                     .push(widget::rich_text([name, Span::new(": ")]))
