@@ -1,12 +1,12 @@
 --- # Lua api documentation
+None:
+  doc: "A null value separate from lua nil, used for optional values"
+
 "Result<T, E>":
   doc: "A union of either a value, or nil and an error"
   union:
     - [T, "Success value"]
     - [[nil, E], "Error value"]
-
-None:
-  doc: "A null value separate from lua nil, used for optional values"
 
 loadConfig:
   doc: "Load lutris yml config for game"
@@ -20,7 +20,7 @@ setAttr:
 
 setAttrs:
   doc: "Set multiple attributes, and update this GameData"
-  param:
+  params:
     attrs: "table<string, string>"
 
 Color:

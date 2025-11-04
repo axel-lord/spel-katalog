@@ -6,7 +6,7 @@ use ::std::{
 use ::derive_more::IsVariant;
 use ::iced::{
     Element,
-    widget::{self, rich_text, text},
+    widget::{self, rich_text},
 };
 use ::yaml_rust2::Yaml;
 
@@ -17,7 +17,9 @@ struct Keys {
     doc: Yaml,
     fields: Yaml,
     params: Yaml,
+    param: Yaml,
     r#return: Yaml,
+    returns: Yaml,
     union: Yaml,
     r#enum: Yaml,
 }
@@ -25,8 +27,10 @@ struct Keys {
 static KEYS: LazyLock<Keys> = LazyLock::new(|| Keys {
     doc: Yaml::String("doc".to_owned()),
     fields: Yaml::String("fields".to_owned()),
+    param: Yaml::String("param".to_owned()),
     params: Yaml::String("params".to_owned()),
     r#return: Yaml::String("return".to_owned()),
+    returns: Yaml::String("returns".to_owned()),
     union: Yaml::String("union".to_owned()),
     r#enum: Yaml::String("enum".to_owned()),
 });
@@ -89,14 +93,6 @@ impl<S: AsRef<str>> Table<S> {
         !self.fields.is_empty()
     }
 
-    fn is_empty(&self) -> bool {
-        self.union.is_empty()
-            && self.params.is_empty()
-            && self.r#return.is_empty()
-            && self.r#enum.is_empty()
-            && self.fields.is_empty()
-    }
-
     fn kind(&self) -> TableKind {
         let mut kind = TableKind::None;
 
@@ -142,10 +138,10 @@ impl<S: AsRef<str>> Table<S> {
     fn view_<'a>(&'a self, name: Option<&'a str>) -> Element<'a, Message> {
         match self.kind() {
             TableKind::None => self.view_empty(name),
-            // TableKind::Union => todo!(),
+            TableKind::Union => self.view_union(name),
+            TableKind::Enum => self.view_enum(name),
             // TableKind::Table => todo!(),
             // TableKind::Function => todo!(),
-            // TableKind::Enum => todo!(),
             // TableKind::Mixed => todo!(),
             _ => self.view_mixed(name.unwrap_or_else(|| self.default_name())),
         }
@@ -158,21 +154,62 @@ impl<S: AsRef<str>> Table<S> {
             }
             (None, Some(doc)) => rich_text(["# ", doc.as_ref()].doc()).into(),
             (Some(name), None) => rich_text([name.name()]).into(),
-            (None, None) => text("---").into(),
+            (None, None) => widget::text("---").into(),
         }
     }
 
-    fn view_mixed<'a>(&'a self, name: &'a str) -> Element<'a, Message> {
-        if self.is_empty() {
-            let [doc_sep, doc] = self
-                .doc
-                .as_ref()
-                .map(|doc| [" # ", doc.as_ref()])
-                .doc()
-                .unwrap_or_else(empty_spans);
-            return rich_text([name.name(), doc_sep, doc]).into();
-        }
+    fn view_name_doc<'a>(&'a self, name: Option<&'a str>, kind: &'a str) -> Element<'a, Message> {
+        let [prefix, name] = name
+            .name()
+            .map(|name| [" ".into_span(), name])
+            .unwrap_or_else(empty_spans);
+        let [doc_sep, doc] = self
+            .doc
+            .as_ref()
+            .map(|doc| [" # ", doc.as_ref()])
+            .doc()
+            .unwrap_or_else(empty_spans);
 
+        rich_text([kind.into_span(), prefix, name, doc_sep, doc]).into()
+    }
+
+    fn view_enum_value_doc<'a>(value: &'a str, doc: Option<&'a str>) -> Element<'a, Message> {
+        let [doc_sep, doc] = doc
+            .as_ref()
+            .map(|doc| [" # ", doc])
+            .doc()
+            .unwrap_or_else(empty_spans);
+        let [l, value, r] = value.dquoted("\"").ty();
+        rich_text([l, value, r, doc_sep, doc]).into()
+    }
+
+    fn view_union<'a>(&'a self, name: Option<&'a str>) -> Element<'a, Message> {
+        widget::Column::new()
+            .push(self.view_name_doc(name, "union"))
+            .push(indented(
+                self.union.iter().fold(widget::Column::new(), |col, item| {
+                    col.push(item.view_anon())
+                }),
+            ))
+            .into()
+    }
+
+    fn view_enum<'a>(&'a self, name: Option<&'a str>) -> Element<'a, Message> {
+        widget::Column::new()
+            .push(self.view_name_doc(name, "enum"))
+            .push(indented(self.r#enum.iter().fold(
+                widget::Column::new(),
+                |col, (value, doc)| {
+                    col.push(Self::view_enum_value_doc(
+                        value.as_ref(),
+                        doc.as_ref().map(|doc| doc.as_ref()),
+                    ))
+                },
+            )))
+            .into()
+    }
+
+    fn view_mixed<'a>(&'a self, name: &'a str) -> Element<'a, Message> {
         let Self {
             doc,
             union,
@@ -232,13 +269,10 @@ impl<S: AsRef<str>> Table<S> {
                     .push_maybe(with_content(r#enum, |_| "Enum"))
                     .push_maybe(with_content(r#enum, |r#enum| {
                         indented(r#enum.fold(widget::Column::new(), |col, (value, doc)| {
-                            let [doc_sep, doc] = doc
-                                .as_ref()
-                                .map(|doc| [" # ", doc.as_ref()])
-                                .doc()
-                                .unwrap_or_else(empty_spans);
-                            let [l, value, r] = value.as_ref().dquoted("\"").ty();
-                            col.push(rich_text([l, value, r, doc_sep, doc]))
+                            col.push(Self::view_enum_value_doc(
+                                value.as_ref(),
+                                doc.as_ref().map(|doc| doc.as_ref()),
+                            ))
                         }))
                     }))
                     .push_maybe(with_content(params, |_| "Parameters"))
@@ -292,6 +326,7 @@ impl TryFrom<Yaml> for Table<String> {
 
         let params = table
             .remove(&KEYS.params)
+            .or_else(|| table.remove(&KEYS.param))
             .and_then(Yaml::into_hash)
             .map(|hash| {
                 hash.into_iter()
@@ -304,6 +339,7 @@ impl TryFrom<Yaml> for Table<String> {
 
         let r#return = table
             .remove(&KEYS.r#return)
+            .or_else(|| table.remove(&KEYS.returns))
             .map(|value| match value {
                 value @ Yaml::String(..) => Item::try_from(value)
                     .map(|item| vec![item])
