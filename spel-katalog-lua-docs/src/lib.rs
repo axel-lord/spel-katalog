@@ -4,11 +4,10 @@ use ::std::sync::LazyLock;
 
 use ::derive_more::From;
 use ::iced::{
-    Color, Element, Font,
+    Element,
     Length::Fill,
     Task,
     alignment::Vertical,
-    font::{Style, Weight},
     widget::{self, horizontal_space, text::Span},
 };
 use ::indexmap::IndexMap;
@@ -18,40 +17,12 @@ use ::yaml_rust2::Yaml;
 use crate::{simple::Simple, table::Table};
 
 mod simple;
+mod span_ext;
 mod table;
 
 type Map<K, V> = IndexMap<K, V, ::rustc_hash::FxBuildHasher>;
 
-trait SpanExt: Sized {
-    fn doc(self) -> Self;
-    fn name(self) -> Self;
-    fn ty(self) -> Self;
-}
-
-impl<L, F: From<Font>> SpanExt for Span<'_, L, F> {
-    fn doc(self) -> Self {
-        const DOC_CLR: Color = Color::from_rgb(1.0, 1.0, 0.7);
-        const FONT: Font = Font {
-            style: Style::Italic,
-            ..Font::DEFAULT
-        };
-        self.color(DOC_CLR).font(FONT)
-    }
-
-    fn name(self) -> Self {
-        const NM_CLR: Color = Color::from_rgb(0.5, 0.7, 1.0);
-        const FONT: Font = Font {
-            weight: Weight::Bold,
-            ..Font::DEFAULT
-        };
-        self.color(NM_CLR).font(FONT)
-    }
-
-    fn ty(self) -> Self {
-        const TY_CLR: Color = Color::from_rgb(0.5, 1.0, 0.5);
-        self.color(TY_CLR)
-    }
-}
+pub(crate) use span_ext::SpanExt;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum Attr {

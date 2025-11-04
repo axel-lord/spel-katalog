@@ -1,12 +1,9 @@
 use ::std::sync::LazyLock;
 
-use ::iced::{
-    Element,
-    widget::{self, text::Span},
-};
+use ::iced::{Element, widget};
 use ::yaml_rust2::Yaml;
 
-use crate::{Item, Map, Message, SpanExt, indented, with_content};
+use crate::{Item, Map, Message, SpanExt, empty_spans, indented, with_content};
 
 #[derive(Debug)]
 struct Keys {
@@ -60,9 +57,6 @@ impl<S: AsRef<str>> Table<S> {
             r#enum,
         } = self;
 
-        let name = Span::new(name).name();
-        let sep = Span::new(":");
-
         if union.is_empty()
             && params.is_empty()
             && r#return.is_empty()
@@ -70,22 +64,23 @@ impl<S: AsRef<str>> Table<S> {
             && fields.is_empty()
         {
             return if let Some(doc) = doc {
-                let doc = Span::new(doc.as_ref());
+                let [doc_sep, doc] = [" # ", doc.as_ref()].doc();
 
-                widget::rich_text([name, sep, doc])
+                widget::rich_text([name.name(), doc_sep, doc])
             } else {
-                widget::rich_text([name])
+                widget::rich_text([name.name()])
             }
             .into();
         }
 
         widget::Column::new()
-            .push(widget::rich_text([name, sep]))
+            .push(widget::rich_text([name.name(), ":".into_span()]))
             .push(indented(
                 widget::Column::new()
-                    .push_maybe(doc.as_ref().map(|doc| {
-                        widget::rich_text([Span::new("# ").doc(), Span::new(doc.as_ref()).doc()])
-                    }))
+                    .push_maybe(
+                        doc.as_ref()
+                            .map(|doc| widget::rich_text(["# ", doc.as_ref()].doc())),
+                    )
                     .push_maybe(with_content(fields, |_| "Fields"))
                     .push_maybe(with_content(fields, |fields| {
                         indented(fields.fold(widget::Column::new(), |col, (name, item)| {
@@ -101,21 +96,13 @@ impl<S: AsRef<str>> Table<S> {
                     .push_maybe(with_content(r#enum, |_| "Enum"))
                     .push_maybe(with_content(r#enum, |r#enum| {
                         indented(r#enum.fold(widget::Column::new(), |col, (value, doc)| {
-                            if let Some(doc) = doc {
-                                col.push(widget::rich_text([
-                                    Span::new("\"").ty(),
-                                    Span::new(value.as_ref()).ty(),
-                                    Span::new("\"").ty(),
-                                    Span::new(" # ").doc(),
-                                    Span::new(doc.as_ref()).doc(),
-                                ]))
+                            let [doc_sep, doc] = if let Some(doc) = doc {
+                                [" # ", doc.as_ref()].doc()
                             } else {
-                                col.push(widget::rich_text([
-                                    Span::new("\"").ty(),
-                                    Span::new(value.as_ref()).ty(),
-                                    Span::new("\"").ty(),
-                                ]))
-                            }
+                                empty_spans()
+                            };
+                            let [l, value, r] = value.as_ref().quoted("\"", "\"").ty();
+                            col.push(widget::rich_text([l, value, r, doc_sep, doc]))
                         }))
                     }))
                     .push_maybe(with_content(params, |_| "Parameters"))
@@ -135,15 +122,15 @@ impl<S: AsRef<str>> Table<S> {
     }
 
     pub fn view_anon(&self) -> Element<'_, Message> {
-        if self.is_union() {
-            self.view("union")
+        self.view(if self.is_union() {
+            "union"
         } else if self.is_enum() {
-            self.view("enum")
+            "enum"
         } else if self.fields.is_empty() && self.is_function() {
-            self.view("function")
+            "function"
         } else {
-            self.view("table")
-        }
+            "table"
+        })
     }
 }
 

@@ -1,7 +1,4 @@
-use ::iced::{
-    Element,
-    widget::{self, text::Span},
-};
+use ::iced::{Element, widget};
 use ::yaml_rust2::Yaml;
 
 use crate::{Attr, Message, SpanExt, empty_spans};
@@ -16,19 +13,20 @@ pub struct Simple<S> {
 impl<S: AsRef<str>> Simple<S> {
     fn view_<'a>(&'a self, name: Option<&'a str>) -> Element<'a, Message> {
         let Self { doc, ty, attr } = self;
-        let ty = Span::new(ty.as_ref()).ty();
-        let attr = Span::new(match attr {
+        let ty = ty.as_ref().ty();
+        let attr = match attr {
             Attr::None => "",
             Attr::Optional => "?",
             Attr::Variadic => "...",
-        });
+        }
+        .into_span();
         let [name, sep] = if let Some(name) = name {
-            [Span::new(name).name(), Span::new(": ")]
+            [name.name(), ": ".into_span()]
         } else {
             empty_spans()
         };
         let [doc_sep, doc] = if let Some(doc) = doc {
-            [Span::new(" # "), Span::new(doc.as_ref())].map(SpanExt::doc)
+            [" # ", doc.as_ref()].doc()
         } else {
             empty_spans()
         };
