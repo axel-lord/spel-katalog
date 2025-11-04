@@ -98,10 +98,10 @@ impl<S: AsRef<str>> Table<S> {
                 spans.push(param.as_ref().param());
             }
 
-            spans.push("):".into_span());
+            spans.push(")".into_span());
             rich_text(spans)
         } else {
-            rich_text([name.name(), ":".into_span()])
+            rich_text([name.name()])
         };
 
         widget::Column::new()

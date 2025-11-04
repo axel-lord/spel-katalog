@@ -21,7 +21,7 @@ impl<S: AsRef<str>> Simple<S> {
         }
         .into_span();
         let [name, sep] = name
-            .map(|name| [name.name(), ": ".into_span()])
+            .map(|name| [name.name(), " ".into_span()])
             .unwrap_or_else(empty_spans);
         let [doc_sep, doc] = doc
             .as_ref()
