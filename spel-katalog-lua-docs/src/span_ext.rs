@@ -14,6 +14,7 @@ pub trait SpanExt<S>: Sized {
     fn doc(self) -> S;
     fn name(self) -> S;
     fn ty(self) -> S;
+    fn param(self) -> S;
     fn quoted(self, l: impl Into<Self::QuoteBy>, r: impl Into<Self::QuoteBy>) -> Self::Quoted;
     fn dquoted(self, q: impl Into<Self::QuoteBy> + Clone) -> Self::Quoted {
         self.quoted(q.clone(), q)
@@ -51,6 +52,15 @@ impl<'a, L, F: From<Font>> SpanExt<Span<'a, L, F>> for Span<'a, L, F> {
         self.color(TY_CLR)
     }
 
+    fn param(self) -> Span<'a, L, F> {
+        const PR_CLR: Color = Color::from_rgb(0.7, 0.9, 0.9);
+        const FONT: Font = Font {
+            style: Style::Italic,
+            ..Font::DEFAULT
+        };
+        self.color(PR_CLR).font(FONT)
+    }
+
     fn quoted(self, l: impl Into<Self::QuoteBy>, r: impl Into<Self::QuoteBy>) -> Self::Quoted {
         [Span::new(l.into()), self, Span::new(r.into())]
     }
@@ -83,8 +93,50 @@ where
         self.map(SpanExt::ty)
     }
 
+    #[inline]
+    fn param(self) -> [Span<'a, L, F>; N] {
+        self.map(SpanExt::param)
+    }
+
     fn quoted(self, l: impl Into<Self::QuoteBy>, r: impl Into<Self::QuoteBy>) -> Self::Quoted {
         (Span::new(l.into()), self.into_span(), Span::new(r.into()))
+    }
+}
+
+impl<'a, L, F: From<Font>, T> SpanExt<Vec<Span<'a, L, F>>> for Vec<T>
+where
+    T: SpanExt<Span<'a, L, F>>,
+{
+    type Quoted = Vec<Span<'a, L, F>>;
+
+    type QuoteBy = Cow<'a, str>;
+
+    fn into_span(self) -> Vec<Span<'a, L, F>> {
+        self.into_iter().map(SpanExt::into_span).collect()
+    }
+
+    fn doc(self) -> Vec<Span<'a, L, F>> {
+        self.into_iter().map(SpanExt::doc).collect()
+    }
+
+    fn name(self) -> Vec<Span<'a, L, F>> {
+        self.into_iter().map(SpanExt::name).collect()
+    }
+
+    fn ty(self) -> Vec<Span<'a, L, F>> {
+        self.into_iter().map(SpanExt::ty).collect()
+    }
+
+    fn param(self) -> Vec<Span<'a, L, F>> {
+        self.into_iter().map(SpanExt::param).collect()
+    }
+
+    fn quoted(self, l: impl Into<Self::QuoteBy>, r: impl Into<Self::QuoteBy>) -> Self::Quoted {
+        let mut spans = self.into_span();
+        spans.reserve(2);
+        spans.insert(0, Span::new(l.into()));
+        spans.push(Span::new(r.into()));
+        spans
     }
 }
 
@@ -111,6 +163,11 @@ impl<'a, L, F: From<Font>> SpanExt<Span<'a, L, F>> for &'a str {
     #[inline]
     fn ty(self) -> Span<'a, L, F> {
         self.into_span().ty()
+    }
+
+    #[inline]
+    fn param(self) -> Span<'a, L, F> {
+        self.into_span().param()
     }
 
     #[inline]
@@ -145,6 +202,11 @@ impl<'a, L, F: From<Font>> SpanExt<Span<'a, L, F>> for String {
     }
 
     #[inline]
+    fn param(self) -> Span<'a, L, F> {
+        self.into_span().param()
+    }
+
+    #[inline]
     fn quoted(self, l: impl Into<Self::QuoteBy>, r: impl Into<Self::QuoteBy>) -> Self::Quoted {
         self.into_span().quoted(l, r)
     }
@@ -173,6 +235,11 @@ impl<'a, L, F: From<Font>> SpanExt<Span<'a, L, F>> for Cow<'a, str> {
     #[inline]
     fn ty(self) -> Span<'a, L, F> {
         self.into_span().ty()
+    }
+
+    #[inline]
+    fn param(self) -> Span<'a, L, F> {
+        self.into_span().param()
     }
 
     #[inline]
@@ -207,6 +274,11 @@ where
     #[inline]
     fn ty(self) -> Option<S> {
         self.map(SpanExt::ty)
+    }
+
+    #[inline]
+    fn param(self) -> Option<S> {
+        self.map(SpanExt::param)
     }
 
     #[inline]

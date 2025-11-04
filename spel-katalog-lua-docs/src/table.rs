@@ -78,8 +78,29 @@ impl<S: AsRef<str>> Table<S> {
             r#enum,
         } = self;
 
+        let name = if self.is_function() {
+            let mut spans = Vec::with_capacity(3.max(self.params.len() * 2 + 2));
+            spans.extend([name.name(), "(".into_span()]);
+
+            let mut iter = self.params.keys();
+
+            if let Some(first) = iter.next() {
+                spans.push(first.as_ref().param());
+            };
+
+            for param in iter {
+                spans.push(", ".into_span());
+                spans.push(param.as_ref().param());
+            }
+
+            spans.push("):".into_span());
+            rich_text(spans)
+        } else {
+            rich_text([name.name(), ":".into_span()])
+        };
+
         widget::Column::new()
-            .push(rich_text([name.name(), ":".into_span()]))
+            .push(name)
             .push(indented(
                 widget::Column::new()
                     .push_maybe(
