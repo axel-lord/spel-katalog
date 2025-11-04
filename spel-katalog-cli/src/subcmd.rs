@@ -21,6 +21,9 @@ pub struct SubcmdCallbacks<E> {
 
     /// Callback to use when running batch.
     pub batch: fn(Batch) -> Result<(), E>,
+
+    /// Callback to use when showing lua api docs.
+    pub api_docs: fn() -> Result<(), E>,
 }
 
 /// Error returned whe subcmd perform fails.
@@ -120,6 +123,8 @@ pub enum Subcmd {
     },
     /// Run a batch script without starting full application.
     Batch(#[command(flatten)] Batch),
+    /// View lua api documentation
+    LuaApi,
 }
 
 impl Default for Subcmd {
@@ -134,7 +139,12 @@ impl Subcmd {
     where
         E: From<SubCmdError>,
     {
-        let SubcmdCallbacks { run, other, batch } = callbacks;
+        let SubcmdCallbacks {
+            run,
+            other,
+            batch,
+            api_docs,
+        } = callbacks;
         match self {
             Subcmd::Skeleton { output, settings } => {
                 other()?;
@@ -157,6 +167,7 @@ impl Subcmd {
             }
             Subcmd::Run(cli) => run(cli)?,
             Subcmd::Batch(cli) => batch(cli)?,
+            Subcmd::LuaApi => api_docs()?,
         }
         Ok(())
     }

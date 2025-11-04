@@ -31,6 +31,7 @@ spel-katalog-games.workspace = true
 spel-katalog-gather.workspace = true
 spel-katalog-info.workspace = true
 spel-katalog-lua.workspace = true
+spel-katalog-lua-docs.workspace = true
 spel-katalog-settings.workspace = true
 spel-katalog-sink.workspace = true
 spel-katalog-terminal.workspace = true

@@ -7,23 +7,23 @@ use ::yaml_rust2::Yaml;
 use crate::{Attr, Message};
 
 #[derive(Debug, Clone)]
-pub struct Simple {
-    pub doc: Option<String>,
-    pub ty: String,
+pub struct Simple<S> {
+    pub doc: Option<S>,
+    pub ty: S,
     pub attr: Attr,
 }
 
-impl Simple {
+impl<S: AsRef<str>> Simple<S> {
     pub fn view_anon(&self) -> Element<'_, Message> {
         let Self { doc, ty, attr } = self;
-        let ty = Span::new(ty).color(Color::new(0.5, 1.0, 0.5, 1.0));
+        let ty = Span::new(ty.as_ref()).color(Color::new(0.5, 1.0, 0.5, 1.0));
         let attr = Span::new(match attr {
             Attr::None => "",
             Attr::Optional => "?",
             Attr::Variadic => "...",
         });
         if let Some(doc) = doc {
-            let doc = Span::new(doc);
+            let doc = Span::new(doc.as_ref());
             let doc_sep = Span::new(" ");
             widget::rich_text([ty, attr, doc_sep, doc]).into()
         } else {
@@ -33,7 +33,7 @@ impl Simple {
 
     pub fn view<'a>(&'a self, name: &'a str) -> Element<'a, Message> {
         let Self { doc, ty, attr } = self;
-        let ty = Span::new(ty).color(Color::new(0.5, 1.0, 0.5, 1.0));
+        let ty = Span::new(ty.as_ref()).color(Color::new(0.5, 1.0, 0.5, 1.0));
         let name = Span::new(name);
         let attr = Span::new(match attr {
             Attr::None => "",
@@ -42,7 +42,7 @@ impl Simple {
         });
         let sep = Span::new(": ");
         if let Some(doc) = doc {
-            let doc = Span::new(doc);
+            let doc = Span::new(doc.as_ref());
             let doc_sep = Span::new(" ");
             widget::rich_text([name, sep, ty, attr, doc_sep, doc]).into()
         } else {
@@ -51,7 +51,7 @@ impl Simple {
     }
 }
 
-impl TryFrom<Yaml> for Simple {
+impl TryFrom<Yaml> for Simple<String> {
     type Error = Yaml;
 
     fn try_from(value: Yaml) -> Result<Self, Self::Error> {

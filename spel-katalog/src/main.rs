@@ -5,6 +5,7 @@ use ::std::{
 
 use ::spel_katalog::{exit_channel, run as run_app};
 use ::spel_katalog_cli::{Cli, Subcmd, SubcmdCallbacks};
+use ::spel_katalog_lua_docs::DocsViewer;
 use ::spel_katalog_sink::SinkBuilder;
 use ::spel_katalog_tui::{Channels, line_channel};
 
@@ -74,9 +75,22 @@ fn batch(cli: ::spel_katalog_cli::Batch) -> ::color_eyre::Result<()> {
     ::spel_katalog::batch_run(cli)
 }
 
+fn api_docs() -> ::color_eyre::Result<()> {
+    init_log(None);
+    ::iced::application("Lua Api Docs", DocsViewer::update, DocsViewer::view)
+        .theme(|_| ::iced::Theme::Dark)
+        .run()?;
+    Ok(())
+}
+
 fn main() -> ::color_eyre::Result<()> {
     ::color_eyre::install()?;
     let cli = Cli::parse();
     let cmd = Subcmd::from(cli);
-    cmd.perform(SubcmdCallbacks { run, other, batch })
+    cmd.perform(SubcmdCallbacks {
+        run,
+        other,
+        batch,
+        api_docs,
+    })
 }

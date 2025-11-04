@@ -1,8 +1,12 @@
 use ::std::sync::LazyLock;
 
+use ::iced::{
+    Element,
+    widget::{self, text::Span},
+};
 use ::yaml_rust2::Yaml;
 
-use crate::{Item, Map};
+use crate::{Item, Map, Message, indented, with_content};
 
 #[derive(Debug)]
 struct Keys {
@@ -24,16 +28,118 @@ static KEYS: LazyLock<Keys> = LazyLock::new(|| Keys {
 });
 
 #[derive(Debug, Clone)]
-pub struct Table {
-    pub doc: Option<String>,
-    pub union: Vec<Item>,
-    pub fields: Map<String, Item>,
-    pub params: Map<String, Item>,
-    pub r#return: Vec<Item>,
-    pub r#enum: Vec<(String, Option<String>)>,
+pub struct Table<S> {
+    pub doc: Option<S>,
+    pub union: Vec<Item<S>>,
+    pub fields: Map<S, Item<S>>,
+    pub params: Map<S, Item<S>>,
+    pub r#return: Vec<Item<S>>,
+    pub r#enum: Vec<(S, Option<S>)>,
 }
 
-impl TryFrom<Yaml> for Table {
+impl<S: AsRef<str>> Table<S> {
+    fn is_union(&self) -> bool {
+        !self.union.is_empty()
+    }
+
+    fn is_enum(&self) -> bool {
+        !self.r#enum.is_empty()
+    }
+
+    fn is_function(&self) -> bool {
+        !self.r#return.is_empty() || !self.params.is_empty()
+    }
+
+    pub fn view<'a>(&'a self, name: &'a str) -> Element<'a, Message> {
+        let Self {
+            doc,
+            union,
+            fields,
+            params,
+            r#return,
+            r#enum,
+        } = self;
+
+        let name = Span::new(name);
+        let sep = Span::new(":");
+
+        if union.is_empty()
+            && params.is_empty()
+            && r#return.is_empty()
+            && r#enum.is_empty()
+            && fields.is_empty()
+        {
+            return if let Some(doc) = doc {
+                let doc = Span::new(doc.as_ref());
+
+                widget::rich_text([name, sep, doc])
+            } else {
+                widget::rich_text([name])
+            }
+            .into();
+        }
+
+        widget::Column::new()
+            .push(widget::rich_text([name, sep]))
+            .push(indented(
+                widget::Column::new()
+                    .push_maybe(doc.as_ref().map(|doc| widget::text(doc.as_ref())))
+                    .push_maybe(with_content(fields, |_| "Fields"))
+                    .push_maybe(with_content(fields, |fields| {
+                        indented(fields.fold(widget::Column::new(), |col, (name, item)| {
+                            col.push(item.view(name.as_ref()))
+                        }))
+                    }))
+                    .push_maybe(with_content(union, |_| "Union"))
+                    .push_maybe(with_content(union, |union| {
+                        indented(union.fold(widget::Column::new(), |col, item| {
+                            col.push(item.view_anon())
+                        }))
+                    }))
+                    .push_maybe(with_content(r#enum, |_| "Enum"))
+                    .push_maybe(with_content(r#enum, |r#enum| {
+                        indented(r#enum.fold(widget::Column::new(), |col, (value, doc)| {
+                            if let Some(doc) = doc {
+                                col.push(widget::rich_text([
+                                    Span::new(value.as_ref()),
+                                    Span::new(": "),
+                                    Span::new(doc.as_ref()),
+                                ]))
+                            } else {
+                                col.push(value.as_ref())
+                            }
+                        }))
+                    }))
+                    .push_maybe(with_content(params, |_| "Parameters"))
+                    .push_maybe(with_content(params, |params| {
+                        indented(params.fold(widget::Column::new(), |col, (name, item)| {
+                            col.push(item.view(name.as_ref()))
+                        }))
+                    }))
+                    .push_maybe(with_content(r#return, |_| "Returns"))
+                    .push_maybe(with_content(r#return, |r#return| {
+                        indented(r#return.fold(widget::Column::new(), |col, item| {
+                            col.push(item.view_anon())
+                        }))
+                    })),
+            ))
+            .into()
+    }
+
+    pub fn view_anon(&self) -> Element<'_, Message> {
+        if self.is_union() {
+            self.view("union")
+        } else if self.is_enum() {
+            self.view("enum")
+        } else if self.fields.is_empty() && self.is_function() {
+            self.view("function")
+        } else {
+            self.view("table")
+        }
+    }
+}
+
+impl TryFrom<Yaml> for Table<String> {
     type Error = Yaml;
 
     fn try_from(value: Yaml) -> Result<Self, Self::Error> {
