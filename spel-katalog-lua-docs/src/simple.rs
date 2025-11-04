@@ -20,16 +20,14 @@ impl<S: AsRef<str>> Simple<S> {
             Attr::Variadic => "...",
         }
         .into_span();
-        let [name, sep] = if let Some(name) = name {
-            [name.name(), ": ".into_span()]
-        } else {
-            empty_spans()
-        };
-        let [doc_sep, doc] = if let Some(doc) = doc {
-            [" # ", doc.as_ref()].doc()
-        } else {
-            empty_spans()
-        };
+        let [name, sep] = name
+            .map(|name| [name.name(), ": ".into_span()])
+            .unwrap_or_else(empty_spans);
+        let [doc_sep, doc] = doc
+            .as_ref()
+            .map(|doc| [" # ", doc.as_ref()])
+            .doc()
+            .unwrap_or_else(empty_spans);
         widget::rich_text([name, sep, ty, attr, doc_sep, doc]).into()
     }
 

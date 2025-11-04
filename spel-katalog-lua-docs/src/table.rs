@@ -1,6 +1,9 @@
 use ::std::sync::LazyLock;
 
-use ::iced::{Element, widget};
+use ::iced::{
+    Element,
+    widget::{self, rich_text},
+};
 use ::yaml_rust2::Yaml;
 
 use crate::{Item, Map, Message, SpanExt, empty_spans, indented, with_content};
@@ -47,7 +50,25 @@ impl<S: AsRef<str>> Table<S> {
         !self.r#return.is_empty() || !self.params.is_empty()
     }
 
+    fn is_empty(&self) -> bool {
+        self.union.is_empty()
+            && self.params.is_empty()
+            && self.r#return.is_empty()
+            && self.r#enum.is_empty()
+            && self.fields.is_empty()
+    }
+
     pub fn view<'a>(&'a self, name: &'a str) -> Element<'a, Message> {
+        if self.is_empty() {
+            let [doc_sep, doc] = self
+                .doc
+                .as_ref()
+                .map(|doc| [" # ", doc.as_ref()])
+                .doc()
+                .unwrap_or_else(empty_spans);
+            return rich_text([name.name(), doc_sep, doc]).into();
+        }
+
         let Self {
             doc,
             union,
@@ -57,29 +78,13 @@ impl<S: AsRef<str>> Table<S> {
             r#enum,
         } = self;
 
-        if union.is_empty()
-            && params.is_empty()
-            && r#return.is_empty()
-            && r#enum.is_empty()
-            && fields.is_empty()
-        {
-            return if let Some(doc) = doc {
-                let [doc_sep, doc] = [" # ", doc.as_ref()].doc();
-
-                widget::rich_text([name.name(), doc_sep, doc])
-            } else {
-                widget::rich_text([name.name()])
-            }
-            .into();
-        }
-
         widget::Column::new()
-            .push(widget::rich_text([name.name(), ":".into_span()]))
+            .push(rich_text([name.name(), ":".into_span()]))
             .push(indented(
                 widget::Column::new()
                     .push_maybe(
                         doc.as_ref()
-                            .map(|doc| widget::rich_text(["# ", doc.as_ref()].doc())),
+                            .map(|doc| rich_text(["# ", doc.as_ref()].doc())),
                     )
                     .push_maybe(with_content(fields, |_| "Fields"))
                     .push_maybe(with_content(fields, |fields| {
@@ -96,13 +101,13 @@ impl<S: AsRef<str>> Table<S> {
                     .push_maybe(with_content(r#enum, |_| "Enum"))
                     .push_maybe(with_content(r#enum, |r#enum| {
                         indented(r#enum.fold(widget::Column::new(), |col, (value, doc)| {
-                            let [doc_sep, doc] = if let Some(doc) = doc {
-                                [" # ", doc.as_ref()].doc()
-                            } else {
-                                empty_spans()
-                            };
+                            let [doc_sep, doc] = doc
+                                .as_ref()
+                                .map(|doc| [" # ", doc.as_ref()])
+                                .doc()
+                                .unwrap_or_else(empty_spans);
                             let [l, value, r] = value.as_ref().dquoted("\"").ty();
-                            col.push(widget::rich_text([l, value, r, doc_sep, doc]))
+                            col.push(rich_text([l, value, r, doc_sep, doc]))
                         }))
                     }))
                     .push_maybe(with_content(params, |_| "Parameters"))
