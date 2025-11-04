@@ -48,6 +48,15 @@ pub trait SpanExt<S>: Sized {
         self.with_color(NM_CLR).with_font(FONT)
     }
 
+    /// Convert into span styled for function names.
+    fn fn_name(self) -> S
+    where
+        S: SpanExt<S>,
+    {
+        const NM_CLR: Color = Color::from_rgb(0.5, 0.7, 1.0);
+        self.with_color(NM_CLR)
+    }
+
     /// Convert into span styled for types.
     fn ty(self) -> S
     where
@@ -76,6 +85,19 @@ pub trait SpanExt<S>: Sized {
         S: SpanExt<S>,
     {
         const PR_CLR: Color = Color::from_rgb(0.8, 0.6, 1.0);
+        const FONT: Font = Font {
+            style: Style::Italic,
+            ..Font::DEFAULT
+        };
+        self.with_color(PR_CLR).with_font(FONT)
+    }
+
+    /// Convert into span styled for parameters.
+    fn self_param(self) -> S
+    where
+        S: SpanExt<S>,
+    {
+        const PR_CLR: Color = Color::from_rgb(1.0, 0.7, 0.9);
         const FONT: Font = Font {
             style: Style::Italic,
             ..Font::DEFAULT

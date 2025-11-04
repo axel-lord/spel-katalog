@@ -28,6 +28,7 @@ pub enum Attr {
     None,
     Optional,
     Variadic,
+    Array,
 }
 
 impl Attr {
@@ -36,18 +37,20 @@ impl Attr {
             Attr::None => "",
             Attr::Optional => "?",
             Attr::Variadic => "...",
+            Attr::Array => "[]",
         }
     }
     pub fn split_ty(mut ty: String) -> (String, Attr) {
-        let attr = if ty.ends_with('?') {
-            _ = ty.pop();
-            Attr::Optional
-        } else if ty.ends_with("...") {
-            (0..3).for_each(|_| _ = ty.pop());
-            Attr::Variadic
+        let (attr, len) = if let Some(prefix) = ty.strip_suffix("?") {
+            (Attr::Optional, prefix.len())
+        } else if let Some(prefix) = ty.strip_suffix("...") {
+            (Attr::Variadic, prefix.len())
+        } else if let Some(prefix) = ty.strip_suffix("[]") {
+            (Attr::Array, prefix.len())
         } else {
-            Attr::None
+            (Attr::None, ty.len())
         };
+        ty.drain(len..);
         (ty, attr)
     }
 }

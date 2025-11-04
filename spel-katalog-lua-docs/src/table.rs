@@ -1,8 +1,12 @@
-use ::std::sync::LazyLock;
+use ::std::{
+    ops::{BitOr, BitOrAssign},
+    sync::LazyLock,
+};
 
+use ::derive_more::IsVariant;
 use ::iced::{
     Element,
-    widget::{self, rich_text},
+    widget::{self, rich_text, text},
 };
 use ::yaml_rust2::Yaml;
 
@@ -37,6 +41,37 @@ pub struct Table<S> {
     pub r#enum: Vec<(S, Option<S>)>,
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, IsVariant)]
+enum TableKind {
+    #[default]
+    None,
+    Union,
+    Table,
+    Function,
+    Enum,
+    Mixed,
+}
+
+impl BitOr for TableKind {
+    type Output = TableKind;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        if self.is_none() {
+            rhs
+        } else if self == rhs {
+            self
+        } else {
+            Self::Mixed
+        }
+    }
+}
+
+impl BitOrAssign for TableKind {
+    fn bitor_assign(&mut self, rhs: Self) {
+        *self = *self | rhs;
+    }
+}
+
 impl<S: AsRef<str>> Table<S> {
     fn is_union(&self) -> bool {
         !self.union.is_empty()
@@ -50,6 +85,10 @@ impl<S: AsRef<str>> Table<S> {
         !self.r#return.is_empty() || !self.params.is_empty()
     }
 
+    fn is_table(&self) -> bool {
+        !self.fields.is_empty()
+    }
+
     fn is_empty(&self) -> bool {
         self.union.is_empty()
             && self.params.is_empty()
@@ -58,7 +97,72 @@ impl<S: AsRef<str>> Table<S> {
             && self.fields.is_empty()
     }
 
+    fn kind(&self) -> TableKind {
+        let mut kind = TableKind::None;
+
+        if self.is_union() {
+            kind |= TableKind::Union;
+        }
+
+        if self.is_enum() {
+            kind |= TableKind::Enum;
+        }
+
+        if self.is_function() {
+            kind |= TableKind::Function;
+        }
+
+        if self.is_table() {
+            kind |= TableKind::Table;
+        }
+
+        kind
+    }
+
+    fn default_name(&self) -> &'static str {
+        if self.is_union() {
+            "union"
+        } else if self.is_enum() {
+            "enum"
+        } else if self.fields.is_empty() && self.is_function() {
+            "function"
+        } else {
+            "table"
+        }
+    }
+
+    pub fn view_anon(&self) -> Element<'_, Message> {
+        self.view_(None)
+    }
+
     pub fn view<'a>(&'a self, name: &'a str) -> Element<'a, Message> {
+        self.view_(Some(name))
+    }
+
+    fn view_<'a>(&'a self, name: Option<&'a str>) -> Element<'a, Message> {
+        match self.kind() {
+            TableKind::None => self.view_empty(name),
+            // TableKind::Union => todo!(),
+            // TableKind::Table => todo!(),
+            // TableKind::Function => todo!(),
+            // TableKind::Enum => todo!(),
+            // TableKind::Mixed => todo!(),
+            _ => self.view_mixed(name.unwrap_or_else(|| self.default_name())),
+        }
+    }
+
+    fn view_empty<'a>(&'a self, name: Option<&'a str>) -> Element<'a, Message> {
+        match (name, &self.doc) {
+            (Some(name), Some(doc)) => {
+                rich_text([name.name(), " # ".doc(), doc.as_ref().doc()]).into()
+            }
+            (None, Some(doc)) => rich_text(["# ", doc.as_ref()].doc()).into(),
+            (Some(name), None) => rich_text([name.name()]).into(),
+            (None, None) => text("---").into(),
+        }
+    }
+
+    fn view_mixed<'a>(&'a self, name: &'a str) -> Element<'a, Message> {
         if self.is_empty() {
             let [doc_sep, doc] = self
                 .doc
@@ -80,7 +184,7 @@ impl<S: AsRef<str>> Table<S> {
 
         let name = if self.is_function() {
             let mut spans = Vec::with_capacity(3.max(self.params.len() * 2 + 2));
-            spans.extend([name.name(), "(".into_span()]);
+            spans.extend([name.fn_name(), "(".into_span()]);
 
             let mut iter = self.params.keys();
 
@@ -89,6 +193,7 @@ impl<S: AsRef<str>> Table<S> {
 
                 spans.push(match first {
                     "class" => "class".class_param(),
+                    "self" => "self".self_param(),
                     other => other.param(),
                 })
             };
@@ -150,18 +255,6 @@ impl<S: AsRef<str>> Table<S> {
                     })),
             ))
             .into()
-    }
-
-    pub fn view_anon(&self) -> Element<'_, Message> {
-        self.view(if self.is_union() {
-            "union"
-        } else if self.is_enum() {
-            "enum"
-        } else if self.fields.is_empty() && self.is_function() {
-            "function"
-        } else {
-            "table"
-        })
     }
 }
 
