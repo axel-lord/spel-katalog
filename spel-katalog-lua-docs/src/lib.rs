@@ -4,9 +4,12 @@ use ::std::sync::LazyLock;
 
 use ::derive_more::From;
 use ::iced::{
-    Element, Task,
+    Color, Element, Font,
+    Length::Fill,
+    Task,
     alignment::Vertical,
-    widget::{self, horizontal_space},
+    font::{Style, Weight},
+    widget::{self, horizontal_space, text::Span},
 };
 use ::indexmap::IndexMap;
 use ::tap::TryConv;
@@ -18,6 +21,37 @@ mod simple;
 mod table;
 
 type Map<K, V> = IndexMap<K, V, ::rustc_hash::FxBuildHasher>;
+
+trait SpanExt: Sized {
+    fn doc(self) -> Self;
+    fn name(self) -> Self;
+    fn ty(self) -> Self;
+}
+
+impl<L, F: From<Font>> SpanExt for Span<'_, L, F> {
+    fn doc(self) -> Self {
+        const DOC_CLR: Color = Color::from_rgb(1.0, 1.0, 0.7);
+        const FONT: Font = Font {
+            style: Style::Italic,
+            ..Font::DEFAULT
+        };
+        self.color(DOC_CLR).font(FONT)
+    }
+
+    fn name(self) -> Self {
+        const NM_CLR: Color = Color::from_rgb(0.5, 0.7, 1.0);
+        const FONT: Font = Font {
+            weight: Weight::Bold,
+            ..Font::DEFAULT
+        };
+        self.color(NM_CLR).font(FONT)
+    }
+
+    fn ty(self) -> Self {
+        const TY_CLR: Color = Color::from_rgb(0.5, 1.0, 0.5);
+        self.color(TY_CLR)
+    }
+}
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum Attr {
@@ -138,11 +172,15 @@ impl DocsViewer {
 
     /// Render documentaion viewer as an element.
     pub fn view(&self) -> Element<'_, Message> {
-        self.docs
-            .iter()
-            .fold(widget::Column::new(), |col, (key, value)| {
-                col.push(value.view(&key))
-            })
-            .into()
+        widget::scrollable(
+            self.docs
+                .iter()
+                .fold(widget::Column::new(), |col, (key, value)| {
+                    col.push(value.view(&key))
+                })
+                .width(Fill)
+                .padding(5),
+        )
+        .into()
     }
 }

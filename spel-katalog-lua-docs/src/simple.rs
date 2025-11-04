@@ -1,10 +1,10 @@
 use ::iced::{
-    Color, Element,
+    Element,
     widget::{self, text::Span},
 };
 use ::yaml_rust2::Yaml;
 
-use crate::{Attr, Message};
+use crate::{Attr, Message, SpanExt};
 
 #[derive(Debug, Clone)]
 pub struct Simple<S> {
@@ -16,15 +16,15 @@ pub struct Simple<S> {
 impl<S: AsRef<str>> Simple<S> {
     pub fn view_anon(&self) -> Element<'_, Message> {
         let Self { doc, ty, attr } = self;
-        let ty = Span::new(ty.as_ref()).color(Color::new(0.5, 1.0, 0.5, 1.0));
+        let ty = Span::new(ty.as_ref()).ty();
         let attr = Span::new(match attr {
             Attr::None => "",
             Attr::Optional => "?",
             Attr::Variadic => "...",
         });
         if let Some(doc) = doc {
-            let doc = Span::new(doc.as_ref());
-            let doc_sep = Span::new(" ");
+            let doc = Span::new(doc.as_ref()).doc();
+            let doc_sep = Span::new(" # ").doc();
             widget::rich_text([ty, attr, doc_sep, doc]).into()
         } else {
             widget::rich_text([ty, attr]).into()
@@ -33,8 +33,8 @@ impl<S: AsRef<str>> Simple<S> {
 
     pub fn view<'a>(&'a self, name: &'a str) -> Element<'a, Message> {
         let Self { doc, ty, attr } = self;
-        let ty = Span::new(ty.as_ref()).color(Color::new(0.5, 1.0, 0.5, 1.0));
-        let name = Span::new(name);
+        let ty = Span::new(ty.as_ref()).ty();
+        let name = Span::new(name).name();
         let attr = Span::new(match attr {
             Attr::None => "",
             Attr::Optional => "?",
@@ -42,8 +42,8 @@ impl<S: AsRef<str>> Simple<S> {
         });
         let sep = Span::new(": ");
         if let Some(doc) = doc {
-            let doc = Span::new(doc.as_ref());
-            let doc_sep = Span::new(" ");
+            let doc = Span::new(doc.as_ref()).doc();
+            let doc_sep = Span::new(" # ").doc();
             widget::rich_text([name, sep, ty, attr, doc_sep, doc]).into()
         } else {
             widget::rich_text([name, sep, ty, attr]).into()

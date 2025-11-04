@@ -6,7 +6,7 @@ use ::iced::{
 };
 use ::yaml_rust2::Yaml;
 
-use crate::{Item, Map, Message, indented, with_content};
+use crate::{Item, Map, Message, SpanExt, indented, with_content};
 
 #[derive(Debug)]
 struct Keys {
@@ -60,7 +60,7 @@ impl<S: AsRef<str>> Table<S> {
             r#enum,
         } = self;
 
-        let name = Span::new(name);
+        let name = Span::new(name).name();
         let sep = Span::new(":");
 
         if union.is_empty()
@@ -83,7 +83,9 @@ impl<S: AsRef<str>> Table<S> {
             .push(widget::rich_text([name, sep]))
             .push(indented(
                 widget::Column::new()
-                    .push_maybe(doc.as_ref().map(|doc| widget::text(doc.as_ref())))
+                    .push_maybe(doc.as_ref().map(|doc| {
+                        widget::rich_text([Span::new("# ").doc(), Span::new(doc.as_ref()).doc()])
+                    }))
                     .push_maybe(with_content(fields, |_| "Fields"))
                     .push_maybe(with_content(fields, |fields| {
                         indented(fields.fold(widget::Column::new(), |col, (name, item)| {
@@ -101,12 +103,18 @@ impl<S: AsRef<str>> Table<S> {
                         indented(r#enum.fold(widget::Column::new(), |col, (value, doc)| {
                             if let Some(doc) = doc {
                                 col.push(widget::rich_text([
-                                    Span::new(value.as_ref()),
-                                    Span::new(": "),
-                                    Span::new(doc.as_ref()),
+                                    Span::new("\"").ty(),
+                                    Span::new(value.as_ref()).ty(),
+                                    Span::new("\"").ty(),
+                                    Span::new(" # ").doc(),
+                                    Span::new(doc.as_ref()).doc(),
                                 ]))
                             } else {
-                                col.push(value.as_ref())
+                                col.push(widget::rich_text([
+                                    Span::new("\"").ty(),
+                                    Span::new(value.as_ref()).ty(),
+                                    Span::new("\"").ty(),
+                                ]))
                             }
                         }))
                     }))
