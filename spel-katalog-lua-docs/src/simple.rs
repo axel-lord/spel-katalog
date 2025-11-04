@@ -4,7 +4,7 @@ use ::iced::{
 };
 use ::yaml_rust2::Yaml;
 
-use crate::{Attr, Message, SpanExt};
+use crate::{Attr, Message, SpanExt, empty_spans};
 
 #[derive(Debug, Clone)]
 pub struct Simple<S> {
@@ -14,7 +14,7 @@ pub struct Simple<S> {
 }
 
 impl<S: AsRef<str>> Simple<S> {
-    pub fn view_anon(&self) -> Element<'_, Message> {
+    fn view_<'a>(&'a self, name: Option<&'a str>) -> Element<'a, Message> {
         let Self { doc, ty, attr } = self;
         let ty = Span::new(ty.as_ref()).ty();
         let attr = Span::new(match attr {
@@ -22,32 +22,25 @@ impl<S: AsRef<str>> Simple<S> {
             Attr::Optional => "?",
             Attr::Variadic => "...",
         });
-        if let Some(doc) = doc {
-            let doc = Span::new(doc.as_ref()).doc();
-            let doc_sep = Span::new(" # ").doc();
-            widget::rich_text([ty, attr, doc_sep, doc]).into()
+        let [name, sep] = if let Some(name) = name {
+            [Span::new(name).name(), Span::new(": ")]
         } else {
-            widget::rich_text([ty, attr]).into()
-        }
+            empty_spans()
+        };
+        let [doc_sep, doc] = if let Some(doc) = doc {
+            [Span::new(" # "), Span::new(doc.as_ref())].map(SpanExt::doc)
+        } else {
+            empty_spans()
+        };
+        widget::rich_text([name, sep, ty, attr, doc_sep, doc]).into()
+    }
+
+    pub fn view_anon(&self) -> Element<'_, Message> {
+        self.view_(None)
     }
 
     pub fn view<'a>(&'a self, name: &'a str) -> Element<'a, Message> {
-        let Self { doc, ty, attr } = self;
-        let ty = Span::new(ty.as_ref()).ty();
-        let name = Span::new(name).name();
-        let attr = Span::new(match attr {
-            Attr::None => "",
-            Attr::Optional => "?",
-            Attr::Variadic => "...",
-        });
-        let sep = Span::new(": ");
-        if let Some(doc) = doc {
-            let doc = Span::new(doc.as_ref()).doc();
-            let doc_sep = Span::new(" # ").doc();
-            widget::rich_text([name, sep, ty, attr, doc_sep, doc]).into()
-        } else {
-            widget::rich_text([name, sep, ty, attr]).into()
-        }
+        self.view_(Some(name))
     }
 }
 

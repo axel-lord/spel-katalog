@@ -129,6 +129,10 @@ where
     }
 }
 
+fn empty_spans<'a, const N: usize, L, F>() -> [Span<'a, L, F>; N] {
+    ::std::array::from_fn(|_| Span::new(""))
+}
+
 /// Message in use by [DocsViewer].
 #[derive(Debug, Clone)]
 pub enum Message {}
