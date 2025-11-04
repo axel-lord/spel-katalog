@@ -24,29 +24,6 @@ type Map<K, V> = IndexMap<K, V, ::rustc_hash::FxBuildHasher>;
 
 pub(crate) use span_ext::SpanExt;
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-enum Attr {
-    #[default]
-    None,
-    Optional,
-    Variadic,
-}
-
-impl Attr {
-    pub fn split_ty(mut ty: String) -> (String, Attr) {
-        let attr = if ty.ends_with('?') {
-            _ = ty.pop();
-            Attr::Optional
-        } else if ty.ends_with("...") {
-            (0..3).for_each(|_| _ = ty.pop());
-            Attr::Variadic
-        } else {
-            Attr::None
-        };
-        (ty, attr)
-    }
-}
-
 #[derive(Debug, Clone, From)]
 enum Item<S> {
     Simple(Simple<S>),
@@ -153,6 +130,7 @@ impl DocsViewer {
                 .fold(widget::Column::new(), |col, (key, value)| {
                     col.push(value.view(&key))
                 })
+                .spacing(5)
                 .width(Fill)
                 .padding(5),
         )

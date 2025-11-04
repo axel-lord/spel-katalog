@@ -54,22 +54,6 @@ function Rect:new(...) end
 ---@class Image
 local Image = {}
 
----Load the cover of the given slug.
----@param slug string Game slug.
----@return (Image | [nil, string])
-function Image:loadCover(slug) end
-
----Load the image at given path.
----@param path string Path to image.
----@return (Image | [nil, string])
-function Image:load(path) end
-
----Create a new empty image.
----@param width number
----@param height number
----@return Image
-function Image:new(width, height) end
-
 ---Get image width.
 ---@return number
 function Image:w() end
@@ -89,6 +73,22 @@ function Image:at(x, y) end
 ---@param y number
 ---@param color Color
 function Image:set(x, y, color) end
+
+---Load the image at given path.
+---@param path string Path to image.
+---@return (Image | [nil, string])
+function Image:load(path) end
+
+---Load the cover of the given slug.
+---@param slug string Game slug.
+---@return (Image | [nil, string])
+function Image:loadCover(slug) end
+
+---Create a new empty image.
+---@param width number
+---@param height number
+---@return Image
+function Image:new(width, height) end
 
 ---Save image to path.
 ---@param path string Path to save image to.
@@ -207,14 +207,6 @@ local GameData = {}
 ---Load lutris yml config for game.
 ---@return any
 function GameData:loadConfig() end
-
----Load cached cover used by game.
----@return (Image | [nil, string])
-function GameData:loadCover() end
-
----Save image to cover cache for this game.
----@param image Image
-function GameData:saveCover(image) end
 
 ---Set an attribute, and update this GameData.
 ---@param attr string Name of attribute to set.

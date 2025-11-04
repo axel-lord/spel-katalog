@@ -5162,6 +5162,7 @@ dependencies = [
  "derive_more",
  "iced",
  "indexmap",
+ "itertools 0.14.0",
  "log",
  "rustc-hash 2.1.1",
  "tap",
