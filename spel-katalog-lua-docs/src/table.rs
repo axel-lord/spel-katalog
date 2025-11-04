@@ -85,7 +85,12 @@ impl<S: AsRef<str>> Table<S> {
             let mut iter = self.params.keys();
 
             if let Some(first) = iter.next() {
-                spans.push(first.as_ref().param());
+                let first = first.as_ref();
+
+                spans.push(match first {
+                    "class" => "class".class_param(),
+                    other => other.param(),
+                })
             };
 
             for param in iter {

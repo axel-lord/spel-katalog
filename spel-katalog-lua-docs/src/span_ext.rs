@@ -7,15 +7,84 @@ use ::iced::{
 };
 
 pub trait SpanExt<S>: Sized {
+    /// Result of quote operation.
     type Quoted;
+
+    /// What to quote by.
     type QuoteBy;
 
+    /// Convert into span type.
     fn into_span(self) -> S;
-    fn doc(self) -> S;
-    fn name(self) -> S;
-    fn ty(self) -> S;
-    fn param(self) -> S;
+
+    /// Convert into span with the given font.
+    fn with_font(self, f: Font) -> S;
+
+    /// Convert into span with the given color.
+    fn with_color(self, c: Color) -> S;
+
+    /// Convert into span styled for documentation.
+    fn doc(self) -> S
+    where
+        S: SpanExt<S>,
+    {
+        const DOC_CLR: Color = Color::from_rgb(1.0, 1.0, 0.7);
+        const FONT: Font = Font {
+            style: Style::Italic,
+            ..Font::DEFAULT
+        };
+        self.with_color(DOC_CLR).with_font(FONT)
+    }
+
+    /// Convert into span styled for item names.
+    fn name(self) -> S
+    where
+        S: SpanExt<S>,
+    {
+        const NM_CLR: Color = Color::from_rgb(0.5, 0.7, 1.0);
+        const FONT: Font = Font {
+            weight: Weight::Bold,
+            ..Font::DEFAULT
+        };
+        self.with_color(NM_CLR).with_font(FONT)
+    }
+
+    /// Convert into span styled for types.
+    fn ty(self) -> S
+    where
+        S: SpanExt<S>,
+    {
+        const TY_CLR: Color = Color::from_rgb(0.5, 1.0, 0.5);
+        self.with_color(TY_CLR)
+    }
+
+    /// Convert into span styled for parameters.
+    fn param(self) -> S
+    where
+        S: SpanExt<S>,
+    {
+        const PR_CLR: Color = Color::from_rgb(0.7, 0.9, 0.9);
+        const FONT: Font = Font {
+            style: Style::Italic,
+            ..Font::DEFAULT
+        };
+        self.with_color(PR_CLR).with_font(FONT)
+    }
+
+    /// Convert into span styled for parameters.
+    fn class_param(self) -> S
+    where
+        S: SpanExt<S>,
+    {
+        const PR_CLR: Color = Color::from_rgb(0.8, 0.6, 1.0);
+        const FONT: Font = Font {
+            style: Style::Italic,
+            ..Font::DEFAULT
+        };
+        self.with_color(PR_CLR).with_font(FONT)
+    }
+
     fn quoted(self, l: impl Into<Self::QuoteBy>, r: impl Into<Self::QuoteBy>) -> Self::Quoted;
+
     fn dquoted(self, q: impl Into<Self::QuoteBy> + Clone) -> Self::Quoted {
         self.quoted(q.clone(), q)
     }
@@ -29,36 +98,12 @@ impl<'a, L, F: From<Font>> SpanExt<Span<'a, L, F>> for Span<'a, L, F> {
         self
     }
 
-    fn doc(self) -> Span<'a, L, F> {
-        const DOC_CLR: Color = Color::from_rgb(1.0, 1.0, 0.7);
-        const FONT: Font = Font {
-            style: Style::Italic,
-            ..Font::DEFAULT
-        };
-        self.color(DOC_CLR).font(FONT)
+    fn with_font(self, f: Font) -> Span<'a, L, F> {
+        self.font(f)
     }
 
-    fn name(self) -> Span<'a, L, F> {
-        const NM_CLR: Color = Color::from_rgb(0.5, 0.7, 1.0);
-        const FONT: Font = Font {
-            weight: Weight::Bold,
-            ..Font::DEFAULT
-        };
-        self.color(NM_CLR).font(FONT)
-    }
-
-    fn ty(self) -> Span<'a, L, F> {
-        const TY_CLR: Color = Color::from_rgb(0.5, 1.0, 0.5);
-        self.color(TY_CLR)
-    }
-
-    fn param(self) -> Span<'a, L, F> {
-        const PR_CLR: Color = Color::from_rgb(0.7, 0.9, 0.9);
-        const FONT: Font = Font {
-            style: Style::Italic,
-            ..Font::DEFAULT
-        };
-        self.color(PR_CLR).font(FONT)
+    fn with_color(self, c: Color) -> Span<'a, L, F> {
+        self.color(c)
     }
 
     fn quoted(self, l: impl Into<Self::QuoteBy>, r: impl Into<Self::QuoteBy>) -> Self::Quoted {
@@ -79,23 +124,13 @@ where
     }
 
     #[inline]
-    fn doc(self) -> [Span<'a, L, F>; N] {
-        self.map(SpanExt::doc)
+    fn with_color(self, c: Color) -> [Span<'a, L, F>; N] {
+        self.map(|s| s.with_color(c))
     }
 
     #[inline]
-    fn name(self) -> [Span<'a, L, F>; N] {
-        self.map(SpanExt::name)
-    }
-
-    #[inline]
-    fn ty(self) -> [Span<'a, L, F>; N] {
-        self.map(SpanExt::ty)
-    }
-
-    #[inline]
-    fn param(self) -> [Span<'a, L, F>; N] {
-        self.map(SpanExt::param)
+    fn with_font(self, f: Font) -> [Span<'a, L, F>; N] {
+        self.map(|s| s.with_font(f))
     }
 
     fn quoted(self, l: impl Into<Self::QuoteBy>, r: impl Into<Self::QuoteBy>) -> Self::Quoted {
@@ -115,20 +150,12 @@ where
         self.into_iter().map(SpanExt::into_span).collect()
     }
 
-    fn doc(self) -> Vec<Span<'a, L, F>> {
-        self.into_iter().map(SpanExt::doc).collect()
+    fn with_font(self, f: Font) -> Vec<Span<'a, L, F>> {
+        self.into_iter().map(|s| s.with_font(f)).collect()
     }
 
-    fn name(self) -> Vec<Span<'a, L, F>> {
-        self.into_iter().map(SpanExt::name).collect()
-    }
-
-    fn ty(self) -> Vec<Span<'a, L, F>> {
-        self.into_iter().map(SpanExt::ty).collect()
-    }
-
-    fn param(self) -> Vec<Span<'a, L, F>> {
-        self.into_iter().map(SpanExt::param).collect()
+    fn with_color(self, c: Color) -> Vec<Span<'a, L, F>> {
+        self.into_iter().map(|s| s.with_color(c)).collect()
     }
 
     fn quoted(self, l: impl Into<Self::QuoteBy>, r: impl Into<Self::QuoteBy>) -> Self::Quoted {
@@ -151,23 +178,13 @@ impl<'a, L, F: From<Font>> SpanExt<Span<'a, L, F>> for &'a str {
     }
 
     #[inline]
-    fn doc(self) -> Span<'a, L, F> {
-        self.into_span().doc()
+    fn with_color(self, c: Color) -> Span<'a, L, F> {
+        self.into_span().with_color(c)
     }
 
     #[inline]
-    fn name(self) -> Span<'a, L, F> {
-        self.into_span().name()
-    }
-
-    #[inline]
-    fn ty(self) -> Span<'a, L, F> {
-        self.into_span().ty()
-    }
-
-    #[inline]
-    fn param(self) -> Span<'a, L, F> {
-        self.into_span().param()
+    fn with_font(self, f: Font) -> Span<'a, L, F> {
+        self.into_span().with_font(f)
     }
 
     #[inline]
@@ -187,23 +204,13 @@ impl<'a, L, F: From<Font>> SpanExt<Span<'a, L, F>> for String {
     }
 
     #[inline]
-    fn doc(self) -> Span<'a, L, F> {
-        self.into_span().doc()
+    fn with_font(self, f: Font) -> Span<'a, L, F> {
+        self.into_span().with_font(f)
     }
 
     #[inline]
-    fn name(self) -> Span<'a, L, F> {
-        self.into_span().name()
-    }
-
-    #[inline]
-    fn ty(self) -> Span<'a, L, F> {
-        self.into_span().ty()
-    }
-
-    #[inline]
-    fn param(self) -> Span<'a, L, F> {
-        self.into_span().param()
+    fn with_color(self, c: Color) -> Span<'a, L, F> {
+        self.into_span().with_color(c)
     }
 
     #[inline]
@@ -223,23 +230,13 @@ impl<'a, L, F: From<Font>> SpanExt<Span<'a, L, F>> for Cow<'a, str> {
     }
 
     #[inline]
-    fn doc(self) -> Span<'a, L, F> {
-        self.into_span().doc()
+    fn with_font(self, f: Font) -> Span<'a, L, F> {
+        self.into_span().with_font(f)
     }
 
     #[inline]
-    fn name(self) -> Span<'a, L, F> {
-        self.into_span().name()
-    }
-
-    #[inline]
-    fn ty(self) -> Span<'a, L, F> {
-        self.into_span().ty()
-    }
-
-    #[inline]
-    fn param(self) -> Span<'a, L, F> {
-        self.into_span().param()
+    fn with_color(self, c: Color) -> Span<'a, L, F> {
+        self.into_span().with_color(c)
     }
 
     #[inline]
@@ -262,23 +259,13 @@ where
     }
 
     #[inline]
-    fn doc(self) -> Option<S> {
-        self.map(SpanExt::doc)
+    fn with_font(self, f: Font) -> Option<S> {
+        self.map(|s| s.with_font(f))
     }
 
     #[inline]
-    fn name(self) -> Option<S> {
-        self.map(SpanExt::name)
-    }
-
-    #[inline]
-    fn ty(self) -> Option<S> {
-        self.map(SpanExt::ty)
-    }
-
-    #[inline]
-    fn param(self) -> Option<S> {
-        self.map(SpanExt::param)
+    fn with_color(self, c: Color) -> Option<S> {
+        self.map(|s| s.with_color(c))
     }
 
     #[inline]
