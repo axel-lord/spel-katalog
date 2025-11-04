@@ -15,6 +15,9 @@ pub trait SpanExt<S>: Sized {
     fn name(self) -> S;
     fn ty(self) -> S;
     fn quoted(self, l: impl Into<Self::QuoteBy>, r: impl Into<Self::QuoteBy>) -> Self::Quoted;
+    fn dquoted(self, q: impl Into<Self::QuoteBy> + Clone) -> Self::Quoted {
+        self.quoted(q.clone(), q)
+    }
 }
 
 impl<'a, L, F: From<Font>> SpanExt<Span<'a, L, F>> for Span<'a, L, F> {
@@ -53,12 +56,15 @@ impl<'a, L, F: From<Font>> SpanExt<Span<'a, L, F>> for Span<'a, L, F> {
     }
 }
 
-impl<'a, L, F: From<Font>, const N: usize> SpanExt<[Span<'a, L, F>; N]> for [Span<'a, L, F>; N] {
+impl<'a, L, F: From<Font>, T, const N: usize> SpanExt<[Span<'a, L, F>; N]> for [T; N]
+where
+    T: SpanExt<Span<'a, L, F>>,
+{
     type Quoted = (Span<'a, L, F>, [Span<'a, L, F>; N], Span<'a, L, F>);
     type QuoteBy = Cow<'a, str>;
 
     fn into_span(self) -> [Span<'a, L, F>; N] {
-        self
+        self.map(SpanExt::into_span)
     }
 
     fn doc(self) -> [Span<'a, L, F>; N] {
@@ -74,27 +80,28 @@ impl<'a, L, F: From<Font>, const N: usize> SpanExt<[Span<'a, L, F>; N]> for [Spa
     }
 
     fn quoted(self, l: impl Into<Self::QuoteBy>, r: impl Into<Self::QuoteBy>) -> Self::Quoted {
-        (Span::new(l.into()), self, Span::new(r.into()))
+        (Span::new(l.into()), self.into_span(), Span::new(r.into()))
     }
 }
 
-impl<'a, L, F: From<Font>, const N: usize> SpanExt<[Span<'a, L, F>; N]> for [&'a str; N] {
-    type Quoted = (Span<'a, L, F>, [Span<'a, L, F>; N], Span<'a, L, F>);
+impl<'a, L, F: From<Font>> SpanExt<Span<'a, L, F>> for &'a str {
+    type Quoted = [Span<'a, L, F>; 3];
+
     type QuoteBy = Cow<'a, str>;
 
-    fn into_span(self) -> [Span<'a, L, F>; N] {
-        self.map(SpanExt::into_span)
+    fn into_span(self) -> Span<'a, L, F> {
+        Span::new(self)
     }
 
-    fn doc(self) -> [Span<'a, L, F>; N] {
+    fn doc(self) -> Span<'a, L, F> {
         self.into_span().doc()
     }
 
-    fn name(self) -> [Span<'a, L, F>; N] {
+    fn name(self) -> Span<'a, L, F> {
         self.into_span().name()
     }
 
-    fn ty(self) -> [Span<'a, L, F>; N] {
+    fn ty(self) -> Span<'a, L, F> {
         self.into_span().ty()
     }
 
@@ -103,7 +110,33 @@ impl<'a, L, F: From<Font>, const N: usize> SpanExt<[Span<'a, L, F>; N]> for [&'a
     }
 }
 
-impl<'a, L, F: From<Font>> SpanExt<Span<'a, L, F>> for &'a str {
+impl<'a, L, F: From<Font>> SpanExt<Span<'a, L, F>> for String {
+    type Quoted = [Span<'a, L, F>; 3];
+
+    type QuoteBy = Cow<'a, str>;
+
+    fn into_span(self) -> Span<'a, L, F> {
+        Span::new(self)
+    }
+
+    fn doc(self) -> Span<'a, L, F> {
+        self.into_span().doc()
+    }
+
+    fn name(self) -> Span<'a, L, F> {
+        self.into_span().name()
+    }
+
+    fn ty(self) -> Span<'a, L, F> {
+        self.into_span().ty()
+    }
+
+    fn quoted(self, l: impl Into<Self::QuoteBy>, r: impl Into<Self::QuoteBy>) -> Self::Quoted {
+        self.into_span().quoted(l, r)
+    }
+}
+
+impl<'a, L, F: From<Font>> SpanExt<Span<'a, L, F>> for Cow<'a, str> {
     type Quoted = [Span<'a, L, F>; 3];
 
     type QuoteBy = Cow<'a, str>;

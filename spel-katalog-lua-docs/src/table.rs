@@ -101,7 +101,7 @@ impl<S: AsRef<str>> Table<S> {
                             } else {
                                 empty_spans()
                             };
-                            let [l, value, r] = value.as_ref().quoted("\"", "\"").ty();
+                            let [l, value, r] = value.as_ref().dquoted("\"").ty();
                             col.push(widget::rich_text([l, value, r, doc_sep, doc]))
                         }))
                     }))
