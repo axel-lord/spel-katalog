@@ -255,7 +255,11 @@ impl<S: AsRef<str>> Table<S> {
             spans.push(")".into_span());
             rich_text(spans)
         } else {
-            rich_text([name.name()])
+            rich_text([
+                self.default_name().into_span(),
+                " ".into_span(),
+                name.name(),
+            ])
         };
 
         widget::Column::new()
