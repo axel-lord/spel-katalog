@@ -140,10 +140,10 @@ impl<S: AsRef<str>> Table<S> {
             TableKind::None => self.view_empty(name),
             TableKind::Union => self.view_union(name),
             TableKind::Enum => self.view_enum(name),
-            // TableKind::Table => todo!(),
-            // TableKind::Function => todo!(),
-            // TableKind::Mixed => todo!(),
-            _ => self.view_mixed(name.unwrap_or_else(|| self.default_name())),
+            TableKind::Table => self.view_table(name),
+            TableKind::Function | TableKind::Mixed => {
+                self.view_mixed(name.unwrap_or_else(|| self.default_name()))
+            }
         }
     }
 
@@ -206,6 +206,19 @@ impl<S: AsRef<str>> Table<S> {
                     ))
                 },
             )))
+            .into()
+    }
+
+    fn view_table<'a>(&'a self, name: Option<&'a str>) -> Element<'a, Message> {
+        widget::Column::new()
+            .push(self.view_name_doc(name, "table"))
+            .push(indented(
+                self.fields
+                    .iter()
+                    .fold(widget::Column::new(), |col, (name, item)| {
+                        col.push(item.view(name.as_ref()))
+                    }),
+            ))
             .into()
     }
 
