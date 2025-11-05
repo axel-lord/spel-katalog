@@ -239,7 +239,8 @@ impl App {
                 QuickMessage::ToggleBatch => self.show_batch = !self.show_batch,
                 QuickMessage::OpenLua => {
                     let (_, task) = window::open(window::Settings::default());
-                    return task.map(|id| Message::OpenWindow(id, WindowType::LuaApi));
+                    return task
+                        .map(|id| Message::OpenWindow(id, WindowType::LuaApi(Default::default())));
                 }
                 QuickMessage::ShowMain => {
                     if !self
@@ -352,9 +353,6 @@ impl App {
                     return ::iced::exit();
                 }
             }
-            Message::Url(url) => {
-                ::log::info!("markdown url clicked {url}");
-            }
             Message::DialogRequest(id, request) => match request {
                 crate::dialog::Request::Close => return window::close(id),
             },
@@ -377,6 +375,13 @@ impl App {
                 return task.map(move |id| {
                     Message::OpenWindow(id, WindowType::Dialog(dialog.clone().build()))
                 });
+            }
+            Message::LuaDocs(id, msg) => {
+                if let Some(WindowType::LuaApi(docs_viewer)) = self.windows.get_mut(&id) {
+                    return docs_viewer
+                        .update(msg)
+                        .map(move |msg| Message::LuaDocs(id, msg));
+                }
             }
         }
         Task::none()

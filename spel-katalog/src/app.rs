@@ -24,12 +24,12 @@ use crate::{
 };
 
 /// Specific kind of window.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum WindowType {
     /// Window is the main window.
     Main,
     /// Show lua api.
-    LuaApi,
+    LuaApi(::spel_katalog_lua_docs::DocsViewer),
     /// Show terminal.
     Term,
     /// Show a dialog window.
@@ -50,7 +50,6 @@ pub(crate) struct App {
     pub process_list: Option<Vec<process_info::ProcessInfo>>,
     pub sink_builder: SinkBuilder,
     pub windows: FxHashMap<window::Id, WindowType>,
-    pub api_markdown: Box<[widget::markdown::Item]>,
     pub dialog_tx: Sender<DialogBuilder>,
     pub terminal: ::spel_katalog_terminal::Terminal,
 }
@@ -131,7 +130,6 @@ impl Initial {
         let show_batch = false;
         let windows = FxHashMap::default();
         let batch = Default::default();
-        let api_markdown = widget::markdown::parse(include_str!("../../lua/docs.md")).collect();
         let (dialog_tx, dialog_rx) = channel(64);
         let terminal = ::spel_katalog_terminal::Terminal::default().with_limit(256);
 
@@ -143,7 +141,6 @@ impl Initial {
         };
 
         let app = App {
-            api_markdown,
             batch,
             dialog_tx,
             filter,
@@ -263,13 +260,9 @@ impl App {
 
         match ty {
             WindowType::Main => self.view_main(),
-            WindowType::LuaApi => crate::api_window::view(
-                &self.api_markdown,
-                (*self.settings.get::<Theme>())
-                    .pipe(::iced::Theme::from)
-                    .palette(),
-            )
-            .map(Message::Url),
+            WindowType::LuaApi(docs_viewer) => {
+                docs_viewer.view().map(move |msg| Message::LuaDocs(id, msg))
+            }
             WindowType::Dialog(dialog) => dialog
                 .view()
                 .map(move |msg| Message::DialogMessage(id, msg)),

@@ -14,7 +14,6 @@ pub(crate) use self::{
     message::{Message, QuickMessage, Safety},
 };
 
-mod api_window;
 mod app;
 mod dialog;
 mod exit_channel;
