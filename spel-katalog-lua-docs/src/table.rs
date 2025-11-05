@@ -10,7 +10,7 @@ use ::iced::{
 };
 use ::yaml_rust2::Yaml;
 
-use crate::{Item, Map, Message, SpanExt, empty_spans, indented, with_content};
+use crate::{Item, Map, Message, SpanExt, category, empty_spans, indented, with_content};
 
 #[derive(Debug)]
 struct Keys {
@@ -272,38 +272,34 @@ impl<S: AsRef<str>> Table<S> {
                         doc.as_ref()
                             .map(|doc| rich_text(["# ", doc.as_ref()].doc())),
                     )
-                    .push_maybe(with_content(fields, |_| "Fields"))
                     .push_maybe(with_content(fields, |fields| {
-                        indented(fields.fold(widget::Column::new(), |col, (name, item)| {
-                            col.push(item.view(name.as_ref()))
-                        }))
+                        category(
+                            "Fields",
+                            fields.map(|(name, item)| item.view(name.as_ref())),
+                        )
                     }))
-                    .push_maybe(with_content(union, |_| "Union"))
                     .push_maybe(with_content(union, |union| {
-                        indented(union.fold(widget::Column::new(), |col, item| {
-                            col.push(item.view_anon())
-                        }))
+                        category("Union", union.map(|item| item.view_anon()))
                     }))
-                    .push_maybe(with_content(r#enum, |_| "Enum"))
-                    .push_maybe(with_content(r#enum, |r#enum| {
-                        indented(r#enum.fold(widget::Column::new(), |col, (value, doc)| {
-                            col.push(Self::view_enum_value_doc(
-                                value.as_ref(),
-                                doc.as_ref().map(|doc| doc.as_ref()),
-                            ))
-                        }))
+                    .push_maybe(with_content(r#enum, |e| {
+                        category(
+                            "Enum",
+                            e.map(|(value, doc)| {
+                                Self::view_enum_value_doc(
+                                    value.as_ref(),
+                                    doc.as_ref().map(|doc| doc.as_ref()),
+                                )
+                            }),
+                        )
                     }))
-                    .push_maybe(with_content(params, |_| "Parameters"))
                     .push_maybe(with_content(params, |params| {
-                        indented(params.fold(widget::Column::new(), |col, (name, item)| {
-                            col.push(item.view(name.as_ref()))
-                        }))
+                        category(
+                            "Parameters",
+                            params.map(|(name, item)| item.view(name.as_ref())),
+                        )
                     }))
-                    .push_maybe(with_content(r#return, |_| "Returns"))
-                    .push_maybe(with_content(r#return, |r#return| {
-                        indented(r#return.fold(widget::Column::new(), |col, item| {
-                            col.push(item.view_anon())
-                        }))
+                    .push_maybe(with_content(r#return, |r| {
+                        category("Returns", r.map(|item| item.view_anon()))
                     })),
             ))
             .into()

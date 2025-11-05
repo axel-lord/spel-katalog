@@ -64,6 +64,20 @@ fn indented<'a, M: 'a>(elem: impl Into<Element<'a, M>>) -> Element<'a, M> {
         .into()
 }
 
+fn category<'a, M: 'a>(
+    name: &'a str,
+    elements: impl IntoIterator<Item = impl Into<Element<'a, M>>>,
+) -> Element<'a, M> {
+    widget::Column::new()
+        .push(name)
+        .push(indented(
+            elements
+                .into_iter()
+                .fold(widget::Column::new(), |col, elem| col.push(elem)),
+        ))
+        .into()
+}
+
 fn with_content<'a, I, C, F, T: 'a>(content: I, f: F) -> Option<T>
 where
     F: FnOnce(::std::iter::Peekable<<I as IntoIterator>::IntoIter>) -> T,
