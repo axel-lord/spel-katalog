@@ -2,7 +2,7 @@
 - [x] Add dedicated crate for information gathering (thumbnails, lutris, additional)
 - [x] Detangle batch running from other application state (possibly remove tracker)
 - [x] Move dedicated batch run to subcommand
-- [ ] Dedicated lua api docs widget
+- [x] Dedicated lua api docs widget
 - [ ] Expand dialog functionality
 - [ ] Expand lua api, remove cover, get lutris cover
 - [ ] Keybinds, and control scheme docs
