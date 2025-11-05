@@ -37,6 +37,7 @@ static KEYS: LazyLock<Keys> = LazyLock::new(|| Keys {
 
 #[derive(Debug, Clone)]
 pub struct Table<S> {
+    pub kind: TableKind,
     pub doc: Option<S>,
     pub union: Vec<Item<S>>,
     pub fields: Map<S, Item<S>>,
@@ -46,7 +47,7 @@ pub struct Table<S> {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, IsVariant)]
-enum TableKind {
+pub enum TableKind {
     #[default]
     None,
     Union,
@@ -136,7 +137,7 @@ impl<S: AsRef<str>> Table<S> {
     }
 
     fn view_<'a>(&'a self, name: Option<&'a str>) -> Element<'a, Message> {
-        match self.find_kind() {
+        match self.kind {
             TableKind::None => self.view_name_doc(name, "value"),
             TableKind::Union => self.view_union(name),
             TableKind::Enum => self.view_enum(name),
@@ -223,6 +224,7 @@ impl<S: AsRef<str>> Table<S> {
 
     fn view_mixed<'a>(&'a self, name: &'a str) -> Element<'a, Message> {
         let Self {
+            kind: _,
             doc,
             union,
             fields,
@@ -393,13 +395,16 @@ impl TryFrom<Yaml> for Table<String> {
                     .collect()
             })
             .unwrap_or_default();
-        Ok(Self {
+        let table = Self {
+            kind: TableKind::Mixed,
             doc,
             union,
             fields,
             params,
             r#return,
             r#enum,
-        })
+        };
+        let kind = table.find_kind();
+        Ok(Self { kind, ..table })
     }
 }
