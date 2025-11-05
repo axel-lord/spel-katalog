@@ -5,12 +5,16 @@ use ::std::{
 
 use ::derive_more::IsVariant;
 use ::iced::{
-    Element,
-    widget::{self, rich_text},
+    Element, Font,
+    widget::{self, rich_text, text::Span},
 };
 use ::yaml_rust2::Yaml;
 
-use crate::{Item, Map, Message, SpanExt, category, empty_spans, indented, with_content};
+use crate::{
+    Item, Map, Message, SpanExt, category, empty_spans, indented,
+    state::{DocsState, ItemId},
+    with_content,
+};
 
 #[derive(Debug)]
 struct Keys {
@@ -38,6 +42,7 @@ static KEYS: LazyLock<Keys> = LazyLock::new(|| Keys {
 #[derive(Debug, Clone)]
 pub struct Table<S> {
     pub kind: TableKind,
+    pub id: ItemId,
     pub doc: Option<S>,
     pub union: Vec<Item<S>>,
     pub fields: Map<S, Item<S>>,
@@ -55,6 +60,19 @@ pub enum TableKind {
     Function,
     Enum,
     Mixed,
+}
+
+impl TableKind {
+    fn name<'a>(self, fallback: impl 'a + FnOnce() -> &'a str) -> &'a str {
+        match self {
+            TableKind::None => "value",
+            TableKind::Union => "union",
+            TableKind::Table => "table",
+            TableKind::Function => "function",
+            TableKind::Enum => "enum",
+            TableKind::Mixed => fallback(),
+        }
+    }
 }
 
 impl BitOr for TableKind {
@@ -128,31 +146,62 @@ impl<S: AsRef<str>> Table<S> {
         }
     }
 
-    pub fn view_anon(&self) -> Element<'_, Message> {
-        self.view_(None)
+    pub fn view_anon<'a>(&'a self, state: &'a DocsState) -> Element<'a, Message> {
+        self.view_(None, state)
     }
 
-    pub fn view<'a>(&'a self, name: &'a str) -> Element<'a, Message> {
-        self.view_(Some(name))
+    pub fn view<'a>(&'a self, name: &'a str, state: &'a DocsState) -> Element<'a, Message> {
+        self.view_(Some(name), state)
     }
 
-    fn view_<'a>(&'a self, name: Option<&'a str>) -> Element<'a, Message> {
+    fn view_<'a>(&'a self, name: Option<&'a str>, state: &'a DocsState) -> Element<'a, Message> {
+        if name.is_some() && !state[self.id] {
+            return self.view_name_doc(name, self.kind.name(|| self.default_name()));
+        }
         match self.kind {
             TableKind::None => self.view_name_doc(name, "value"),
-            TableKind::Union => self.view_union(name),
+            TableKind::Union => self.view_union(name, state),
             TableKind::Enum => self.view_enum(name),
-            TableKind::Table => self.view_table(name),
-            TableKind::Function | TableKind::Mixed => {
-                self.view_mixed(name.unwrap_or_else(|| self.default_name()))
-            }
+            TableKind::Table => self.view_table(name, state),
+            TableKind::Function | TableKind::Mixed => self.view_mixed(name, state),
         }
     }
 
+    fn function_signature<'a, F: From<Font>>(
+        &'a self,
+        name: Option<&'a str>,
+        kind: &'a str,
+    ) -> Vec<Span<'a, Message, F>> {
+        let mut spans = Vec::with_capacity(3.max(self.params.len() * 2 + 2));
+        spans.extend([
+            name.fn_name()
+                .with_link(|| Message::Toggle(self.id))
+                .unwrap_or_else(|| kind.into_span()),
+            "(".into_span(),
+        ]);
+
+        let mut iter = self.params.keys();
+
+        if let Some(first) = iter.next() {
+            let first = first.as_ref();
+
+            spans.push(match first {
+                "class" => "class".class_param(),
+                "self" => "self".self_param(),
+                other => other.param(),
+            })
+        };
+
+        for param in iter {
+            spans.push(", ".into_span());
+            spans.push(param.as_ref().param());
+        }
+
+        spans.push(")".into_span());
+        spans
+    }
+
     fn view_name_doc<'a>(&'a self, name: Option<&'a str>, kind: &'a str) -> Element<'a, Message> {
-        let [prefix, name] = name
-            .name()
-            .map(|name| [" ".into_span(), name])
-            .unwrap_or_else(empty_spans);
         let [doc_sep, doc] = self
             .doc
             .as_ref()
@@ -160,13 +209,34 @@ impl<S: AsRef<str>> Table<S> {
             .doc()
             .unwrap_or_else(empty_spans);
 
-        rich_text([kind.into_span(), prefix, name, doc_sep, doc]).into()
+        if self.is_function() {
+            let mut spans = self.function_signature(name, kind);
+            spans.extend([doc_sep, doc]);
+
+            rich_text(spans).into()
+        } else {
+            let [prefix, name] = name
+                .name()
+                .map(|name| {
+                    [
+                        " ".into_span(),
+                        name.link_maybe((!self.kind.is_none()).then_some(Message::Toggle(self.id))),
+                    ]
+                })
+                .unwrap_or_else(empty_spans);
+
+            rich_text([kind.into_span(), prefix, name, doc_sep, doc]).into()
+        }
     }
 
     fn view_name<'a>(&'a self, name: Option<&'a str>, kind: &'a str) -> Element<'a, Message> {
+        if self.is_function() {
+            return rich_text(self.function_signature(name, kind)).into();
+        }
+
         let [prefix, name] = name
             .name()
-            .map(|name| [" ".into_span(), name])
+            .map(|name| [" ".into_span(), name.link(Message::Toggle(self.id))])
             .unwrap_or_else(empty_spans);
         rich_text([kind.into_span(), prefix, name]).into()
     }
@@ -187,12 +257,16 @@ impl<S: AsRef<str>> Table<S> {
         rich_text([l, value, r, doc_sep, doc]).into()
     }
 
-    fn view_union<'a>(&'a self, name: Option<&'a str>) -> Element<'a, Message> {
+    fn view_union<'a>(
+        &'a self,
+        name: Option<&'a str>,
+        state: &'a DocsState,
+    ) -> Element<'a, Message> {
         widget::Column::new()
             .push(self.view_name(name, "union"))
             .push(indented(self.union.iter().fold(
                 widget::Column::new().push_maybe(self.view_docs()),
-                |col, item| col.push(item.view_anon()),
+                |col, item| col.push(item.view_anon(state)),
             )))
             .into()
     }
@@ -212,19 +286,28 @@ impl<S: AsRef<str>> Table<S> {
             .into()
     }
 
-    fn view_table<'a>(&'a self, name: Option<&'a str>) -> Element<'a, Message> {
+    fn view_table<'a>(
+        &'a self,
+        name: Option<&'a str>,
+        state: &'a DocsState,
+    ) -> Element<'a, Message> {
         widget::Column::new()
             .push(self.view_name(name, "table"))
             .push(indented(self.fields.iter().fold(
                 widget::Column::new().push_maybe(self.view_docs()),
-                |col, (name, item)| col.push(item.view(name.as_ref())),
+                |col, (name, item)| col.push(item.view(name.as_ref(), state)),
             )))
             .into()
     }
 
-    fn view_mixed<'a>(&'a self, name: &'a str) -> Element<'a, Message> {
+    fn view_mixed<'a>(
+        &'a self,
+        name: Option<&'a str>,
+        state: &'a DocsState,
+    ) -> Element<'a, Message> {
         let Self {
             kind: _,
+            id: _,
             doc,
             union,
             fields,
@@ -233,39 +316,8 @@ impl<S: AsRef<str>> Table<S> {
             r#enum,
         } = self;
 
-        let name = if self.is_function() {
-            let mut spans = Vec::with_capacity(3.max(self.params.len() * 2 + 2));
-            spans.extend([name.fn_name(), "(".into_span()]);
-
-            let mut iter = self.params.keys();
-
-            if let Some(first) = iter.next() {
-                let first = first.as_ref();
-
-                spans.push(match first {
-                    "class" => "class".class_param(),
-                    "self" => "self".self_param(),
-                    other => other.param(),
-                })
-            };
-
-            for param in iter {
-                spans.push(", ".into_span());
-                spans.push(param.as_ref().param());
-            }
-
-            spans.push(")".into_span());
-            rich_text(spans)
-        } else {
-            rich_text([
-                self.default_name().into_span(),
-                " ".into_span(),
-                name.name(),
-            ])
-        };
-
         widget::Column::new()
-            .push(name)
+            .push(self.view_name(name, self.default_name()))
             .push(indented(
                 widget::Column::new()
                     .push_maybe(
@@ -275,11 +327,11 @@ impl<S: AsRef<str>> Table<S> {
                     .push_maybe(with_content(fields, |fields| {
                         category(
                             "Fields",
-                            fields.map(|(name, item)| item.view(name.as_ref())),
+                            fields.map(|(name, item)| item.view(name.as_ref(), state)),
                         )
                     }))
                     .push_maybe(with_content(union, |union| {
-                        category("Union", union.map(|item| item.view_anon()))
+                        category("Union", union.map(|item| item.view_anon(state)))
                     }))
                     .push_maybe(with_content(r#enum, |e| {
                         category(
@@ -295,21 +347,19 @@ impl<S: AsRef<str>> Table<S> {
                     .push_maybe(with_content(params, |params| {
                         category(
                             "Parameters",
-                            params.map(|(name, item)| item.view(name.as_ref())),
+                            params.map(|(name, item)| item.view(name.as_ref(), state)),
                         )
                     }))
                     .push_maybe(with_content(r#return, |r| {
-                        category("Returns", r.map(|item| item.view_anon()))
+                        category("Returns", r.map(|item| item.view_anon(state)))
                     })),
             ))
             .into()
     }
 }
 
-impl TryFrom<Yaml> for Table<String> {
-    type Error = Yaml;
-
-    fn try_from(value: Yaml) -> Result<Self, Self::Error> {
+impl Table<String> {
+    pub fn from_yaml(value: Yaml, state: &mut DocsState) -> Result<Self, Yaml> {
         let mut table = match value {
             Yaml::Hash(hash) => hash,
             other => return Err(other),
@@ -321,7 +371,7 @@ impl TryFrom<Yaml> for Table<String> {
             .and_then(Yaml::into_vec)
             .map(|v| {
                 v.into_iter()
-                    .filter_map(|value| Item::try_from(value).ok())
+                    .filter_map(|value| Item::from_yaml(value, state).ok())
                     .collect()
             })
             .unwrap_or_default();
@@ -332,7 +382,7 @@ impl TryFrom<Yaml> for Table<String> {
             .map(|hash| {
                 hash.into_iter()
                     .filter_map(|(key, value)| {
-                        Some((key.into_string()?, Item::try_from(value).ok()?))
+                        Some((key.into_string()?, Item::from_yaml(value, state).ok()?))
                     })
                     .collect()
             })
@@ -345,7 +395,7 @@ impl TryFrom<Yaml> for Table<String> {
             .map(|hash| {
                 hash.into_iter()
                     .filter_map(|(key, value)| {
-                        Some((key.into_string()?, Item::try_from(value).ok()?))
+                        Some((key.into_string()?, Item::from_yaml(value, state).ok()?))
                     })
                     .collect()
             })
@@ -355,12 +405,12 @@ impl TryFrom<Yaml> for Table<String> {
             .remove(&KEYS.r#return)
             .or_else(|| table.remove(&KEYS.returns))
             .map(|value| match value {
-                value @ Yaml::String(..) => Item::try_from(value)
+                value @ Yaml::String(..) => Item::from_yaml(value, state)
                     .map(|item| vec![item])
                     .unwrap_or_default(),
                 Yaml::Array(items) => items
                     .into_iter()
-                    .filter_map(|value| Item::try_from(value).ok())
+                    .filter_map(|value| Item::from_yaml(value, state).ok())
                     .collect(),
                 _ => Vec::new(),
             })
@@ -391,8 +441,10 @@ impl TryFrom<Yaml> for Table<String> {
                     .collect()
             })
             .unwrap_or_default();
+        let id = state.new_id();
         let table = Self {
             kind: TableKind::Mixed,
+            id,
             doc,
             union,
             fields,

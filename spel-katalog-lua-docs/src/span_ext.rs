@@ -6,12 +6,16 @@ use ::iced::{
     widget::text::Span,
 };
 
+/// Extension trait for spans and span-adjacent types.
 pub trait SpanExt<S>: Sized {
     /// Result of quote operation.
     type Quoted;
 
     /// What to quote by.
     type QuoteBy;
+
+    /// Type used for links.
+    type Link;
 
     /// Convert into span type.
     fn into_span(self) -> S;
@@ -21,6 +25,9 @@ pub trait SpanExt<S>: Sized {
 
     /// Convert into span with the given color.
     fn with_color(self, c: Color) -> S;
+
+    /// Convert into span with the given link
+    fn with_link(self, link: impl FnMut() -> Self::Link) -> S;
 
     /// Convert into span styled for documentation.
     fn doc(self) -> S
@@ -105,8 +112,19 @@ pub trait SpanExt<S>: Sized {
         self.with_color(PR_CLR).with_font(FONT)
     }
 
+    /// Set link if provided function is Some.
+    fn with_link_maybe(self, link: Option<impl FnMut() -> Self::Link>) -> S {
+        if let Some(link) = link {
+            self.with_link(link)
+        } else {
+            self.into_span()
+        }
+    }
+
+    /// Quote the span.
     fn quoted(self, l: impl Into<Self::QuoteBy>, r: impl Into<Self::QuoteBy>) -> Self::Quoted;
 
+    /// Double quote the span by cloning the quote.
     fn dquoted(self, q: impl Into<Self::QuoteBy> + Clone) -> Self::Quoted {
         self.quoted(q.clone(), q)
     }
@@ -115,6 +133,11 @@ pub trait SpanExt<S>: Sized {
 impl<'a, L, F: From<Font>> SpanExt<Span<'a, L, F>> for Span<'a, L, F> {
     type Quoted = [Span<'a, L, F>; 3];
     type QuoteBy = Cow<'a, str>;
+    type Link = L;
+
+    fn with_link(self, mut link: impl FnMut() -> Self::Link) -> Span<'a, L, F> {
+        self.link(link())
+    }
 
     fn into_span(self) -> Span<'a, L, F> {
         self
@@ -139,6 +162,12 @@ where
 {
     type Quoted = (Span<'a, L, F>, [Span<'a, L, F>; N], Span<'a, L, F>);
     type QuoteBy = Cow<'a, str>;
+    type Link = L;
+
+    #[inline]
+    fn with_link(self, mut link: impl FnMut() -> Self::Link) -> [Span<'a, L, F>; N] {
+        self.map(|s| s.into_span().link(link()))
+    }
 
     #[inline]
     fn into_span(self) -> [Span<'a, L, F>; N] {
@@ -168,6 +197,14 @@ where
 
     type QuoteBy = Cow<'a, str>;
 
+    type Link = L;
+
+    fn with_link(self, mut link: impl FnMut() -> Self::Link) -> Vec<Span<'a, L, F>> {
+        self.into_iter()
+            .map(|s| s.into_span().link(link()))
+            .collect()
+    }
+
     fn into_span(self) -> Vec<Span<'a, L, F>> {
         self.into_iter().map(SpanExt::into_span).collect()
     }
@@ -193,6 +230,13 @@ impl<'a, L, F: From<Font>> SpanExt<Span<'a, L, F>> for &'a str {
     type Quoted = [Span<'a, L, F>; 3];
 
     type QuoteBy = Cow<'a, str>;
+
+    type Link = L;
+
+    #[inline]
+    fn with_link(self, mut link: impl FnMut() -> Self::Link) -> Span<'a, L, F> {
+        self.into_span().link(link())
+    }
 
     #[inline]
     fn into_span(self) -> Span<'a, L, F> {
@@ -220,6 +264,13 @@ impl<'a, L, F: From<Font>> SpanExt<Span<'a, L, F>> for String {
 
     type QuoteBy = Cow<'a, str>;
 
+    type Link = L;
+
+    #[inline]
+    fn with_link(self, mut link: impl FnMut() -> Self::Link) -> Span<'a, L, F> {
+        self.into_span().link(link())
+    }
+
     #[inline]
     fn into_span(self) -> Span<'a, L, F> {
         Span::new(self)
@@ -245,6 +296,13 @@ impl<'a, L, F: From<Font>> SpanExt<Span<'a, L, F>> for Cow<'a, str> {
     type Quoted = [Span<'a, L, F>; 3];
 
     type QuoteBy = Cow<'a, str>;
+
+    type Link = L;
+
+    #[inline]
+    fn with_link(self, mut link: impl FnMut() -> Self::Link) -> Span<'a, L, F> {
+        self.into_span().link(link())
+    }
 
     #[inline]
     fn into_span(self) -> Span<'a, L, F> {
@@ -274,6 +332,13 @@ where
     type Quoted = Option<T::Quoted>;
 
     type QuoteBy = fn() -> T::QuoteBy;
+
+    type Link = T::Link;
+
+    #[inline]
+    fn with_link(self, link: impl FnMut() -> Self::Link) -> Option<S> {
+        self.map(|s| s.with_link(link))
+    }
 
     #[inline]
     fn into_span(self) -> Option<S> {

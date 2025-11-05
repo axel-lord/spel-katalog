@@ -14,15 +14,20 @@ use ::indexmap::IndexMap;
 use ::tap::TryConv;
 use ::yaml_rust2::Yaml;
 
-use crate::{simple::Simple, table::Table};
+use crate::{
+    simple::Simple,
+    state::{DocsState, ItemId},
+    table::Table,
+};
 
 mod simple;
 mod span_ext;
+mod state;
 mod table;
 
 type Map<K, V> = IndexMap<K, V, ::rustc_hash::FxBuildHasher>;
 
-pub(crate) use span_ext::SpanExt;
+pub use span_ext::SpanExt;
 
 #[derive(Debug, Clone, From)]
 enum Item<S> {
@@ -30,28 +35,34 @@ enum Item<S> {
     Table(Table<S>),
 }
 
-impl TryFrom<Yaml> for Item<String> {
-    type Error = Yaml;
+impl Item<String> {
+    pub fn from_yaml(yaml: Yaml, state: &mut DocsState) -> Result<Self, Yaml> {
+        let yaml = match Simple::from_yaml(yaml, state) {
+            Ok(simple) => return Ok(Self::Simple(simple)),
+            Err(yaml) => yaml,
+        };
 
-    fn try_from(value: Yaml) -> Result<Self, Self::Error> {
-        Simple::try_from(value)
-            .map(Item::Simple)
-            .or_else(|value| Table::try_from(value).map(Item::Table))
+        let yaml = match Table::from_yaml(yaml, state) {
+            Ok(table) => return Ok(Self::Table(table)),
+            Err(yaml) => yaml,
+        };
+
+        Err(yaml)
     }
 }
 
 impl<S: AsRef<str>> Item<S> {
-    pub fn view<'a>(&'a self, name: &'a str) -> Element<'a, Message> {
+    pub fn view<'a>(&'a self, name: &'a str, state: &'a DocsState) -> Element<'a, Message> {
         match self {
             Item::Simple(simple) => simple.view(name),
-            Item::Table(table) => table.view(name),
+            Item::Table(table) => table.view(name, state),
         }
     }
 
-    pub fn view_anon(&self) -> Element<'_, Message> {
+    pub fn view_anon<'a>(&'a self, state: &'a DocsState) -> Element<'a, Message> {
         match self {
             Item::Simple(simple) => simple.view_anon(),
-            Item::Table(table) => table.view_anon(),
+            Item::Table(table) => table.view_anon(state),
         }
     }
 }
@@ -96,44 +107,54 @@ fn empty_spans<'a, const N: usize, L, F>() -> [Span<'a, L, F>; N] {
 }
 
 /// Message in use by [DocsViewer].
-#[derive(Debug, Clone)]
-pub enum Message {}
+#[derive(Debug, Clone, Copy)]
+pub enum Message {
+    /// Toggle display of item.
+    Toggle(ItemId),
+}
 
 /// Documentation viewer.
 #[derive(Debug)]
 pub struct DocsViewer {
     docs: Map<String, Item<String>>,
+    state: DocsState,
 }
 
 impl Default for DocsViewer {
     fn default() -> Self {
-        static DOCUMENT: LazyLock<Map<String, Item<String>>> = LazyLock::new(|| {
+        static DOCUMENT: LazyLock<(Map<String, Item<String>>, DocsState)> = LazyLock::new(|| {
             let [document] =
                 ::yaml_rust2::YamlLoader::load_from_str(include_str!("../../lua/docs.yml"))
                     .expect("embedded lua docs should be valid yaml")
                     .try_conv::<[Yaml; 1]>()
                     .expect("embedded lua docs yaml should be a single yaml document");
-            document
+            let mut state = DocsState::default();
+            let docs = document
                 .into_hash()
                 .map(|hash| {
                     hash.into_iter()
                         .filter_map(|(key, value)| {
-                            Some((key.into_string()?, Item::try_from(value).ok()?))
+                            Some((key.into_string()?, Item::from_yaml(value, &mut state).ok()?))
                         })
                         .collect()
                 })
-                .unwrap_or_default()
+                .unwrap_or_default();
+            (docs, state)
         });
-        Self {
-            docs: DOCUMENT.clone(),
-        }
+        let (docs, state) = (&*DOCUMENT).clone();
+        Self { docs, state }
     }
 }
 
 impl DocsViewer {
     /// Update application state based on message.
     pub fn update(&mut self, message: Message) -> Task<Message> {
-        match message {}
+        match message {
+            Message::Toggle(item_id) => {
+                self.state[item_id] = !self.state[item_id];
+                Task::none()
+            }
+        }
     }
 
     /// Render documentaion viewer as an element.
@@ -142,7 +163,7 @@ impl DocsViewer {
             self.docs
                 .iter()
                 .fold(widget::Column::new(), |col, (key, value)| {
-                    col.push(value.view(&key))
+                    col.push(value.view(&key, &self.state))
                 })
                 .spacing(5)
                 .width(Fill)

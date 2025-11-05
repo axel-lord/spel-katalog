@@ -8,7 +8,7 @@ use ::itertools::{
 };
 use ::yaml_rust2::Yaml;
 
-use crate::{Message, SpanExt, empty_spans};
+use crate::{Message, SpanExt, empty_spans, state::DocsState};
 
 #[derive(Debug, Clone)]
 pub struct Simple<S> {
@@ -101,10 +101,8 @@ impl<S: AsRef<str>> Simple<S> {
     }
 }
 
-impl TryFrom<Yaml> for Simple<String> {
-    type Error = Yaml;
-
-    fn try_from(value: Yaml) -> Result<Self, Self::Error> {
+impl Simple<String> {
+    pub fn from_yaml(value: Yaml, _state: &mut DocsState) -> Result<Self, Yaml> {
         fn split_array(array: Vec<Yaml>) -> Result<Vec<(String, Attr)>, Vec<Yaml>> {
             let (array, types): (Vec<_>, Vec<_>) =
                 array.into_iter().partition_map(|yaml| match yaml {
