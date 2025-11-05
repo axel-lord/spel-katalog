@@ -4,11 +4,11 @@ use ::std::sync::LazyLock;
 
 use ::derive_more::From;
 use ::iced::{
-    Element,
+    Color, Element,
     Length::Fill,
     Task,
     alignment::Vertical,
-    widget::{self, horizontal_space, text::Span},
+    widget::{self, horizontal_space, rich_text, text::Span},
 };
 use ::indexmap::IndexMap;
 use ::tap::TryConv;
@@ -111,6 +111,8 @@ fn empty_spans<'a, const N: usize, L, F>() -> [Span<'a, L, F>; N] {
 pub enum Message {
     /// Toggle display of item.
     Toggle(ItemId),
+    /// Set expanded state of all items.
+    SetAll(bool),
 }
 
 /// Documentation viewer.
@@ -154,6 +156,10 @@ impl DocsViewer {
                 self.state[item_id] = !self.state[item_id];
                 Task::none()
             }
+            Message::SetAll(value) => {
+                self.state.set_all(value);
+                Task::none()
+            }
         }
     }
 
@@ -162,9 +168,17 @@ impl DocsViewer {
         widget::scrollable(
             self.docs
                 .iter()
-                .fold(widget::Column::new(), |col, (key, value)| {
-                    col.push(value.view(&key, &self.state))
-                })
+                .fold(
+                    widget::Column::new().push(rich_text(
+                        [
+                            "Show All".with_link(|| Message::SetAll(true)),
+                            " | ".into_span(),
+                            "Hide All".with_link(|| Message::SetAll(false)),
+                        ]
+                        .with_color(Color::from_rgb(0.7, 0.7, 0.7)),
+                    )),
+                    |col, (key, value)| col.push(value.view(&key, &self.state)),
+                )
                 .spacing(5)
                 .width(Fill)
                 .padding(5),

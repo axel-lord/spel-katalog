@@ -305,35 +305,21 @@ impl<S: AsRef<str>> Table<S> {
         name: Option<&'a str>,
         state: &'a DocsState,
     ) -> Element<'a, Message> {
-        let Self {
-            kind: _,
-            id: _,
-            doc,
-            union,
-            fields,
-            params,
-            r#return,
-            r#enum,
-        } = self;
-
         widget::Column::new()
             .push(self.view_name(name, self.default_name()))
             .push(indented(
                 widget::Column::new()
-                    .push_maybe(
-                        doc.as_ref()
-                            .map(|doc| rich_text(["# ", doc.as_ref()].doc())),
-                    )
-                    .push_maybe(with_content(fields, |fields| {
+                    .push_maybe(self.view_docs())
+                    .push_maybe(with_content(&self.fields, |fields| {
                         category(
                             "Fields",
                             fields.map(|(name, item)| item.view(name.as_ref(), state)),
                         )
                     }))
-                    .push_maybe(with_content(union, |union| {
+                    .push_maybe(with_content(&self.union, |union| {
                         category("Union", union.map(|item| item.view_anon(state)))
                     }))
-                    .push_maybe(with_content(r#enum, |e| {
+                    .push_maybe(with_content(&self.r#enum, |e| {
                         category(
                             "Enum",
                             e.map(|(value, doc)| {
@@ -344,13 +330,13 @@ impl<S: AsRef<str>> Table<S> {
                             }),
                         )
                     }))
-                    .push_maybe(with_content(params, |params| {
+                    .push_maybe(with_content(&self.params, |params| {
                         category(
                             "Parameters",
                             params.map(|(name, item)| item.view(name.as_ref(), state)),
                         )
                     }))
-                    .push_maybe(with_content(r#return, |r| {
+                    .push_maybe(with_content(&self.r#return, |r| {
                         category("Returns", r.map(|item| item.view_anon(state)))
                     })),
             ))

@@ -11,6 +11,10 @@ impl DocsState {
         self.entries.push(true);
         ItemId(id)
     }
+
+    pub fn set_all(&mut self, value: bool) {
+        self.entries.iter_mut().for_each(|entry| *entry = value);
+    }
 }
 
 impl Index<ItemId> for DocsState {
