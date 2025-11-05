@@ -1,0 +1,20 @@
+[package]
+name = "spel-katalog-lua-docs"
+version = "0.1.0"
+edition = "2024"
+authors = ["Axel Lord"]
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+derive_more = { workspace = true, features = ["is_variant", "from"] }
+iced.workspace = true
+log.workspace = true
+rustc-hash.workspace = true
+tap.workspace = true
+thiserror.workspace = true
+yaml-rust2.workspace = true
+indexmap.workspace = true
+itertools.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,227 @@
+--- # Lua api documentation
+None:
+  doc: "A null value separate from lua nil, used for optional values"
+
+"Result<T, E>":
+  doc: "A union of either a value, or nil and an error"
+  union:
+    - [T, "Success value"]
+    - [[nil, E], "Error value"]
+
+loadConfig:
+  doc: "Load lutris yml config for game"
+  return: table
+
+setAttr:
+  doc: "Set an attribute, and update this GameData"
+  params:
+    attr: [string, "Name of attribute to set"]
+    value: [string, "Value to set attribute to"]
+
+setAttrs:
+  doc: "Set multiple attributes, and update this GameData"
+  params:
+    attrs: "table<string, string>"
+
+Color:
+  doc: "A color with a red, green, blue and alpha value"
+  fields:
+    r: [number, "Red value of color in range [0, 255]"]
+    g: [number, "Green value of color in range [0, 255]"]
+    b: [number, "Blue value of color in range [0, 255]"]
+    a: [number, "Alpha value of color in range [0.0, 1.0]"]
+    new:
+      doc: "Add color metatable to given tables, or create a new table with the metatable"
+      params:
+        class: Color
+        tbl: ["table...", "Table to add class to"]
+      return: "Color..."
+
+Rect:
+  doc: "A rectangle"
+  fields:
+    x: [number, "X position of rectangle"]
+    y: [number, "Y position of rectangle"]
+    w: [number, "Width of rectangle"]
+    h: [number, "Height of rectangle"]
+    new:
+      doc: "Add Rect metatable to given tables, or create a new table with the metatable"
+      params:
+        class: Rect
+        tbl: ["table...", "Table to add class to"]
+      return: "Rect..."
+
+Letterbox:
+  doc: "Input to Image:Letterbox"
+  fields:
+    ratio: ["number?", "Ratio to use"]
+    color: ["Color?", "Color of background"]
+  union:
+    - [nil, "Use defaults"]
+    - [Color, "Use the provided Color"]
+    - [number, "Use the provided number for ratio"]
+
+Filter:
+  doc: "Stretch/resize filter"
+  enum:
+    - [nearest, "Nearest filtering"]
+    - [triangle, "Triangle filtering"]
+    - [catmullrom, "Catmullrom filtering"]
+    - [gaussian, "Gaussian filtering"]
+    - [lanczos3, "Lanczos3 filtering"]
+
+Image:
+  doc: "An in-memory image"
+  fields:
+    w:
+      doc: "Get image width"
+      params:
+        self: Image
+      return: number
+    h:
+      doc: "Get image height"
+      params:
+        self: Image
+      return: number
+    at:
+      doc: "Get color at point"
+      params:
+        self: Image
+        x: [number, "X position"]
+        y: [number, "Y position"]
+      return: Color
+    set:
+      doc: "Set color at point"
+      params:
+        self: Image
+        x: [number, "X position"]
+        y: [number, "Y position"]
+        color: Color
+    avg:
+      doc: "Get average color of image"
+      params:
+        self: Image
+      return: Color
+    letterbox:
+      doc: "Get letterboxed image"
+      params:
+        self: Image
+        letterbox: [Letterbox, "How to letterbox image"]
+      return: Image
+    crop:
+      doc: "Get image cropped to rectangle"
+      params:
+        self: Image
+        rect: [Rect, "Rectangle to crop image to"]
+      return: Image
+    flipH:
+      doc: "Get image flipped aong the horizontal axis"
+      params:
+        self: Image
+      return: Image
+    flipV:
+      doc: "Get image flipped aong the vertical axis"
+      params:
+        self: Image
+      return: Image
+    load:
+      doc: "Load the image at given path"
+      params:
+        class: Image
+        path: [string, "Path to image"]
+      return: "Result<Image, string>"
+    loadCover:
+      doc: "Load the cover of the given slug"
+      params:
+        class: Image
+        slug: [string, "Lutris game slug to load cover for"]
+      return: "Result<Image, string>"
+    new:
+      doc: "Create a new empty image"
+      params:
+        class: Image
+        width: [number, "Width of image"]
+        height: [number, "Height of image"]
+      return: Image
+    save:
+      doc: "Save image to path"
+      params:
+        self: Image
+        path: [string, "Path to save image to"]
+    saveCover:
+      doc: "Save image as cover"
+      params:
+        self: Image
+        slug: [string, "Slug to set image as cover for"]
+    overlay:
+      doc: "Overlay the other image on self at the given position"
+      params:
+        self: Image
+        other: Image
+        x: [number, "X Position"]
+        y: [number, "Y Position"]
+      return: Image
+    stretch:
+      doc: "Return the image stretched to the given dimensions"
+      params:
+        self: Image
+        w: [number, "Width to stretch to"]
+        h: [number, "Height to stretch to"]
+        filter: ["Filter?", "What filter to use when scaling"]
+      return: Image
+    resize:
+      doc: "Return the image resized with preserved aspect ratio"
+      params:
+        self: Image
+        w: [number, "Width to stretch to"]
+        h: [number, "Height to stretch to"]
+        filter: ["Filter?", "What filter to use when scaling"]
+      return: Image
+    mapColor:
+      doc: "Map the colors of all pixels using a function, nil leaves the color as-is"
+      params:
+        self: Image
+        f:
+          doc: "Mapping function"
+          params:
+            color: Color
+            x: number
+            y: number
+          return: "Color?"
+      return: Image
+
+Command:
+  doc: "A command to run"
+  fields:
+    status:
+      doc: "Run the command returning the exit code if not interrupted"
+      return:
+        "number?"
+    splitExec:
+      doc: "Create a new command with the current binary split by shell splitting rules"
+      return: Command
+    output:
+      doc: "Run the command with the given optional input (given to command separated by newlines)"
+      params:
+        "...": ["string...", "Input to feed command stdin"]
+      return:
+        - fields:
+            status: ["number?", "Status code returned by command if not interrupted"]
+            stdout: [string, "Stdout of command"]
+            stderr: [string, "Stderr of command"]
+
+Dialog:
+  doc: "A dialog box"
+  fields:
+    buttons: ["string[]", "Dialog options"]
+    text: [string, "Message to write in dialog"]
+    ignore: ["string[]", "Buttons to treat the same as closing the dialog"]
+    new:
+      doc: "Add Dialog metatable to given tables, or create a new table with the metatable"
+      params:
+        class: Dialog
+        tbl: ["table...", "Table to add class to"]
+      return: "Dialog..."
+    open:
+      doc: "Open the dialog and wait for result, if closed nil is returned"
+      return: "string?"

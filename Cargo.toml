@@ -6,9 +6,11 @@ members = [
 	"spel-katalog-cli",
 	"spel-katalog-common",
 	"spel-katalog-formats",
-	"spel-katalog-games", "spel-katalog-gather",
+	"spel-katalog-games",
+	"spel-katalog-gather",
 	"spel-katalog-info",
 	"spel-katalog-lua",
+	"spel-katalog-lua-docs",
 	"spel-katalog-settings",
 	"spel-katalog-sink",
 	"spel-katalog-terminal",
@@ -93,6 +95,7 @@ spel-katalog-games = { path = "spel-katalog-games" }
 spel-katalog-gather = { path = "spel-katalog-gather" }
 spel-katalog-info = { path = "spel-katalog-info" }
 spel-katalog-lua = { path = "spel-katalog-lua" }
+spel-katalog-lua-docs = { path = "spel-katalog-lua-docs" }
 spel-katalog-settings = { path = "spel-katalog-settings" }
 spel-katalog-sink = { path = "spel-katalog-sink" }
 spel-katalog-terminal = { path = "spel-katalog-terminal" }

@@ -1,1 +1,0 @@
-# Lua API Documentation
