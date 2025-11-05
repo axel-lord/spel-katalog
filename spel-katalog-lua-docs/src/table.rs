@@ -93,7 +93,7 @@ impl<S: AsRef<str>> Table<S> {
         !self.fields.is_empty()
     }
 
-    fn kind(&self) -> TableKind {
+    fn find_kind(&self) -> TableKind {
         let mut kind = TableKind::None;
 
         if self.is_union() {
@@ -136,25 +136,14 @@ impl<S: AsRef<str>> Table<S> {
     }
 
     fn view_<'a>(&'a self, name: Option<&'a str>) -> Element<'a, Message> {
-        match self.kind() {
-            TableKind::None => self.view_empty(name),
+        match self.find_kind() {
+            TableKind::None => self.view_name_doc(name, "value"),
             TableKind::Union => self.view_union(name),
             TableKind::Enum => self.view_enum(name),
             TableKind::Table => self.view_table(name),
             TableKind::Function | TableKind::Mixed => {
                 self.view_mixed(name.unwrap_or_else(|| self.default_name()))
             }
-        }
-    }
-
-    fn view_empty<'a>(&'a self, name: Option<&'a str>) -> Element<'a, Message> {
-        match (name, &self.doc) {
-            (Some(name), Some(doc)) => {
-                rich_text([name.name(), " # ".doc(), doc.as_ref().doc()]).into()
-            }
-            (None, Some(doc)) => rich_text(["# ", doc.as_ref()].doc()).into(),
-            (Some(name), None) => rich_text([name.name()]).into(),
-            (None, None) => widget::text("---").into(),
         }
     }
 
@@ -173,6 +162,20 @@ impl<S: AsRef<str>> Table<S> {
         rich_text([kind.into_span(), prefix, name, doc_sep, doc]).into()
     }
 
+    fn view_name<'a>(&'a self, name: Option<&'a str>, kind: &'a str) -> Element<'a, Message> {
+        let [prefix, name] = name
+            .name()
+            .map(|name| [" ".into_span(), name])
+            .unwrap_or_else(empty_spans);
+        rich_text([kind.into_span(), prefix, name]).into()
+    }
+
+    fn view_docs(&self) -> Option<Element<'_, Message>> {
+        self.doc
+            .as_ref()
+            .map(|docs| rich_text(["# ", docs.as_ref()].doc()).into())
+    }
+
     fn view_enum_value_doc<'a>(value: &'a str, doc: Option<&'a str>) -> Element<'a, Message> {
         let [doc_sep, doc] = doc
             .as_ref()
@@ -185,20 +188,19 @@ impl<S: AsRef<str>> Table<S> {
 
     fn view_union<'a>(&'a self, name: Option<&'a str>) -> Element<'a, Message> {
         widget::Column::new()
-            .push(self.view_name_doc(name, "union"))
-            .push(indented(
-                self.union.iter().fold(widget::Column::new(), |col, item| {
-                    col.push(item.view_anon())
-                }),
-            ))
+            .push(self.view_name(name, "union"))
+            .push(indented(self.union.iter().fold(
+                widget::Column::new().push_maybe(self.view_docs()),
+                |col, item| col.push(item.view_anon()),
+            )))
             .into()
     }
 
     fn view_enum<'a>(&'a self, name: Option<&'a str>) -> Element<'a, Message> {
         widget::Column::new()
-            .push(self.view_name_doc(name, "enum"))
+            .push(self.view_name(name, "enum"))
             .push(indented(self.r#enum.iter().fold(
-                widget::Column::new(),
+                widget::Column::new().push_maybe(self.view_docs()),
                 |col, (value, doc)| {
                     col.push(Self::view_enum_value_doc(
                         value.as_ref(),
@@ -211,14 +213,11 @@ impl<S: AsRef<str>> Table<S> {
 
     fn view_table<'a>(&'a self, name: Option<&'a str>) -> Element<'a, Message> {
         widget::Column::new()
-            .push(self.view_name_doc(name, "table"))
-            .push(indented(
-                self.fields
-                    .iter()
-                    .fold(widget::Column::new(), |col, (name, item)| {
-                        col.push(item.view(name.as_ref()))
-                    }),
-            ))
+            .push(self.view_name(name, "table"))
+            .push(indented(self.fields.iter().fold(
+                widget::Column::new().push_maybe(self.view_docs()),
+                |col, (name, item)| col.push(item.view(name.as_ref())),
+            )))
             .into()
     }
 
