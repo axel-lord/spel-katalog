@@ -1,6 +1,7 @@
 use ::std::{collections::HashMap, convert::identity, io::PipeReader, path::PathBuf, sync::Arc};
 
 use ::color_eyre::Report;
+use ::derive_more::IsVariant;
 use ::iced::{
     Element,
     Length::Fill,
@@ -24,7 +25,7 @@ use crate::{
 };
 
 /// Specific kind of window.
-#[derive(Debug)]
+#[derive(Debug, IsVariant)]
 pub enum WindowType {
     /// Window is the main window.
     Main,

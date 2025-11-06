@@ -35,7 +35,7 @@ pub enum QuickMessage {
     Next,
     Prev,
     ToggleBatch,
-    OpenLua,
+    ToggleLuaApi,
     ShowMain,
 }
 

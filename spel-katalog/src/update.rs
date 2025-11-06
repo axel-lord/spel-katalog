@@ -237,10 +237,23 @@ impl App {
                     }
                 }
                 QuickMessage::ToggleBatch => self.show_batch = !self.show_batch,
-                QuickMessage::OpenLua => {
-                    let (_, task) = window::open(window::Settings::default());
-                    return task
-                        .map(|id| Message::OpenWindow(id, WindowType::LuaApi(Default::default())));
+                QuickMessage::ToggleLuaApi => {
+                    let mut extracted = self
+                        .windows
+                        .iter()
+                        .filter_map(|(k, v)| v.is_lua_api().then_some(*k))
+                        .peekable();
+
+                    if extracted.peek().is_some() {
+                        return Task::batch(
+                            extracted.map(|id| window::close(id)).collect::<Box<[_]>>(),
+                        );
+                    } else {
+                        let (_, task) = window::open(window::Settings::default());
+                        return task.map(|id| {
+                            Message::OpenWindow(id, WindowType::LuaApi(Default::default()))
+                        });
+                    }
                 }
                 QuickMessage::ShowMain => {
                     if !self
