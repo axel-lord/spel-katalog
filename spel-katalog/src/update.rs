@@ -250,9 +250,7 @@ impl App {
                         );
                     } else {
                         let (_, task) = window::open(window::Settings::default());
-                        return task.map(|id| {
-                            Message::OpenWindow(id, WindowType::LuaApi(Default::default()))
-                        });
+                        return task.map(|id| Message::OpenWindow(id, WindowType::LuaApi));
                     }
                 }
                 QuickMessage::ShowMain => {
@@ -389,12 +387,8 @@ impl App {
                     Message::OpenWindow(id, WindowType::Dialog(dialog.clone().build()))
                 });
             }
-            Message::LuaDocs(id, msg) => {
-                if let Some(WindowType::LuaApi(docs_viewer)) = self.windows.get_mut(&id) {
-                    return docs_viewer
-                        .update(msg)
-                        .map(move |msg| Message::LuaDocs(id, msg));
-                }
+            Message::LuaDocs(msg) => {
+                return self.docs_viewer.update(msg).map(Message::LuaDocs);
             }
         }
         Task::none()

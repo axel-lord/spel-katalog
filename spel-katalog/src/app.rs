@@ -30,7 +30,7 @@ pub enum WindowType {
     /// Window is the main window.
     Main,
     /// Show lua api.
-    LuaApi(::spel_katalog_lua_docs::DocsViewer),
+    LuaApi,
     /// Show terminal.
     Term,
     /// Show a dialog window.
@@ -53,6 +53,7 @@ pub(crate) struct App {
     pub windows: FxHashMap<window::Id, WindowType>,
     pub dialog_tx: Sender<DialogBuilder>,
     pub terminal: ::spel_katalog_terminal::Terminal,
+    pub docs_viewer: ::spel_katalog_lua_docs::DocsViewer,
 }
 
 /// Virtual table passed to lua.
@@ -133,6 +134,7 @@ impl Initial {
         let batch = Default::default();
         let (dialog_tx, dialog_rx) = channel(64);
         let terminal = ::spel_katalog_terminal::Terminal::default().with_limit(256);
+        let docs_viewer = Default::default();
 
         let (sink_builder, terminal_rx) = if show_terminal {
             let (terminal_tx, terminal_rx) = ::std::sync::mpsc::channel();
@@ -156,6 +158,7 @@ impl Initial {
             terminal,
             view,
             windows,
+            docs_viewer,
         };
 
         Ok(Self {
@@ -261,9 +264,7 @@ impl App {
 
         match ty {
             WindowType::Main => self.view_main(),
-            WindowType::LuaApi(docs_viewer) => {
-                docs_viewer.view().map(move |msg| Message::LuaDocs(id, msg))
-            }
+            WindowType::LuaApi => self.docs_viewer.view().map(Message::LuaDocs),
             WindowType::Dialog(dialog) => dialog
                 .view()
                 .map(move |msg| Message::DialogMessage(id, msg)),

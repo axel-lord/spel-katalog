@@ -68,5 +68,5 @@ pub enum Message {
     Dialog(DialogBuilder),
     #[from]
     Terminal(::spel_katalog_terminal::Message),
-    LuaDocs(window::Id, ::spel_katalog_lua_docs::Message),
+    LuaDocs(::spel_katalog_lua_docs::Message),
 }
