@@ -34,6 +34,7 @@ impl App {
                     Some(Message::Quick(QuickMessage::RunSelected))
                 }
                 Named::F1 => Some(Message::Quick(QuickMessage::ToggleLuaApi)),
+                Named::F2 => Some(Message::Quick(QuickMessage::ToggleSettingsWin)),
                 _ => None,
             },
             keyboard::Key::Character(chr) => match chr {

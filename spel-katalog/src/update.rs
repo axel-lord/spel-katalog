@@ -54,6 +54,30 @@ pub fn gather<'a>(
 }
 
 impl App {
+    fn find_windows(
+        &self,
+        mut condition: impl FnMut(&WindowType) -> bool,
+    ) -> impl Iterator<Item = window::Id> {
+        self.windows
+            .iter()
+            .filter_map(move |(k, v)| condition(v).then_some(*k))
+    }
+
+    fn toggle_window(
+        &self,
+        condition: impl FnMut(&WindowType) -> bool,
+        factory: impl 'static + Send + FnMut() -> WindowType,
+    ) -> Task<Message> {
+        let mut windows = self.find_windows(condition).peekable();
+        if windows.peek().is_some() {
+            Task::batch(windows.map(window::close).collect::<Box<[_]>>())
+        } else {
+            let (_, task) = window::open(Default::default());
+            let mut factory = factory;
+            task.map(move |id| Message::OpenWindow(id, factory()))
+        }
+    }
+
     pub fn update(&mut self, msg: Message) -> Task<Message> {
         match msg {
             Message::Status(status) => {
@@ -238,20 +262,10 @@ impl App {
                 }
                 QuickMessage::ToggleBatch => self.show_batch = !self.show_batch,
                 QuickMessage::ToggleLuaApi => {
-                    let mut extracted = self
-                        .windows
-                        .iter()
-                        .filter_map(|(k, v)| v.is_lua_api().then_some(*k))
-                        .peekable();
-
-                    if extracted.peek().is_some() {
-                        return Task::batch(
-                            extracted.map(|id| window::close(id)).collect::<Box<[_]>>(),
-                        );
-                    } else {
-                        let (_, task) = window::open(window::Settings::default());
-                        return task.map(|id| Message::OpenWindow(id, WindowType::LuaApi));
-                    }
+                    return self.toggle_window(|t| t.is_lua_api(), || WindowType::LuaApi);
+                }
+                QuickMessage::ToggleSettingsWin => {
+                    return self.toggle_window(|t| t.is_settings(), || WindowType::Settings);
                 }
                 QuickMessage::ShowMain => {
                     if !self

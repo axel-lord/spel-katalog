@@ -33,6 +33,8 @@ pub enum WindowType {
     LuaApi,
     /// Show terminal.
     Term,
+    /// Show a settings window.
+    Settings,
     /// Show a dialog window.
     Dialog(Dialog),
 }
@@ -268,6 +270,9 @@ impl App {
             WindowType::Dialog(dialog) => dialog
                 .view()
                 .map(move |msg| Message::DialogMessage(id, msg)),
+            WindowType::Settings => widget::container(self.settings.view().map(Message::Settings))
+                .padding(5)
+                .into(),
             WindowType::Term => self.terminal.view().map(From::from),
         }
     }

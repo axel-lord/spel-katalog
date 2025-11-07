@@ -36,6 +36,7 @@ pub enum QuickMessage {
     Prev,
     ToggleBatch,
     ToggleLuaApi,
+    ToggleSettingsWin,
     ShowMain,
 }
 
