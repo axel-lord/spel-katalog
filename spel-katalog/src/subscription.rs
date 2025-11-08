@@ -9,7 +9,7 @@ use ::spel_katalog_common::OrRequest;
 use ::spel_katalog_games::SelDir;
 use ::tap::Pipe;
 
-use crate::{App, Message, QuickMessage, dialog::DialogBuilder};
+use crate::{App, Message, QuickMessage};
 
 impl App {
     pub fn subscription(&self) -> Subscription<Message> {
@@ -33,11 +33,9 @@ impl App {
                 Named::Enter | Named::Space if modifiers.is_empty() => {
                     Some(Message::Quick(QuickMessage::RunSelected))
                 }
-                Named::F1 => Some(Message::Quick(QuickMessage::OpenLua)),
-                Named::F2 => {
-                    let (dialog, _) = DialogBuilder::new("Sample Dialog", ["Ok", "Cancel"]);
-                    Some(Message::Dialog(dialog))
-                }
+                Named::F1 => Some(Message::Quick(QuickMessage::ToggleLuaApi)),
+                Named::F2 => Some(Message::Quick(QuickMessage::ToggleSettings)),
+                Named::F3 => Some(Message::Quick(QuickMessage::ToggleMain)),
                 _ => None,
             },
             keyboard::Key::Character(chr) => match chr {
@@ -45,7 +43,6 @@ impl App {
                 "q" if modifiers == Modifiers::CTRL => Some(QuickMessage::CloseAll),
                 "h" if modifiers.is_empty() => Some(QuickMessage::CycleHidden),
                 "f" if modifiers.is_empty() => Some(QuickMessage::CycleFilter),
-                "s" if modifiers.is_empty() => Some(QuickMessage::ToggleSettings),
                 "n" if modifiers.is_empty() => Some(QuickMessage::ToggleNetwork),
                 "k" if modifiers == Modifiers::CTRL | Modifiers::SHIFT => {
                     Some(QuickMessage::OpenProcessInfo)
@@ -54,7 +51,7 @@ impl App {
                     Some(QuickMessage::ToggleBatch)
                 }
                 "m" if modifiers == Modifiers::CTRL | Modifiers::SHIFT => {
-                    Some(QuickMessage::ShowMain)
+                    Some(QuickMessage::ToggleMain)
                 }
                 _ => None,
             }

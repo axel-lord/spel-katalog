@@ -6,7 +6,7 @@
 - [ ] Expand dialog functionality
 - [ ] Expand lua api, remove cover, get lutris cover
 - [ ] Keybinds, and control scheme docs
-- [ ] Split settings to dedicated window, info should be kept as-is
+- [x] Split settings to dedicated window, info should be kept as-is
 - [x] Console Window
 
 # Future Goals/Possibilities

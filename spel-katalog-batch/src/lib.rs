@@ -194,7 +194,7 @@ impl State {
         tx: &StatusSender,
         settings: &::spel_katalog_settings::Settings,
         sink_builder: &SinkBuilder,
-        create_lua_vt: &dyn Fn() -> Arc<dyn Send + Sync + ::spel_katalog_lua::Virtual>,
+        lua_vt: Arc<dyn Send + Sync + ::spel_katalog_lua::Virtual>,
     ) -> Task<OrRequest<Message, Request>> {
         match msg {
             Message::Action(action) => {
@@ -204,7 +204,6 @@ impl State {
             Message::RunBatch(batch_infos) => {
                 let script = self.script.text();
                 let sink_builder = sink_builder.clone();
-                let lua_vt = create_lua_vt();
                 let task = Task::future(::tokio::task::spawn_blocking(move || {
                     lua_batch(batch_infos, script, &sink_builder, lua_vt)
                         .map_err(|err| ::std::io::Error::other(err.to_string()))

@@ -1,11 +1,16 @@
 use ::std::{collections::HashMap, convert::identity, io::PipeReader, path::PathBuf, sync::Arc};
 
 use ::color_eyre::Report;
+use ::derive_more::IsVariant;
 use ::iced::{
+    Alignment::Center,
     Element,
     Length::Fill,
     Task,
-    widget::{self, horizontal_rule, stack, text, text_input, toggler, value, vertical_space},
+    widget::{
+        self, Row, horizontal_rule, horizontal_space, stack, text, text_input, toggler, value,
+        vertical_space,
+    },
     window,
 };
 use ::rustc_hash::FxHashMap;
@@ -18,20 +23,22 @@ use ::tokio::sync::mpsc::{Receiver, Sender, channel};
 use ::tokio_stream::wrappers::ReceiverStream;
 
 use crate::{
-    ExitReceiver, Message,
+    ExitReceiver, Message, QuickMessage,
     dialog::{Dialog, DialogBuilder},
     get_modules, get_settings, process_info, view,
 };
 
 /// Specific kind of window.
-#[derive(Debug)]
+#[derive(Debug, IsVariant)]
 pub enum WindowType {
     /// Window is the main window.
     Main,
     /// Show lua api.
-    LuaApi(::spel_katalog_lua_docs::DocsViewer),
+    LuaApi,
     /// Show terminal.
     Term,
+    /// Show a settings window.
+    Settings,
     /// Show a dialog window.
     Dialog(Dialog),
 }
@@ -52,6 +59,7 @@ pub(crate) struct App {
     pub windows: FxHashMap<window::Id, WindowType>,
     pub dialog_tx: Sender<DialogBuilder>,
     pub terminal: ::spel_katalog_terminal::Terminal,
+    pub docs_viewer: ::spel_katalog_lua_docs::DocsViewer,
 }
 
 /// Virtual table passed to lua.
@@ -102,6 +110,7 @@ struct Initial {
     status_rx: Receiver<String>,
     dialog_rx: Receiver<DialogBuilder>,
     terminal_rx: Option<::std::sync::mpsc::Receiver<(PipeReader, SinkIdentity)>>,
+    show_settings: bool,
 }
 
 impl Initial {
@@ -121,7 +130,7 @@ impl Initial {
 
         let filter = String::new();
         let status = String::new();
-        let view = view::State::new(show_settings);
+        let view = view::State::new();
         let settings = ::spel_katalog_settings::State { settings, config };
         let games = ::spel_katalog_games::State::default();
         let info = ::spel_katalog_info::State::default();
@@ -132,6 +141,7 @@ impl Initial {
         let batch = Default::default();
         let (dialog_tx, dialog_rx) = channel(64);
         let terminal = ::spel_katalog_terminal::Terminal::default().with_limit(256);
+        let docs_viewer = Default::default();
 
         let (sink_builder, terminal_rx) = if show_terminal {
             let (terminal_tx, terminal_rx) = ::std::sync::mpsc::channel();
@@ -155,6 +165,7 @@ impl Initial {
             terminal,
             view,
             windows,
+            docs_viewer,
         };
 
         Ok(Self {
@@ -162,6 +173,7 @@ impl Initial {
             dialog_rx,
             status_rx,
             terminal_rx,
+            show_settings,
         })
     }
 }
@@ -177,6 +189,7 @@ impl App {
             status_rx,
             dialog_rx,
             terminal_rx,
+            show_settings,
         } = Initial::new(run, sink_builder)?;
 
         ::iced::daemon("Lutris Games", Self::update, Self::view)
@@ -211,6 +224,9 @@ impl App {
                         ])
                     })
                     .unwrap_or_else(Task::none);
+                let show_settings = show_settings
+                    .then(|| Task::done(Message::Quick(QuickMessage::ToggleSettings)))
+                    .unwrap_or_else(Task::none);
 
                 let batch = Task::batch([
                     receive_status,
@@ -219,6 +235,7 @@ impl App {
                     main,
                     exit_recv,
                     window_recv,
+                    show_settings,
                 ]);
 
                 (app, batch)
@@ -260,12 +277,13 @@ impl App {
 
         match ty {
             WindowType::Main => self.view_main(),
-            WindowType::LuaApi(docs_viewer) => {
-                docs_viewer.view().map(move |msg| Message::LuaDocs(id, msg))
-            }
+            WindowType::LuaApi => self.docs_viewer.view().map(Message::LuaDocs),
             WindowType::Dialog(dialog) => dialog
                 .view()
                 .map(move |msg| Message::DialogMessage(id, msg)),
+            WindowType::Settings => widget::container(self.settings.view().map(Message::Settings))
+                .padding(5)
+                .into(),
             WindowType::Term => self.terminal.view().map(From::from),
         }
     }
@@ -294,7 +312,6 @@ impl App {
                 stack([self
                     .view
                     .view(
-                        &self.settings,
                         &self.games,
                         &self.info,
                         self.process_list.is_some() || self.show_batch,
@@ -319,14 +336,19 @@ impl App {
             )
             .push(vertical_space().height(3))
             .push(horizontal_rule(2))
+            .push(vertical_space().height(3))
             .push(
-                w::row()
+                Row::new()
+                    .align_y(Center)
                     .push(text(&self.status).width(Fill))
-                    .push(text("Displayed").style(widget::text::secondary))
+                    .push(text("Displayed / All").style(widget::text::secondary))
+                    .push(horizontal_space().width(5))
                     .push(value(self.games.displayed_count()))
-                    .push(text("All").style(widget::text::secondary))
+                    .push(text(" / "))
                     .push(value(self.games.all_count()))
+                    .push(horizontal_space().width(7))
                     .push(text("Network").style(widget::text::secondary))
+                    .push(horizontal_space().width(5))
                     .push(
                         toggler(self.settings.get::<Network>().is_enabled())
                             .spacing(0)
@@ -337,14 +359,6 @@ impl App {
                                         false => spel_katalog_settings::Network::Disabled,
                                     }),
                                 ))
-                            }),
-                    )
-                    .push(text("Settings").style(widget::text::secondary))
-                    .push(
-                        toggler(self.view.settings_shown())
-                            .spacing(0)
-                            .on_toggle(|show_settings| {
-                                view::Message::Settings(show_settings).into()
                             }),
                     ),
             )
