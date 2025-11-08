@@ -37,7 +37,7 @@ pub enum QuickMessage {
     ToggleBatch,
     ToggleLuaApi,
     ToggleSettingsWin,
-    ShowMain,
+    ToggleMain,
 }
 
 #[derive(Debug, IsVariant, From)]

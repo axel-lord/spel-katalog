@@ -35,6 +35,7 @@ impl App {
                 }
                 Named::F1 => Some(Message::Quick(QuickMessage::ToggleLuaApi)),
                 Named::F2 => Some(Message::Quick(QuickMessage::ToggleSettingsWin)),
+                Named::F3 => Some(Message::Quick(QuickMessage::ToggleMain)),
                 _ => None,
             },
             keyboard::Key::Character(chr) => match chr {
@@ -51,7 +52,7 @@ impl App {
                     Some(QuickMessage::ToggleBatch)
                 }
                 "m" if modifiers == Modifiers::CTRL | Modifiers::SHIFT => {
-                    Some(QuickMessage::ShowMain)
+                    Some(QuickMessage::ToggleMain)
                 }
                 _ => None,
             }
