@@ -34,7 +34,7 @@ impl App {
                     Some(Message::Quick(QuickMessage::RunSelected))
                 }
                 Named::F1 => Some(Message::Quick(QuickMessage::ToggleLuaApi)),
-                Named::F2 => Some(Message::Quick(QuickMessage::ToggleSettingsWin)),
+                Named::F2 => Some(Message::Quick(QuickMessage::ToggleSettings)),
                 Named::F3 => Some(Message::Quick(QuickMessage::ToggleMain)),
                 _ => None,
             },
@@ -43,7 +43,6 @@ impl App {
                 "q" if modifiers == Modifiers::CTRL => Some(QuickMessage::CloseAll),
                 "h" if modifiers.is_empty() => Some(QuickMessage::CycleHidden),
                 "f" if modifiers.is_empty() => Some(QuickMessage::CycleFilter),
-                "s" if modifiers.is_empty() => Some(QuickMessage::ToggleSettings),
                 "n" if modifiers.is_empty() => Some(QuickMessage::ToggleNetwork),
                 "k" if modifiers == Modifiers::CTRL | Modifiers::SHIFT => {
                     Some(QuickMessage::OpenProcessInfo)

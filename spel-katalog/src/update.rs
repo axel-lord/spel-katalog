@@ -100,7 +100,6 @@ impl App {
             QuickMessage::CloseAll => {
                 self.process_list = None;
                 self.view.show_info(false);
-                self.view.show_settings(false);
                 self.games.select(SelDir::None);
                 self.filter = String::new();
                 self.sort_games();
@@ -112,18 +111,12 @@ impl App {
                 } else if self.view.info_shown() {
                     self.view.show_info(false);
                     self.set_status("closed info pane");
-                } else if self.view.settings_shown() {
-                    self.view.show_settings(false);
-                    self.set_status("closed settings pane");
                 } else if self.games.selected().is_some() {
                     self.games.select(SelDir::None);
                 } else if !self.filter.is_empty() {
                     self.filter = String::new();
                     self.sort_games();
                 }
-            }
-            QuickMessage::ToggleSettings => {
-                self.view.show_settings(!self.view.settings_shown());
             }
             QuickMessage::OpenProcessInfo => {
                 return Task::future(Self::collect_process_info()).then(identity);
@@ -166,7 +159,7 @@ impl App {
                     WindowToggleSettings::default(),
                 );
             }
-            QuickMessage::ToggleSettingsWin => {
+            QuickMessage::ToggleSettings => {
                 return self.toggle_window(
                     |t| t.is_settings(),
                     || WindowType::Settings,

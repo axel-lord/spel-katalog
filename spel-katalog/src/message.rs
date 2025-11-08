@@ -25,7 +25,6 @@ impl From<bool> for Safety {
 pub enum QuickMessage {
     ClosePane,
     CloseAll,
-    ToggleSettings,
     OpenProcessInfo,
     CycleHidden,
     CycleFilter,
@@ -36,7 +35,7 @@ pub enum QuickMessage {
     Prev,
     ToggleBatch,
     ToggleLuaApi,
-    ToggleSettingsWin,
+    ToggleSettings,
     ToggleMain,
 }
 
