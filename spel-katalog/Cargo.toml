@@ -24,7 +24,7 @@ parking_lot.workspace = true
 paste.workspace = true
 rayon.workspace = true
 regex.workspace = true
-rfd = { workspace = true, features = ["xdg-portal","tokio"] }
+rfd.workspace = true
 rustc-hash.workspace = true
 rustix = { workspace = true, features = ["process"] }
 serde = { workspace = true, features = ["derive"] }
@@ -44,10 +44,9 @@ spel-katalog-terminal.workspace = true
 strsim.workspace = true
 tap.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["parking_lot"] }
-tokio-stream = { workspace = true, features = ["time"] }
 toml.workspace = true
 yaml-rust2.workspace = true
+smol.workspace = true
 
 [build-dependencies]
 spel-katalog-build.workspace = true

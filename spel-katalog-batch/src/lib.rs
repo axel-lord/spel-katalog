@@ -224,18 +224,14 @@ impl State {
             Message::RunBatch(batch_infos) => {
                 let script = self.script.text();
                 let sink_builder = sink_builder.clone();
-                let task = Task::future(::tokio::task::spawn_blocking(move || {
+                let task = Task::future(::smol::unblock(move || {
                     lua_batch(batch_infos, script, &sink_builder, lua_vt)
                         .map_err(|err| ::std::io::Error::other(err.to_string()))
                 }))
                 .then(|result| match result {
-                    Ok(Ok(..)) => Task::done(OrRequest::Request(Request::ReloadCache)),
-                    Ok(Err(err)) => {
-                        ::log::error!("Failure when running batch\n{err}");
-                        Task::none()
-                    }
+                    Ok(..) => Task::done(OrRequest::Request(Request::ReloadCache)),
                     Err(err) => {
-                        ::log::error!("Could not spawn blocking task\n{err}");
+                        ::log::error!("Failure when running batch\n{err}");
                         Task::none()
                     }
                 });
@@ -266,7 +262,7 @@ impl State {
                         return None;
                     };
                     let file_path = file_path.path();
-                    let result = ::tokio::fs::read_to_string(file_path).await;
+                    let result = ::smol::fs::read_to_string(file_path).await;
 
                     match result {
                         Err(err) => {
@@ -306,7 +302,7 @@ impl State {
                         return;
                     };
                     let file_path = file_path.path();
-                    let result = ::tokio::fs::write(file_path, content.as_bytes()).await;
+                    let result = ::smol::fs::write(file_path, content.as_bytes()).await;
 
                     if let Err(err) = result {
                         ::log::error!("could not save script to {file_path:?}\n{err}");

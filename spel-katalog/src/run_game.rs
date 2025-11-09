@@ -5,6 +5,7 @@ use ::std::{
 
 use ::iced_runtime::Task;
 use ::mlua::Lua;
+use ::smol::stream::StreamExt;
 use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::status;
 use ::spel_katalog_formats::AdditionalConfig;
@@ -12,7 +13,7 @@ use ::spel_katalog_info::formats;
 use ::spel_katalog_settings::{ConfigDir, FirejailExe, LutrisExe, Network, YmlDir};
 use ::spel_katalog_sink::SinkIdentity;
 
-use crate::{App, Message, QuickMessage, Safety};
+use crate::{App, Message, QuickMessage, Safety, oneshot_broadcast::oneshot_broadcast};
 
 #[derive(Debug, ::thiserror::Error)]
 enum ScriptGatherError {
@@ -25,9 +26,6 @@ enum ScriptGatherError {
     /// Error reading lua script.
     #[error("clould not read file {1:?}\n{0}")]
     ReadLuaScript(#[source] ::std::io::Error, PathBuf),
-    /// Spawned blocking task could not be joined.
-    #[error(transparent)]
-    JoinError(#[from] ::tokio::task::JoinError),
 }
 
 #[derive(Debug, ::thiserror::Error)]
@@ -53,8 +51,8 @@ async fn gather_scripts(script_dir: PathBuf) -> Result<Vec<PathBuf>, ScriptGathe
     stack.push(script_dir);
 
     while let Some(dir) = stack.pop() {
-        let mut dir = ::tokio::fs::read_dir(dir).await?;
-        while let Some(entry) = dir.next_entry().await? {
+        let mut dir = ::smol::fs::read_dir(dir).await?;
+        while let Some(entry) = dir.next().await.transpose()? {
             let ft = entry.file_type().await?;
 
             let path = entry.path();
@@ -105,13 +103,13 @@ impl App {
             .join(format!("{id}.toml"));
         let script_dir = self.settings.get::<ConfigDir>().as_path().join("scripts");
 
-        let (send_open, recv_open) = ::tokio::sync::oneshot::channel();
+        let (send_open, recv_open) = oneshot_broadcast();
 
         let open_process_list = Task::future(async {
-            match recv_open.await {
-                Ok(_) => Some(Message::Quick(QuickMessage::OpenProcessInfo)),
-                Err(err) => {
-                    ::log::error!("could not receive open signel through oneshot\n{err}");
+            match recv_open.recv_async().await {
+                Some(_) => Some(Message::Quick(QuickMessage::OpenProcessInfo)),
+                None => {
+                    ::log::error!("could not receive open signel through oneshot");
                     None
                 }
             }
@@ -121,7 +119,7 @@ impl App {
         let lua_vt = self.lua_vt();
         let task = Task::future(async move {
             let config = async {
-                let config = ::tokio::fs::read_to_string(&configpath).await?;
+                let config = ::smol::fs::read_to_string(&configpath).await?;
                 let config = formats::Config::parse(&config)?;
 
                 Ok::<_, ConfigError>(config)
@@ -136,7 +134,7 @@ impl App {
             };
 
             let extra_config = if extra_config_path.exists() {
-                let Some(content) = ::tokio::fs::read_to_string(&extra_config_path)
+                let Some(content) = ::smol::fs::read_to_string(&extra_config_path)
                     .await
                     .map_err(|err| ::log::error!("could not read {extra_config_path:?}\n{err}"))
                     .ok()
@@ -173,7 +171,7 @@ impl App {
                     };
 
                     let sink_builder = sink_builder.clone();
-                    ::tokio::task::spawn_blocking(move || {
+                    ::smol::unblock(move || {
                         let scripts = lua_scripts
                             .into_iter()
                             .map(|path| match ::std::fs::read_to_string(&path) {
@@ -203,7 +201,7 @@ impl App {
                         .map_err(|err| LuaError(err.to_string()))?;
                         Ok::<_, ScriptGatherError>(())
                     })
-                    .await??;
+                    .await?;
                 }
 
                 Ok::<_, ScriptGatherError>(())
@@ -238,7 +236,7 @@ impl App {
             let cmd = match safety {
                 Safety::None => {
                     ::log::info!("executing {lutris:?} with arguments\n{:#?}", &[&rungame]);
-                    ::tokio::process::Command::new(lutris)
+                    ::smol::process::Command::new(lutris)
                         .args(rungame)
                         .kill_on_drop(true)
                         .stdout(stdout)
@@ -269,7 +267,7 @@ impl App {
 
                     ::log::info!("executing {firejail:?} with arguments\n{args:#?}");
 
-                    ::tokio::process::Command::new(firejail)
+                    ::smol::process::Command::new(firejail)
                         .args(args)
                         .kill_on_drop(true)
                         .stdout(stdout)
@@ -278,9 +276,7 @@ impl App {
                 }
             };
 
-            if send_open.send(()).is_err() {
-                ::log::warn!("could not send open signal through oneshot");
-            }
+            send_open.send(());
 
             match cmd.await {
                 Ok(status) => format!("{name} exited with {status}").into(),

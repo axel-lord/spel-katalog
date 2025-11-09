@@ -15,9 +15,8 @@ log.workspace = true
 memchr.workspace = true
 spel-katalog-common.workspace = true
 spel-katalog-sink.workspace = true
-tokio = { workspace = true, features = ["sync"]}
-tokio-stream.workspace = true
 vte.workspace = true
+smol.workspace = true
 
 [lints]
 workspace = true

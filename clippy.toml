@@ -13,6 +13,8 @@ disallowed-types = [
 	"iced::futures::channel::mpsc::Receiver",
 	"iced::futures::channel::mpsc::UnboundedSender",
 	"iced::futures::channel::mpsc::UnboundedReceiver",
+	"tokio::task::JoinError",
+	"tokio::process::Command",
 ]
 disallowed-methods = [
 	"std::sync::mpsc::channel",
@@ -22,4 +24,16 @@ disallowed-methods = [
 	"futures::channel::mpsc::unbounded",
 	"iced::futures::channel::mpsc::channel",
 	"iced::futures::channel::mpsc::unbounded",
+	"tokio::task::spawn_blocking",
+	"tokio::time::sleep",
+	"tokio::fs::create_dir_all",
+	"tokio::fs::try_exists",
+	"tokio::fs::read_to_string",
+	"tokio::fs::write",
+	"tokio::fs::read",
+	"tokio::fs::copy",
+	"tokio::fs::remove_file",
+	"tokio::fs::read_dir",
+	"tokio::sync::oneshot::channel",
+	"tokio::process::Command::new",
 ]

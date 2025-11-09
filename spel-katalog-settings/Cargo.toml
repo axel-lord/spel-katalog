@@ -14,9 +14,9 @@ iced_runtime.workspace = true
 iced_widget.workspace = true
 log.workspace = true
 serde = { workspace = true, features = ["derive"] }
+smol.workspace = true
 spel-katalog-common.workspace = true
 tap.workspace = true
-tokio = { workspace = true, features = ["parking_lot"] }
 toml.workspace = true
 whoami = { workspace = true }
 

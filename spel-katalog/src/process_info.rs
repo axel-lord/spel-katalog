@@ -6,6 +6,7 @@ use ::iced_core::{
     alignment::Horizontal::Left,
 };
 use ::iced_widget::{self as widget, button, container, horizontal_space, opaque, text, value};
+use ::smol::stream::StreamExt;
 use ::spel_katalog_common::{styling, w};
 use ::tap::Pipe;
 
@@ -88,34 +89,42 @@ impl ProcessInfo {
     }
 
     pub async fn open() -> Result<Vec<ProcessInfo>, io::Error> {
-        let mut task_dir = ::tokio::fs::read_dir("/proc/self/task/").await?;
         let mut children = Vec::new();
-        while let Some(entry) = task_dir.next_entry().await? {
-            let path = entry.path().join("children");
-            let task_children = match ::tokio::fs::read_to_string(&path).await {
-                Ok(task_children) => task_children,
-                Err(err) => {
-                    ::log::error!("reading path {path:?}\n{err}");
-                    continue;
-                }
-            };
+        ::smol::fs::read_dir("/proc/self/task/")
+            .await?
+            .filter_map(|entry| entry.ok())
+            .then(|entry| async move {
+                let path = entry.path().join("children");
+                let task_children = match ::smol::fs::read_to_string(&path).await {
+                    Ok(task_children) => task_children,
+                    Err(err) => {
+                        ::log::error!("reading path {path:?}\n{err}");
+                        return None;
+                    }
+                };
 
-            children.extend(task_children.lines().flat_map(|line| {
-                let line = line.trim();
-                if line.is_empty() {
-                    None
-                } else {
-                    line.parse::<i64>().ok().map(|i| (0usize, i))
+                Some(task_children)
+            })
+            .for_each(|task_children| {
+                if let Some(task_children) = task_children {
+                    children.extend(task_children.lines().flat_map(|line| {
+                        let line = line.trim();
+                        if line.is_empty() {
+                            None
+                        } else {
+                            line.parse::<i64>().ok().map(|i| (0usize, i))
+                        }
+                    }));
                 }
-            }));
-        }
+            })
+            .await;
 
         let mut summary = Vec::<ProcessInfo>::new();
         while let Some((level, child)) = children.pop() {
             let proc = PathBuf::from(format!("/proc/{child}"));
 
             let status = proc.join("status");
-            let name = match ::tokio::fs::read(&status).await {
+            let name = match ::smol::fs::read(&status).await {
                 Ok(bytes) => {
                     let mut name = None;
                     for line in bytes.split(|c| *c == b'\n').map(|line| line.trim_ascii()) {
@@ -139,7 +148,7 @@ impl ProcessInfo {
 
             let cmdline = proc.join("cmdline");
 
-            let mut cmdline = match ::tokio::fs::read(&cmdline).await {
+            let mut cmdline = match ::smol::fs::read(&cmdline).await {
                 Ok(cmdline) => cmdline,
                 Err(err) => {
                     ::log::error!("while reading {cmdline:?}\n{err}");
@@ -159,7 +168,7 @@ impl ProcessInfo {
                 .pipe(::shell_words::join);
 
             let tasks = proc.join("task");
-            let mut tasks = match ::tokio::fs::read_dir(&tasks).await {
+            let tasks = match ::smol::fs::read_dir(&tasks).await {
                 Ok(tasks) => tasks,
                 Err(err) => {
                     ::log::error!("reading directory {tasks:?}\n{err}");
@@ -167,25 +176,32 @@ impl ProcessInfo {
                 }
             };
 
-            while let Some(entry) = tasks.next_entry().await? {
-                let path = entry.path().join("children");
-                let task_children = match ::tokio::fs::read_to_string(&path).await {
-                    Ok(task_children) => task_children,
-                    Err(err) => {
-                        ::log::error!("reading path {path:?}\n{err}");
-                        continue;
+            tasks
+                .filter_map(|entry| entry.ok())
+                .then(|entry| async move {
+                    let path = entry.path().join("children");
+                    let task_children = match ::smol::fs::read_to_string(&path).await {
+                        Ok(task_children) => task_children,
+                        Err(err) => {
+                            ::log::error!("reading path {path:?}\n{err}");
+                            return None;
+                        }
+                    };
+                    Some(task_children)
+                })
+                .for_each(|task_children| {
+                    if let Some(task_children) = task_children {
+                        children.extend(task_children.lines().flat_map(|line| {
+                            let line = line.trim();
+                            if line.is_empty() {
+                                None
+                            } else {
+                                line.parse::<i64>().ok().map(|i| (next_level, i))
+                            }
+                        }));
                     }
-                };
-
-                children.extend(task_children.lines().flat_map(|line| {
-                    let line = line.trim();
-                    if line.is_empty() {
-                        None
-                    } else {
-                        line.parse::<i64>().ok().map(|i| (next_level, i))
-                    }
-                }));
-            }
+                })
+                .await;
 
             summary.push(ProcessInfo {
                 level,
@@ -195,6 +211,6 @@ impl ProcessInfo {
             });
         }
 
-        Ok::<_, ::tokio::io::Error>(summary)
+        Ok::<_, ::std::io::Error>(summary)
     }
 }

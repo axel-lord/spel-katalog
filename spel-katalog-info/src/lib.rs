@@ -184,7 +184,7 @@ impl State {
                         if !path.exists() {
                             return None;
                         };
-                        ::tokio::fs::read_to_string(path)
+                        ::smol::fs::read_to_string(path)
                             .await
                             .map_err(|err| {
                                 ::log::error!("could not read {path:?} to string\n{err}")
@@ -197,7 +197,7 @@ impl State {
 
                     let tx = tx.clone();
                     fill_content = Task::future(async move {
-                        match ::tokio::fs::read_to_string(&path).await {
+                        match ::smol::fs::read_to_string(&path).await {
                             Ok(value) => {
                                 let additional =
                                     read_additional(&additional_path).await.unwrap_or_default();
@@ -273,7 +273,7 @@ impl State {
                     let tx = tx.clone();
                     let text = self.content.text();
                     Task::future(async move {
-                        match ::tokio::fs::write(&path, text).await {
+                        match ::smol::fs::write(&path, text).await {
                             Ok(_) => {
                                 async_status!(tx, "wrote game config {path:?}").await;
                                 Task::none()
@@ -334,6 +334,7 @@ impl State {
                     let task = async move {
                         let dialog = ::rfd::AsyncFileDialog::new()
                             .set_title("Add Thumbnail")
+                            .add_filter("png, jpg", &["png", "jpg", "jpeg"])
                             .pick_file()
                             .await
                             .ok_or_else(|| AddThumbError::NoneChosen)?;
@@ -341,7 +342,7 @@ impl State {
                         let dest = dest
                             .with_extension(dialog.path().extension().unwrap_or(OsStr::new("")));
 
-                        match ::tokio::fs::copy(dialog.path(), &dest).await {
+                        match ::smol::fs::copy(dialog.path(), &dest).await {
                             Ok(_) => (),
                             Err(source) => {
                                 return Err(AddThumbError::Copy {
@@ -352,7 +353,7 @@ impl State {
                             }
                         }
 
-                        let content = match ::tokio::fs::read(&dest).await {
+                        let content = match ::smol::fs::read(&dest).await {
                             Ok(content) => content,
                             Err(source) => return Err(AddThumbError::Read { source, path: dest }),
                         };
@@ -402,7 +403,7 @@ impl State {
 
                     for &ext in EXTENSIONS {
                         let path = dest.with_extension(ext);
-                        if let Err(err) = ::tokio::fs::remove_file(&path).await {
+                        if let Err(err) = ::smol::fs::remove_file(&path).await {
                             ::log::warn!("could not remove {path:?}\n{err}");
                         } else {
                             async_status!(tx, "removed {path:?}").await;
@@ -444,7 +445,7 @@ impl State {
                             ::log::error!("could not serialize additional to {path:?}\n{err}")
                         })
                         .ok()?;
-                    ::tokio::fs::write(path, content.as_bytes())
+                    ::smol::fs::write(path, content.as_bytes())
                         .await
                         .map_err(|err| ::log::error!("could not write to {path:?}\n{err}"))
                         .ok()
@@ -456,7 +457,7 @@ impl State {
 
                 let tx = tx.clone();
                 Task::future(async move {
-                    if let Err(err) = ::tokio::fs::create_dir_all(&extra_config_dir).await {
+                    if let Err(err) = ::smol::fs::create_dir_all(&extra_config_dir).await {
                         async_status!(tx, "could not create {extra_config_dir:?}").await;
                         ::log::error!(
                             "could not create extra config dir {extra_config_dir:?}\n{err}"
@@ -491,7 +492,7 @@ impl State {
                 let tx = tx.clone();
 
                 Task::future(async move {
-                    let content = match ::tokio::fs::read_to_string(&config_path).await {
+                    let content = match ::smol::fs::read_to_string(&config_path).await {
                         Ok(content) => content,
                         Err(err) => {
                             async_status!(&tx, "could not read {config_path:?}").await;

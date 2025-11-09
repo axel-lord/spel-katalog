@@ -95,21 +95,17 @@ pub enum Message {
 impl Message {
     /// Create a task receiving pipes.
     pub fn sink_receiver(recv: ::flume::Receiver<(PipeReader, SinkIdentity)>) -> Task<Self> {
-        Task::future(::tokio::task::spawn_blocking(move || {
+        Task::future(::smol::unblock(move || {
             let value = recv.recv();
 
             (value, recv)
         }))
         .then(|result| {
             let ((reader, identity), recv) = match result {
-                Err(err) => {
-                    ::log::error!("sink receiver task could not be joined\n{err}");
+                (Err(_), _) => {
                     return Task::none();
                 }
-                Ok((Err(_), _)) => {
-                    return Task::none();
-                }
-                Ok((Ok(value), recv)) => (value, recv),
+                (Ok(value), recv) => (value, recv),
             };
 
             let next = Self::sink_receiver(recv);
@@ -267,7 +263,7 @@ impl Terminal {
                 let idx = self.pipes.len();
                 self.pipes.push(pipe);
 
-                let close_task = Task::future(::tokio::task::spawn_blocking(move || {
+                let close_task = Task::future(::smol::unblock(move || {
                     let mut buf = vec![0; 1024];
 
                     loop {
@@ -284,14 +280,8 @@ impl Terminal {
                     }
                 }))
                 .then(move |result| {
-                    match result {
-                        Err(err) => {
-                            ::log::error!("could not run task for pipe {identity}\n{err}");
-                        }
-                        Ok(Err(err)) => {
-                            ::log::error!("task reading pipe {identity} failed\n{err}");
-                        }
-                        Ok(..) => {}
+                    if let Err(err) = result {
+                        ::log::error!("task reading pipe {identity} failed\n{err}");
                     }
                     Task::done(Message::ClosePipe { idx: Private(idx) })
                 });
