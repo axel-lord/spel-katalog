@@ -1,6 +1,6 @@
 //! State of documentation implementation.
 
-use ::std::ops::{Index, IndexMut};
+use ::core::ops::{Index, IndexMut};
 
 /// Documentation view state.
 #[derive(Debug, Clone, Default)]

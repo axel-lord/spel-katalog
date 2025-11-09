@@ -7,11 +7,10 @@ use ::iced::{
     widget::{Column, Row, button, container, horizontal_rule, horizontal_space, scrollable},
 };
 use ::tap::Pipe;
-use ::tokio::sync::mpsc::{Receiver, Sender, channel};
 
 #[derive(Debug, Clone)]
 pub struct DialogBuilder {
-    sender: Sender<String>,
+    sender: ::flume::Sender<String>,
     buttons: Arc<[String]>,
     text: Arc<str>,
 }
@@ -47,8 +46,8 @@ impl DialogBuilder {
     pub fn new(
         text: impl AsRef<str>,
         buttons: impl IntoIterator<Item = impl Into<String>>,
-    ) -> (DialogBuilder, Receiver<String>) {
-        let (sender, rx) = channel(64);
+    ) -> (DialogBuilder, ::flume::Receiver<String>) {
+        let (sender, rx) = ::flume::bounded(64);
         let text = Arc::<str>::from(text.as_ref());
         let buttons = buttons.into_iter().map(Into::into).collect();
         (
@@ -85,7 +84,7 @@ impl DialogBuilder {
 #[derive(Debug, Clone)]
 pub struct Dialog {
     multiline: bool,
-    sender: Sender<String>,
+    sender: ::flume::Sender<String>,
     buttons: Box<[(String, ButtonTheme)]>,
     text: String,
 }
@@ -110,7 +109,7 @@ impl Dialog {
                 let sender = self.sender.clone();
 
                 Task::future(async move {
-                    if let Err(err) = sender.send(button).await {
+                    if let Err(err) = sender.send_async(button).await {
                         ::log::error!("failed to send button\n{err}");
                     };
 

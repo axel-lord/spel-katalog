@@ -1,6 +1,6 @@
 //! Attribute editor implementation.
 
-use ::std::mem;
+use ::core::mem;
 
 use ::iced::{
     Element, Task,

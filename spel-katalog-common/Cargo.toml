@@ -6,9 +6,9 @@ authors = ["Axel Lord"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-iced.workspace = true
-tokio = { workspace = true, features = ["sync"] }
 derive_more = { workspace = true, features = ["is_variant", "deref", "from", "into"] }
+flume.workspace = true
+iced.workspace = true
 log.workspace = true
 
 [lints]

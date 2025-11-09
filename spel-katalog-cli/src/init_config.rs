@@ -39,12 +39,12 @@ const LUA_DEF: &str = include_str!("../../lua/spel-katalog.lua");
 /// Create a directory should it not already exist, and log relevant information.
 fn create_dir_if_missing(path: &PathBuf) {
     match ::std::fs::create_dir(path).map_err(|err| (err.kind(), err)) {
-        Ok(_) => println!("created directory {path:?}"),
+        Ok(_) => ::log::info!("created directory {path:?}"),
         Err((::std::io::ErrorKind::AlreadyExists, _)) => {
-            println!("directory {path:?} already exists");
+            ::log::info!("directory {path:?} already exists");
         }
         Err((_, err)) => {
-            eprintln!("could not create directory {path:?}, {err}");
+            ::log::error!("could not create directory {path:?}, {err}");
         }
     }
 }
@@ -53,7 +53,7 @@ fn create_dir_if_missing(path: &PathBuf) {
 fn create_file_if_missing(path: &PathBuf, content: &str) {
     match ::std::fs::File::create_new(path).map_err(|err| (err.kind(), err)) {
         Ok(file) => {
-            println!("created file {path:?}");
+            ::log::info!("created file {path:?}");
 
             if !content.is_empty() {
                 let result = file.pipe(|mut file| {
@@ -62,17 +62,17 @@ fn create_file_if_missing(path: &PathBuf, content: &str) {
                 });
 
                 if let Err(err) = result {
-                    eprintln!("could not write default content to {path:?}, {err}")
+                    ::log::error!("could not write default content to {path:?}, {err}")
                 } else {
-                    println!("wrote default content to {path:?}")
+                    ::log::info!("wrote default content to {path:?}")
                 }
             }
         }
         Err((::std::io::ErrorKind::AlreadyExists, _)) => {
-            println!("file {path:?} already exists");
+            ::log::info!("file {path:?} already exists");
         }
         Err((_, err)) => {
-            eprintln!("could not create file {path:?}, {err}");
+            ::log::error!("could not create file {path:?}, {err}");
         }
     }
 }
@@ -84,17 +84,17 @@ fn update_file(path: &PathBuf, content: &str) {
             create_file_if_missing(path, content);
         }
         _ => {
-            eprintln!("could not read {path:?}, {err}")
+            ::log::error!("could not read {path:?}, {err}")
         }
     }) else {
         return;
     };
 
     if current_content == content {
-        println!("no need to update {path:?}");
+        ::log::info!("no need to update {path:?}");
     } else if let Err(err) = ::std::fs::write(path, content.as_bytes()) {
-        eprintln!("could not update {path:?}, {err}");
+        ::log::error!("could not update {path:?}, {err}");
     } else {
-        println!("updated {path:?}");
+        ::log::info!("updated {path:?}");
     }
 }

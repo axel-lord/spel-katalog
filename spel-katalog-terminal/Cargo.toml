@@ -6,6 +6,7 @@ authors = ["Axel Lord"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
+flume.workspace = true
 iced.workspace = true
 log.workspace = true
 memchr.workspace = true

@@ -6,7 +6,7 @@ use ::std::{path::Path, sync::LazyLock};
 #[derive(Debug)]
 pub struct Lazy(LazyLock<String>);
 
-impl ::std::ops::Deref for Lazy {
+impl ::core::ops::Deref for Lazy {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
@@ -40,8 +40,8 @@ where
     }
 }
 
-impl ::std::fmt::Display for Lazy {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        ::std::fmt::Display::fmt(self.0.as_str(), f)
+impl ::core::fmt::Display for Lazy {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        ::core::fmt::Display::fmt(self.0.as_str(), f)
     }
 }

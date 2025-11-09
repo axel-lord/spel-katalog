@@ -1,19 +1,15 @@
 //! Library for terminal widget.
 
+use ::core::{convert, fmt::Display, mem, num::NonZero};
 use ::std::{
     borrow::Cow,
     collections::VecDeque,
-    convert,
-    fmt::Display,
     io::{ErrorKind, PipeReader, Read},
-    mem,
-    num::NonZero,
 };
 
 use ::iced::{Alignment::Center, Element, Length::Fill, Task, widget};
 use ::spel_katalog_common::w;
 use ::spel_katalog_sink::SinkIdentity;
-use ::tokio_stream::wrappers::ReceiverStream;
 
 /// Remove ansi escape codes from input.
 fn without_ansi_escapes(bytes: Cow<'_, str>) -> Cow<'_, str> {
@@ -93,9 +89,7 @@ pub enum Message {
 
 impl Message {
     /// Create a task receiving pipes.
-    pub fn sink_receiver(
-        recv: ::std::sync::mpsc::Receiver<(PipeReader, SinkIdentity)>,
-    ) -> Task<Self> {
+    pub fn sink_receiver(recv: ::flume::Receiver<(PipeReader, SinkIdentity)>) -> Task<Self> {
         Task::future(::tokio::task::spawn_blocking(move || {
             let value = recv.recv();
 
@@ -157,7 +151,7 @@ impl<'a> From<(usize, &'a Pipe)> for PipeId<'a> {
 }
 
 impl Display for PipeId<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
         let id = self.idx;
         let name = self.name;
         let status = if self.open { "" } else { " (closed)" };
@@ -180,7 +174,7 @@ pub enum Wrap {
 }
 
 impl Display for Wrap {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
         match self {
             Wrap::None => f.write_str("None"),
             Wrap::Word => f.write_str("Word"),
@@ -257,7 +251,7 @@ impl Terminal {
                 identity,
                 mut reader,
             } => {
-                let (tx, rx) = ::tokio::sync::mpsc::channel(64);
+                let (tx, rx) = ::flume::bounded(64);
 
                 let pipe = Pipe {
                     identity: identity.to_string(),
@@ -277,7 +271,7 @@ impl Terminal {
                             Err(err) if err.kind() == ErrorKind::Interrupted => continue,
                             Err(err) => break Err(err),
                             Ok(count) => {
-                                if let Err(err) = tx.blocking_send(Vec::from(&buf[..count])) {
+                                if let Err(err) = tx.send(Vec::from(&buf[..count])) {
                                     break Err(::std::io::Error::other(err));
                                 }
                             }
@@ -298,7 +292,7 @@ impl Terminal {
                 });
 
                 let content_task =
-                    Task::stream(ReceiverStream::new(rx)).map(move |content| Message::AddContent {
+                    Task::stream(rx.into_stream()).map(move |content| Message::AddContent {
                         idx: Private(idx),
                         content: Private(content),
                     });
@@ -409,7 +403,7 @@ impl Terminal {
 
         // name of content that we manipulate.
         let mut content = new_content.as_slice();
-        let mut content = ::std::iter::from_fn(move || {
+        let mut content = ::core::iter::from_fn(move || {
             if content.is_empty() {
                 return None;
             }

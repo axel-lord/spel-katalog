@@ -3,7 +3,7 @@
 use ::std::{
     io::{PipeReader, PipeWriter, pipe},
     process::Stdio,
-    sync::{Arc, mpsc::Sender},
+    sync::Arc,
 };
 
 use ::derive_more::Display;
@@ -30,7 +30,7 @@ pub enum SinkBuilder {
     /// Set sink to inherit parent.
     Inherit,
     /// Create and send a pipe.
-    CreatePipe(Sender<(PipeReader, SinkIdentity)>),
+    CreatePipe(::flume::Sender<(PipeReader, SinkIdentity)>),
     /// Clone an already created pipe.
     ClonePipe(Arc<PipeWriter>),
 }

@@ -1,6 +1,7 @@
 //! Sample game, should run on all platforms, and log with color.
 
-use ::std::{f32, time::Duration};
+use ::core::time::Duration;
+use ::std::{f32, io::Write};
 
 use ::clap::Parser;
 use ::iced::{
@@ -160,9 +161,16 @@ impl State {
                     Task::none()
                 } else {
                     let mag = ((f32::consts::PI * 2.0 * off / 64.0).sin() + 1.0) * 128.0;
+                    let mut stdout = ::std::io::stdout().lock();
 
-                    (0..(mag.round() as usize)).for_each(|_| print!("#"));
-                    println!();
+                    (0..(mag.round() as usize)).for_each(|_| {
+                        stdout
+                            .write_all(b"#")
+                            .expect("write to stdout should succeed")
+                    });
+                    stdout
+                        .write_all(b"\n")
+                        .expect("write to stdout should succeed");
 
                     Task::future(async move {
                         ::tokio::time::sleep(Duration::from_secs_f32(0.025)).await;

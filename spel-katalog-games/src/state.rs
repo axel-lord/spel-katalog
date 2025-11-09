@@ -1,14 +1,10 @@
 //! [State], [Message] and [Request] impls.
 
+use ::core::{cell::Cell, convert::identity, mem, ops::ControlFlow, time::Duration};
 use ::std::{
-    cell::Cell,
-    convert::identity,
     io::Cursor,
-    mem,
-    ops::ControlFlow,
     path::{Path, PathBuf},
     sync::LazyLock,
-    time::Duration,
 };
 
 use ::derive_more::{Deref, DerefMut, IsVariant};

@@ -101,7 +101,7 @@ fn category<'a, M: 'a>(
 /// Use a closure to display an iterable if it has any items.
 fn with_content<'a, I, C, F, T: 'a>(content: I, f: F) -> Option<T>
 where
-    F: FnOnce(::std::iter::Peekable<<I as IntoIterator>::IntoIter>) -> T,
+    F: FnOnce(::core::iter::Peekable<<I as IntoIterator>::IntoIter>) -> T,
     I: IntoIterator<Item = C>,
 {
     let mut peekable = content.into_iter().peekable();
@@ -114,7 +114,7 @@ where
 
 /// Create an array of empty spans.
 fn empty_spans<'a, const N: usize, L, F>() -> [Span<'a, L, F>; N] {
-    ::std::array::from_fn(|_| Span::new(""))
+    ::core::array::from_fn(|_| Span::new(""))
 }
 
 /// Message in use by [DocsViewer].

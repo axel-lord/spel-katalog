@@ -1,8 +1,8 @@
 //! Lua api in use by project.
 
+use ::core::fmt::Debug;
 use ::std::{
     collections::HashMap,
-    fmt::Debug,
     path::{Path, PathBuf},
     rc::Rc,
     sync::Arc,
