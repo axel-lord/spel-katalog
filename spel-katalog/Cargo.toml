@@ -10,7 +10,12 @@ color-eyre.workspace = true
 derive_more = { workspace = true, features = ["from", "is_variant", "display", "into_iterator", "as_ref", "deref", "into", "deref_mut"] }
 env_logger.workspace = true
 flume.workspace = true
-iced = { workspace = true, features = ["tokio", "lazy", "image", "advanced", "markdown"] }
+iced_core.workspace = true
+iced_runtime.workspace = true
+iced_winit.workspace = true
+iced_futures.workspace = true
+iced_widget.workspace = true
+iced_renderer.workspace = true
 image.workspace = true
 itertools.workspace = true
 log = { workspace = true, features = ["max_level_debug", "release_max_level_info"] }

@@ -3,18 +3,18 @@
 use ::std::{collections::HashMap, sync::Arc};
 
 use ::derive_more::Display;
-use ::iced::{
+use ::iced_core::{
     Alignment::Center,
-    Element, Font,
+    Font,
     Length::Fill,
-    Task,
     keyboard::{Key, Modifiers},
-    widget::{
-        self, button, text,
-        text_editor::{self, Action, Binding, Edit},
-    },
 };
 use ::iced_highlighter::Highlighter;
+use ::iced_runtime::Task;
+use ::iced_widget::{
+    self as widget, button, text,
+    text_editor::{self, Action, Binding, Edit},
+};
 use ::mlua::{Lua, LuaSerdeExt, Table};
 use ::rustc_hash::FxHashMap;
 use ::serde::Serialize;
@@ -23,6 +23,9 @@ use ::spel_katalog_lua::set_class;
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::strum::VariantArray;
 use ::tap::Pipe;
+
+/// Element alias.
+type Element<'a, M> = ::iced_core::Element<'a, M, ::iced_core::Theme, ::iced_renderer::Renderer>;
 
 /// Struct for setting up initial state and running batch scripts.
 #[derive(Debug)]
@@ -391,7 +394,7 @@ impl State {
                         .on_action(|act| OrRequest::Message(Message::Action(act)))
                         .key_binding(|keypress| {
                             if keypress.key.as_ref()
-                                == Key::Named(::iced::keyboard::key::Named::Tab)
+                                == Key::Named(::iced_core::keyboard::key::Named::Tab)
                             {
                                 Some(Binding::Custom(OrRequest::Message(Message::Indent)))
                             } else if keypress.key.as_ref() == Key::Character("r")

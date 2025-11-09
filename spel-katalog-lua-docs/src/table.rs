@@ -4,14 +4,12 @@ use ::core::ops::{BitOr, BitOrAssign};
 use ::std::sync::LazyLock;
 
 use ::derive_more::IsVariant;
-use ::iced::{
-    Element, Font,
-    widget::{self, rich_text, text::Span},
-};
+use ::iced_core::Font;
+use ::iced_widget::{self as widget, rich_text, text::Span};
 use ::yaml_rust2::Yaml;
 
 use crate::{
-    Item, Map, Message, SpanExt, category, empty_spans, indented,
+    Element, Item, Map, Message, SpanExt, category, empty_spans, indented,
     state::{DocsState, ItemId},
     with_content,
 };

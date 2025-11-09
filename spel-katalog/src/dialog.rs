@@ -1,12 +1,11 @@
 use ::std::sync::Arc;
 
-use ::iced::{
-    Element,
-    Length::Fill,
-    Task,
-    widget::{Column, Row, button, container, horizontal_rule, horizontal_space, scrollable},
-};
+use ::iced_core::Length::Fill;
+use ::iced_runtime::Task;
 use ::tap::Pipe;
+use iced_widget::{Column, Row, button, container, horizontal_rule, horizontal_space, scrollable};
+
+use crate::Element;
 
 #[derive(Debug, Clone)]
 pub struct DialogBuilder {
@@ -32,7 +31,7 @@ impl ButtonTheme {
         }
     }
 
-    fn style(self, theme: &::iced::Theme, status: button::Status) -> button::Style {
+    fn style(self, theme: &::iced_core::Theme, status: button::Status) -> button::Style {
         match self {
             ButtonTheme::Primary => button::primary(theme, status),
             ButtonTheme::Danger => button::danger(theme, status),

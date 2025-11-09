@@ -7,7 +7,6 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 derive_more = { workspace = true, features = ["from", "is_variant"] }
-iced.workspace = true
 image.workspace = true
 log.workspace = true
 rfd = { workspace = true, features = ["xdg-portal","tokio"] }
@@ -27,6 +26,10 @@ toml.workspace = true
 rustc-hash.workspace = true
 open.workspace = true
 iced_highlighter.workspace = true
+iced_renderer.workspace = true
+iced_runtime.workspace = true
+iced_widget.workspace = true
+iced_core.workspace = true
 
 [lints]
 workspace = true

@@ -1,17 +1,11 @@
 use ::std::{collections::HashMap, convert::identity, io::PipeReader, path::PathBuf, sync::Arc};
 
-use ::color_eyre::Report;
 use ::derive_more::IsVariant;
-use ::iced::{
-    Alignment::Center,
-    Element,
-    Length::Fill,
-    Task,
-    widget::{
-        self, Row, horizontal_rule, horizontal_space, stack, text, text_input, toggler, value,
-        vertical_space,
-    },
-    window,
+use ::iced_core::{Alignment::Center, Length::Fill, window};
+use ::iced_runtime::Task;
+use ::iced_widget::{
+    self as widget, Row, horizontal_rule, horizontal_space, stack, text, text_input, toggler,
+    value, vertical_space,
 };
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog_cli::Run;
@@ -21,7 +15,7 @@ use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::tap::Pipe;
 
 use crate::{
-    ExitReceiver, Message, QuickMessage,
+    Element, ExitReceiver, Message, QuickMessage,
     dialog::{Dialog, DialogBuilder},
     get_modules, get_settings, process_info, view,
 };
@@ -109,6 +103,15 @@ struct Initial {
     show_settings: bool,
 }
 
+/// Flags used to start application.
+#[derive(Debug)]
+pub struct Flags {
+    /// Initial state.
+    initial: Initial,
+    /// Exit receiver.
+    exit_recv: Option<ExitReceiver>,
+}
+
 impl Initial {
     fn new(run: Run, sink_builder: SinkBuilder) -> ::color_eyre::Result<Self> {
         let Run {
@@ -173,70 +176,113 @@ impl Initial {
     }
 }
 
+impl ::iced_winit::Program for App {
+    type Message = Message;
+
+    type Theme = ::iced_core::Theme;
+
+    type Executor = ::iced_futures::backend::default::Executor;
+
+    type Renderer = ::iced_renderer::Renderer;
+
+    type Flags = Flags;
+
+    fn new(
+        Flags {
+            initial:
+                Initial {
+                    app,
+                    status_rx,
+                    dialog_rx,
+                    terminal_rx,
+                    show_settings,
+                },
+            exit_recv,
+        }: Self::Flags,
+    ) -> (Self, Task<Self::Message>) {
+        let (_, open_main) = ::iced_runtime::window::open(::iced_core::window::Settings::default());
+        let main = open_main.map(|id| Message::OpenWindow(id, WindowType::Main));
+        let load_db = app
+            .settings
+            .get::<LutrisDb>()
+            .to_path_buf()
+            .pipe(move |db_path| spel_katalog_games::Message::LoadDb { db_path })
+            .pipe(OrRequest::Message)
+            .pipe(Message::Games)
+            .pipe(Task::done);
+        let receive_status = Task::stream(status_rx.into_stream()).map(Message::Status);
+        let receive_dialog = Task::stream(dialog_rx.into_stream()).map(Message::BuildDialog);
+        let exit_recv = exit_recv
+            .map(|exit_recv| Task::future(exit_recv.recv()).then(|_| ::iced_runtime::exit()))
+            .unwrap_or_else(Task::none);
+        let window_recv = terminal_rx
+            .map(|terminal_rx| {
+                let (_, task) = ::iced_runtime::window::open(Default::default());
+                Task::batch([
+                    ::spel_katalog_terminal::Message::sink_receiver(terminal_rx).map(Message::from),
+                    task.map(|id| Message::OpenWindow(id, WindowType::Term)),
+                ])
+            })
+            .unwrap_or_else(Task::none);
+        let show_settings = if show_settings {
+            Task::done(Message::Quick(QuickMessage::ToggleSettings))
+        } else {
+            Task::none()
+        };
+
+        let batch = Task::batch([
+            receive_status,
+            receive_dialog,
+            load_db,
+            main,
+            exit_recv,
+            window_recv,
+            show_settings,
+        ]);
+
+        (app, batch)
+    }
+
+    fn title(&self, _window: window::Id) -> String {
+        "Lutris Games".to_owned()
+    }
+
+    fn update(&mut self, message: Self::Message) -> Task<Self::Message> {
+        self.update(message)
+    }
+
+    fn view(
+        &self,
+        window: window::Id,
+    ) -> iced_core::Element<'_, Self::Message, Self::Theme, Self::Renderer> {
+        self.view(window)
+    }
+
+    fn subscription(&self) -> iced_futures::Subscription<Self::Message> {
+        self.subscription()
+    }
+
+    fn theme(&self, _window: window::Id) -> Self::Theme {
+        ::iced_core::Theme::from(*self.settings.get::<Theme>())
+    }
+}
+
 impl App {
     pub fn run(
         run: Run,
         sink_builder: SinkBuilder,
         exit_recv: Option<ExitReceiver>,
     ) -> ::color_eyre::Result<()> {
-        let Initial {
-            app,
-            status_rx,
-            dialog_rx,
-            terminal_rx,
-            show_settings,
-        } = Initial::new(run, sink_builder)?;
-
-        ::iced::daemon("Lutris Games", Self::update, Self::view)
-            .theme(|app, _| ::iced::Theme::from(*app.settings.settings.get::<Theme>()))
-            .subscription(Self::subscription)
-            .executor::<::tokio::runtime::Runtime>()
-            .run_with(move || {
-                let (_, open_main) = window::open(::iced::window::Settings::default());
-                let main = open_main.map(|id| Message::OpenWindow(id, WindowType::Main));
-                let load_db = app
-                    .settings
-                    .get::<LutrisDb>()
-                    .to_path_buf()
-                    .pipe(move |db_path| spel_katalog_games::Message::LoadDb { db_path })
-                    .pipe(OrRequest::Message)
-                    .pipe(Message::Games)
-                    .pipe(Task::done);
-                let receive_status = Task::stream(status_rx.into_stream()).map(Message::Status);
-                let receive_dialog =
-                    Task::stream(dialog_rx.into_stream()).map(Message::BuildDialog);
-                let exit_recv = exit_recv
-                    .map(|exit_recv| Task::future(exit_recv.recv()).then(|_| ::iced::exit()))
-                    .unwrap_or_else(Task::none);
-                let window_recv = terminal_rx
-                    .map(|terminal_rx| {
-                        let (_, task) = window::open(Default::default());
-                        Task::batch([
-                            ::spel_katalog_terminal::Message::sink_receiver(terminal_rx)
-                                .map(Message::from),
-                            task.map(|id| Message::OpenWindow(id, WindowType::Term)),
-                        ])
-                    })
-                    .unwrap_or_else(Task::none);
-                let show_settings = if show_settings {
-                    Task::done(Message::Quick(QuickMessage::ToggleSettings))
-                } else {
-                    Task::none()
-                };
-
-                let batch = Task::batch([
-                    receive_status,
-                    receive_dialog,
-                    load_db,
-                    main,
-                    exit_recv,
-                    window_recv,
-                    show_settings,
-                ]);
-
-                (app, batch)
-            })
-            .map_err(Report::from)
+        ::iced_winit::program::run::<Self, ::iced_renderer::Compositor>(
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Flags {
+                initial: Initial::new(run, sink_builder)?,
+                exit_recv,
+            },
+        )
+        .map_err(|err| ::color_eyre::eyre::eyre!(err))
     }
 
     pub fn lua_vt(&self) -> Arc<LuaVt> {

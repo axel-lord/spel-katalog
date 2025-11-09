@@ -6,15 +6,18 @@ authors = ["Axel Lord"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-iced.workspace = true
-derive_more = { workspace = true, features = ["from", "is_variant", "display", "into_iterator", "as_ref", "deref", "into", "deref_mut"] }
-tap.workspace = true
-log.workspace = true
-toml.workspace = true
-serde = { workspace = true, features = ["derive"] }
 clap = { workspace = true, features = ["derive"] }
+derive_more = { workspace = true, features = ["from", "is_variant", "display", "into_iterator", "as_ref", "deref", "into", "deref_mut"] }
+iced_core.workspace = true
+iced_renderer.workspace = true
+iced_runtime.workspace = true
+iced_widget.workspace = true
+log.workspace = true
+serde = { workspace = true, features = ["derive"] }
 spel-katalog-common.workspace = true
+tap.workspace = true
 tokio = { workspace = true, features = ["parking_lot"] }
+toml.workspace = true
 whoami = { workspace = true }
 
 [build-dependencies]

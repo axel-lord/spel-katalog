@@ -24,6 +24,9 @@ mod subscription;
 mod update;
 mod view;
 
+/// Element alias
+type Element<'a, M> = ::iced_core::Element<'a, M, ::iced_core::Theme, ::iced_renderer::Renderer>;
+
 fn get_settings(
     config: &Path,
     overrides: ::spel_katalog_settings::Settings,

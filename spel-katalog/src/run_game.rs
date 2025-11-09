@@ -3,7 +3,7 @@ use ::std::{
     path::PathBuf,
 };
 
-use ::iced::Task;
+use ::iced_runtime::Task;
 use ::mlua::Lua;
 use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::status;

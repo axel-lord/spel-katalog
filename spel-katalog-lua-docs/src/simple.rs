@@ -1,16 +1,13 @@
 //! Simple documentation.
 
-use ::iced::{
-    Element,
-    widget::{rich_text, text::Span},
-};
+use ::iced_widget::{rich_text, text::Span};
 use ::itertools::{
     Either::{Left, Right},
     Itertools, chain,
 };
 use ::yaml_rust2::Yaml;
 
-use crate::{Message, SpanExt, empty_spans, state::DocsState};
+use crate::{Element, Message, SpanExt, empty_spans, state::DocsState};
 
 /// Simple documentation display.
 #[derive(Debug, Clone)]

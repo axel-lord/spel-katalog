@@ -1,5 +1,5 @@
 use ::derive_more::{From, IsVariant};
-use ::iced::window;
+use ::iced_core::window;
 use ::spel_katalog_common::OrRequest;
 
 use crate::{

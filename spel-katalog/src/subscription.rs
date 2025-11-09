@@ -1,10 +1,7 @@
 use ::std::time::Duration;
 
-use ::iced::{
-    Subscription,
-    keyboard::{self, Modifiers, key::Named, on_key_press},
-    window,
-};
+use ::iced_core::keyboard::{self, Modifiers, key::Named};
+use ::iced_futures::{Subscription, keyboard::on_key_press};
 use ::spel_katalog_common::OrRequest;
 use ::spel_katalog_games::SelDir;
 use ::tap::Pipe;
@@ -61,13 +58,13 @@ impl App {
         });
 
         let refresh = if self.process_list.is_some() {
-            ::iced::time::every(Duration::from_millis(500))
+            ::iced_futures::backend::default::time::every(Duration::from_millis(500))
                 .map(|_| Message::Quick(QuickMessage::RefreshProcessInfo))
         } else {
             Subscription::none()
         };
 
-        let window_close = window::close_events().map(Message::CloseWindow);
+        let window_close = ::iced_runtime::window::close_events().map(Message::CloseWindow);
         let games = self
             .games
             .subscription()

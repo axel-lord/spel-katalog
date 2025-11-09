@@ -8,13 +8,14 @@ use ::std::{
 };
 
 use ::derive_more::{Deref, DerefMut, IsVariant};
-use ::iced::{
+use ::iced_core::{
     Alignment::{self},
-    Border, Element,
+    Border,
     Length::Fill,
-    Subscription, Task,
-    widget::{self, container, stack},
 };
+use ::iced_futures::Subscription;
+use ::iced_runtime::Task;
+use ::iced_widget::{self as widget, container, stack};
 use ::image::ImageFormat;
 use ::itertools::Itertools;
 use ::parking_lot::Mutex;
@@ -31,7 +32,7 @@ use ::spel_katalog_settings::{CacheDir, CoverartDir, Settings};
 use ::tap::Pipe;
 use ::tokio::task::{JoinError, spawn_blocking};
 
-use crate::{Games, games::WithThumb};
+use crate::{Element, Games, games::WithThumb};
 
 /// Filename of thumbnails cache database.
 const THUMBNAILS_FILENAME: &str = "thumbnails.db";
@@ -177,7 +178,8 @@ impl State {
     /// Subscription used by games state.
     pub fn subscription(&self) -> Subscription<Message> {
         if !self.cache_queue.0.is_empty() {
-            ::iced::time::every(Duration::from_secs_f64(0.1)).map(|_| Message::FlushCache)
+            ::iced_futures::backend::default::time::every(Duration::from_secs_f64(0.1))
+                .map(|_| Message::FlushCache)
         } else {
             Subscription::none()
         }
@@ -426,7 +428,7 @@ impl State {
             let name = game.name.as_str();
             let id = game.id;
 
-            let style: fn(&::iced::Theme) -> container::Style;
+            let style: fn(&::iced_core::Theme) -> container::Style;
             if selected == Some(id) {
                 if game.batch_selected {
                     style = |theme| {
@@ -463,15 +465,15 @@ impl State {
                     let image = widget::image(handle)
                         .width(width)
                         .height(width)
-                        .content_fit(::iced::ContentFit::Contain);
+                        .content_fit(::iced_core::ContentFit::Contain);
                     widget::mouse_area(stack([image.into(), text.into()]))
                 }
                 None => widget::mouse_area(text),
             }
             .interaction(if shadowed {
-                ::iced::mouse::Interaction::default()
+                ::iced_core::mouse::Interaction::default()
             } else {
-                ::iced::mouse::Interaction::Pointer
+                ::iced_core::mouse::Interaction::Pointer
             })
             .pipe(|area| {
                 if shadowed {

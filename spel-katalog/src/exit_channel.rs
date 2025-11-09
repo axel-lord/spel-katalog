@@ -1,4 +1,4 @@
-use ::iced::futures::channel::oneshot::{Canceled, Receiver, Sender};
+use ::iced_futures::futures::channel::oneshot::{Canceled, Receiver, Sender};
 
 /// Sender for sending exit messages.
 #[derive(Debug)]
@@ -24,6 +24,6 @@ impl ExitReceiver {
 
 /// Create a channel for sending exit messages.
 pub fn exit_channel() -> (ExitSender, ExitReceiver) {
-    let (tx, rx) = ::iced::futures::channel::oneshot::channel();
+    let (tx, rx) = ::iced_futures::futures::channel::oneshot::channel();
     (ExitSender(tx), ExitReceiver(rx))
 }

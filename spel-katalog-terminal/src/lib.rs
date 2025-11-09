@@ -7,9 +7,14 @@ use ::std::{
     io::{ErrorKind, PipeReader, Read},
 };
 
-use ::iced::{Alignment::Center, Element, Length::Fill, Task, widget};
+use ::iced_core::{Alignment::Center, Length::Fill};
+use ::iced_runtime::Task;
+use ::iced_widget as widget;
 use ::spel_katalog_common::w;
 use ::spel_katalog_sink::SinkIdentity;
+
+/// Element alias.
+type Element<'a, M> = ::iced_core::Element<'a, M, ::iced_core::Theme, ::iced_renderer::Renderer>;
 
 /// Remove ansi escape codes from input.
 fn without_ansi_escapes(bytes: Cow<'_, str>) -> Cow<'_, str> {
@@ -491,7 +496,7 @@ impl Terminal {
                                 column.push(
                                     widget::Text::new(line.1.as_str())
                                         .size(self.text_size)
-                                        .font(::iced::font::Font::MONOSPACE)
+                                        .font(::iced_core::font::Font::MONOSPACE)
                                         .wrapping(self.wrap.into()),
                                 )
                             })
