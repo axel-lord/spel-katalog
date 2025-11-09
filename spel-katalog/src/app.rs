@@ -209,7 +209,7 @@ impl App {
                 let receive_status =
                     Task::stream(ReceiverStream::new(status_rx)).map(Message::Status);
                 let receive_dialog =
-                    Task::stream(ReceiverStream::new(dialog_rx)).map(Message::Dialog);
+                    Task::stream(ReceiverStream::new(dialog_rx)).map(Message::BuildDialog);
                 let exit_recv = exit_recv
                     .map(|exit_recv| Task::future(exit_recv.recv()).then(|_| ::iced::exit()))
                     .unwrap_or_else(Task::none);
@@ -223,9 +223,11 @@ impl App {
                         ])
                     })
                     .unwrap_or_else(Task::none);
-                let show_settings = show_settings
-                    .then(|| Task::done(Message::Quick(QuickMessage::ToggleSettings)))
-                    .unwrap_or_else(Task::none);
+                let show_settings = if show_settings {
+                    Task::done(Message::Quick(QuickMessage::ToggleSettings))
+                } else {
+                    Task::none()
+                };
 
                 let batch = Task::batch([
                     receive_status,
@@ -279,7 +281,7 @@ impl App {
             WindowType::LuaApi => self.docs_viewer.view().map(Message::LuaDocs),
             WindowType::Dialog(dialog) => dialog
                 .view()
-                .map(move |msg| Message::DialogMessage(id, msg)),
+                .map(move |msg| Message::Dialog(id, OrRequest::Message(msg))),
             WindowType::Settings => widget::container(self.settings.view().map(Message::Settings))
                 .padding(5)
                 .into(),
@@ -308,14 +310,11 @@ impl App {
             )
             .push(vertical_space().height(5))
             .push(
-                stack([self
-                    .view
-                    .view(
-                        &self.games,
-                        &self.info,
-                        self.process_list.is_some() || self.show_batch,
-                    )
-                    .into()])
+                stack([self.view.view(
+                    &self.games,
+                    &self.info,
+                    self.process_list.is_some() || self.show_batch,
+                )])
                 .push_maybe(self.show_batch.then(|| {
                     self.batch
                         .view()
@@ -330,7 +329,7 @@ impl App {
                 .push_maybe(
                     self.process_list
                         .as_ref()
-                        .map(|process_info| process_info::ProcessInfo::view_list(&process_info)),
+                        .map(|process_info| process_info::ProcessInfo::view_list(process_info)),
                 ),
             )
             .push(vertical_space().height(3))

@@ -98,8 +98,7 @@ mod environment {
 
 #[doc(hidden)]
 mod generated {
-    #![allow(missing_docs)]
-
+    include!(concat!(env!("OUT_DIR"), "/settings.rs"));
     pub use crate::environment::*;
 
     impl Settings {
@@ -113,8 +112,6 @@ mod generated {
             &mut self[T::as_idx()]
         }
     }
-
-    include!(concat!(env!("OUT_DIR"), "/settings.rs"));
 }
 pub use generated::*;
 

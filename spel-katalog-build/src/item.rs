@@ -44,6 +44,19 @@ pub fn default(ty: &dyn ToTokens, body: &dyn ToTokens) -> Item {
     }
 }
 
+/// Generate a default implementation for the given type with the given body.
+pub fn default_expect_derive(ty: &dyn ToTokens, body: &dyn ToTokens) -> Item {
+    spec!(ty: Type, body: Vec<Stmt>);
+    parse_quote! {
+        #[expect(clippy::derivable_impls)]
+        impl ::core::default::Default for #ty {
+            fn default() -> Self {
+                #( #body )*
+            }
+        }
+    }
+}
+
 /// Generate a display implementation for the given type with the given body.
 pub fn display(ty: &dyn ToTokens, body: &dyn ToTokens) -> Item {
     spec!(ty: Type, body: Vec<Stmt>);

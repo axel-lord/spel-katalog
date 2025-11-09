@@ -22,10 +22,11 @@ impl App {
         }
         let on_key = on_key_press(|key, modifiers| match key.as_ref() {
             keyboard::Key::Named(named) => match named {
-                Named::Tab if modifiers.is_empty() => Some(QuickMessage::Next).map(Message::Quick),
+                Named::Tab if modifiers.is_empty() => Some(Message::Quick(QuickMessage::Next)),
                 Named::Tab if modifiers == Modifiers::SHIFT => {
-                    Some(QuickMessage::Prev).map(Message::Quick)
+                    Some(Message::Quick(QuickMessage::Prev))
                 }
+
                 Named::ArrowRight if modifiers.is_empty() => sel(SelDir::Right),
                 Named::ArrowLeft if modifiers.is_empty() => sel(SelDir::Left),
                 Named::ArrowUp if modifiers.is_empty() => sel(SelDir::Up),

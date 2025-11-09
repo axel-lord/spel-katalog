@@ -34,7 +34,6 @@ impl ProcessInfo {
         .center(Fill)
         .style(|_theme| container::background(Color::from_rgba8(0, 0, 0, 0.7)))
         .pipe(opaque)
-        .into()
     }
 
     pub fn view<'e>(&'e self) -> Element<'e, Message> {
