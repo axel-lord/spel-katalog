@@ -1,23 +1,31 @@
 //! Common widgets.
 
-use ::iced::{
-    Alignment::Center,
-    Color, Element,
-    widget::{Column, Row, Scrollable, scrollable},
-};
+use ::iced_core::{Alignment::Center, Color, Element};
+use ::iced_widget::{Column, Row, Scrollable, scrollable};
 
 /// Create a column.
-pub fn col<'a, M>() -> Column<'a, M> {
+pub fn col<'a, M, T, R>() -> Column<'a, M, T, R>
+where
+    R: ::iced_core::Renderer,
+{
     Column::new().spacing(3)
 }
 
 /// Create a row.
-pub fn row<'a, M>() -> Row<'a, M> {
+pub fn row<'a, M, T, R>() -> Row<'a, M, T, R>
+where
+    R: ::iced_core::Renderer,
+{
     Row::new().spacing(3).align_y(Center)
 }
 
 /// Create a scrollable.
-pub fn scroll<'a, M>(element: impl Into<Element<'a, M>>) -> Scrollable<'a, M> {
+pub fn scroll<'a, M, R>(
+    element: impl Into<Element<'a, M, ::iced_core::Theme, R>>,
+) -> Scrollable<'a, M, ::iced_core::Theme, R>
+where
+    R: ::iced_core::Renderer,
+{
     scrollable(element).style(|theme, status| {
         let scrollable::Style {
             container,

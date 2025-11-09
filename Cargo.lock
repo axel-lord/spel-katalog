@@ -4867,7 +4867,8 @@ version = "0.1.0"
 dependencies = [
  "derive_more",
  "flume",
- "iced",
+ "iced_core",
+ "iced_widget",
  "log",
 ]
 
