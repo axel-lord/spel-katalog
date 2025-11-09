@@ -27,7 +27,7 @@ pub struct WithThumb {
     #[deref_mut]
     pub game: Game,
     /// Thumbnail.
-    pub thumb: Option<::iced::advanced::image::Handle>,
+    pub thumb: Option<::iced_widget::image::Handle>,
 }
 
 impl From<Game> for WithThumb {
@@ -230,7 +230,7 @@ impl Games {
     /// Set the thumbnail of a game.
     pub(crate) fn set_image(&mut self, slug: &str, image: ::spel_katalog_formats::Image) {
         if let Some(game) = self.by_slug_mut(slug) {
-            game.thumb = Some(::iced::advanced::image::Handle::from_rgba(
+            game.thumb = Some(::iced_widget::image::Handle::from_rgba(
                 image.width,
                 image.height,
                 image.bytes,
