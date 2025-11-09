@@ -334,6 +334,7 @@ impl State {
                     let task = async move {
                         let dialog = ::rfd::AsyncFileDialog::new()
                             .set_title("Add Thumbnail")
+                            .add_filter("png, jpg", &["png", "jpg", "jpeg"])
                             .pick_file()
                             .await
                             .ok_or_else(|| AddThumbError::NoneChosen)?;

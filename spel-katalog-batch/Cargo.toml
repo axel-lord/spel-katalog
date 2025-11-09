@@ -16,7 +16,7 @@ iced_runtime.workspace = true
 iced_widget.workspace = true
 iced_renderer.workspace = true
 log.workspace = true
-mlua = { workspace = true, features = ["serde", "luau", "luau-jit", "vendored"]}
+mlua.workspace = true
 rfd.workspace = true
 rustc-hash.workspace = true
 serde = { workspace = true, features = ["derive"] }

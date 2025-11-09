@@ -29,7 +29,8 @@ mod yaml;
 /// The result is an ::mlua::Result which should be handled.
 ///
 /// ```
-/// let lua = ::mlua::Lua::new().unwrap();
+/// use ::spel_katalog_lua::init_table;
+/// let lua = ::mlua::Lua::new();
 /// let table = lua.create_table().unwrap();
 /// init_table! {
 ///     table:
@@ -38,13 +39,13 @@ mod yaml;
 ///         c = ::mlua::Value::NULL,
 /// }.unwrap()
 /// ```
+#[macro_export]
 macro_rules! init_table {
     ($tbl:ident: $( $id:ident = $val:expr ),+ $(,)?) => {(|| {
         $( $tbl.set(stringify!($id), $val)?; )*
         Ok::<_, ::mlua::Error>(())
     })()};
 }
-pub(crate) use init_table;
 
 /// Module skeleton, used to access objects.
 #[derive(Debug, Clone)]
