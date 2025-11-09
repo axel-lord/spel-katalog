@@ -116,7 +116,6 @@ struct Initial {
 impl Initial {
     fn new(run: Run, sink_builder: SinkBuilder) -> ::color_eyre::Result<Self> {
         let Run {
-            advanced_terminal: _,
             config,
             keep_terminal: _,
             settings,

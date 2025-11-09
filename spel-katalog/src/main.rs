@@ -1,13 +1,9 @@
-use ::std::{
-    io::{IsTerminal, Read},
-    sync::mpsc::channel,
-};
+use ::std::io::{IsTerminal, Read};
 
-use ::spel_katalog::{exit_channel, run as run_app};
+use ::spel_katalog::run as run_app;
 use ::spel_katalog_cli::{Cli, Subcmd, SubcmdCallbacks};
 use ::spel_katalog_lua_docs::DocsViewer;
 use ::spel_katalog_sink::SinkBuilder;
-use ::spel_katalog_tui::{Channels, line_channel};
 
 fn init_log(target: Option<::env_logger::Target>) {
     let mut log_builder = ::env_logger::builder();
@@ -27,47 +23,17 @@ fn other() -> ::color_eyre::Result<()> {
 }
 
 fn run(cli: ::spel_katalog_cli::Run) -> ::color_eyre::Result<()> {
-    if cli.advanced_terminal {
-        let (log_tx, log_rx) = line_channel();
-        init_log(Some(::env_logger::Target::Pipe(Box::new(log_tx))));
+    init_log(None);
+    let keep_terminal = cli.keep_terminal;
+    run_app(cli, SinkBuilder::Inherit, None)?;
 
-        let (pipe_tx, pipe_rx) = channel();
-        let (exit_tx, exit_rx) = exit_channel();
-        let keep_terminal = cli.keep_terminal;
-
-        let app_handle = ::std::thread::Builder::new()
-            .name("spel-katalog-app".to_owned())
-            .spawn(move || {
-                ::spel_katalog_tui::tui(
-                    Channels {
-                        exit_tx: Box::new(|| exit_tx.send()),
-                        pipe_rx,
-                        log_rx,
-                    },
-                    keep_terminal,
-                )
-            })?;
-
-        run_app(cli, SinkBuilder::CreatePipe(pipe_tx), Some(exit_rx))?;
-
-        match app_handle.join() {
-            Ok(result) => result?,
-            Err(payload) => ::std::panic::resume_unwind(payload),
-        }
-        Ok(())
-    } else {
-        init_log(None);
-        let keep_terminal = cli.keep_terminal;
-        run_app(cli, SinkBuilder::Inherit, None)?;
-
-        if keep_terminal && ::std::io::stdin().is_terminal() {
-            println!("Press enter to exit...");
-            let mut buf = [0u8; 1];
-            ::std::io::stdin().read_exact(&mut buf)?;
-        }
-
-        Ok(())
+    if keep_terminal && ::std::io::stdin().is_terminal() {
+        println!("Press enter to exit...");
+        let mut buf = [0u8; 1];
+        ::std::io::stdin().read_exact(&mut buf)?;
     }
+
+    Ok(())
 }
 
 fn batch(cli: ::spel_katalog_cli::Batch) -> ::color_eyre::Result<()> {
