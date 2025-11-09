@@ -15,7 +15,6 @@ members = [
 	"spel-katalog-sink",
 	"spel-katalog-terminal",
 	"spel-katalog-test",
-	"spel-katalog-tui",
 ]
 resolver = "2"
 default-members = ["spel-katalog"]
@@ -74,7 +73,6 @@ prettyplease = "0.2.37"
 proc-macro2 = { version = "1.0.103", default-features = false }
 quote = { version = "1.0.41", default-features = false }
 rand = "0.9.2"
-ratatui = "0.29.0"
 rayon = "1.11.0"
 regex = "1.12.2"
 rfd = { version = "0.15.4", default-features = false }
@@ -99,7 +97,6 @@ spel-katalog-lua-docs = { path = "spel-katalog-lua-docs" }
 spel-katalog-settings = { path = "spel-katalog-settings" }
 spel-katalog-sink = { path = "spel-katalog-sink" }
 spel-katalog-terminal = { path = "spel-katalog-terminal" }
-spel-katalog-tui = { path = "spel-katalog-tui" }
 strsim = "0.11.1"
 strum = "0.27.2"
 syn = { version = "2.0.108", default-features = false }

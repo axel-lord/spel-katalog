@@ -32,16 +32,12 @@ pub struct Run {
     #[arg(long, short, default_value=default_config().as_os_str())]
     pub config: PathBuf,
 
-    /// Advanced terminal output.
-    #[arg(long, visible_alias = "at")]
-    pub advanced_terminal: bool,
-
     /// Keep terminal open.
     #[arg(long, visible_alias = "kt")]
     pub keep_terminal: bool,
 
     /// Show a terminal dialog.
-    #[arg(long, visible_alias = "st", conflicts_with = "advanced_terminal")]
+    #[arg(long, visible_alias = "st")]
     pub show_terminal: bool,
 }
 
@@ -51,7 +47,6 @@ impl Default for Run {
             settings: ::spel_katalog_settings::Settings::default(),
             show_settings: false,
             config: default_config().to_path_buf(),
-            advanced_terminal: false,
             keep_terminal: false,
             show_terminal: false,
         }
