@@ -4929,8 +4929,11 @@ name = "spel-katalog-info"
 version = "0.1.0"
 dependencies = [
  "derive_more",
- "iced",
+ "iced_core",
  "iced_highlighter",
+ "iced_renderer",
+ "iced_runtime",
+ "iced_widget",
  "image 0.25.8",
  "log",
  "open",

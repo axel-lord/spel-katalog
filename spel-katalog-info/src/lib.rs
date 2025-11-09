@@ -8,18 +8,18 @@ use ::std::{
 };
 
 use ::derive_more::{From, IsVariant};
-use ::iced::{
+use ::iced_core::{
     Alignment::{self, Center},
-    Element, Font,
+    Font,
     Length::Fill,
-    Task,
-    widget::{
-        self, button, horizontal_rule, horizontal_space,
-        text_editor::{Action, Edit},
-        vertical_rule,
-    },
 };
 use ::iced_highlighter::Highlighter;
+use ::iced_runtime::Task;
+use ::iced_widget::{
+    self as widget, button, horizontal_rule, horizontal_space,
+    text_editor::{Action, Edit},
+    vertical_rule,
+};
 use ::image::ImageError;
 use ::open::that;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, styling, w};
@@ -31,6 +31,9 @@ use ::yaml_rust2::Yaml;
 pub mod formats;
 
 mod attrs;
+
+/// Element alias.
+type Element<'a, M> = ::iced_core::Element<'a, M, ::iced_core::Theme, ::iced_renderer::Renderer>;
 
 /// State of info display.
 #[derive(Debug)]
@@ -649,7 +652,7 @@ impl State {
             i64,
         ) -> Option<(
             &'a ::spel_katalog_formats::Game,
-            Option<&'a ::iced::advanced::image::Handle>,
+            Option<&'a widget::image::Handle>,
         )>,
     ) -> Element<'a, OrRequest<Message, Request>> {
         let Some((game, thumb)) = game_by_id(self.id) else {

@@ -2,11 +2,11 @@
 
 use ::core::mem;
 
-use ::iced::{
-    Element, Task,
-    widget::{self, horizontal_space},
-};
+use ::iced_runtime::Task;
+use ::iced_widget::{self as widget, horizontal_space};
 use ::spel_katalog_common::w;
+
+use crate::Element;
 
 /// State of attribute editor.
 #[derive(Debug, Default)]
