@@ -1,3 +1,5 @@
+//! Channel to send lines.
+
 use ::std::{
     io::{ErrorKind, Write},
     mem,
@@ -22,12 +24,15 @@ pub fn line_channel() -> (ChannelWriter, LineReceiver) {
 /// Writer sending lines as completed in buffer.
 #[derive(Debug, new)]
 pub struct ChannelWriter {
+    /// Sender to send lines to.
     tx: Sender<Vec<u8>>,
+    /// Buffer for incomplete lines.
     #[new(default)]
     buf: Vec<u8>,
 }
 
 impl ChannelWriter {
+    /// Extend internal buffer with bytes.
     fn extend_buf(&mut self, bytes: &[u8]) {
         self.buf.extend_from_slice(bytes);
     }
@@ -59,6 +64,7 @@ impl Write for ChannelWriter {
 /// and storing lines.
 #[derive(Debug, IntoIterator, Deref, AsRef, AsMut, DerefMut, new)]
 pub struct LineReceiver {
+    /// Receiver for getting lines.
     rx: Receiver<Vec<u8>>,
     #[new(default)]
     #[as_ref]
@@ -71,6 +77,7 @@ pub struct LineReceiver {
 }
 
 impl LineReceiver {
+    /// Add a line to internal state.
     fn add_line(&mut self, mut line: Vec<u8>) {
         clean_bytes(&mut line);
         let line = bytes_to_string(line);
@@ -101,6 +108,9 @@ impl LineReceiver {
     }
 
     /// Receive a line from channel.
+    ///
+    /// # Errors
+    /// If a line cannot be received.
     pub fn recv(&mut self) -> Result<(), RecvError> {
         let line = self.rx.recv()?;
         self.add_line(line);
@@ -108,6 +118,9 @@ impl LineReceiver {
     }
 
     /// Try to receive a line from channel.
+    ///
+    /// # Errors
+    /// If a line cannot be received. Or is not available.
     pub fn try_recv(&mut self) -> Result<(), TryRecvError> {
         let line = self.rx.try_recv()?;
         self.add_line(line);
@@ -120,6 +133,9 @@ impl LineReceiver {
     /// Will return ok as long as the first line was received.
     /// No indication as to if it stopped due to disconnection or
     /// emptyness after is given.
+    ///
+    /// # Errors
+    /// If sender is closed.
     pub fn recv_many(&mut self, limit: usize) -> Result<NonZero<usize>, RecvError> {
         self.recv()?;
         Ok(self.try_recv_loop(ONE_NZ, limit))
@@ -131,6 +147,9 @@ impl LineReceiver {
     /// Will return ok as long as the first line was received.
     /// No indication as to if it stopped due to disconnection or
     /// emptyness after is given.
+    ///
+    /// # Errors
+    /// If sender is closed, or if no line was received.
     pub fn try_recv_many(&mut self, limit: usize) -> Result<NonZero<usize>, TryRecvError> {
         self.try_recv()?;
         Ok(self.try_recv_loop(ONE_NZ, limit))

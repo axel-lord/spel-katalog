@@ -10,6 +10,7 @@ mod ansi_cleanup;
 mod line_channel;
 mod tui;
 
+/// Convert bytes to a string.
 fn bytes_to_string(bytes: Vec<u8>) -> String {
     match String::from_utf8(bytes) {
         Ok(s) => s,
@@ -49,6 +50,9 @@ impl Debug for Channels {
 }
 
 /// Run tui.
+///
+/// # Errors
+/// If an io error occurs.
 pub fn tui(channels: Channels, keep_terminal: bool) -> ::std::io::Result<()> {
     ::ratatui::crossterm::execute!(
         ::std::io::stdout(),
