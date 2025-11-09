@@ -46,11 +46,16 @@ impl Game {
     }
 }
 
+/// Yaml item to get game field.
 pub static GAME: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("game".into()));
+/// Yaml item to get exe field.
 pub static EXE: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("exe".into()));
+/// Yaml item to get prefix field.
 pub static PREFIX: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("prefix".into()));
+/// Yaml item to get arch field.
 pub static ARCH: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("arch".into()));
 
+/// Get exe of game config.
 fn get_exe(yml: &Yaml) -> Option<PathBuf> {
     yml.as_hash()?
         .get(&GAME)?
@@ -60,6 +65,7 @@ fn get_exe(yml: &Yaml) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+/// get wine prefix of game config.
 fn get_prefix(yml: &Yaml) -> Option<PathBuf> {
     yml.as_hash()?
         .get(&GAME)?
@@ -69,6 +75,7 @@ fn get_prefix(yml: &Yaml) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+/// Get wine arch of game config.
 fn get_arch(yml: &Yaml) -> Option<String> {
     yml.as_hash()?
         .get(&GAME)?
@@ -79,13 +86,17 @@ fn get_arch(yml: &Yaml) -> Option<String> {
 }
 
 impl Config {
+    /// Parse game config.
+    ///
+    /// # Errors
+    /// If the content is not valid yaml.
     pub fn parse(content: &str) -> Result<Self, ScanError> {
         let doc = YamlLoader::load_from_str(content)?;
         Ok(Config {
             game: Game {
-                exe: doc.get(0).and_then(get_exe).unwrap_or_default(),
-                prefix: doc.get(0).and_then(get_prefix),
-                arch: doc.get(0).and_then(get_arch),
+                exe: doc.first().and_then(get_exe).unwrap_or_default(),
+                prefix: doc.first().and_then(get_prefix),
+                arch: doc.first().and_then(get_arch),
             },
         })
     }

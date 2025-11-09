@@ -1,3 +1,5 @@
+//! Functions to load thumbnail database.
+
 use ::std::path::Path;
 
 use ::rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -6,6 +8,9 @@ use ::rusqlite::{Connection, OpenFlags};
 use crate::LoadDbError;
 
 /// Load thumbnail database.
+///
+/// # Errors
+/// If thumbnails cannot be loaded from database.
 pub fn load_thumbnail_database(
     db_path: &Path,
 ) -> Result<Vec<(String, ::spel_katalog_formats::Image)>, LoadDbError> {

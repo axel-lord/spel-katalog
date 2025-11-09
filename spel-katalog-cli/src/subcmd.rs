@@ -6,8 +6,9 @@ use ::clap::Subcommand;
 
 use crate::{batch::Batch, completions::completions, init_config::init_config, skeleton::skeleton};
 
+/// Get default shell.
 fn get_shell() -> ::clap_complete::Shell {
-    ::clap_complete::Shell::from_env().unwrap_or_else(|| ::clap_complete::Shell::Bash)
+    ::clap_complete::Shell::from_env().unwrap_or(::clap_complete::Shell::Bash)
 }
 
 /// Callbacks required when performing subcommand.
@@ -135,6 +136,9 @@ impl Default for Subcmd {
 
 impl Subcmd {
     /// Perform action tied to subcommand.
+    ///
+    /// # Errors
+    /// Forwards whatever errors may occur in callback for given subcommand.
     pub fn perform<E>(self, callbacks: SubcmdCallbacks<E>) -> Result<(), E>
     where
         E: From<SubCmdError>,

@@ -1,3 +1,5 @@
+//! Setting viewer helpers.
+
 use ::iced::{
     Alignment, Element,
     widget::{Column, Row, container, pick_list, text_input},
@@ -7,6 +9,7 @@ use spel_katalog_common::w;
 
 use crate::{DefaultStr, Title, Variants};
 
+/// Create a choice widget for a setting.
 pub fn enum_choice<'a, T, M>(value: Option<T>) -> (&'a str, Element<'a, M>)
 where
     T: Variants + Clone + PartialEq + ToString + Default + Title,
@@ -25,6 +28,7 @@ where
     )
 }
 
+/// Create a list of settings consisting of name and set columns.
 pub fn enum_list<'a, M>(settings: impl IntoIterator<Item = (&'a str, Element<'a, M>)>) -> Row<'a, M>
 where
     M: 'a,
@@ -40,6 +44,7 @@ where
     w::row().align_y(Alignment::Start).push(l).push(r)
 }
 
+/// Create a path input.
 pub fn path_input<'a, T, M>(value: &Option<T>) -> (&'a str, Element<'a, M>)
 where
     T: 'static + DefaultStr + AsRef<str> + From<String> + Clone + Title,
@@ -61,6 +66,7 @@ where
     )
 }
 
+/// Create a list of settings consisting of name and input columns.
 pub fn path_list<'a, M>(
     settings: impl IntoIterator<Item = (&'a str, Element<'a, M>)>,
 ) -> Column<'a, M>

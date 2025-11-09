@@ -18,10 +18,31 @@ setAttr:
     attr: [string, "Name of attribute to set"]
     value: [string, "Value to set attribute to"]
 
+resolve:
+  doc: "Perform a table access using multiple components"
+  params:
+    value: [any, "Value to resolve path on"]
+    keys: [any..., "Path components"]
+  return:
+    - union:
+      - [any, "Resolved value"]
+      - [nil, "No value was resolved"]
+
 setAttrs:
   doc: "Set multiple attributes, and update this GameData"
   params:
     attrs: "table<string, string>"
+
+print:
+  doc: "Print values"
+  params: 
+    values: [any..., "Values with compatible with to_string"]
+
+dbg:
+  doc: "Debug print and forward values"
+  params:
+    values: [any..., "Values to debug"]
+  return: "any..."
 
 Color:
   doc: "A color with a red, green, blue and alpha value"

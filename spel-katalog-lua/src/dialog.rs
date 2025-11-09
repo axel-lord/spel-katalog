@@ -1,9 +1,12 @@
+//! Dialog api.
+
 use ::std::sync::Arc;
 
 use ::mlua::{Lua, Table};
 
 use crate::{Skeleton, Virtual, init_table, make_class};
 
+/// Register dialog functions with table.
 pub fn register(lua: &Lua, skeleton: &Skeleton, vt: Arc<dyn Virtual>) -> ::mlua::Result<()> {
     let dialog = lua.create_table()?;
     make_class(lua, &dialog)?;
@@ -21,10 +24,10 @@ pub fn register(lua: &Lua, skeleton: &Skeleton, vt: Arc<dyn Virtual>) -> ::mlua:
 
             if let Some(r) = &result {
                 let ignored = table.get::<Vec<String>>("ignore").ok();
-                if let Some(ignored) = ignored {
-                    if ignored.contains(r) {
-                        result = None;
-                    }
+                if let Some(ignored) = ignored
+                    && ignored.contains(r)
+                {
+                    result = None;
                 }
             }
 

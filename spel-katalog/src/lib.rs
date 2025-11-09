@@ -107,6 +107,7 @@ pub fn batch_run(batch: Batch) -> ::color_eyre::Result<()> {
                 .map_err(::mlua::Error::external)?;
 
             Ok(line
+                .trim_end()
                 .parse::<usize>()
                 .ok()
                 .and_then(|idx| buttons.get(idx).cloned()))

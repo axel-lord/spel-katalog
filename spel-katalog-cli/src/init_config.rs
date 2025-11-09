@@ -4,6 +4,7 @@ use ::std::{io::Write, path::PathBuf};
 
 use ::tap::Pipe;
 
+/// Initialize runtime config directory of application.
 pub fn init_config(path: PathBuf, skip_lua_update: bool) {
     let lib_path = path.join("lib");
     let games_path = path.join("games");
@@ -29,9 +30,13 @@ pub fn init_config(path: PathBuf, skip_lua_update: bool) {
     }
 }
 
+/// Content of template luarc file.
 const LUARC: &str = include_str!("../../lua/luarc.template.json");
+
+/// Content of default lua api definitions file.
 const LUA_DEF: &str = include_str!("../../lua/spel-katalog.lua");
 
+/// Create a directory should it not already exist, and log relevant information.
 fn create_dir_if_missing(path: &PathBuf) {
     match ::std::fs::create_dir(path).map_err(|err| (err.kind(), err)) {
         Ok(_) => println!("created directory {path:?}"),
@@ -44,8 +49,9 @@ fn create_dir_if_missing(path: &PathBuf) {
     }
 }
 
+/// Create a file with given content should it not already exist, logging relevant information.
 fn create_file_if_missing(path: &PathBuf, content: &str) {
-    match ::std::fs::File::create_new(&path).map_err(|err| (err.kind(), err)) {
+    match ::std::fs::File::create_new(path).map_err(|err| (err.kind(), err)) {
         Ok(file) => {
             println!("created file {path:?}");
 
@@ -71,10 +77,11 @@ fn create_file_if_missing(path: &PathBuf, content: &str) {
     }
 }
 
+/// Update or create a file.
 fn update_file(path: &PathBuf, content: &str) {
-    let Ok(current_content) = ::std::fs::read_to_string(&path).map_err(|err| match err.kind() {
+    let Ok(current_content) = ::std::fs::read_to_string(path).map_err(|err| match err.kind() {
         ::std::io::ErrorKind::NotFound => {
-            create_file_if_missing(&path, content);
+            create_file_if_missing(path, content);
         }
         _ => {
             eprintln!("could not read {path:?}, {err}")

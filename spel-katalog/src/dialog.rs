@@ -70,7 +70,7 @@ impl DialogBuilder {
         let text = text.to_string();
         let multiline = text.contains('\n');
         let buttons = buttons
-            .into_iter()
+            .iter()
             .map(|name| (name.clone(), ButtonTheme::from_name(name)))
             .collect();
         Dialog {

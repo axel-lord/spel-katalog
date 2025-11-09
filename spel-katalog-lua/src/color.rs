@@ -1,3 +1,5 @@
+//! Color api.
+
 use ::image::Rgba;
 use ::mlua::{FromLua, Lua, Table, Value};
 
@@ -6,15 +8,19 @@ use crate::{Skeleton, class_instance, init_table, make_class};
 /// A color as a rust type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Color {
+    /// Red value of color.
     pub r: u8,
+    /// Greej value of color.
     pub g: u8,
+    /// Blue value of color.
     pub b: u8,
+    /// Alpha value of color.
     pub a: u8,
 }
 
 impl Color {
     /// Convert to a table, using the provided class.
-    pub fn to_table(&self, lua: &Lua, class: &Table) -> ::mlua::Result<::mlua::Table> {
+    pub fn to_table(self, lua: &Lua, class: &Table) -> ::mlua::Result<::mlua::Table> {
         let initial = lua.create_table()?;
 
         init_table! {
@@ -81,6 +87,7 @@ impl FromLua for Color {
     }
 }
 
+/// Register color functions with module.
 pub fn register(lua: &Lua, skeleton: &Skeleton) -> ::mlua::Result<()> {
     let color = &skeleton.color;
     make_class(lua, color)?;

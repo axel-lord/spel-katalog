@@ -13,25 +13,40 @@ use ::log::LevelFilter;
 use ::rand::{Rng, seq::SliceRandom};
 use ::tap::Tap;
 
+/// Cli
 #[derive(Debug, Parser)]
 #[command(author, version, long_about = None)]
 struct Cli {}
 
+/// Game message.
 #[derive(Debug, Clone, Copy)]
 enum Msg {
-    Pressed { x: usize, y: usize },
+    /// Pressed tile.
+    Pressed {
+        /// X pos of tile.
+        x: usize,
+        /// Y pos of tile.
+        y: usize,
+    },
+    /// Log a wave.
     Wave(f32),
+    /// Fill tiles.
     Fill,
+    /// Reset board.
     Reset,
 }
 
+/// A game cell.
 #[derive(Debug, Clone)]
 struct Cell {
+    /// Is this cell selected.
     is_selected: bool,
+    /// Value of cell.
     value: String,
 }
 
 impl Cell {
+    /// View cell.
     pub fn view(&self, x: usize, y: usize, is_success: bool) -> Button<'_, Msg> {
         button(
             if self.is_selected {
@@ -56,15 +71,21 @@ impl Cell {
     }
 }
 
+/// Game state.
 #[derive(Debug, Default)]
 struct State {
+    /// Cells of board.
     cells: Vec<Vec<Cell>>,
+    /// Dimension of board.
     dim: usize,
+    /// Current duplicated tile.
     dupe: String,
+    /// Is selection success.
     is_success: bool,
 }
 
 impl State {
+    /// Reset state.
     fn reset(&mut self) {
         self.is_success = false;
         let range = (1, self.dim * self.dim);
@@ -92,18 +113,17 @@ impl State {
         ::log::info!("reset board, dupe {}", self.dupe);
     }
 
+    /// Get selected tiles.
     fn get_selected(&self) -> Vec<&str> {
-        let mut v = Vec::new();
-
-        for cell in self.cells.iter().flatten() {
-            if cell.is_selected {
-                v.push(cell.value.as_str());
-            }
-        }
-
-        v
+        self.cells
+            .iter()
+            .flatten()
+            .filter(|cell| cell.is_selected)
+            .map(|cell| cell.value.as_str())
+            .collect()
     }
 
+    /// Update game state.
     pub fn update(&mut self, msg: Msg) -> Task<Msg> {
         match msg {
             Msg::Pressed { x, y } => {
@@ -114,7 +134,7 @@ impl State {
 
                 let selected = self.get_selected();
 
-                self.is_success = selected.as_slice() == &[self.dupe.as_str(), self.dupe.as_str()];
+                self.is_success = selected.as_slice() == [self.dupe.as_str(), self.dupe.as_str()];
 
                 if self.is_success {
                     ::log::info!("success! {}", self.dupe);
@@ -153,6 +173,7 @@ impl State {
         }
     }
 
+    /// View game board.
     pub fn view(&self) -> Element<'_, Msg> {
         self.cells
             .iter()

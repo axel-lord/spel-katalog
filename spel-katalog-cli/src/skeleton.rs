@@ -1,3 +1,5 @@
+//! Implementation of skeleton generator.
+
 use ::std::{
     io::{BufWriter, Write},
     path::PathBuf,
@@ -5,6 +7,7 @@ use ::std::{
 
 use crate::SubCmdError;
 
+/// Create a settings skeleton at the given path.
 pub fn skeleton(
     output: PathBuf,
     settings: ::spel_katalog_settings::Settings,

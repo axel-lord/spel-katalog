@@ -63,9 +63,8 @@ pub enum Message {
     Batch(OrRequest<::spel_katalog_batch::Message, ::spel_katalog_batch::Request>),
     OpenWindow(window::Id, WindowType),
     CloseWindow(window::Id),
-    DialogRequest(window::Id, dialog::Request),
-    DialogMessage(window::Id, dialog::Message),
-    Dialog(DialogBuilder),
+    Dialog(window::Id, OrRequest<dialog::Message, dialog::Request>),
+    BuildDialog(DialogBuilder),
     #[from]
     Terminal(::spel_katalog_terminal::Message),
     LuaDocs(::spel_katalog_lua_docs::Message),

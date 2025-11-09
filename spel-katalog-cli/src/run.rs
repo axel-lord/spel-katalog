@@ -6,6 +6,7 @@ use ::std::{
 
 use ::clap::Args;
 
+/// Generate default config path.
 pub fn default_config() -> &'static Path {
     static LAZY: OnceLock<PathBuf> = OnceLock::new();
     LAZY.get_or_init(|| {

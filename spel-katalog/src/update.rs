@@ -422,17 +422,20 @@ impl App {
                     return ::iced::exit();
                 }
             }
-            Message::DialogRequest(id, request) => match request {
-                crate::dialog::Request::Close => return window::close(id),
-            },
-            Message::DialogMessage(id, msg) => {
+            Message::Dialog(id, msg) => {
+                let msg = match msg {
+                    OrRequest::Message(msg) => msg,
+                    OrRequest::Request(request) => match request {
+                        crate::dialog::Request::Close => return window::close(id),
+                    },
+                };
                 if let Some(WindowType::Dialog(dialog)) = self.windows.get_mut(&id) {
                     return dialog
                         .update(msg)
-                        .map(move |request| Message::DialogRequest(id, request));
+                        .map(move |request| Message::Dialog(id, OrRequest::Request(request)));
                 }
             }
-            Message::Dialog(dialog) => {
+            Message::BuildDialog(dialog) => {
                 let (_, task) = window::open(window::Settings {
                     size: Size {
                         width: 500.0,

@@ -45,6 +45,9 @@ impl SinkBuilder {
     /// If `ClonePipe`, clone self.
     ///
     /// If `Inherit`, create a new `Inherit` builder.
+    ///
+    /// # Errors
+    /// If pipe creation fails.
     pub fn with_locked_channel(
         &self,
         id: impl FnOnce() -> SinkIdentity,
@@ -67,6 +70,9 @@ impl SinkBuilder {
     /// Get a pipewriter if possible, returns `Ok(None)` if `Inherit`,
     /// otherwise attempts to clone/create a pipe. If creating `id` will
     /// be called to set identity of pipe.
+    ///
+    /// # Errors
+    /// If pipe creation fails.
     pub fn get_pipe_writer(
         &self,
         id: impl FnOnce() -> SinkIdentity,
@@ -91,6 +97,9 @@ impl SinkBuilder {
     /// be called to set identity of pipe.
     ///
     /// If `CreatePipe` and two pipes cannot be created no reader is sent.
+    ///
+    /// # Errors
+    /// If pipe creation fails.
     pub fn get_pipe_writer_double(
         &self,
         id: impl FnOnce() -> SinkIdentity,
@@ -114,6 +123,9 @@ impl SinkBuilder {
     }
 
     /// Get a process sink.
+    ///
+    /// # Errors
+    /// If pipes should be created but fails.
     pub fn build(&self, id: impl FnOnce() -> SinkIdentity) -> ::std::io::Result<Stdio> {
         match self {
             SinkBuilder::Inherit => Ok(Stdio::inherit()),
@@ -133,6 +145,9 @@ impl SinkBuilder {
     /// Get two process sinks, which either both inherit parent or point to the same output.
     ///
     /// If `CreatePipe` and two pipes cannot be created no reader is sent.
+    ///
+    /// # Errors
+    /// If pipes should be created but fail.
     pub fn build_double(&self, id: impl FnOnce() -> SinkIdentity) -> ::std::io::Result<[Stdio; 2]> {
         match self {
             SinkBuilder::Inherit => Ok([Stdio::inherit(), Stdio::inherit()]),

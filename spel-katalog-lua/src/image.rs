@@ -1,3 +1,5 @@
+//! Image api.
+
 use ::std::{ffi::OsStr, io::Cursor, os::unix::ffi::OsStrExt, path::Path, rc::Rc};
 
 use ::image::{
@@ -13,6 +15,7 @@ use ::tap::Pipe;
 
 use crate::{Skeleton, color, init_table, lua_result::LuaResult, make_class};
 
+/// Get connection reference from lazy cell.
 fn get_conn<'c>(
     conn: &'c OnceCell<::rusqlite::Connection>,
     db_path: &Path,
@@ -24,9 +27,13 @@ fn get_conn<'c>(
 /// Rectangle consisting of a point, width and height.
 #[derive(Debug, Clone, Copy)]
 struct Rect {
+    /// X position of rectangle.
     x: u32,
+    /// Y position of rectangle.
     y: u32,
+    /// Width of rectangle.
     w: u32,
+    /// Height of rectangle.
     h: u32,
 }
 
@@ -53,7 +60,9 @@ impl FromLua for Rect {
 /// Letterbox params
 #[derive(Debug, Clone, Copy)]
 struct Letterbox {
+    /// Ratio of letterbox.
     ratio: f64,
+    /// Colors of letterbox borders.
     color: color::Color,
 }
 
@@ -131,6 +140,7 @@ impl FromLua for Filter {
     }
 }
 
+/// Wrapped image.
 #[derive(Debug, Clone, FromLua)]
 pub struct Image(DynamicImage);
 
@@ -141,6 +151,7 @@ impl IntoLua for Image {
 }
 
 impl Image {
+    /// Create a new empty image with the given width and height.
     fn new(_c: &::mlua::Table, width: u32, height: u32) -> ::mlua::Result<Self> {
         if width == 0 || height == 0 {
             return Err(::mlua::Error::RuntimeError(format!(
@@ -152,6 +163,7 @@ impl Image {
         Ok(Self(img))
     }
 
+    /// Stŕetch the image.
     fn stretch(&self, width: u32, height: u32, filter: Option<Filter>) -> ::mlua::Result<Self> {
         if width == 0 || height == 0 {
             return Err(::mlua::Error::RuntimeError(format!(
@@ -166,6 +178,7 @@ impl Image {
         )))
     }
 
+    /// Resize the image.
     fn resize(&self, width: u32, height: u32, filter: Option<Filter>) -> ::mlua::Result<Self> {
         if width == 0 || height == 0 {
             return Err(::mlua::Error::RuntimeError(format!(
@@ -180,16 +193,19 @@ impl Image {
         )))
     }
 
+    /// Flip the image horizontally.
     #[inline]
     fn flip_h(&self) -> Self {
         Self(self.0.fliph())
     }
 
+    /// Flip the image vertically.
     #[inline]
     fn flip_v(&self) -> Self {
         Self(self.0.flipv())
     }
 
+    /// Overlay an image over the image.
     fn overlay(&self, other: AnyUserData, x: Option<u32>, y: Option<u32>) -> ::mlua::Result<Self> {
         let other = other.borrow::<Self>()?;
         let other = &other.0;
@@ -213,6 +229,7 @@ impl Image {
         Ok(Self(DynamicImage::from(dest)))
     }
 
+    /// Run a function on all pixels.
     fn map_color(&self, lua: &Lua, color_class: &Table, map: Function) -> ::mlua::Result<Self> {
         let mut outimg = self.0.to_rgba8();
 
@@ -231,6 +248,7 @@ impl Image {
         Ok(Self(DynamicImage::from(outimg)))
     }
 
+    /// Crop the image.
     fn crop(&self, rect: Rect) -> ::mlua::Result<Self> {
         let Rect { x, y, w, h } = rect;
         let this = &self.0;
@@ -240,6 +258,7 @@ impl Image {
         Ok(Self(DynamicImage::from(view.to_image())))
     }
 
+    /// Letterbox the image.
     fn letterbox(&self, letterbox: Letterbox) -> ::mlua::Result<Self> {
         let Letterbox { ratio, color } = letterbox;
         let this = &self.0;
@@ -278,6 +297,7 @@ impl Image {
         Ok(Self(DynamicImage::from(outimg)))
     }
 
+    /// Load a cover.
     pub fn load_cover(
         slug: String,
         db_path: &Path,
@@ -302,6 +322,7 @@ impl Image {
         LuaResult::Ok(image).wrap_ok()
     }
 
+    /// Load an image from a path.
     fn load(_c: &::mlua::Table, path: ::mlua::String) -> ::mlua::Result<LuaResult<Self, String>> {
         let image = ImageReader::open(OsStr::from_bytes(&path.as_bytes()))
             .map_err(|err| format!("could not open image {path:?}, {err}"))
@@ -315,16 +336,7 @@ impl Image {
         LuaResult::from(image).wrap_ok()
     }
 
-    #[inline]
-    fn width(&self) -> u32 {
-        self.0.width()
-    }
-
-    #[inline]
-    fn height(&self) -> u32 {
-        self.0.height()
-    }
-
+    /// Get color of pixel at position.
     fn at(&self, lua: &Lua, color_class: &Table, x: u32, y: u32) -> ::mlua::Result<Table> {
         let this = &self.0;
         if !this.in_bounds(x, y) {
@@ -336,9 +348,10 @@ impl Image {
         }
         let [r, g, b, a] = this.get_pixel(x, y).0;
         let clr = color::Color { r, g, b, a };
-        clr.to_table(lua, &color_class)
+        clr.to_table(lua, color_class)
     }
 
+    /// Set color of pixel at position.
     fn set(&mut self, x: u32, y: u32, clr: color::Color) -> ::mlua::Result<()> {
         let this = &mut self.0;
         if !this.in_bounds(x, y) {
@@ -353,6 +366,7 @@ impl Image {
         Ok(())
     }
 
+    /// Get average color of image.
     fn avg(&self, lua: &Lua, color_class: &Table) -> ::mlua::Result<Table> {
         let this = &self.0;
         let img;
@@ -380,12 +394,14 @@ impl Image {
         color::Color { r, g, b, a: 255 }.to_table(lua, color_class)
     }
 
+    /// Save image to path.
     fn save(&self, path: ::mlua::String) -> ::mlua::Result<()> {
         self.0
             .save(OsStr::from_bytes(&path.as_bytes()))
             .map_err(::mlua::Error::runtime)
     }
 
+    /// Save image as cover.
     pub fn save_cover(
         &self,
         slug: String,
@@ -409,6 +425,7 @@ impl Image {
         Ok(())
     }
 
+    /// Register image class with module.
     fn register(
         lua: &Lua,
         skeleton: &Skeleton,
@@ -436,8 +453,8 @@ impl Image {
 
         let color_class = skeleton.color.clone();
         lua.register_userdata_type::<Image>(move |r| {
-            r.add_method("w", |_, this, _: ()| Ok(this.width()));
-            r.add_method("h", |_, this, _: ()| Ok(this.height()));
+            r.add_method("w", |_, this, _: ()| Ok(this.0.width()));
+            r.add_method("h", |_, this, _: ()| Ok(this.0.height()));
 
             let class = color_class.clone();
             r.add_method("at", move |lua, this, (x, y)| this.at(lua, &class, x, y));
@@ -474,6 +491,7 @@ impl Image {
     }
 }
 
+/// Register image functions with module.
 pub fn register(
     lua: &Lua,
     conn: Rc<OnceCell<Connection>>,

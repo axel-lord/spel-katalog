@@ -15,6 +15,7 @@ use ::spel_katalog_common::w;
 use ::spel_katalog_sink::SinkIdentity;
 use ::tokio_stream::wrappers::ReceiverStream;
 
+/// Remove ansi escape codes from input.
 fn without_ansi_escapes(bytes: Cow<'_, str>) -> Cow<'_, str> {
     #[derive(Debug)]
     struct Cleaner(String);
@@ -43,6 +44,7 @@ fn without_ansi_escapes(bytes: Cow<'_, str>) -> Cow<'_, str> {
     Cow::Owned(output)
 }
 
+/// Extend a string lossily from bytes.
 fn extend_lossy(buf: &mut String, bytes: &[u8]) {
     for chunk in bytes.utf8_chunks() {
         buf.push_str(chunk.valid());
@@ -122,17 +124,25 @@ impl Message {
 #[derive(Debug)]
 pub struct Private<T>(pub(crate) T);
 
+/// Storage for data received from pipe.
 #[derive(Debug)]
 struct Pipe {
+    /// Id to display for this data.
     identity: String,
+    /// All received content.
     content: Vec<u8>,
+    /// If the pipe is still open.
     open: bool,
 }
 
+/// Id of data pipe.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct PipeId<'s> {
+    /// Name of pipe.
     name: &'s str,
+    /// Index of pipe.
     idx: usize,
+    /// If the pipe is still open.
     open: bool,
 }
 
@@ -194,14 +204,23 @@ impl From<Wrap> for widget::text::Wrapping {
 /// Terminal widget/window.
 #[derive(Debug)]
 pub struct Terminal {
+    /// Received data/pipes.
     pipes: Vec<Pipe>,
+    /// Currently displayed lines.
     lines: VecDeque<(NonZero<usize>, String)>,
+    /// Current pipe.
     current: Option<usize>,
+    /// How to wrap content.
     wrap: Wrap,
+    /// Default value for how many lines to display at most.
     limit: u16,
+    /// Placeholder text for limit input.
     limit_placeholder: String,
+    /// How many lines to currently display at most.
     current_limit: Option<u16>,
+    /// Text in limit input.
     limit_text: String,
+    /// Text size to use.
     text_size: u16,
 }
 
@@ -254,7 +273,7 @@ impl Terminal {
 
                     loop {
                         match reader.read(&mut buf) {
-                            Ok(count) if count == 0 => break Ok(()),
+                            Ok(0) => break Ok(()),
                             Err(err) if err.kind() == ErrorKind::Interrupted => continue,
                             Err(err) => break Err(err),
                             Ok(count) => {
@@ -323,9 +342,10 @@ impl Terminal {
         }
     }
 
+    /// Add line to back of deque,
     fn add_line_back(lines: &mut VecDeque<(NonZero<usize>, String)>, line: Cow<str>) {
         if let Some((count, last)) = lines.back_mut()
-            && last.as_str() == &line
+            && last.as_str() == line
         {
             *count = count.saturating_add(1);
         } else {
@@ -333,9 +353,10 @@ impl Terminal {
         }
     }
 
+    /// Add line to front of deque.
     fn add_line_front(lines: &mut VecDeque<(NonZero<usize>, String)>, line: Cow<str>) {
         if let Some((count, first)) = lines.front_mut()
-            && first.as_str() == &line
+            && first.as_str() == line
         {
             *count = count.saturating_add(1);
         } else {
@@ -343,6 +364,7 @@ impl Terminal {
         }
     }
 
+    /// Refresh lines from byte content.
     fn refresh(&mut self) {
         let Self {
             pipes,
@@ -378,6 +400,7 @@ impl Terminal {
         }
     }
 
+    /// Add more content to pipe with given index.
     fn add_content(&mut self, idx: usize, new_content: Vec<u8>) {
         let Some(pipe) = self.pipes.get_mut(idx) else {
             ::log::warn!("received content for unavailable task {idx}");
@@ -438,6 +461,7 @@ impl Terminal {
         }
     }
 
+    /// Set amount of visible lines.
     fn set_line_count(&mut self, to: String) {
         if to.is_empty() {
             if self.current_limit.is_some() {

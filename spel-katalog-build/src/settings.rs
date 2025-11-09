@@ -20,12 +20,17 @@ use crate::{
     string::doc_str,
 };
 
+/// Content to emit to file.
 struct Emit {
+    /// Type to emit.
     ty: ::syn::Item,
+    /// Impls for type..
     impls: ::syn::File,
+    /// FromStr impl for type.
     from_str: ::syn::File,
 }
 
+/// Create an [Emit] for an enum setting.
 fn emit_enum(
     setting: &Setting,
     name: &str,
@@ -65,7 +70,7 @@ fn emit_enum(
                 impl #ident {
                     #[doc = "Get string representation of current variant."]
                     #[inline]
-                    pub fn as_str(&self) -> &str {
+                    pub const fn as_str(&self) -> &str {
                         match self {
                             #( Self::#variant_idents => #variants, )*
                         }
@@ -73,11 +78,8 @@ fn emit_enum(
 
                     #(
                         #[doc = #is_variants_doc]
-                        pub fn #is_variants(&self) -> bool {
-                            match self {
-                                Self::#variant_idents => true,
-                                _ => false,
-                            }
+                        pub const fn #is_variants(&self) -> bool {
+                            matches!(self, Self::#variant_idents)
                         }
                     )*
                 }
@@ -87,7 +89,7 @@ fn emit_enum(
             item::title(ident, &title_body),
             item::help(ident, &str_expr(doc.trim_end_matches('.'))),
             item::variants(ident, &quote! { #( Self::#variant_idents ),* }),
-            item::default(ident, &quote! { Self::#default_ident }),
+            item::default_expect_derive(ident, &quote! { Self::#default_ident }),
             item::display(ident, &quote! { f.write_str(self.as_str()) }),
             item::as_ref(ident, &quote! { str }, &quote! { self.as_str() }),
             item::from(
@@ -145,6 +147,7 @@ fn emit_enum(
     }
 }
 
+/// create an [Emit] for a path setting.
 fn emit_path(setting: &Setting, name: &str, ident: &Ident, path: &str) -> Emit {
     let title_body = title_expr(name, setting.title.as_deref());
     let doc = doc_str(&setting.help);
@@ -166,7 +169,7 @@ fn emit_path(setting: &Setting, name: &str, ident: &Ident, path: &str) -> Emit {
                 impl #ident {
                     #[doc = "Construct a new value from a string."]
                     #[inline]
-                    pub fn new(string: ::std::string::String) -> Self {
+                    pub const fn new(string: ::std::string::String) -> Self {
                         Self(string)
                     }
 
@@ -179,8 +182,8 @@ fn emit_path(setting: &Setting, name: &str, ident: &Ident, path: &str) -> Emit {
 
                     #[doc = "Get setting as a string slice."]
                     #[inline]
-                    pub fn as_str(&self) -> &str {
-                        &self.0
+                    pub const fn as_str(&self) -> &str {
+                        self.0.as_str()
                     }
 
                     #[doc = "Get setting as a path."]
@@ -263,6 +266,7 @@ fn emit_path(setting: &Setting, name: &str, ident: &Ident, path: &str) -> Emit {
     }
 }
 
+/// Create an [Emit] based on the provided setting.
 fn emit_type(setting: &Setting, name: &str) -> Emit {
     let ident = format_ident!("{}", name.to_case(Case::Pascal));
     match &setting.content {
@@ -274,6 +278,9 @@ fn emit_type(setting: &Setting, name: &str) -> Emit {
 }
 
 /// Write settings rust code to destination path.
+///
+/// # Panics
+/// If content cannot be written.
 pub fn write(settings: Settings, dest: &Path) {
     let mut file = BufWriter::new(File::create(dest).unwrap());
     let Settings { settings } = settings;
@@ -282,7 +289,6 @@ pub fn write(settings: Settings, dest: &Path) {
         .iter()
         .map(|(name, setting)| (name, setting, emit_type(setting, name)))
         .collect::<Vec<_>>();
-    // emitted.sort_by(|a, b| a.1.cmp(&b.1).then(a.0.cmp(&b.0)));
 
     let from_str = emitted.iter().map(|(.., e)| &e.from_str);
     let types = emitted.iter().map(|(.., e)| &e.ty);
@@ -335,16 +341,23 @@ pub fn write(settings: Settings, dest: &Path) {
         }
     }
 
+    let allow: ::syn::Attribute = parse_quote!(#![allow(clippy::all)]);
+
     file.write_all(
         ::prettyplease::unparse(&parse_quote! {
+
+            pub use super::*;
+
             /// Error types used for [FromStr][::core::str::FromStr] implementations.
             pub mod error {
+                #allow
                 use super::*;
                 #(#from_str)*
             }
 
             /// Types used for indexing settings.
             pub mod index {
+                #allow
                 use super::*;
 
                 /// Index enum settings.
@@ -454,6 +467,7 @@ pub fn write(settings: Settings, dest: &Path) {
                 }
 
                 /// Get a skeleton config.
+                #[expect(clippy::clone_on_copy)]
                 pub fn skeleton(&self) -> Self {
                     Self {#(
                         #field_names: Some(self.#field_names.clone().unwrap_or_default()),
@@ -525,16 +539,13 @@ pub fn write(settings: Settings, dest: &Path) {
                 /// Create setting deltas from a [Settings].
                 pub fn create(settings: Settings) -> impl Iterator<Item = Delta> {
                     let Settings { #( #field_names ),* } = settings;
-                    [#( #field_names.map(|value| Self::#ty_names(value))),*].into_iter().flatten()
+                    [#( #field_names.map(Self::#ty_names)),*].into_iter().flatten()
                 }
 
                 #(
                 #[doc = #is_variants_docs]
-                pub fn #is_variants(&self) -> bool {
-                    match self {
-                        Self::#ty_names(..) => true,
-                        _ => false,
-                    }
+                pub const fn #is_variants(&self) -> bool {
+                    matches!(self, Self::#ty_names(..))
                 }
                 )*
             }

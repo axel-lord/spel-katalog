@@ -25,17 +25,22 @@ mod span_ext;
 mod state;
 mod table;
 
+/// Key value map in use by crate.
 type Map<K, V> = IndexMap<K, V, ::rustc_hash::FxBuildHasher>;
 
 pub use span_ext::SpanExt;
 
+/// Documentation Item.
 #[derive(Debug, Clone, From)]
 enum Item<S> {
+    /// Simple docs.
     Simple(Simple<S>),
+    /// Table docs.
     Table(Table<S>),
 }
 
 impl Item<String> {
+    /// Get an item from a yaml value.
     pub fn from_yaml(yaml: Yaml, state: &mut DocsState) -> Result<Self, Yaml> {
         let yaml = match Simple::from_yaml(yaml, state) {
             Ok(simple) => return Ok(Self::Simple(simple)),
@@ -52,6 +57,7 @@ impl Item<String> {
 }
 
 impl<S: AsRef<str>> Item<S> {
+    /// View item with the given name.
     pub fn view<'a>(&'a self, name: &'a str, state: &'a DocsState) -> Element<'a, Message> {
         match self {
             Item::Simple(simple) => simple.view(name),
@@ -59,6 +65,7 @@ impl<S: AsRef<str>> Item<S> {
         }
     }
 
+    /// View item without a name.
     pub fn view_anon<'a>(&'a self, state: &'a DocsState) -> Element<'a, Message> {
         match self {
             Item::Simple(simple) => simple.view_anon(),
@@ -67,6 +74,7 @@ impl<S: AsRef<str>> Item<S> {
     }
 }
 
+/// View element indented,
 fn indented<'a, M: 'a>(elem: impl Into<Element<'a, M>>) -> Element<'a, M> {
     widget::Row::new()
         .align_y(Vertical::Top)
@@ -75,6 +83,7 @@ fn indented<'a, M: 'a>(elem: impl Into<Element<'a, M>>) -> Element<'a, M> {
         .into()
 }
 
+/// View a category.
 fn category<'a, M: 'a>(
     name: &'a str,
     elements: impl IntoIterator<Item = impl Into<Element<'a, M>>>,
@@ -89,6 +98,7 @@ fn category<'a, M: 'a>(
         .into()
 }
 
+/// Use a closure to display an iterable if it has any items.
 fn with_content<'a, I, C, F, T: 'a>(content: I, f: F) -> Option<T>
 where
     F: FnOnce(::std::iter::Peekable<<I as IntoIterator>::IntoIter>) -> T,
@@ -102,6 +112,7 @@ where
     }
 }
 
+/// Create an array of empty spans.
 fn empty_spans<'a, const N: usize, L, F>() -> [Span<'a, L, F>; N] {
     ::std::array::from_fn(|_| Span::new(""))
 }
@@ -118,7 +129,9 @@ pub enum Message {
 /// Documentation viewer.
 #[derive(Debug)]
 pub struct DocsViewer {
+    /// Top-level item docs.
     docs: Map<String, Item<String>>,
+    /// Display state of docs.
     state: DocsState,
 }
 
@@ -143,7 +156,7 @@ impl Default for DocsViewer {
                 .unwrap_or_default();
             (docs, state)
         });
-        let (docs, state) = (&*DOCUMENT).clone();
+        let (docs, state) = (*DOCUMENT).clone();
         Self { docs, state }
     }
 }
@@ -177,7 +190,7 @@ impl DocsViewer {
                         ]
                         .with_color(Color::from_rgb(0.7, 0.7, 0.7)),
                     )),
-                    |col, (key, value)| col.push(value.view(&key, &self.state)),
+                    |col, (key, value)| col.push(value.view(key, &self.state)),
                 )
                 .spacing(5)
                 .width(Fill)

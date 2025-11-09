@@ -1,3 +1,5 @@
+//! Path api.
+
 use ::std::{
     ffi::{OsStr, OsString},
     os::unix::ffi::{OsStrExt, OsStringExt},
@@ -9,18 +11,22 @@ use ::tap::{Conv, Pipe};
 
 use crate::{Skeleton, make_module};
 
+/// Convert bytes to path.
 fn bytes_as_path(bytes: &[u8]) -> &Path {
     Path::new(OsStr::from_bytes(bytes))
 }
 
+/// Convert a bstring to a pathbuf.
 fn path_buf_from_bstring(bstring: BString) -> PathBuf {
     PathBuf::from(OsString::from_vec(bstring.into()))
 }
 
+/// Convert a pathbuf to a bstring.
 fn bstring_from_path_buf(path_buf: PathBuf) -> BString {
     path_buf.into_os_string().into_vec().into()
 }
 
+/// Register path functions with module.
 pub fn register(lua: &Lua, skeleton: &Skeleton) -> ::mlua::Result<()> {
     let module = lua.create_table()?;
 

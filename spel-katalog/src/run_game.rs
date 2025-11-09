@@ -131,7 +131,7 @@ impl App {
                 Ok(config) => config,
                 Err(err) => {
                     ::log::error!("while loading config {configpath:?}\n{err}");
-                    return format!("could not load config for game").into();
+                    return "could not load config for game".to_owned().into();
                 }
             };
 
