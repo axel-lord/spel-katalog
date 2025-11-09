@@ -1,6 +1,6 @@
 //! [Games] impl.
 
-use ::std::iter::{self, FusedIterator};
+use ::core::iter::{self, FusedIterator};
 
 use ::derive_more::{Deref, DerefMut};
 use ::itertools::izip;

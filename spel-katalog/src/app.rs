@@ -19,8 +19,6 @@ use ::spel_katalog_common::{OrRequest, StatusSender, w};
 use ::spel_katalog_settings::{CacheDir, ConfigDir, FilterMode, LutrisDb, Network, Theme};
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::tap::Pipe;
-use ::tokio::sync::mpsc::{Receiver, Sender, channel};
-use ::tokio_stream::wrappers::ReceiverStream;
 
 use crate::{
     ExitReceiver, Message, QuickMessage,
@@ -57,7 +55,7 @@ pub(crate) struct App {
     pub process_list: Option<Vec<process_info::ProcessInfo>>,
     pub sink_builder: SinkBuilder,
     pub windows: FxHashMap<window::Id, WindowType>,
-    pub dialog_tx: Sender<DialogBuilder>,
+    pub dialog_tx: ::flume::Sender<DialogBuilder>,
     pub terminal: ::spel_katalog_terminal::Terminal,
     pub docs_viewer: ::spel_katalog_lua_docs::DocsViewer,
 }
@@ -65,7 +63,7 @@ pub(crate) struct App {
 /// Virtual table passed to lua.
 #[derive(Debug)]
 pub struct LuaVt {
-    pub sender: Sender<DialogBuilder>,
+    pub sender: ::flume::Sender<DialogBuilder>,
     pub settings: ::spel_katalog_settings::Settings,
 }
 
@@ -75,11 +73,9 @@ impl ::spel_katalog_lua::Virtual for LuaVt {
     }
 
     fn open_dialog(&self, text: String, buttons: Vec<String>) -> mlua::Result<Option<String>> {
-        let (dialog, mut rx) = DialogBuilder::new(text, buttons);
-        self.sender
-            .blocking_send(dialog)
-            .map_err(::mlua::Error::external)?;
-        Ok(rx.blocking_recv())
+        let (dialog, rx) = DialogBuilder::new(text, buttons);
+        self.sender.send(dialog).map_err(::mlua::Error::external)?;
+        Ok(rx.recv().ok())
     }
 
     fn thumb_db_path(&self) -> mlua::Result<PathBuf> {
@@ -107,9 +103,9 @@ impl ::spel_katalog_lua::Virtual for LuaVt {
 #[derive(Debug)]
 struct Initial {
     app: App,
-    status_rx: Receiver<String>,
-    dialog_rx: Receiver<DialogBuilder>,
-    terminal_rx: Option<::std::sync::mpsc::Receiver<(PipeReader, SinkIdentity)>>,
+    status_rx: ::flume::Receiver<String>,
+    dialog_rx: ::flume::Receiver<DialogBuilder>,
+    terminal_rx: Option<::flume::Receiver<(PipeReader, SinkIdentity)>>,
     show_settings: bool,
 }
 
@@ -125,7 +121,7 @@ impl Initial {
 
         let settings = get_settings(&config, settings);
 
-        let (status_tx, status_rx) = ::tokio::sync::mpsc::channel(64);
+        let (status_tx, status_rx) = ::flume::bounded(64);
 
         let filter = String::new();
         let status = String::new();
@@ -138,12 +134,12 @@ impl Initial {
         let show_batch = false;
         let windows = FxHashMap::default();
         let batch = Default::default();
-        let (dialog_tx, dialog_rx) = channel(64);
+        let (dialog_tx, dialog_rx) = ::flume::bounded(64);
         let terminal = ::spel_katalog_terminal::Terminal::default().with_limit(256);
         let docs_viewer = Default::default();
 
         let (sink_builder, terminal_rx) = if show_terminal {
-            let (terminal_tx, terminal_rx) = ::std::sync::mpsc::channel();
+            let (terminal_tx, terminal_rx) = ::flume::unbounded();
             (SinkBuilder::CreatePipe(terminal_tx), Some(terminal_rx))
         } else {
             (sink_builder, None)
@@ -206,10 +202,9 @@ impl App {
                     .pipe(OrRequest::Message)
                     .pipe(Message::Games)
                     .pipe(Task::done);
-                let receive_status =
-                    Task::stream(ReceiverStream::new(status_rx)).map(Message::Status);
+                let receive_status = Task::stream(status_rx.into_stream()).map(Message::Status);
                 let receive_dialog =
-                    Task::stream(ReceiverStream::new(dialog_rx)).map(Message::BuildDialog);
+                    Task::stream(dialog_rx.into_stream()).map(Message::BuildDialog);
                 let exit_recv = exit_recv
                     .map(|exit_recv| Task::future(exit_recv.recv()).then(|_| ::iced::exit()))
                     .unwrap_or_else(Task::none);

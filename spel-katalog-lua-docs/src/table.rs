@@ -1,9 +1,7 @@
 //! Documentation table display.
 
-use ::std::{
-    ops::{BitOr, BitOrAssign},
-    sync::LazyLock,
-};
+use ::core::ops::{BitOr, BitOrAssign};
+use ::std::sync::LazyLock;
 
 use ::derive_more::IsVariant;
 use ::iced::{

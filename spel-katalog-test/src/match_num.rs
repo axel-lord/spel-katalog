@@ -1,17 +1,19 @@
 //! Sample game, should run on all platforms, and log with color.
 
-use ::std::{f32, time::Duration};
+use ::core::time::Duration;
+use ::std::{collections::HashSet, f32, io::Write};
 
 use ::clap::Parser;
-use ::iced::{
-    Element,
-    Length::Fill,
-    Task,
-    widget::{self, Button, Column, Row, button, horizontal_space, text},
-};
+use ::iced_core::{Element, Length::Fill, Theme};
+use ::iced_futures::backend;
+use ::iced_renderer::{Compositor, Renderer};
+use ::iced_runtime::Task;
+use ::iced_widget::{self as widget, Button, Column, Row, button, horizontal_space, text};
+use ::iced_winit::program;
 use ::log::LevelFilter;
 use ::rand::{Rng, seq::SliceRandom};
 use ::tap::Tap;
+use iced_futures::Subscription;
 
 /// Cli
 #[derive(Debug, Parser)]
@@ -34,6 +36,10 @@ enum Msg {
     Fill,
     /// Reset board.
     Reset,
+    /// Window closed.
+    Close(::iced_core::window::Id),
+    /// Window opened.
+    Open(::iced_core::window::Id),
 }
 
 /// A game cell.
@@ -47,7 +53,12 @@ struct Cell {
 
 impl Cell {
     /// View cell.
-    pub fn view(&self, x: usize, y: usize, is_success: bool) -> Button<'_, Msg> {
+    pub fn view<'a, R: 'a + ::iced_core::text::Renderer>(
+        &'a self,
+        x: usize,
+        y: usize,
+        is_success: bool,
+    ) -> Button<'a, Msg, Theme, R> {
         button(
             if self.is_selected {
                 text(format!("[{}]", self.value))
@@ -82,6 +93,8 @@ struct State {
     dupe: String,
     /// Is selection success.
     is_success: bool,
+    /// Open windows.
+    windows: HashSet<::iced_core::window::Id>,
 }
 
 impl State {
@@ -160,9 +173,16 @@ impl State {
                     Task::none()
                 } else {
                     let mag = ((f32::consts::PI * 2.0 * off / 64.0).sin() + 1.0) * 128.0;
+                    let mut stdout = ::std::io::stdout().lock();
 
-                    (0..(mag.round() as usize)).for_each(|_| print!("#"));
-                    println!();
+                    (0..(mag.round() as usize)).for_each(|_| {
+                        stdout
+                            .write_all(b"#")
+                            .expect("write to stdout should succeed")
+                    });
+                    stdout
+                        .write_all(b"\n")
+                        .expect("write to stdout should succeed");
 
                     Task::future(async move {
                         ::tokio::time::sleep(Duration::from_secs_f32(0.025)).await;
@@ -170,17 +190,33 @@ impl State {
                     })
                 }
             }
+            Msg::Open(id) => {
+                self.windows.insert(id);
+                Task::none()
+            }
+            Msg::Close(id) => {
+                self.windows.remove(&id);
+
+                if self.windows.is_empty() {
+                    ::iced_runtime::exit()
+                } else {
+                    Task::none()
+                }
+            }
         }
     }
 
     /// View game board.
-    pub fn view(&self) -> Element<'_, Msg> {
+    pub fn view<'a, R>(&'a self) -> Element<'a, Msg, Theme, R>
+    where
+        R: 'a + ::iced_core::Renderer + ::iced_core::text::Renderer,
+    {
         self.cells
             .iter()
             .enumerate()
             .fold(
-                Column::new().padding(3).spacing(3).push(
-                    Row::new()
+                Column::<_, _, R>::new().padding(3).spacing(3).push(
+                    Row::<_, _, R>::new()
                         .width(Fill)
                         .push(
                             button("Fill")
@@ -214,6 +250,46 @@ impl State {
     }
 }
 
+impl ::iced_winit::Program for State {
+    type Message = Msg;
+
+    type Theme = Theme;
+
+    type Executor = backend::default::Executor;
+
+    type Renderer = Renderer;
+
+    type Flags = ();
+
+    fn new(_flags: Self::Flags) -> (Self, Task<Self::Message>) {
+        let (_, task) = ::iced_runtime::window::open(Default::default());
+        (Self::default(), task.map(Msg::Open))
+    }
+
+    fn title(&self, _window: ::iced_core::window::Id) -> String {
+        "Match Num".to_owned()
+    }
+
+    fn update(&mut self, message: Self::Message) -> Task<Self::Message> {
+        self.update(message)
+    }
+
+    fn view(
+        &self,
+        _window: ::iced_core::window::Id,
+    ) -> Element<'_, Self::Message, Self::Theme, Self::Renderer> {
+        self.view()
+    }
+
+    fn theme(&self, _window: ::iced_core::window::Id) -> Self::Theme {
+        Theme::Light
+    }
+
+    fn subscription(&self) -> Subscription<Self::Message> {
+        ::iced_runtime::window::close_events().map(Msg::Close)
+    }
+}
+
 /// Application entry.
 fn main() -> ::color_eyre::Result<()> {
     let Cli {} = Cli::parse();
@@ -223,6 +299,8 @@ fn main() -> ::color_eyre::Result<()> {
         .write_style(::env_logger::WriteStyle::Always)
         .init();
     ::log::info!("log initialized");
-    ::iced::run("Find Pair", State::update, State::view)?;
+
+    program::run::<State, Compositor>(Default::default(), Default::default(), None, ())?;
+
     Ok(())
 }

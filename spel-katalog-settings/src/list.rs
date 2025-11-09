@@ -20,7 +20,7 @@ where
         pick_list(
             T::VARIANTS,
             Some(value.unwrap_or_default()),
-            ::std::convert::identity,
+            ::core::convert::identity,
         )
         .padding(3)
         .conv::<Element<'a, T>>()

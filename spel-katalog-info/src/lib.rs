@@ -1,7 +1,7 @@
 //! Game info view.
 
+use ::core::convert::identity;
 use ::std::{
-    convert::identity,
     ffi::OsStr,
     path::{Path, PathBuf},
     sync::Arc,
@@ -417,7 +417,7 @@ impl State {
                     .additional_roots_content
                     .lines()
                     .filter(|line| !line.trim().is_empty())
-                    .map(|s| s.trim().to_string())
+                    .map(|s| s.trim().to_owned())
                     .collect();
 
                 Task::none()
@@ -835,7 +835,7 @@ impl State {
                             .highlight_with::<Highlighter>(
                                 ::iced_highlighter::Settings {
                                     theme: ::iced_highlighter::Theme::SolarizedDark,
-                                    token: "yml".to_string(),
+                                    token: "yml".to_owned(),
                                 },
                                 |h, _| h.to_format(),
                             )

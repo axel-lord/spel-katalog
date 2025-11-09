@@ -38,12 +38,20 @@ missing_debug_implementations = "warn"
 
 [workspace.lints.clippy]
 allow_attributes = "warn"
+case_sensitive_file_extension_comparisons = "warn"
+dbg_macro = "warn"
+future_not_send = "warn"
+missing_const_for_fn = "warn"
 missing_docs_in_private_items = "warn"
 missing_errors_doc = "warn"
 missing_panics_doc = "warn"
 missing_safety_doc = "warn"
-future_not_send = "warn"
-missing_const_for_fn = "warn"
+print_stderr = "warn"
+print_stdout = "warn"
+std_instead_of_core = "warn"
+str_to_string = "warn"
+todo = "warn"
+unused_result_ok = "warn"
 
 [workspace.dependencies]
 bytes = "1.10.1"
@@ -55,8 +63,16 @@ derive-new = "0.7.0"
 derive_more = "2.0.1"
 either = "1.15.0"
 env_logger = "0.11.8"
+flume = "0.11.1"
+futures = "0.3.31"
 iced = "0.13.1"
 iced_highlighter = "0.13.0"
+iced_runtime = "0.13.2"
+iced_futures = { version = "0.13.2", features = ["tokio"] }
+iced_widget = { version = "0.13.4", features = ["image"] }
+iced_winit = { version = "0.13.0", default-features = false, features = ["program", "wayland", "wayland-csd-adwaita", "wayland-dlopen"] }
+iced_renderer = { version = "0.13.0", features = ["wgpu"] }
+iced_core = "0.13.2"
 image = "0.25.8"
 indexmap = "2.12.0"
 itertools = "0.14.0"
@@ -108,5 +124,3 @@ toml = "0.9.8"
 vte = "0.15.0"
 whoami = { version = "1.6.1", default-features = false }
 yaml-rust2 = "0.10.4"
-flume = "0.11.1"
-futures = "0.3.31"

@@ -1,0 +1,25 @@
+disallowed-types = [
+	"std::sync::mpsc::Sender",
+	"std::sync::mpsc::Receiver",
+	"tokio::sync::mpsc::Sender",
+	"tokio::sync::mpsc::Receiver",
+	"tokio::sync::mpsc::UnboundedSender",
+	"tokio::sync::mpsc::UnboundedReceiver",
+	"futures::channel::mpsc::Sender",
+	"futures::channel::mpsc::Receiver",
+	"futures::channel::mpsc::UnboundedSender",
+	"futures::channel::mpsc::UnboundedReceiver",
+	"iced::futures::channel::mpsc::Sender",
+	"iced::futures::channel::mpsc::Receiver",
+	"iced::futures::channel::mpsc::UnboundedSender",
+	"iced::futures::channel::mpsc::UnboundedReceiver",
+]
+disallowed-methods = [
+	"std::sync::mpsc::channel",
+	"tokio::sync::mpsc::channel",
+	"tokio::sync::mpsc::unbounded_channel",
+	"futures::channel::mpsc::channel",
+	"futures::channel::mpsc::unbounded",
+	"iced::futures::channel::mpsc::channel",
+	"iced::futures::channel::mpsc::unbounded",
+]

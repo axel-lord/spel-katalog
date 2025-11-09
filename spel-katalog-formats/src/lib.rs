@@ -1,6 +1,6 @@
 //! Shared data formats in use buy application.
 
-use ::std::{convert::Infallible, str::FromStr};
+use ::core::{convert::Infallible, str::FromStr};
 
 use ::bytes::Bytes;
 use ::derive_more::{Display, IsVariant};
