@@ -211,6 +211,6 @@ impl ProcessInfo {
             });
         }
 
-        Ok::<_, ::tokio::io::Error>(summary)
+        Ok::<_, ::std::io::Error>(summary)
     }
 }

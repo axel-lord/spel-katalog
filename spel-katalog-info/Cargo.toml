@@ -9,16 +9,14 @@ license = "MIT OR Apache-2.0"
 derive_more = { workspace = true, features = ["from", "is_variant"] }
 image.workspace = true
 log.workspace = true
-rfd = { workspace = true, features = ["xdg-portal","tokio"] }
+rfd.workspace = true
 spel-katalog-common.workspace = true
 spel-katalog-formats.workspace = true
 spel-katalog-gather.workspace = true
 spel-katalog-settings.workspace = true
 tap.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["fs"] }
 serde = { workspace = true, features = ["derive"] }
-tokio-stream = { workspace = true, features = ["time"] }
 rayon.workspace = true
 parking_lot.workspace = true
 yaml-rust2 = { workspace = true }
