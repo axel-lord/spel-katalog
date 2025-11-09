@@ -4993,7 +4993,10 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "derive_more",
- "iced",
+ "iced_core",
+ "iced_renderer",
+ "iced_runtime",
+ "iced_widget",
  "log",
  "serde",
  "spel-katalog-build",

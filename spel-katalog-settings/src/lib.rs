@@ -1,12 +1,9 @@
 //! Settings widgets.
 
 use ::derive_more::{Deref, DerefMut, From, IsVariant};
-use ::iced::{
-    Alignment, Element,
-    Length::Fill,
-    Task,
-    widget::{button, horizontal_rule, horizontal_space, text},
-};
+use ::iced_core::{Alignment, Element, Length::Fill};
+use ::iced_runtime::Task;
+use ::iced_widget::{button, horizontal_rule, horizontal_space, text};
 
 use ::spel_katalog_common::{StatusSender, async_status, w};
 use ::std::{collections::HashMap, path::PathBuf};
@@ -206,12 +203,12 @@ where
     }
 }
 
-impl From<Theme> for ::iced::Theme {
+impl From<Theme> for ::iced_core::Theme {
     fn from(value: Theme) -> Self {
         macro_rules! themes {
             ($v:expr, $($theme:ident,)*) => {
                 match $v {$(
-                    Theme:: $theme => ::iced::Theme:: $theme,
+                    Theme:: $theme => ::iced_core::Theme:: $theme,
                 )*}
             };
         }
@@ -311,7 +308,7 @@ impl State {
     }
 
     /// View settings.
-    pub fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self) -> Element<'_, Message, ::iced_core::Theme, ::iced_renderer::Renderer> {
         w::col()
             .align_x(Alignment::Start)
             .width(Fill)
