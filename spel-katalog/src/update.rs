@@ -1,10 +1,8 @@
 use ::std::{convert::identity, path::Path};
 
-use ::iced::{
-    Size, Task,
-    widget::{self},
-    window,
-};
+use ::iced_core::{Size, window};
+use ::iced_runtime::Task;
+use ::iced_widget as widget;
 use ::rustc_hash::FxHashMap;
 use ::rustix::process::{Pid, RawPid};
 use ::spel_katalog_batch::BatchInfo;
@@ -79,13 +77,17 @@ impl App {
         let mut windows = self.find_windows(condition).peekable();
         if windows.peek().is_some() {
             if !settings.keep_if_last || self.windows.len() > 1 {
-                Task::batch(windows.map(window::close).collect::<Box<[_]>>())
+                Task::batch(
+                    windows
+                        .map(::iced_runtime::window::close)
+                        .collect::<Box<[_]>>(),
+                )
             } else {
                 ::log::info!("refusing to close this window type with no other windows shown");
                 Task::none()
             }
         } else {
-            let (_, task) = window::open(
+            let (_, task) = ::iced_runtime::window::open(
                 settings
                     .window_settings
                     .map_or_else(Default::default, |factory| factory()),
@@ -419,14 +421,14 @@ impl App {
 
                 if self.windows.is_empty() || matches!(closed, Some(WindowType::Term)) {
                     self.sink_builder = ::spel_katalog_sink::SinkBuilder::Inherit;
-                    return ::iced::exit();
+                    return ::iced_runtime::exit();
                 }
             }
             Message::Dialog(id, msg) => {
                 let msg = match msg {
                     OrRequest::Message(msg) => msg,
                     OrRequest::Request(request) => match request {
-                        crate::dialog::Request::Close => return window::close(id),
+                        crate::dialog::Request::Close => return ::iced_runtime::window::close(id),
                     },
                 };
                 if let Some(WindowType::Dialog(dialog)) = self.windows.get_mut(&id) {
@@ -436,7 +438,7 @@ impl App {
                 }
             }
             Message::BuildDialog(dialog) => {
-                let (_, task) = window::open(window::Settings {
+                let (_, task) = ::iced_runtime::window::open(window::Settings {
                     size: Size {
                         width: 500.0,
                         height: 250.0,

@@ -1,15 +1,15 @@
 use ::std::{ffi::OsStr, io, ops::Mul, os::unix::ffi::OsStrExt, path::PathBuf};
 
-use ::iced::{
-    Color, Element,
+use ::iced_core::{
+    Color,
     Length::{self, Fill},
     alignment::Horizontal::Left,
-    widget::{self, button, container, horizontal_space, opaque, text, value},
 };
+use ::iced_widget::{self as widget, button, container, horizontal_space, opaque, text, value};
 use ::spel_katalog_common::{styling, w};
 use ::tap::Pipe;
 
-use crate::Message;
+use crate::{Element, Message};
 
 #[derive(Debug, Clone)]
 pub struct ProcessInfo {

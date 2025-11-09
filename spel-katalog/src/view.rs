@@ -1,12 +1,11 @@
 use ::derive_more::{Display, From, IsVariant};
-use ::iced::{
-    Color, Element,
-    Length::Fill,
-    Task,
-    widget::{self, pane_grid},
-};
+use ::iced_core::{Color, Length::Fill};
+use ::iced_runtime::Task;
+use ::iced_widget::{self as widget, pane_grid};
 use ::spel_katalog_common::styling;
 use ::tap::Pipe;
+
+use crate::Element;
 
 #[derive(Debug, Default, Clone, Copy, Display, PartialEq, Eq, IsVariant, Hash)]
 pub enum Pane {
@@ -77,8 +76,9 @@ impl State {
         info: &'app spel_katalog_info::State,
         shadowed: bool,
     ) -> Element<'app, crate::Message> {
-        let style =
-            |t: &iced::Theme| styling::box_border(t).background(Color::WHITE.scale_alpha(0.025));
+        let style = |t: &iced_core::Theme| {
+            styling::box_border(t).background(Color::WHITE.scale_alpha(0.025))
+        };
         pane_grid(&self.panes, |_pane, state, _is_maximized| {
             pane_grid::Content::new(
                 match state {
