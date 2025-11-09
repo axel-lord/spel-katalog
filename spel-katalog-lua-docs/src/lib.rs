@@ -3,13 +3,9 @@
 use ::std::sync::LazyLock;
 
 use ::derive_more::From;
-use ::iced::{
-    Color, Element,
-    Length::Fill,
-    Task,
-    alignment::Vertical,
-    widget::{self, horizontal_space, rich_text, text::Span},
-};
+use ::iced_core::{Color, Length::Fill, alignment::Vertical};
+use ::iced_runtime::Task;
+use ::iced_widget::{self as widget, horizontal_space, rich_text, text::Span};
 use ::indexmap::IndexMap;
 use ::tap::TryConv;
 use ::yaml_rust2::Yaml;
@@ -27,6 +23,9 @@ mod table;
 
 /// Key value map in use by crate.
 type Map<K, V> = IndexMap<K, V, ::rustc_hash::FxBuildHasher>;
+
+/// Element alias.
+type Element<'a, M> = ::iced_core::Element<'a, M, ::iced_core::Theme, ::iced_renderer::Renderer>;
 
 pub use span_ext::SpanExt;
 

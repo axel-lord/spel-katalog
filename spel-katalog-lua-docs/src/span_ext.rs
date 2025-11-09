@@ -2,11 +2,11 @@
 
 use ::std::borrow::Cow;
 
-use ::iced::{
+use ::iced_core::{
     Color, Font,
     font::{Style, Weight},
-    widget::text::Span,
 };
+use ::iced_widget::text::Span;
 
 /// Extension trait for spans and span-adjacent types.
 pub trait SpanExt<S>: Sized {

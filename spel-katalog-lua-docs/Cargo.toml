@@ -7,7 +7,10 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 derive_more = { workspace = true, features = ["is_variant", "from"] }
-iced.workspace = true
+iced_core.workspace = true
+iced_widget.workspace = true
+iced_renderer.workspace = true
+iced_runtime.workspace = true
 log.workspace = true
 rustc-hash.workspace = true
 tap.workspace = true
