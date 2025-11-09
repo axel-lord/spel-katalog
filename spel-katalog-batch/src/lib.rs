@@ -262,7 +262,7 @@ impl State {
                         return None;
                     };
                     let file_path = file_path.path();
-                    let result = ::tokio::fs::read_to_string(file_path).await;
+                    let result = ::smol::fs::read_to_string(file_path).await;
 
                     match result {
                         Err(err) => {
@@ -302,7 +302,7 @@ impl State {
                         return;
                     };
                     let file_path = file_path.path();
-                    let result = ::tokio::fs::write(file_path, content.as_bytes()).await;
+                    let result = ::smol::fs::write(file_path, content.as_bytes()).await;
 
                     if let Err(err) = result {
                         ::log::error!("could not save script to {file_path:?}\n{err}");

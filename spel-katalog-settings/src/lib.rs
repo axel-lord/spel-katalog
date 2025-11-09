@@ -262,7 +262,7 @@ pub struct State {
 
 async fn save(settings: Settings, path: PathBuf) -> Result<PathBuf, PathBuf> {
     match ::toml::to_string_pretty(&settings) {
-        Ok(contents) => match ::tokio::fs::write(&path, contents).await {
+        Ok(contents) => match ::smol::fs::write(&path, contents).await {
             Ok(_) => Ok(path),
             Err(err) => {
                 ::log::error!("could not write settings to {path:?}\n{err}");

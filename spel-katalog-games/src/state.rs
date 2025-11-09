@@ -495,7 +495,7 @@ impl State {
 
 /// Create cache directory.
 async fn create_cache_dir(cache_path: &Path, tx: StatusSender) -> ControlFlow<()> {
-    if let Err(err) = ::tokio::fs::create_dir_all(&cache_path).await {
+    if let Err(err) = ::smol::fs::create_dir_all(&cache_path).await {
         ::log::error!("could not create cache directory {cache_path:?}\n{err}");
         status!(tx, "could not create {cache_path:?}");
         ControlFlow::Break(())
@@ -506,10 +506,6 @@ async fn create_cache_dir(cache_path: &Path, tx: StatusSender) -> ControlFlow<()
 
 /// Remove an image from cache.
 async fn uncache_image(slug: String, cache_path: PathBuf) {
-    if !::tokio::fs::try_exists(&cache_path).await.unwrap_or(false) {
-        return;
-    }
-
     let result = ::smol::unblock(move || uncache_image_blocking(slug, cache_path)).await;
     match result {
         Ok(_) => {}

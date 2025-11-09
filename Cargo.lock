@@ -4747,6 +4747,7 @@ dependencies = [
  "rfd",
  "rustc-hash 2.1.1",
  "serde",
+ "smol",
  "spel-katalog-common",
  "spel-katalog-formats",
  "spel-katalog-gather",
@@ -4810,6 +4811,7 @@ dependencies = [
  "iced_widget",
  "log",
  "serde",
+ "smol",
  "spel-katalog-build",
  "spel-katalog-common",
  "tap",
@@ -4861,6 +4863,7 @@ dependencies = [
  "log",
  "pretty_assertions",
  "rand 0.9.2",
+ "smol",
  "tap",
  "tokio",
 ]

@@ -185,7 +185,7 @@ impl State {
                         .expect("write to stdout should succeed");
 
                     Task::future(async move {
-                        ::tokio::time::sleep(Duration::from_secs_f32(0.025)).await;
+                        ::smol::Timer::after(Duration::from_secs_f32(0.025)).await;
                         Msg::Wave(off + 1.0)
                     })
                 }
