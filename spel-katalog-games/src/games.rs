@@ -10,9 +10,12 @@ use ::spel_katalog_formats::Game;
 use ::spel_katalog_settings::{AsIndex, FilterMode, Settings, Show, SortBy, SortDir};
 use ::tap::TapFallible;
 
+/// Cached game identity.
 #[derive(Debug)]
 struct GameCache {
+    /// Game slug as uppercase.
     slug: String,
+    /// Game name as uppercase.
     name: String,
 }
 
@@ -42,10 +45,15 @@ impl From<WithThumb> for Game {
 /// Collection of games.
 #[derive(Debug, Default)]
 pub struct Games {
+    /// Cached game identities.
     cache: Box<[Option<GameCache>]>,
+    /// Collection of game data and thumbnails.
     games: Box<[WithThumb]>,
+    /// Indices of displayed games.
     displayed: Vec<usize>,
+    /// Index lookup table by slug.
     slug_lookup: FxHashMap<String, usize>,
+    /// Index lookup table by id.
     id_lookup: FxHashMap<i64, usize>,
 }
 
@@ -53,14 +61,14 @@ impl Games {
     /// Games that are currently to be displayed.
     pub fn displayed(
         &self,
-    ) -> impl Iterator<Item = &'_ WithThumb> + DoubleEndedIterator + FusedIterator + Clone {
+    ) -> impl DoubleEndedIterator<Item = &'_ WithThumb> + FusedIterator + Clone {
         self.displayed.iter().filter_map(|idx| self.games.get(*idx))
     }
 
     /// Games that are batch selected.
     pub fn batch_selected(
         &self,
-    ) -> impl Iterator<Item = &'_ WithThumb> + DoubleEndedIterator + FusedIterator + Clone {
+    ) -> impl DoubleEndedIterator<Item = &'_ WithThumb> + FusedIterator + Clone {
         self.games.iter().filter(|game| game.batch_selected)
     }
 
@@ -80,7 +88,7 @@ impl Games {
     }
 
     /// Amount of displayed games.
-    pub fn displayed_count(&self) -> usize {
+    pub const fn displayed_count(&self) -> usize {
         self.displayed.len()
     }
 
@@ -184,10 +192,7 @@ impl Games {
                     return;
                 };
                 to_be = filter_hidden(to_be, settings[Show::as_idx()]);
-                to_be = to_be
-                    .into_iter()
-                    .filter(|(_, game, _)| re.is_match(&game.name))
-                    .collect();
+                to_be.retain(|(_, game, _)| re.is_match(&game.name));
             }
         }
 
@@ -204,6 +209,7 @@ impl Games {
         *displayed = to_be.into_iter().map(|(i, ..)| i).collect();
     }
 
+    /// Get a mutable reference to a game with the given slug.
     fn by_slug_mut(&mut self, slug: &str) -> Option<&mut WithThumb> {
         let idx = *self.slug_lookup.get(slug)?;
         self.games.get_mut(idx)

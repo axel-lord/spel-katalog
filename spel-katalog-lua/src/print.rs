@@ -6,6 +6,7 @@ use ::either::{Either, Left, Right};
 use ::mlua::{Lua, Table};
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 
+/// Print values.
 fn lua_print(
     _: &Lua,
     mv: ::mlua::MultiValue,
@@ -20,6 +21,7 @@ fn lua_print(
     Ok(())
 }
 
+/// Debug and pass values through.
 fn lua_dbg(
     _: &Lua,
     mv: ::mlua::MultiValue,
@@ -31,6 +33,7 @@ fn lua_dbg(
     Ok(mv)
 }
 
+/// Register print functions with module.
 pub fn register(lua: &Lua, module: &Table, sink_builder: &SinkBuilder) -> ::mlua::Result<()> {
     let to_string = lua.globals().get("tostring")?;
 

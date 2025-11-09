@@ -1,3 +1,5 @@
+//! Functions to load game database.
+
 use ::std::path::Path;
 
 use ::rusqlite::{Connection, OpenFlags};
@@ -7,6 +9,9 @@ use ::spel_katalog_formats::Game;
 use crate::LoadDbError;
 
 /// Attempt to load games from lutris database.
+///
+/// # Errors
+/// If games cannot be loaded from database.
 pub fn load_games_from_database(db_path: &Path) -> Result<Vec<Game>, LoadDbError> {
     let db = Connection::open_with_flags(
         db_path,

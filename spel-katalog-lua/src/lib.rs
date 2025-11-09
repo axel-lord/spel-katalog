@@ -60,6 +60,7 @@ pub struct Skeleton {
 }
 
 impl Skeleton {
+    /// Create a new module skeleton.
     fn new(lua: &Lua, module: Table) -> ::mlua::Result<Self> {
         Ok(Self {
             module,
@@ -78,6 +79,9 @@ fn class_instance(class: &Table, initial: Table) -> ::mlua::Result<Table> {
 }
 
 /// Set the class of a table.
+///
+/// # Errors
+/// Forwards lua errors.
 pub fn set_class(tbl: &Table, class: &Table) -> ::mlua::Result<()> {
     tbl.set_metatable(Some(class.clone()))
 }
@@ -127,18 +131,30 @@ fn make_class(lua: &Lua, class: &Table) -> ::mlua::Result<()> {
 /// Functionality caller needs to provide.
 pub trait Virtual: 'static + Debug + Send + Sync {
     /// Open a dialog window with the given text and buttons.
+    ///
+    /// # Errors
+    /// Implementation may return lua errors.
     fn open_dialog(&self, text: String, buttons: Vec<String>) -> ::mlua::Result<Option<String>>;
 
     /// Create a dictionary of available lua modules and their source code.
     fn available_modules(&self) -> FxHashMap<String, String>;
 
     /// Get path to thumbnail cache db.
+    ///
+    /// # Errors
+    /// Implementation may return lua errors.
     fn thumb_db_path(&self) -> ::mlua::Result<PathBuf>;
 
     /// Get path to additional config dir for a game.
+    ///
+    /// # Errors
+    /// Implementation may return lua errors.
     fn additional_config_path(&self, game_id: i64) -> ::mlua::Result<PathBuf>;
 
     /// Get settings as a hash map.
+    ///
+    /// # Errors
+    /// Implementation may return lua errors.
     fn settings(&self) -> ::mlua::Result<HashMap<&'_ str, String>>;
 }
 
@@ -153,6 +169,9 @@ pub struct Module<'dep> {
 
 impl Module<'_> {
     /// Register module to lua instance.
+    ///
+    /// # Errors
+    /// Forwards lua errors.
     pub fn register(self, lua: &Lua) -> ::mlua::Result<Skeleton> {
         let Self { sink_builder, vt } = self;
         register_module(lua, Rc::from(vt.thumb_db_path()?), sink_builder, vt)
@@ -172,25 +191,25 @@ fn register_module(
     let conn = Rc::new(OnceCell::new());
     let skeleton = Skeleton::new(lua, lua.create_table()?)?;
 
-    color::register(&lua, &skeleton)?;
+    color::register(lua, &skeleton)?;
     game_data::register(
-        &lua,
+        lua,
         &skeleton,
         conn.clone(),
         thumb_db_path.clone(),
         vt.clone(),
     )?;
-    image::register(&lua, conn, thumb_db_path, &skeleton)?;
-    cmd::register(&lua, &skeleton, &sink_builder)?;
-    misc::register(&lua, &skeleton, vt.clone())?;
-    yaml::register(&lua, &skeleton)?;
-    path::register(&lua, &skeleton)?;
-    dialog::register(&lua, &skeleton, vt.clone())?;
+    image::register(lua, conn, thumb_db_path, &skeleton)?;
+    cmd::register(lua, &skeleton, &sink_builder)?;
+    misc::register(lua, &skeleton, vt.clone())?;
+    yaml::register(lua, &skeleton)?;
+    path::register(lua, &skeleton)?;
+    dialog::register(lua, &skeleton, vt.clone())?;
 
     let Skeleton { module, .. } = &skeleton;
 
-    fs::register(&lua, &module)?;
-    print::register(&lua, &module, &sink_builder)?;
+    fs::register(lua, module)?;
+    print::register(lua, module, &sink_builder)?;
 
     module.set("None", ::mlua::Value::NULL)?;
     module.set("settings", lua.to_value(&vt.settings()?)?)?;

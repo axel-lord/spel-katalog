@@ -3,6 +3,7 @@
 use ::quote::ToTokens;
 use ::syn::{Expr, File, Item, Stmt, Token, Type, parse_quote, punctuated::Punctuated};
 
+/// Shadow the given identifiers with their content parsed as the given type.
 macro_rules! spec {
     {$($ident:ident: $ty:ty),* $(,)?} => {
         $( let $ident: $ty = parse_quote!(#$ident); )*

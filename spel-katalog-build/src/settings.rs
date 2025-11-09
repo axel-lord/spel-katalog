@@ -20,12 +20,17 @@ use crate::{
     string::doc_str,
 };
 
+/// Content to emit to file.
 struct Emit {
+    /// Type to emit.
     ty: ::syn::Item,
+    /// Impls for type..
     impls: ::syn::File,
+    /// FromStr impl for type.
     from_str: ::syn::File,
 }
 
+/// Create an [Emit] for an enum setting.
 fn emit_enum(
     setting: &Setting,
     name: &str,
@@ -145,6 +150,7 @@ fn emit_enum(
     }
 }
 
+/// create an [Emit] for a path setting.
 fn emit_path(setting: &Setting, name: &str, ident: &Ident, path: &str) -> Emit {
     let title_body = title_expr(name, setting.title.as_deref());
     let doc = doc_str(&setting.help);
@@ -263,6 +269,7 @@ fn emit_path(setting: &Setting, name: &str, ident: &Ident, path: &str) -> Emit {
     }
 }
 
+/// Create an [Emit] based on the provided setting.
 fn emit_type(setting: &Setting, name: &str) -> Emit {
     let ident = format_ident!("{}", name.to_case(Case::Pascal));
     match &setting.content {
@@ -274,6 +281,9 @@ fn emit_type(setting: &Setting, name: &str) -> Emit {
 }
 
 /// Write settings rust code to destination path.
+///
+/// # Panics
+/// If content cannot be written.
 pub fn write(settings: Settings, dest: &Path) {
     let mut file = BufWriter::new(File::create(dest).unwrap());
     let Settings { settings } = settings;

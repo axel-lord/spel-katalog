@@ -1,3 +1,5 @@
+//! Misc api functions.
+
 use ::std::{ffi::OsStr, os::unix::ffi::OsStrExt, sync::Arc};
 
 use ::mlua::{Lua, LuaSerdeExt, MultiValue, ObjectLike, Variadic};
@@ -6,21 +8,24 @@ use ::spel_katalog_formats::AdditionalConfig;
 
 use crate::{Skeleton, Virtual};
 
+/// Get an environment variable.
 fn get_env(lua: &Lua, name: ::mlua::String) -> ::mlua::Result<Option<::mlua::String>> {
     ::std::env::var_os(OsStr::from_bytes(&name.as_bytes()))
         .map(|value| lua.create_string(value.as_bytes()))
         .transpose()
 }
 
+/// Shell split strings.
 fn shell_split(_lua: &Lua, args: Variadic<String>) -> ::mlua::Result<Vec<String>> {
     let mut out = Vec::new();
     for arg in args {
         let split = ::shell_words::split(&arg);
-        out.extend(split.map_err(|err| ::mlua::Error::external(err))?);
+        out.extend(split.map_err(::mlua::Error::external)?);
     }
     Ok(out)
 }
 
+/// Set an attribute.
 pub fn set_attr(
     lua: &Lua,
     id: i64,
@@ -47,6 +52,7 @@ pub fn set_attr(
     Ok(table)
 }
 
+/// Set any number of attributes by table.
 pub fn set_attrs(
     lua: &Lua,
     id: i64,
@@ -73,6 +79,7 @@ pub fn set_attrs(
     Ok(table)
 }
 
+/// Resolve a multi component table access.
 pub fn resolve(
     _lua: &Lua,
     mut init: ::mlua::Value,
@@ -92,6 +99,7 @@ pub fn resolve(
     Ok(init)
 }
 
+/// Register misc functions with module.
 pub fn register(lua: &Lua, skeleton: &Skeleton, vt: Arc<dyn Virtual>) -> ::mlua::Result<()> {
     let module = &skeleton.module;
     module.set("getEnv", lua.create_function(get_env)?)?;

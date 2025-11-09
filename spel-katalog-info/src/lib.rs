@@ -1,5 +1,4 @@
 //! Game info view.
-#![allow(missing_docs)]
 
 use ::std::{
     convert::identity,
@@ -33,14 +32,22 @@ pub mod formats;
 
 mod attrs;
 
+/// State of info display.
 #[derive(Debug)]
 pub struct State {
+    /// Id of current game.
     id: i64,
+    /// Content of config editor.
     content: widget::text_editor::Content,
+    /// Path to game config.
     config_path: Option<PathBuf>,
+    /// Common parent of wine prefix and executable.
     common_parent: PathBuf,
+    /// Content of additional roots editor.
     additional_roots_content: widget::text_editor::Content,
+    /// Additional config of game.
     additional: AdditionalConfig,
+    /// Attribute editor.
     attrs: attrs::State,
 }
 
@@ -58,66 +65,96 @@ impl Default for State {
     }
 }
 
+/// Message used by info display.
 #[derive(Debug, Clone, From, IsVariant)]
 pub enum Message {
+    /// Set current game.
     SetId {
+        /// Id of game.
         id: i64,
     },
+    /// Set content of config editor.
     SetContent {
+        /// Id of game to verify match.
         id: i64,
+        /// Content to set editor to.
         content: String,
+        /// Path to game config.
         path: PathBuf,
+        /// Additional config.
         additional: AdditionalConfig,
     },
+    /// Update config editor content.
     #[from]
     UpdateContent(widget::text_editor::Action),
+    /// Update additional roots editor content.
     UpdateAdditionalRoots(widget::text_editor::Action),
+    /// Update attribute editor.
     UpdateAttrs(attrs::Message),
+    /// Save config content to file.
     SaveContent,
+    /// Save additional config to file.
     SaveAdditional,
+    /// Add a thumbail.
     AddThumb {
         /// Game id to add thumbnail for
         id: i64,
     },
-
+    /// Remove a thumbail.
     RemoveThumb {
         /// Game id to removremovee thumbnail for
         id: i64,
     },
+    /// Set executable in game config.
     SetExe {
+        /// Path to new executable.
         path: PathBuf,
     },
+    /// Open executable selection dialog.
     OpenExe,
+    /// Open directory of game.
     OpenDir,
 }
 
+/// Request application for action.
 #[derive(Debug, Clone, IsVariant)]
 pub enum Request {
+    /// Request display status of info.
     ShowInfo(bool),
+    /// Set image of game wiht given slug.
     SetImage {
+        /// Slug of game to set image for.
         slug: String,
+        /// Image to set.
         image: ::spel_katalog_formats::Image,
     },
+    /// Remove image for game with given slug.
     RemoveImage {
+        /// Slug of game to remove image for.
         slug: String,
     },
+    /// Run the game with given id.
     RunGame {
+        /// Id of game to run.
         id: i64,
+        /// Should game be sandboxed.
         sandbox: bool,
     },
+    /// Run lutris in sandbox of game.
     RunLutrisInSandbox {
+        /// Id of game to run lutris in sandbox of.
         id: i64,
     },
 }
 
 impl State {
+    /// Udate state of info display.
     pub fn update<'a>(
         &'a mut self,
         message: Message,
         tx: &'a StatusSender,
         settings: &'a Settings,
         game_by_id: impl Fn(i64) -> Option<&'a ::spel_katalog_formats::Game>,
-        // games: &Games,
     ) -> Task<OrRequest<Message, Request>> {
         match message {
             Message::SetId { id } => {
@@ -254,25 +291,36 @@ impl State {
                 Some(game) => {
                     #[derive(Debug, thiserror::Error)]
                     enum AddThumbError {
+                        /// No thumbnail was chosen.
                         #[error("no thumbnail chosen")]
                         NoneChosen,
+                        /// A file could not be copied.
                         #[error("could not copy {from:?} to {to:?}\n{source}")]
                         Copy {
+                            /// Error that occured.
                             #[source]
                             source: ::std::io::Error,
+                            /// Path to file that was to be copied.
                             from: PathBuf,
+                            /// Path it was to be copied to.
                             to: PathBuf,
                         },
+                        /// A file could not be read.
                         #[error("could not read {path:?}\n{source}")]
                         Read {
+                            /// Error that occurred.
                             #[source]
                             source: ::std::io::Error,
+                            /// Path to file.
                             path: PathBuf,
                         },
+                        /// Thumbnail could not be processed.
                         #[error("could not process {path:?}\n{source}")]
                         Process {
+                            /// Error that occurred.
                             #[source]
                             source: ImageError,
+                            /// Path to image.
                             path: PathBuf,
                         },
                     }
@@ -488,6 +536,7 @@ impl State {
         }
     }
 
+    /// Set config editor content.
     fn set_content(&mut self, content: String) {
         // Probably most correct solution.
         // self.content = widget::text_editor::Content::with_text(&content);
@@ -502,6 +551,7 @@ impl State {
         .for_each(|action| self.content.perform(action));
     }
 
+    /// Open dialog to replace exe in config.
     fn open_exe(&mut self, tx: &StatusSender) -> Option<Task<OrRequest<Message, Request>>> {
         let tx = tx.clone();
         let exe = formats::Config::parse(&self.content.text())
@@ -549,6 +599,7 @@ impl State {
         Some(task)
     }
 
+    /// Set exe in config.
     fn set_exe(&mut self, path: PathBuf, tx: &StatusSender) -> Option<()> {
         let path = path.to_str().map(String::from)?;
 
@@ -591,6 +642,7 @@ impl State {
         Some(())
     }
 
+    /// View info.
     pub fn view<'a>(
         &'a self,
         game_by_id: impl Fn(
@@ -614,7 +666,7 @@ impl State {
                 w::row()
                     .align_y(Alignment::Start)
                     .height(150)
-                    .push_maybe(thumb.map(|image| widget::image(image)))
+                    .push_maybe(thumb.map(widget::image))
                     .push_maybe(thumb.is_some().then(|| widget::vertical_rule(2)))
                     .push(
                         w::col()

@@ -1,3 +1,5 @@
+//! Simple documentation.
+
 use ::iced::{
     Element,
     widget::{rich_text, text::Span},
@@ -10,29 +12,39 @@ use ::yaml_rust2::Yaml;
 
 use crate::{Message, SpanExt, empty_spans, state::DocsState};
 
+/// Simple documentation display.
 #[derive(Debug, Clone)]
 pub struct Simple<S> {
+    /// Doc comment of item.
     pub doc: Option<S>,
+    /// Type of item.
     pub ty: SimpleTy<S>,
 }
 
 #[derive(Debug, Clone)]
 pub enum SimpleTy<S> {
+    /// A single type.
     Single(S, Attr),
+    /// A tuple of types.
     Tuple(Vec<(S, Attr)>),
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Attr {
+    /// Value does not have any special attributes.
     #[default]
     None,
+    /// Value is optional.
     Optional,
+    /// Value is variadic.
     Variadic,
+    /// Value is an array.
     Array,
 }
 
 impl Attr {
-    pub fn as_str<'a>(self) -> &'a str {
+    /// Get attribute as a str.
+    pub const fn as_str<'a>(self) -> &'a str {
         match self {
             Attr::None => "",
             Attr::Optional => "?",
@@ -40,6 +52,8 @@ impl Attr {
             Attr::Array => "[]",
         }
     }
+
+    /// Split attribute from a type.
     pub fn split_ty(mut ty: String) -> (String, Attr) {
         let (attr, len) = if let Some(prefix) = ty.strip_suffix("?") {
             (Attr::Optional, prefix.len())
@@ -56,6 +70,7 @@ impl Attr {
 }
 
 impl<S: AsRef<str>> Simple<S> {
+    /// View a simple item with an optional name.
     fn view_<'a>(&'a self, name: Option<&'a str>) -> Element<'a, Message> {
         let Self { doc, ty } = self;
         let [name, sep] = name
@@ -92,16 +107,19 @@ impl<S: AsRef<str>> Simple<S> {
         }
     }
 
+    /// View a simple item without a name.
     pub fn view_anon(&self) -> Element<'_, Message> {
         self.view_(None)
     }
 
+    /// View a simple item with a name.
     pub fn view<'a>(&'a self, name: &'a str) -> Element<'a, Message> {
         self.view_(Some(name))
     }
 }
 
 impl Simple<String> {
+    /// Create a simple item from a yaml value.
     pub fn from_yaml(value: Yaml, _state: &mut DocsState) -> Result<Self, Yaml> {
         fn split_array(array: Vec<Yaml>) -> Result<Vec<(String, Attr)>, Vec<Yaml>> {
             let (array, types): (Vec<_>, Vec<_>) =

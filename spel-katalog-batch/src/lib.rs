@@ -27,11 +27,15 @@ use ::tap::Pipe;
 /// Struct for setting up initial state and running batch scripts.
 #[derive(Debug)]
 pub struct Batcher {
+    /// Lua instance.
     lua: Lua,
 }
 
 impl Batcher {
     /// Create a new lua batcher.
+    ///
+    /// # Errors
+    /// Forwards lua errors.
     pub fn new(
         batch_data: Vec<BatchInfo>,
         sink_builder: &SinkBuilder,
@@ -55,6 +59,9 @@ impl Batcher {
     }
 
     /// Run a script using batcher.
+    ///
+    /// # Errors
+    /// Forwards lua errors.
     pub fn run_script(&self, content: String) -> ::mlua::Result<()> {
         self.lua.load(content).exec()?;
         Ok(())
@@ -62,6 +69,9 @@ impl Batcher {
 }
 
 /// Run a lua script with a batch.
+///
+/// # Errors
+/// Forwards lua errors.
 pub fn lua_batch(
     batch_data: Vec<BatchInfo>,
     script: String,
@@ -92,6 +102,9 @@ pub struct BatchInfo {
 
 impl BatchInfo {
     /// Convert batch info to a lua value.
+    ///
+    /// # Errors
+    /// Forwards lua errors.
     pub fn to_lua(&self, lua: &Lua, class: &Table) -> ::mlua::Result<::mlua::Table> {
         let Self {
             id,
@@ -154,9 +167,13 @@ pub enum Request {
 /// State of batch view.
 #[derive(Debug)]
 pub struct State {
+    /// Script content to show.
     script: text_editor::Content,
+    /// Highlighter settings to use.
     hl_settings: ::iced_highlighter::Settings,
+    /// What games to run batch on.
     scope: Scope,
+    /// Title of script to show.
     script_title: String,
 }
 

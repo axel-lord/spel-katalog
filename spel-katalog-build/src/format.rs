@@ -17,6 +17,9 @@ pub struct Settings {
 
 impl Settings {
     /// Read a settings struct from a path.
+    ///
+    /// # Panics
+    /// Should the settings at path be malformed.
     pub fn read(path: &Path) -> Self {
         ::toml::from_str(&fs::read_to_string(path).unwrap()).unwrap()
     }

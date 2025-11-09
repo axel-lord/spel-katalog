@@ -1,3 +1,5 @@
+//! Game data api.
+
 use ::std::{path::Path, rc::Rc, sync::Arc};
 
 use ::mlua::{Lua, Table};
@@ -12,6 +14,7 @@ use crate::{
     yaml::load_yaml,
 };
 
+/// Register misc functions with module.
 pub fn register(
     lua: &Lua,
     skeleton: &Skeleton,

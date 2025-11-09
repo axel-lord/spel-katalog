@@ -1,9 +1,12 @@
+//! Implementation of completions generator.
+
 use ::std::{io::BufWriter, path::PathBuf};
 
 use ::clap::CommandFactory;
 
 use crate::{Cli, SubCmdError};
 
+/// Generate command completions.
 pub fn completions(
     shell: ::clap_complete::Shell,
     name: String,

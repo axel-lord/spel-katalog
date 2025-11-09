@@ -1,3 +1,5 @@
+//! Yaml api.
+
 use ::std::{ffi::OsStr, os::unix::ffi::OsStrExt};
 
 use ::mlua::{BString, IntoLua, Lua};
@@ -5,6 +7,7 @@ use ::yaml_rust2::{Yaml, YamlLoader};
 
 use crate::Skeleton;
 
+/// Load a yaml file into lua data.
 pub fn load_yaml(lua: &Lua, path: BString) -> ::mlua::Result<::mlua::Value> {
     let yml = YamlLoader::load_from_str(
         &::std::fs::read_to_string(OsStr::from_bytes(&path)).map_err(::mlua::Error::runtime)?,
@@ -46,6 +49,7 @@ pub fn load_yaml(lua: &Lua, path: BString) -> ::mlua::Result<::mlua::Value> {
     conv(lua, yml)
 }
 
+/// Register yaml functionality with module.
 pub fn register(lua: &Lua, skeleton: &Skeleton) -> ::mlua::Result<()> {
     skeleton
         .module

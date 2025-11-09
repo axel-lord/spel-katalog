@@ -1,3 +1,5 @@
+//! Extension trait for working with spans.
+
 use ::std::borrow::Cow;
 
 use ::iced::{

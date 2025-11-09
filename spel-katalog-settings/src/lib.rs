@@ -1,5 +1,4 @@
 //! Settings widgets.
-#![allow(missing_docs)]
 
 use ::derive_more::{Deref, DerefMut, From, IsVariant};
 use ::iced::{
@@ -16,14 +15,17 @@ use ::tap::Pipe;
 mod list;
 
 mod environment {
+    //! Environment available for settings.
     use ::spel_katalog_common::lazy::Lazy;
 
+    /// Remove trailing newlines.
     fn remove_trailing(mut s: String) -> String {
         let len = s.trim_end_matches('/').len();
         s.truncate(len);
         s
     }
 
+    /// Value for HOME.
     fn home() -> String {
         ::std::env::var("HOME").map_or_else(
             |err| {
@@ -34,6 +36,7 @@ mod environment {
         )
     }
 
+    /// Value fo CONFIG.
     fn config() -> String {
         ::std::env::var("XDG_CONFIG_HOME").map_or_else(
             |err| {
@@ -44,6 +47,7 @@ mod environment {
         )
     }
 
+    /// Value for CACHE.
     fn cache() -> String {
         ::std::env::var("XDG_CACHE_HOME").map_or_else(
             |err| {
@@ -54,6 +58,7 @@ mod environment {
         )
     }
 
+    /// Value for DATA.
     fn data() -> String {
         ::std::env::var("XDG_DATA_HOME").map_or_else(
             |err| {
@@ -64,6 +69,7 @@ mod environment {
         )
     }
 
+    /// Value for STATE.
     fn state() -> String {
         ::std::env::var("XDG_STATE_HOME").map_or_else(
             |err| {
@@ -190,6 +196,7 @@ where
     /// All values for enum.
     const VARIANTS: &[Self];
 
+    /// Select the next variant.
     fn cycle(&self) -> Self
     where
         Self: PartialEq + Clone,
@@ -239,17 +246,23 @@ impl From<Theme> for ::iced::Theme {
     }
 }
 
+/// Message used by settings view.
 #[derive(Debug, IsVariant, Clone, From)]
 pub enum Message {
+    /// Apply a settings change.
     Delta(Delta),
+    /// Save settings.
     Save,
 }
 
+/// State of settings view.
 #[derive(Debug, Clone, Deref, DerefMut)]
 pub struct State {
+    /// Settings state.
     #[deref]
     #[deref_mut]
     pub settings: Settings,
+    /// Path to config file.
     pub config: PathBuf,
 }
 
@@ -270,6 +283,7 @@ async fn save(settings: Settings, path: PathBuf) -> Result<PathBuf, PathBuf> {
 }
 
 impl State {
+    /// Apply delta created from t to self.
     pub fn apply_from<T>(&mut self, t: T)
     where
         Delta: From<T>,
@@ -277,6 +291,7 @@ impl State {
         Delta::from(t).apply(self);
     }
 
+    /// Update state by message.
     pub fn update(&mut self, message: Message, tx: &StatusSender) -> Task<Message> {
         match message {
             Message::Delta(delta) => {
@@ -298,6 +313,7 @@ impl State {
         Task::none()
     }
 
+    /// View settings.
     pub fn view(&self) -> Element<'_, Message> {
         w::col()
             .align_x(Alignment::Start)

@@ -1,3 +1,5 @@
+//! Functions to gather game covers.
+
 use ::std::{
     borrow::Cow,
     collections::hash_map::Entry,
@@ -42,6 +44,7 @@ impl Default for CoverGathererOptions {
 /// Iterator or Stream receiving gathered covers.
 #[derive(Debug, Clone)]
 pub struct CoverGatherer {
+    /// Receiver of loaded covers.
     receiver: ::flume::Receiver<(String, ::spel_katalog_formats::Image)>,
 }
 
@@ -108,6 +111,9 @@ pub fn thumbnail(image: DynamicImage, dimensions: u32) -> ::spel_katalog_formats
 
 impl CoverGatherer {
     /// Create a new CoverGatherer for finding the given slugs.
+    ///
+    /// # Errors
+    /// If `cover_dir` does not exist or is not a diorectory.
     pub fn new(cover_dir: &Path, slugs: Vec<String>) -> ::std::io::Result<Self> {
         Self::with_options(
             cover_dir,
@@ -119,6 +125,9 @@ impl CoverGatherer {
     }
 
     /// Create a new CoverGatherer for the given path and covers using the provided options.
+    ///
+    /// # Errors
+    /// If `cover_dir` does not exist or is not a diorectory.
     pub fn with_options(
         cover_dir: &Path,
         options: CoverGathererOptions,

@@ -1,3 +1,5 @@
+//! Attribute editor implementation.
+
 use ::std::mem;
 
 use ::iced::{
@@ -6,22 +8,31 @@ use ::iced::{
 };
 use ::spel_katalog_common::w;
 
+/// State of attribute editor.
 #[derive(Debug, Default)]
 pub struct State {
+    /// Attributes of game.
     pub attrs: Vec<(String, String)>,
+    /// Current key.
     key: String,
+    /// Current value.
     value: String,
 }
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    /// Current key should be set to value.
     Key(String),
+    /// Current value should be set to value.
     Value(String),
+    /// Current field contents as an attribute.
     Add,
+    /// Move the attribute at the given index to fields for editing.
     Edit(usize),
 }
 
 impl State {
+    /// Update state of attribute editor according to the given message.
     pub fn update(&mut self, msg: Message) -> Task<Message> {
         match msg {
             Message::Key(key) => self.key = key,
@@ -42,6 +53,7 @@ impl State {
         Task::none()
     }
 
+    /// View the attribute editor.
     pub fn view(&self) -> Element<'_, Message> {
         w::col()
             .push(

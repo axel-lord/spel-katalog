@@ -1,3 +1,5 @@
+//! Command api.
+
 use ::std::{
     ffi::{OsStr, OsString},
     io::{Read, Write, pipe},
@@ -11,9 +13,12 @@ use ::tap::Pipe;
 
 use crate::{Skeleton, init_table};
 
+/// A command to execute.
 #[derive(Debug, Clone)]
 struct Command {
+    /// Executable of command.
     exec: OsString,
+    /// Arguments of command.
     args: Vec<OsString>,
 }
 
@@ -24,6 +29,7 @@ impl IntoLua for Command {
 }
 
 impl Command {
+    /// Create a new command.
     fn new(exec: ::mlua::String, args: Variadic<::mlua::String>) -> ::mlua::Result<Command> {
         let cmd = Command {
             exec: OsString::from(OsStr::from_bytes(&exec.as_bytes())),
@@ -36,6 +42,7 @@ impl Command {
         Ok(cmd)
     }
 
+    /// Split executable of command.
     fn split_exec(&self) -> ::mlua::Result<Command> {
         let mut initial = self
             .exec
@@ -59,6 +66,7 @@ impl Command {
         Ok(Self { exec, args })
     }
 
+    /// Gather output of command.
     fn output(&self, lua: &Lua, input: Variadic<String>) -> ::mlua::Result<::mlua::Table> {
         let mut input = input.into_iter();
         let table = lua.create_table()?;
@@ -88,11 +96,11 @@ impl Command {
                     Ok(buf)
                 });
 
-                w_stdin.write_all(&first.as_bytes())?;
+                w_stdin.write_all(first.as_bytes())?;
 
                 for s in input {
                     w_stdin.write_all(b"\n")?;
-                    w_stdin.write_all(&s.as_bytes())?;
+                    w_stdin.write_all(s.as_bytes())?;
                 }
 
                 let status = child.wait()?;
@@ -137,6 +145,7 @@ impl Command {
         Ok(table)
     }
 
+    /// Run command and get status.
     fn status(&self, sink_builder: &SinkBuilder) -> ::mlua::Result<Option<i32>> {
         let [stdout, stderr] =
             sink_builder.build_double(|| SinkIdentity::StaticName("Lua Batch Cmd"))?;
@@ -149,6 +158,7 @@ impl Command {
     }
 }
 
+/// Register command functions in module.
 pub fn register(lua: &Lua, skeleton: &Skeleton, sink_builder: &SinkBuilder) -> ::mlua::Result<()> {
     let sink_builder = sink_builder.clone();
     let module = &skeleton.module;

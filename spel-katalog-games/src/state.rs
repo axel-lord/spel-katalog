@@ -37,6 +37,7 @@ use ::tokio::task::{JoinError, spawn_blocking};
 
 use crate::{Games, games::WithThumb};
 
+/// Filename of thumbnails cache database.
 const THUMBNAILS_FILENAME: &str = "thumbnails.db";
 
 /// State of games element.
@@ -44,9 +45,13 @@ const THUMBNAILS_FILENAME: &str = "thumbnails.db";
 pub struct State {
     #[deref]
     #[deref_mut]
+    /// Game collection.
     games: Games,
+    /// Queue used for batching caching of thumbnails.
     cache_queue: (Vec<String>, Vec<::spel_katalog_formats::Image>),
+    /// Indices of currently selected games.
     selected: Option<i64>,
+    /// How many columns to display.
     columns: Cell<usize>,
 }
 
@@ -133,9 +138,23 @@ pub enum Request {
 /// Messages produced by game areas.
 #[derive(Debug, Clone, Copy)]
 pub enum AreaMessage {
-    Select { id: i64 },
-    BatchSelect { id: i64 },
-    Run { id: i64, sandbox: bool },
+    /// Select a game.
+    Select {
+        /// Numeric id of game.
+        id: i64,
+    },
+    /// Given id was batch selected.
+    BatchSelect {
+        /// Numeric id game.
+        id: i64,
+    },
+    /// Run game.
+    Run {
+        /// Numeric id of game.
+        id: i64,
+        /// Should the game be sandboxed.
+        sandbox: bool,
+    },
 }
 
 impl From<AreaMessage> for OrRequest<Message, Request> {
@@ -150,12 +169,12 @@ impl From<AreaMessage> for OrRequest<Message, Request> {
 
 impl State {
     /// Get current amount of columns.
-    pub fn columns(&self) -> usize {
+    pub const fn columns(&self) -> usize {
         self.columns.get()
     }
 
     /// Get id of currently selected game, if any.
-    pub fn selected(&self) -> Option<i64> {
+    pub const fn selected(&self) -> Option<i64> {
         self.selected
     }
 
@@ -263,7 +282,7 @@ impl State {
             }
             Message::SelectId(id) => {
                 self.selected = Some(id);
-                return Task::done(OrRequest::Request(Request::SetId { id }));
+                Task::done(OrRequest::Request(Request::SetId { id }))
             }
             Message::BatchSelect(id) => {
                 if let Some(game) = self.games.by_id_mut(id) {
@@ -390,15 +409,10 @@ impl State {
         };
 
         self.selected = match sel_dir {
-            Up => self
-                .displayed()
-                .rev()
-                .cycle()
-                .skip(idx + self.columns())
-                .next(),
-            Down => self.displayed().cycle().skip(idx + self.columns()).next(),
-            Left => self.displayed().rev().cycle().skip(idx + 1).next(),
-            Right => self.displayed().cycle().skip(idx + 1).next(),
+            Up => self.displayed().rev().cycle().nth(idx + self.columns()),
+            Down => self.displayed().cycle().nth(idx + self.columns()),
+            Left => self.displayed().rev().cycle().nth(idx + 1),
+            Right => self.displayed().cycle().nth(idx + 1),
             SelDir::None => Option::None,
         }
         .map(|game| game.id);
@@ -432,13 +446,10 @@ impl State {
                     style =
                         |theme| container::bordered_box(theme).background(theme.palette().primary);
                 }
+            } else if game.batch_selected {
+                style = |theme| container::bordered_box(theme).background(theme.palette().danger);
             } else {
-                if game.batch_selected {
-                    style =
-                        |theme| container::bordered_box(theme).background(theme.palette().danger);
-                } else {
-                    style = container::bordered_box;
-                }
+                style = container::bordered_box;
             };
 
             let text = container(name)
@@ -498,6 +509,7 @@ impl State {
     }
 }
 
+/// Create cache directory.
 async fn create_cache_dir(cache_path: &Path, tx: StatusSender) -> ControlFlow<()> {
     if let Err(err) = ::tokio::fs::create_dir_all(&cache_path).await {
         ::log::error!("could not create cache directory {cache_path:?}\n{err}");
@@ -508,6 +520,7 @@ async fn create_cache_dir(cache_path: &Path, tx: StatusSender) -> ControlFlow<()
     }
 }
 
+/// Handle result of thumbnail caching.
 fn handle_cache_result(result: Result<Result<(), ::rusqlite::Error>, JoinError>) {
     match result {
         Ok(result) => match result {
@@ -518,6 +531,7 @@ fn handle_cache_result(result: Result<Result<(), ::rusqlite::Error>, JoinError>)
     }
 }
 
+/// Handle result of thumbnail uncaching.
 fn handle_uncache_result(result: Result<Result<(), ::rusqlite::Error>, JoinError>) {
     match result {
         Ok(result) => match result {
@@ -528,6 +542,7 @@ fn handle_uncache_result(result: Result<Result<(), ::rusqlite::Error>, JoinError
     }
 }
 
+/// Remove an image from cache.
 async fn uncache_image(slug: String, cache_path: PathBuf) {
     if !::tokio::fs::try_exists(&cache_path).await.unwrap_or(false) {
         return;
@@ -536,6 +551,7 @@ async fn uncache_image(slug: String, cache_path: PathBuf) {
     handle_uncache_result(spawn_blocking(move || uncache_image_blocking(slug, cache_path)).await);
 }
 
+/// Add an image to cache.
 async fn cache_images(
     slugs: Vec<String>,
     images: Vec<::spel_katalog_formats::Image>,
@@ -551,6 +567,7 @@ async fn cache_images(
     );
 }
 
+/// SQL to create image table.
 const CREATE_IMAGE_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS images(
     slug TEXT NOT NULL UNIQUE ON CONFLICT REPLACE,
@@ -558,14 +575,17 @@ CREATE TABLE IF NOT EXISTS images(
 )
 "#;
 
+/// SQL to insert image into table.
 const INSERT_IMAGE: &str = r#"
 INSERT INTO images (slug, image) VALUES (:slug, :image)   
 "#;
 
+/// SQL to remove image from table.
 const REMOVE_IMAGE: &str = r#"
 DELETE FROM images WHERE slug = :slug
 "#;
 
+/// Convert image to png.
 fn convert_slug_image(
     slug: String,
     image: ::spel_katalog_formats::Image,
@@ -586,18 +606,21 @@ fn convert_slug_image(
     Some((slug, buf))
 }
 
+/// Insert image into database.
 fn insert_image(stmt: &mut Statement<'_>, slug: String, image: Vec<u8>) {
     if let Err(err) = stmt.execute(named_params! {":slug": slug, ":image": image}) {
         ::log::error!("failed to save thumbnail for {slug} to cache\n{err}");
     }
 }
 
+/// Remove image from database.
 fn remove_image(stmt: &mut Statement<'_>, slug: String) {
     if let Err(err) = stmt.execute(named_params! {":slug": slug}) {
         ::log::error!("failed to remove thumbnail for {slug} from cache\n{err}");
     }
 }
 
+/// Blocking portion of image uncaching.
 fn uncache_image_blocking(slug: String, cache_path: PathBuf) -> Result<(), ::rusqlite::Error> {
     let cache_path = cache_path.join(THUMBNAILS_FILENAME);
     let db = Connection::open(&cache_path)?;
@@ -610,12 +633,13 @@ fn uncache_image_blocking(slug: String, cache_path: PathBuf) -> Result<(), ::rus
     Ok(())
 }
 
+/// Blocking portion of image caching.
 fn cache_images_blocking(
     slugs: Vec<String>,
     images: Vec<::spel_katalog_formats::Image>,
     cache_path: PathBuf,
 ) -> Result<(), ::rusqlite::Error> {
-    const LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+    static LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
     let lock = &*LOCK;
     let lock = lock.lock();
 

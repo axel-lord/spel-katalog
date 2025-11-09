@@ -1,3 +1,5 @@
+//! Lua style result type.
+
 use ::mlua::IntoLuaMulti;
 
 /// A result which may be converted to a lua value of `T | nil, E`.
@@ -39,14 +41,17 @@ impl<T, E> From<LuaResult<T, E>> for Result<T, E> {
 
 impl<T, E> LuaResult<T, E> {
     /// Wrap into an regular result ok.
+    ///
+    /// Errors
+    /// If self is of the error variant.
     #[inline]
-    pub fn wrap_ok<E2>(self) -> Result<Self, E2> {
+    pub const fn wrap_ok<E2>(self) -> Result<Self, E2> {
         Ok(self)
     }
 
     /// Get a new `LuaResult` with variants as references.
     #[inline]
-    pub fn as_ref(&self) -> LuaResult<&T, &E> {
+    pub const fn as_ref(&self) -> LuaResult<&T, &E> {
         match self {
             LuaResult::Ok(value) => LuaResult::Ok(value),
             LuaResult::Err(err) => LuaResult::Err(err),
@@ -55,7 +60,7 @@ impl<T, E> LuaResult<T, E> {
 
     /// Get a new `LuaResult` with variants as mutable references.
     #[inline]
-    pub fn as_mut(&mut self) -> LuaResult<&mut T, &mut E> {
+    pub const fn as_mut(&mut self) -> LuaResult<&mut T, &mut E> {
         match self {
             LuaResult::Ok(value) => LuaResult::Ok(value),
             LuaResult::Err(err) => LuaResult::Err(err),
