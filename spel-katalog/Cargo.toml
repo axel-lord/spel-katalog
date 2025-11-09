@@ -48,6 +48,7 @@ tokio = { workspace = true, features = ["parking_lot"] }
 tokio-stream = { workspace = true, features = ["time"] }
 toml.workspace = true
 yaml-rust2.workspace = true
+smol.workspace = true
 
 [build-dependencies]
 spel-katalog-build.workspace = true

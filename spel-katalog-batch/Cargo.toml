@@ -21,10 +21,11 @@ rfd = { workspace = true, features = ["xdg-portal","tokio"] }
 rustc-hash.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+smol.workspace = true
 spel-katalog-common.workspace = true
+spel-katalog-lua.workspace = true
 spel-katalog-settings.workspace = true
 spel-katalog-sink.workspace = true
-spel-katalog-lua.workspace = true
 strum = { workspace = true, features = ["derive"] }
 tap.workspace = true
 tokio = { workspace = true, features = ["process"] }

@@ -30,7 +30,6 @@ use ::spel_katalog_gather::{
 };
 use ::spel_katalog_settings::{CacheDir, CoverartDir, Settings};
 use ::tap::Pipe;
-use ::tokio::task::{JoinError, spawn_blocking};
 
 use crate::{Element, Games, games::WithThumb};
 
@@ -197,25 +196,18 @@ impl State {
             Message::LoadDb { db_path } => {
                 let tx = tx.clone();
                 Task::future(async move {
-                    match spawn_blocking(move || load_games_from_database(&db_path)).await {
-                        Ok(result) => match result {
-                            Ok(games) => games
-                                .pipe(|games| Message::SetGames { games })
-                                .pipe(OrRequest::Message)
-                                .pipe(Task::done),
-                            Err(err) => match err {
-                                LoadDbError::Sqlite(error) => {
-                                    ::log::error!("an sqlite error occurred\n{error}");
-                                    async_status!(tx, "an sqlite error occurred").await;
-                                    Task::none()
-                                }
-                            },
+                    match ::smol::unblock(move || load_games_from_database(&db_path)).await {
+                        Ok(games) => games
+                            .pipe(|games| Message::SetGames { games })
+                            .pipe(OrRequest::Message)
+                            .pipe(Task::done),
+                        Err(err) => match err {
+                            LoadDbError::Sqlite(error) => {
+                                ::log::error!("an sqlite error occurred\n{error}");
+                                async_status!(tx, "an sqlite error occurred").await;
+                                Task::none()
+                            }
                         },
-                        Err(err) => {
-                            ::log::error!("database thread did not finish\n{err}");
-                            async_status!(tx, "thread did not finish").await;
-                            Task::none()
-                        }
                     }
                 })
                 .then(identity)
@@ -302,7 +294,7 @@ impl State {
             .map(|game| game.slug.clone())
             .collect::<Vec<_>>();
 
-        let find_cached = spawn_blocking(move || {
+        let find_cached = ::smol::unblock(move || {
             let db_path = cache_dir.join(THUMBNAILS_FILENAME);
             let (slugs, images) = load_thumbnail_database(&db_path)
                 .map_err(|err| ::log::warn!("could not load thumbnail cache at {db_path:?}\n{err}"))
@@ -324,49 +316,43 @@ impl State {
             (game_slugs, slugs, images)
         });
 
-        Task::future(find_cached).then(move |result| match result {
-            Err(err) => {
-                ::log::error!("image cache thread did not finish\n{err}");
+        Task::future(find_cached).then(move |(game_slugs, slugs, images)| {
+            let set_images = Message::SetImages {
+                slugs,
+                images,
+                add_to_cache: false,
+            }
+            .pipe(OrRequest::Message)
+            .pipe(Task::done);
+
+            let load_covers = if !game_slugs.is_empty() {
+                ::log::info!(
+                    "looking for {} thumbnails in {cover_dir:?}",
+                    game_slugs.len()
+                );
+                CoverGatherer::with_options(
+                    &cover_dir,
+                    CoverGathererOptions {
+                        slugs: Some(game_slugs),
+                        ..Default::default()
+                    },
+                )
+                .map_err(|err| ::log::warn!("could not read cover dir {cover_dir:?}\n{err}"))
+                .map(|cover_gatherer| cover_gatherer.into_stream().pipe(Task::stream))
+                .ok()
+                .unwrap_or_else(Task::none)
+                .map(|(slug, image)| Message::SetImage {
+                    slug,
+                    image,
+                    add_to_cache: true,
+                })
+                .map(OrRequest::Message)
+            } else {
+                ::log::info!("no need to load covers from {cover_dir:?}");
                 Task::none()
-            }
-            Ok((game_slugs, slugs, images)) => {
-                let set_images = Message::SetImages {
-                    slugs,
-                    images,
-                    add_to_cache: false,
-                }
-                .pipe(OrRequest::Message)
-                .pipe(Task::done);
+            };
 
-                let load_covers = if !game_slugs.is_empty() {
-                    ::log::info!(
-                        "looking for {} thumbnails in {cover_dir:?}",
-                        game_slugs.len()
-                    );
-                    CoverGatherer::with_options(
-                        &cover_dir,
-                        CoverGathererOptions {
-                            slugs: Some(game_slugs),
-                            ..Default::default()
-                        },
-                    )
-                    .map_err(|err| ::log::warn!("could not read cover dir {cover_dir:?}\n{err}"))
-                    .map(|cover_gatherer| cover_gatherer.into_stream().pipe(Task::stream))
-                    .ok()
-                    .unwrap_or_else(Task::none)
-                    .map(|(slug, image)| Message::SetImage {
-                        slug,
-                        image,
-                        add_to_cache: true,
-                    })
-                    .map(OrRequest::Message)
-                } else {
-                    ::log::info!("no need to load covers from {cover_dir:?}");
-                    Task::none()
-                };
-
-                Task::batch([set_images, load_covers])
-            }
+            Task::batch([set_images, load_covers])
         })
     }
 
@@ -518,35 +504,17 @@ async fn create_cache_dir(cache_path: &Path, tx: StatusSender) -> ControlFlow<()
     }
 }
 
-/// Handle result of thumbnail caching.
-fn handle_cache_result(result: Result<Result<(), ::rusqlite::Error>, JoinError>) {
-    match result {
-        Ok(result) => match result {
-            Ok(_) => {}
-            Err(err) => ::log::error!("could not cache thumbnails\n{err}"),
-        },
-        Err(err) => ::log::error!("cache thread failed\n{err}"),
-    }
-}
-
-/// Handle result of thumbnail uncaching.
-fn handle_uncache_result(result: Result<Result<(), ::rusqlite::Error>, JoinError>) {
-    match result {
-        Ok(result) => match result {
-            Ok(_) => {}
-            Err(err) => ::log::error!("could not uncache thumbnails\n{err}"),
-        },
-        Err(err) => ::log::error!("uncache thread failed\n{err}"),
-    }
-}
-
 /// Remove an image from cache.
 async fn uncache_image(slug: String, cache_path: PathBuf) {
     if !::tokio::fs::try_exists(&cache_path).await.unwrap_or(false) {
         return;
     }
 
-    handle_uncache_result(spawn_blocking(move || uncache_image_blocking(slug, cache_path)).await);
+    let result = ::smol::unblock(move || uncache_image_blocking(slug, cache_path)).await;
+    match result {
+        Ok(_) => {}
+        Err(err) => ::log::error!("could not uncache thumbnails\n{err}"),
+    }
 }
 
 /// Add an image to cache.
@@ -560,9 +528,11 @@ async fn cache_images(
         return;
     }
 
-    handle_cache_result(
-        spawn_blocking(move || cache_images_blocking(slugs, images, cache_path)).await,
-    );
+    let result = ::smol::unblock(move || cache_images_blocking(slugs, images, cache_path)).await;
+    match result {
+        Ok(_) => {}
+        Err(err) => ::log::error!("could not cache thumbnails\n{err}"),
+    }
 }
 
 /// SQL to create image table.

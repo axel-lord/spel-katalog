@@ -173,7 +173,7 @@ impl App {
                     };
 
                     let sink_builder = sink_builder.clone();
-                    ::tokio::task::spawn_blocking(move || {
+                    ::smol::unblock(move || {
                         let scripts = lua_scripts
                             .into_iter()
                             .map(|path| match ::std::fs::read_to_string(&path) {
@@ -203,7 +203,7 @@ impl App {
                         .map_err(|err| LuaError(err.to_string()))?;
                         Ok::<_, ScriptGatherError>(())
                     })
-                    .await??;
+                    .await?;
                 }
 
                 Ok::<_, ScriptGatherError>(())

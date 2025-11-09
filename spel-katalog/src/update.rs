@@ -371,7 +371,7 @@ impl App {
                 };
 
                 return Task::future(async move {
-                    match ::tokio::task::spawn_blocking(move || {
+                    let result = ::smol::unblock(move || {
                         ::rustix::process::kill_process(
                             pid,
                             if terminate {
@@ -381,19 +381,16 @@ impl App {
                             },
                         )
                     })
-                    .await
-                    {
-                        Ok(result) => match result {
-                            Ok(_) => ::log::info!(
-                                "sent TERM to process {pid}",
-                                pid = pid.as_raw_nonzero().get()
-                            ),
-                            Err(err) => ::log::error!(
-                                "could not kill process {pid}\n{err}",
-                                pid = pid.as_raw_nonzero().get()
-                            ),
-                        },
-                        Err(err) => ::log::error!("could not spawn blocking thread\n{err}"),
+                    .await;
+                    match result {
+                        Ok(_) => ::log::info!(
+                            "sent TERM to process {pid}",
+                            pid = pid.as_raw_nonzero().get()
+                        ),
+                        Err(err) => ::log::error!(
+                            "could not kill process {pid}\n{err}",
+                            pid = pid.as_raw_nonzero().get()
+                        ),
                     };
                 })
                 .then(|_| Task::none());

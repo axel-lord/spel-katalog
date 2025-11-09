@@ -22,4 +22,5 @@ disallowed-methods = [
 	"futures::channel::mpsc::unbounded",
 	"iced::futures::channel::mpsc::channel",
 	"iced::futures::channel::mpsc::unbounded",
+	"tokio::task::spawn_blocking"
 ]

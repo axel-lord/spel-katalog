@@ -32,3 +32,4 @@ strsim.workspace = true
 tap.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+smol.workspace = true
