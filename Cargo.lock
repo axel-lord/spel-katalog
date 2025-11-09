@@ -5020,7 +5020,10 @@ name = "spel-katalog-terminal"
 version = "0.1.0"
 dependencies = [
  "flume",
- "iced",
+ "iced_core",
+ "iced_renderer",
+ "iced_runtime",
+ "iced_widget",
  "log",
  "memchr",
  "spel-katalog-common",

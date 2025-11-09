@@ -7,7 +7,10 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 flume.workspace = true
-iced.workspace = true
+iced_core.workspace = true
+iced_runtime.workspace = true
+iced_renderer.workspace = true
+iced_widget.workspace = true
 log.workspace = true
 memchr.workspace = true
 spel-katalog-common.workspace = true
