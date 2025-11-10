@@ -477,7 +477,8 @@ impl Terminal {
         widget::Column::new()
             .padding(3)
             .spacing(3)
-            .push(
+            .push(widget::themer(
+                ::iced_core::Theme::Dark,
                 w::scroll(
                     widget::container(
                         self.lines
@@ -497,7 +498,7 @@ impl Terminal {
                 )
                 .anchor_bottom()
                 .height(Fill),
-            )
+            ))
             .push(widget::horizontal_rule(3))
             .push(
                 widget::Row::new()

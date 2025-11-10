@@ -319,7 +319,15 @@ impl App {
 
         match ty {
             WindowType::Main => self.view_main(),
-            WindowType::LuaApi => self.docs_viewer.view().map(Message::LuaDocs),
+            WindowType::LuaApi => widget::container(
+                widget::container(widget::themer(
+                    ::iced_core::Theme::Dark,
+                    self.docs_viewer.view().map(Message::LuaDocs),
+                ))
+                .style(widget::container::dark),
+            )
+            .padding(5)
+            .into(),
             WindowType::Dialog(dialog) => dialog
                 .view()
                 .map(move |msg| Message::Dialog(id, OrRequest::Message(msg))),
