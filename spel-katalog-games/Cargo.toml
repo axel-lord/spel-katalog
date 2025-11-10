@@ -10,13 +10,13 @@ workspace = true
 
 [dependencies]
 derive_more = { workspace = true, features = ["is_variant", "display", "deref", "deref_mut"] }
+iced_core.workspace = true
+iced_futures.workspace = true
+iced_renderer.workspace = true
+iced_runtime.workspace = true
+iced_widget.workspace = true
 image.workspace = true
 itertools.workspace = true
-iced_core.workspace = true
-iced_renderer.workspace = true
-iced_widget.workspace = true
-iced_runtime.workspace = true
-iced_futures.workspace = true
 log.workspace = true
 parking_lot.workspace = true
 rayon.workspace = true
@@ -24,6 +24,7 @@ regex.workspace = true
 rusqlite.workspace = true
 rustc-hash.workspace = true
 shell-words.workspace = true
+smol.workspace = true
 spel-katalog-common.workspace = true
 spel-katalog-formats.workspace = true
 spel-katalog-gather.workspace = true
@@ -31,4 +32,3 @@ spel-katalog-settings.workspace = true
 strsim.workspace = true
 tap.workspace = true
 thiserror.workspace = true
-smol.workspace = true

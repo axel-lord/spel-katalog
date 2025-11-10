@@ -10,11 +10,11 @@ workspace = true
 
 [dependencies]
 derive_more = { workspace = true, features = ["display"] }
-iced_highlighter.workspace = true
 iced_core.workspace = true
+iced_highlighter.workspace = true
+iced_renderer.workspace = true
 iced_runtime.workspace = true
 iced_widget.workspace = true
-iced_renderer.workspace = true
 log.workspace = true
 mlua.workspace = true
 rfd.workspace = true

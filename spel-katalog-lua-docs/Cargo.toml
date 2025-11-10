@@ -8,16 +8,16 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 derive_more = { workspace = true, features = ["is_variant", "from"] }
 iced_core.workspace = true
-iced_widget.workspace = true
 iced_renderer.workspace = true
 iced_runtime.workspace = true
+iced_widget.workspace = true
+indexmap.workspace = true
+itertools.workspace = true
 log.workspace = true
 rustc-hash.workspace = true
 tap.workspace = true
 thiserror.workspace = true
 yaml-rust2.workspace = true
-indexmap.workspace = true
-itertools.workspace = true
 
 [lints]
 workspace = true

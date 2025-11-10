@@ -8,8 +8,8 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 derive_more = { workspace = true, features = ["is_variant", "deref", "from", "into"] }
 flume.workspace = true
-iced_widget.workspace = true
 iced_core.workspace = true
+iced_widget.workspace = true
 log.workspace = true
 
 [lints]
