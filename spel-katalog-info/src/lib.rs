@@ -675,7 +675,16 @@ impl State {
                     .push(
                         w::col()
                             .push(
-                                w::row().push(widget::text(&game.name).width(Fill).align_x(Center)),
+                                w::row()
+                                    .push(widget::text(&game.name).width(Fill).align_x(Center))
+                                    .push(
+                                        widget::button("Close")
+                                            .padding(3)
+                                            .style(widget::button::danger)
+                                            .on_press_with(|| {
+                                                OrRequest::Request(Request::ShowInfo(false))
+                                            }),
+                                    ),
                             )
                             .push(horizontal_rule(2))
                             .push(
@@ -757,13 +766,7 @@ impl State {
                             .padding(3)
                             .on_press(OrRequest::Message(Message::OpenDir)),
                     )
-                    .push(horizontal_space())
-                    .push(
-                        widget::button("Close")
-                            .padding(3)
-                            .style(widget::button::secondary)
-                            .on_press_with(|| OrRequest::Request(Request::ShowInfo(false))),
-                    ),
+                    .push(horizontal_space()),
             )
             .push(horizontal_rule(2))
             .push(w::scroll(

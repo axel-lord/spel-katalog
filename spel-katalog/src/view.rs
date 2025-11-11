@@ -52,7 +52,7 @@ impl State {
     pub fn update(&mut self, message: Message) -> Task<crate::Message> {
         match message {
             Message::Resized(pane_grid::ResizeEvent { split, ratio }) => {
-                self.panes.resize(split, ratio);
+                self.panes.resize(split, ratio.clamp(0.25, 0.75));
             }
         };
         Task::none()
