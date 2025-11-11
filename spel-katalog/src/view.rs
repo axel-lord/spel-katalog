@@ -1,3 +1,5 @@
+use ::std::cell::Cell;
+
 use ::derive_more::{Display, From, IsVariant};
 use ::iced_core::{Color, Length::Fill};
 use ::iced_runtime::Task;
@@ -19,6 +21,7 @@ pub struct State {
     panes: pane_grid::State<Pane>,
     games: pane_grid::Pane,
     info: Option<pane_grid::Pane>,
+    aspect_ratio: Cell<f32>,
 }
 
 #[derive(Debug, Clone, From)]
@@ -36,8 +39,14 @@ impl State {
         let (panes, games) = pane_grid::State::new(Pane::Games);
 
         let info = None;
+        let aspect_ratio = Cell::new(16.0 / 9.0);
 
-        Self { panes, games, info }
+        Self {
+            panes,
+            games,
+            info,
+            aspect_ratio,
+        }
     }
 
     pub fn update(&mut self, message: Message) -> Task<crate::Message> {
@@ -59,11 +68,18 @@ impl State {
                 }
             }
             None => {
-                if let Some((pane, _split)) =
-                    self.panes
-                        .split(pane_grid::Axis::Vertical, self.games, Pane::GameInfo)
+                if self.aspect_ratio.get() > 1.0
+                    && let Some((pane, split)) =
+                        self.panes
+                            .split(pane_grid::Axis::Vertical, self.games, Pane::GameInfo)
                 {
+                    self.panes.resize(split, 0.3);
                     self.panes.swap(pane, self.games);
+                    self.info = Some(pane);
+                } else if let Some((pane, _split)) =
+                    self.panes
+                        .split(pane_grid::Axis::Horizontal, self.games, Pane::GameInfo)
+                {
                     self.info = Some(pane);
                 }
             }
@@ -79,24 +95,29 @@ impl State {
         let style = |t: &iced_core::Theme| {
             styling::box_border(t).background(Color::WHITE.scale_alpha(0.025))
         };
-        pane_grid(&self.panes, |_pane, state, _is_maximized| {
-            pane_grid::Content::new(
-                match state {
-                    Pane::Games => games.view(shadowed).map(crate::Message::from),
-                    Pane::GameInfo => info
-                        .view(|id| games.by_id(id).map(|g| (&g.game, g.thumb.as_ref())))
-                        .map(crate::Message::from)
-                        .pipe(widget::container)
-                        .padding(5)
-                        .style(style)
-                        .height(Fill)
-                        .into(),
-                }
-                .pipe(widget::container),
-            )
+        widget::responsive(move |size| {
+            self.aspect_ratio.set(size.width / size.height);
+
+            pane_grid(&self.panes, |_pane, state, _is_maximized| {
+                pane_grid::Content::new(
+                    match state {
+                        Pane::Games => games.view(shadowed).map(crate::Message::from),
+                        Pane::GameInfo => info
+                            .view(|id| games.by_id(id).map(|g| (&g.game, g.thumb.as_ref())))
+                            .map(crate::Message::from)
+                            .pipe(widget::container)
+                            .padding(5)
+                            .style(style)
+                            .height(Fill)
+                            .into(),
+                    }
+                    .pipe(widget::container),
+                )
+            })
+            .spacing(9)
+            .on_resize(3, |event| crate::Message::View(Message::Resized(event)))
+            .into()
         })
-        .spacing(9)
-        .on_resize(3, |event| crate::Message::View(Message::Resized(event)))
         .into()
     }
 }
