@@ -8,6 +8,13 @@
 - [ ] Keybinds, and control scheme docs
 - [x] Split settings to dedicated window, info should be kept as-is
 - [x] Console Window
+- [ ] Move settings back to proc macros
+- [ ] Split up spel-katalog more
+- [ ] In info view rework buttons
+- [ ] In info and batch view, give editors dark backgrounds at all times
+- [ ] Merge process and batch view with info view, with some kind of switching mechanism
+- [ ] Unresized cover cache, and cover size option with different caches for different sizes
+- [ ] Add more refined database access limitations
 
 # Future Goals/Possibilities
 - [ ] Run exe files in prefix without lutris
