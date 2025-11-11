@@ -172,8 +172,6 @@ pub enum Request {
 pub struct State {
     /// Script content to show.
     script: text_editor::Content,
-    /// Highlighter settings to use.
-    hl_settings: ::iced_highlighter::Settings,
     /// What games to run batch on.
     scope: Scope,
     /// Title of script to show.
@@ -184,10 +182,6 @@ impl Default for State {
     fn default() -> Self {
         Self {
             script: widget::text_editor::Content::with_text(include_str!("../../lua/sample.lua")),
-            hl_settings: ::iced_highlighter::Settings {
-                theme: ::iced_highlighter::Theme::SolarizedDark,
-                token: String::from("lua"),
-            },
             scope: Scope::default(),
             script_title: "sample.lua".to_owned(),
         }
@@ -382,11 +376,16 @@ impl State {
                         .padding(3)
                         .spacing(3),
                 )
-                .push(
+                .push(widget::themer(
+                    ::iced_core::Theme::SolarizedDark,
                     widget::text_editor(&self.script)
-                        .highlight_with::<Highlighter>(self.hl_settings.clone(), |h, _| {
-                            h.to_format()
-                        })
+                        .highlight_with::<Highlighter>(
+                            ::iced_highlighter::Settings {
+                                theme: ::iced_highlighter::Theme::SolarizedDark,
+                                token: String::from("lua"),
+                            },
+                            |h, _| h.to_format(),
+                        )
                         .on_action(|act| OrRequest::Message(Message::Action(act)))
                         .key_binding(|keypress| {
                             if keypress.key.as_ref()
@@ -423,7 +422,7 @@ impl State {
                         })
                         .font(Font::MONOSPACE)
                         .height(Fill),
-                )
+                ))
                 .height(Fill),
         )
         .style(|theme| {

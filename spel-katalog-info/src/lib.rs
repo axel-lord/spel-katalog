@@ -834,7 +834,8 @@ impl State {
                                 ),
                             ),
                     )
-                    .push(
+                    .push(widget::themer(
+                        ::iced_core::Theme::SolarizedDark,
                         widget::text_editor(&self.content)
                             .highlight_with::<Highlighter>(
                                 ::iced_highlighter::Settings {
@@ -845,7 +846,7 @@ impl State {
                             )
                             .on_action(|action| action.pipe(Message::from).pipe(OrRequest::Message))
                             .padding(3),
-                    )
+                    ))
                     .push(horizontal_space().width(0)),
             ))
             .into()
