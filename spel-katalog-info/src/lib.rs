@@ -646,6 +646,70 @@ impl State {
         Some(())
     }
 
+    /// View game info.
+    fn view_info<'a>(
+        &'a self,
+        game: &'a ::spel_katalog_formats::Game,
+        thumb: Option<&'a widget::image::Handle>,
+        id: i64,
+    ) -> Element<'a, OrRequest<Message, Request>> {
+        w::row()
+            .align_y(Alignment::Start)
+            .height(150)
+            .push_maybe(thumb.map(widget::image))
+            .push_maybe(thumb.is_some().then(|| widget::vertical_rule(2)))
+            .push(
+                w::col()
+                    .push(
+                        w::row()
+                            .push(widget::text(&game.name).width(Fill).align_x(Center))
+                            .push(
+                                widget::button("Close")
+                                    .padding(3)
+                                    .style(widget::button::danger)
+                                    .on_press_with(|| OrRequest::Request(Request::ShowInfo(false))),
+                            ),
+                    )
+                    .push(horizontal_rule(2))
+                    .push(
+                        w::row()
+                            .push(widget::text("Runner").font(Font::MONOSPACE))
+                            .push(vertical_rule(2))
+                            .push(
+                                widget::value(&game.runner)
+                                    .font(Font::MONOSPACE)
+                                    .align_x(Alignment::Start)
+                                    .width(Fill),
+                            ),
+                    )
+                    .push(horizontal_rule(2))
+                    .push(
+                        w::row()
+                            .push(widget::text("Slug  ").font(Font::MONOSPACE))
+                            .push(vertical_rule(2))
+                            .push(
+                                widget::value(&game.slug)
+                                    .font(Font::MONOSPACE)
+                                    .align_x(Alignment::Start)
+                                    .width(Fill),
+                            ),
+                    )
+                    .push(horizontal_rule(2))
+                    .push(
+                        w::row()
+                            .push(widget::text("Id    ").font(Font::MONOSPACE))
+                            .push(vertical_rule(2))
+                            .push(
+                                widget::value(id)
+                                    .font(Font::MONOSPACE)
+                                    .align_x(Alignment::Start)
+                                    .width(Fill),
+                            ),
+                    ),
+            )
+            .into()
+    }
+
     /// View info.
     pub fn view<'a>(
         &'a self,
@@ -666,107 +730,34 @@ impl State {
         let id = game.id;
 
         w::col()
-            .push(
-                w::row()
-                    .align_y(Alignment::Start)
-                    .height(150)
-                    .push_maybe(thumb.map(widget::image))
-                    .push_maybe(thumb.is_some().then(|| widget::vertical_rule(2)))
-                    .push(
-                        w::col()
-                            .push(
-                                w::row()
-                                    .push(widget::text(&game.name).width(Fill).align_x(Center))
-                                    .push(
-                                        widget::button("Close")
-                                            .padding(3)
-                                            .style(widget::button::danger)
-                                            .on_press_with(|| {
-                                                OrRequest::Request(Request::ShowInfo(false))
-                                            }),
-                                    ),
-                            )
-                            .push(horizontal_rule(2))
-                            .push(
-                                w::row()
-                                    .push(widget::text("Runner").font(Font::MONOSPACE))
-                                    .push(vertical_rule(2))
-                                    .push(
-                                        widget::value(&game.runner)
-                                            .font(Font::MONOSPACE)
-                                            .align_x(Alignment::Start)
-                                            .width(Fill),
-                                    ),
-                            )
-                            .push(horizontal_rule(2))
-                            .push(
-                                w::row()
-                                    .push(widget::text("Slug  ").font(Font::MONOSPACE))
-                                    .push(vertical_rule(2))
-                                    .push(
-                                        widget::value(&game.slug)
-                                            .font(Font::MONOSPACE)
-                                            .align_x(Alignment::Start)
-                                            .width(Fill),
-                                    ),
-                            )
-                            .push(horizontal_rule(2))
-                            .push(
-                                w::row()
-                                    .push(widget::text("Id    ").font(Font::MONOSPACE))
-                                    .push(vertical_rule(2))
-                                    .push(
-                                        widget::value(id)
-                                            .font(Font::MONOSPACE)
-                                            .align_x(Alignment::Start)
-                                            .width(Fill),
-                                    ),
-                            ),
-                    ),
-            )
+            .push(self.view_info(game, thumb, id))
             .push(horizontal_rule(2))
             .push(
-                w::row()
-                    .push(
-                        button("Sandbox")
-                            .padding(3)
-                            .style(widget::button::success)
-                            .on_press(OrRequest::Request(Request::RunGame { id, sandbox: true })),
-                    )
-                    .push(
-                        button("Run")
-                            .padding(3)
-                            .style(widget::button::danger)
-                            .on_press(OrRequest::Request(Request::RunGame { id, sandbox: false })),
-                    )
-                    .push(
-                        button("Lutris")
-                            .padding(3)
-                            .on_press(OrRequest::Request(Request::RunLutrisInSandbox { id })),
-                    )
-                    .push(
-                        button("+Thumb").padding(3).on_press_maybe(
+                [
+                    button("Sandbox")
+                        .style(widget::button::success)
+                        .on_press(OrRequest::Request(Request::RunGame { id, sandbox: true })),
+                    button("Run")
+                        .style(widget::button::danger)
+                        .on_press(OrRequest::Request(Request::RunGame { id, sandbox: false })),
+                    button("Lutris")
+                        .on_press(OrRequest::Request(Request::RunLutrisInSandbox { id })),
+                    button("+Thumb").padding(3).on_press_maybe(
+                        thumb
+                            .is_none()
+                            .then(|| OrRequest::Message(Message::AddThumb { id })),
+                    ),
+                    button("-Thumb")
+                        .style(widget::button::danger)
+                        .on_press_maybe(
                             thumb
-                                .is_none()
-                                .then(|| OrRequest::Message(Message::AddThumb { id })),
+                                .is_some()
+                                .then(|| OrRequest::Message(Message::RemoveThumb { id })),
                         ),
-                    )
-                    .push(
-                        button("-Thumb")
-                            .padding(3)
-                            .style(widget::button::danger)
-                            .on_press_maybe(
-                                thumb
-                                    .is_some()
-                                    .then(|| OrRequest::Message(Message::RemoveThumb { id })),
-                            ),
-                    )
-                    .push(
-                        button("Open")
-                            .padding(3)
-                            .on_press(OrRequest::Message(Message::OpenDir)),
-                    )
-                    .push(horizontal_space()),
+                    button("Open").on_press(OrRequest::Message(Message::OpenDir)),
+                ]
+                .into_iter()
+                .fold(w::row(), |row, btn| row.push(btn.padding(3))),
             )
             .push(horizontal_rule(2))
             .push(w::scroll(
