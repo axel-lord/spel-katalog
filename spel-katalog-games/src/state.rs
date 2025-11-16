@@ -116,7 +116,7 @@ pub enum Message {
 #[derive(Debug, IsVariant)]
 pub enum Request {
     /// Set currently chosen game.
-    SetId {
+    ShowGame {
         /// Id of game
         id: i64,
     },
@@ -272,7 +272,7 @@ impl State {
             }
             Message::SelectId(id) => {
                 self.selected = Some(id);
-                Task::done(OrRequest::Request(Request::SetId { id }))
+                Task::done(OrRequest::Request(Request::ShowGame { id }))
             }
             Message::BatchSelect(id) => {
                 if let Some(game) = self.games.by_id_mut(id) {

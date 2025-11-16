@@ -100,14 +100,14 @@ impl App {
     fn quick_update(&mut self, msg: QuickMessage) -> Task<Message> {
         match msg {
             QuickMessage::CloseAll => {
-                self.view.show_info(false);
+                self.view.hide_info();
                 self.games.select(SelDir::None);
                 self.filter = String::new();
                 self.sort_games();
             }
             QuickMessage::ClosePane => {
                 if self.view.info_shown() {
-                    self.view.show_info(false);
+                    self.view.hide_info();
                     self.set_status("closed info pane");
                 } else if self.games.selected().is_some() {
                     self.games.select(SelDir::None);
@@ -118,7 +118,7 @@ impl App {
             }
             QuickMessage::OpenProcessInfo => {
                 self.view.displayed = crate::view::Displayed::Processes;
-                self.view.show_info(true);
+                self.view.show_info();
             }
             QuickMessage::CycleHidden => {
                 let next = self.settings.get::<Show>().cycle();
@@ -174,6 +174,17 @@ impl App {
                     },
                 );
             }
+            QuickMessage::ToggleProcessInfo => {
+                match (self.view.info_shown(), self.view.displayed) {
+                    (true, crate::view::Displayed::Processes) => {
+                        self.view.hide_info();
+                    }
+                    _ => {
+                        self.view.show_info();
+                        self.view.displayed = crate::view::Displayed::Processes;
+                    }
+                }
+            }
             QuickMessage::ToggleMain => {
                 return self.toggle_window(
                     |t| t.is_main(),
@@ -190,16 +201,30 @@ impl App {
 
     fn games_request(&mut self, request: ::spel_katalog_games::Request) -> Task<Message> {
         match request {
-            ::spel_katalog_games::Request::SetId { id } => {
-                return self
-                    .info
-                    .update(
-                        ::spel_katalog_info::Message::SetId { id },
-                        &self.sender,
-                        &self.settings,
-                        &|id| self.games.by_id(id).map(|g| &g.game),
-                    )
-                    .map(Message::Info);
+            ::spel_katalog_games::Request::ShowGame { id } => {
+                let Self {
+                    info,
+                    games,
+                    sender,
+                    settings,
+                    view,
+                    ..
+                } = self;
+                if view.info_shown() && view.displayed.is_game_info() && info.id() == Some(id) {
+                    view.hide_info();
+                } else if let Some(game) = games.by_id(id) {
+                    return info
+                        .set_game(sender, settings, game)
+                        .map(OrRequest::Message)
+                        .map(Message::Info)
+                        .then(|message| {
+                            Task::done(message).chain(Task::done(Message::ShowInfo(
+                                crate::view::Displayed::GameInfo,
+                            )))
+                        });
+                } else {
+                    info.clear();
+                }
             }
             ::spel_katalog_games::Request::Run { id, sandbox } => {
                 return self.run_game(
@@ -213,7 +238,9 @@ impl App {
                 );
             }
             ::spel_katalog_games::Request::CloseInfo => {
-                self.view.show_info(false);
+                if self.view.displayed.is_game_info() {
+                    self.view.hide_info();
+                }
                 self.games.select(SelDir::None);
             }
         }
@@ -222,43 +249,35 @@ impl App {
 
     fn info_request(&mut self, request: ::spel_katalog_info::Request) -> Task<Message> {
         match request {
-            ::spel_katalog_info::Request::ShowInfo(show) => {
-                self.view.show_info(show);
-            }
-            ::spel_katalog_info::Request::RemoveImage { slug } => {
-                return self
-                    .games
-                    .update(
-                        ::spel_katalog_games::Message::RemoveImage { slug },
-                        &self.sender,
-                        &self.settings,
-                        &self.filter,
-                    )
-                    .map(Message::Games);
-            }
-            ::spel_katalog_info::Request::SetImage { slug, image } => {
-                return self
-                    .games
-                    .update(
-                        ::spel_katalog_games::Message::SetImage {
-                            slug,
-                            image,
-                            add_to_cache: true,
-                        },
-                        &self.sender,
-                        &self.settings,
-                        &self.filter,
-                    )
-                    .map(Message::Games);
-            }
+            ::spel_katalog_info::Request::RemoveImage { slug } => self
+                .games
+                .update(
+                    ::spel_katalog_games::Message::RemoveImage { slug },
+                    &self.sender,
+                    &self.settings,
+                    &self.filter,
+                )
+                .map(Message::Games),
+            ::spel_katalog_info::Request::SetImage { slug, image } => self
+                .games
+                .update(
+                    ::spel_katalog_games::Message::SetImage {
+                        slug,
+                        image,
+                        add_to_cache: true,
+                    },
+                    &self.sender,
+                    &self.settings,
+                    &self.filter,
+                )
+                .map(Message::Games),
             ::spel_katalog_info::Request::RunGame { id, sandbox } => {
-                return self.run_game(id, Safety::from(sandbox), false);
+                self.run_game(id, Safety::from(sandbox), false)
             }
             ::spel_katalog_info::Request::RunLutrisInSandbox { id } => {
-                return self.run_game(id, Safety::Firejail, true);
+                self.run_game(id, Safety::Firejail, true)
             }
         }
-        Task::none()
     }
 
     fn batch_request(&mut self, request: ::spel_katalog_batch::Request) -> Task<Message> {
@@ -446,6 +465,10 @@ impl App {
             }
             Message::LuaDocs(msg) => {
                 return self.docs_viewer.update(msg).map(Message::LuaDocs);
+            }
+            Message::ShowInfo(displayed) => {
+                self.view.displayed = displayed;
+                self.view.show_info();
             }
         }
         Task::none()

@@ -37,6 +37,7 @@ pub enum QuickMessage {
     ToggleLuaApi,
     ToggleSettings,
     ToggleMain,
+    ToggleProcessInfo,
 }
 
 #[derive(Debug, IsVariant, From)]
@@ -68,4 +69,6 @@ pub enum Message {
     #[from]
     Terminal(::spel_katalog_terminal::Message),
     LuaDocs(::spel_katalog_lua_docs::Message),
+    #[from]
+    ShowInfo(crate::view::Displayed),
 }

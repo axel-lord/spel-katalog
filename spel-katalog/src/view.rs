@@ -71,7 +71,7 @@ impl State {
                 self.panes.resize(split, ratio.clamp(0.25, 0.75));
             }
             Message::Close => {
-                self.show_info(false);
+                self.hide_info();
             }
             Message::SetDisplayed(displayed) => {
                 self.displayed = displayed;
@@ -80,32 +80,35 @@ impl State {
         Task::none()
     }
 
-    pub fn show_info(&mut self, show_info: bool) {
-        match self.info.take() {
-            Some(info_pane) if show_info => {
-                self.info = Some(info_pane);
+    pub fn show_info(&mut self) {
+        let Self {
+            panes,
+            games,
+            info,
+            aspect_ratio,
+            ..
+        } = self;
+        if let info @ None = info {
+            if aspect_ratio.get() > 1.0
+                && let Some((pane, split)) =
+                    panes.split(pane_grid::Axis::Vertical, *games, Pane::GameInfo)
+            {
+                panes.resize(split, 0.3);
+                panes.swap(pane, self.games);
+                *info = Some(pane);
+            } else if let Some((pane, _split)) =
+                panes.split(pane_grid::Axis::Horizontal, *games, Pane::GameInfo)
+            {
+                *info = Some(pane);
             }
-            Some(info_pane) => {
-                self.panes.close(info_pane);
-                self.info = None;
-            }
-            None if show_info => {
-                if self.aspect_ratio.get() > 1.0
-                    && let Some((pane, split)) =
-                        self.panes
-                            .split(pane_grid::Axis::Vertical, self.games, Pane::GameInfo)
-                {
-                    self.panes.resize(split, 0.3);
-                    self.panes.swap(pane, self.games);
-                    self.info = Some(pane);
-                } else if let Some((pane, _split)) =
-                    self.panes
-                        .split(pane_grid::Axis::Horizontal, self.games, Pane::GameInfo)
-                {
-                    self.info = Some(pane);
-                }
-            }
-            None => {}
+        }
+    }
+
+    pub fn hide_info(&mut self) {
+        let Self { panes, info, .. } = self;
+        if let Some(pane) = info {
+            panes.close(*pane);
+            *info = None;
         }
     }
 

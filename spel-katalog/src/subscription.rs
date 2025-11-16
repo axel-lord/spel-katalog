@@ -34,6 +34,7 @@ impl App {
                 Named::F1 => Some(Message::Quick(QuickMessage::ToggleLuaApi)),
                 Named::F2 => Some(Message::Quick(QuickMessage::ToggleSettings)),
                 Named::F3 => Some(Message::Quick(QuickMessage::ToggleMain)),
+                Named::F4 => Some(Message::Quick(QuickMessage::ToggleProcessInfo)),
                 _ => None,
             },
             keyboard::Key::Character(chr) => match chr {
@@ -42,9 +43,6 @@ impl App {
                 "h" if modifiers.is_empty() => Some(QuickMessage::CycleHidden),
                 "f" if modifiers.is_empty() => Some(QuickMessage::CycleFilter),
                 "n" if modifiers.is_empty() => Some(QuickMessage::ToggleNetwork),
-                "k" if modifiers == Modifiers::CTRL | Modifiers::SHIFT => {
-                    Some(QuickMessage::OpenProcessInfo)
-                }
                 "b" if modifiers == Modifiers::CTRL | Modifiers::SHIFT => {
                     Some(QuickMessage::ToggleBatch)
                 }
