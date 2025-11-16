@@ -38,6 +38,7 @@ pub enum QuickMessage {
     ToggleSettings,
     ToggleMain,
     ToggleProcessInfo,
+    ToggleGameInfo,
 }
 
 #[derive(Debug, IsVariant, From)]

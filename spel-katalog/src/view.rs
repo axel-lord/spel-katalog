@@ -25,6 +25,7 @@ pub enum Displayed {
     #[default]
     GameInfo,
     Processes,
+    Batch,
 }
 
 #[derive(Debug)]
@@ -118,7 +119,7 @@ impl State {
             .spacing(3)
             .push(
                 widget::pick_list(
-                    [Displayed::GameInfo, Displayed::Processes],
+                    [Displayed::GameInfo, Displayed::Batch, Displayed::Processes],
                     Some(self.displayed),
                     Message::SetDisplayed,
                 )
@@ -133,22 +134,38 @@ impl State {
             .into()
     }
 
-    /// Create a titlebar
-    fn titlebar<'app>(&'app self) -> Element<'app, crate::Message> {
+    /// Close if displayed matches current otherwise open to displayed.
+    pub fn toggle_displayed(&mut self, displayed: Displayed) {
+        if self.info_shown() && self.displayed == displayed {
+            self.hide_info();
+        } else {
+            self.displayed = displayed;
+            self.show_info();
+        }
+    }
+
+    /// Create a titlebar.
+    fn titlebar<'app>(&'app self, title: &'app str) -> Element<'app, crate::Message> {
         widget::Row::new()
             .spacing(3)
             .align_y(Alignment::Center)
             .push(
-                widget::text(match self.displayed {
-                    Displayed::GameInfo => "No Game Selected",
-                    Displayed::Processes => "Processes",
-                })
-                .width(Fill)
-                .align_y(Vertical::Center)
-                .align_x(Horizontal::Center),
+                widget::text(title)
+                    .width(Fill)
+                    .align_y(Vertical::Center)
+                    .align_x(Horizontal::Center),
             )
             .push(self.buttons().map(crate::Message::from))
             .into()
+    }
+
+    /// Create a titlebar using currently displayed content.
+    fn auto_titlebar<'app>(&'app self) -> Element<'app, crate::Message> {
+        self.titlebar(match self.displayed {
+            Displayed::GameInfo => "No Game Selected",
+            Displayed::Processes => "Processes",
+            Displayed::Batch => "Game Batch",
+        })
     }
 
     fn view_info<'app>(
@@ -156,6 +173,7 @@ impl State {
         games: &'app ::spel_katalog_games::State,
         info: &'app spel_katalog_info::State,
         process_info: &'app [ProcessInfo],
+        batch_view: &'app ::spel_katalog_batch::State,
     ) -> Element<'app, crate::Message> {
         let style = |t: &_| styling::box_border(t).background(Color::WHITE.scale_alpha(0.025));
         match self.displayed {
@@ -176,7 +194,7 @@ impl State {
                         .into()
                 } else {
                     widget::Column::new()
-                        .push(self.titlebar())
+                        .push(self.auto_titlebar())
                         .push(widget::horizontal_rule(2))
                         .push(widget::vertical_space())
                         .padding(5)
@@ -187,9 +205,18 @@ impl State {
                 }
             }
             Displayed::Processes => widget::Column::new()
-                .push(self.titlebar())
+                .push(self.auto_titlebar())
                 .push(widget::horizontal_rule(2))
                 .push(ProcessInfo::view_list(process_info))
+                .padding(5)
+                .spacing(3)
+                .pipe(widget::container)
+                .style(style)
+                .into(),
+            Displayed::Batch => widget::Column::new()
+                .push(self.titlebar(batch_view.title()))
+                .push(widget::horizontal_rule(2))
+                .push(batch_view.view().map(crate::Message::from))
                 .padding(5)
                 .spacing(3)
                 .pipe(widget::container)
@@ -203,7 +230,7 @@ impl State {
         games: &'app ::spel_katalog_games::State,
         info: &'app spel_katalog_info::State,
         process_info: &'app [ProcessInfo],
-        shadowed: bool,
+        batch_view: &'app ::spel_katalog_batch::State,
     ) -> Element<'app, crate::Message> {
         widget::responsive(move |size| {
             self.aspect_ratio.set(size.width / size.height);
@@ -211,8 +238,8 @@ impl State {
             pane_grid(&self.panes, |_pane, state, _is_maximized| {
                 pane_grid::Content::new(
                     match state {
-                        Pane::Games => games.view(shadowed).map(crate::Message::from),
-                        Pane::GameInfo => self.view_info(games, info, process_info),
+                        Pane::Games => games.view().map(crate::Message::from),
+                        Pane::GameInfo => self.view_info(games, info, process_info, batch_view),
                     }
                     .pipe(widget::container),
                 )

@@ -150,7 +150,9 @@ impl App {
                     return self.run_game(id, Safety::Firejail, false);
                 }
             }
-            QuickMessage::ToggleBatch => self.show_batch = !self.show_batch,
+            QuickMessage::ToggleBatch => {
+                self.view.toggle_displayed(crate::view::Displayed::Batch);
+            }
             QuickMessage::ToggleLuaApi => {
                 return self.toggle_window(
                     |t| t.is_lua_api(),
@@ -175,15 +177,8 @@ impl App {
                 );
             }
             QuickMessage::ToggleProcessInfo => {
-                match (self.view.info_shown(), self.view.displayed) {
-                    (true, crate::view::Displayed::Processes) => {
-                        self.view.hide_info();
-                    }
-                    _ => {
-                        self.view.show_info();
-                        self.view.displayed = crate::view::Displayed::Processes;
-                    }
-                }
+                self.view
+                    .toggle_displayed(crate::view::Displayed::Processes);
             }
             QuickMessage::ToggleMain => {
                 return self.toggle_window(
@@ -194,6 +189,9 @@ impl App {
                         ..Default::default()
                     },
                 );
+            }
+            QuickMessage::ToggleGameInfo => {
+                self.view.toggle_displayed(crate::view::Displayed::GameInfo);
             }
         }
         Task::none()
@@ -283,14 +281,13 @@ impl App {
     fn batch_request(&mut self, request: ::spel_katalog_batch::Request) -> Task<Message> {
         match request {
             ::spel_katalog_batch::Request::ShowProcesses => {
-                return Task::done(Message::Quick(QuickMessage::OpenProcessInfo));
+                Task::done(Message::Quick(QuickMessage::OpenProcessInfo))
             }
-            ::spel_katalog_batch::Request::HideBatch => self.show_batch = false,
             ::spel_katalog_batch::Request::GatherBatchInfo(scope) => {
                 let yml_dir = self.settings.get::<YmlDir>();
                 let yml_dir = yml_dir.as_str();
                 let config_dir = self.settings.get::<ConfigDir>().as_str();
-                return match scope {
+                match scope {
                     ::spel_katalog_batch::Scope::All => gather(
                         yml_dir,
                         config_dir,
@@ -310,13 +307,12 @@ impl App {
                 .pipe(::spel_katalog_batch::Message::RunBatch)
                 .pipe(OrRequest::Message)
                 .pipe(Message::Batch)
-                .pipe(Task::done);
+                .pipe(Task::done)
             }
             ::spel_katalog_batch::Request::ReloadCache => {
-                return self.games.find_cached(&self.settings).map(Message::Games);
+                self.games.find_cached(&self.settings).map(Message::Games)
             }
         }
-        Task::none()
     }
 
     fn should_re_sort(msg: &::spel_katalog_settings::Message) -> bool {

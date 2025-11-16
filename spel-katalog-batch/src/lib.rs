@@ -12,7 +12,7 @@ use ::iced_core::{
 use ::iced_highlighter::Highlighter;
 use ::iced_runtime::Task;
 use ::iced_widget::{
-    self as widget, button, text,
+    self as widget, button,
     text_editor::{self, Action, Binding, Edit},
 };
 use ::mlua::{Lua, LuaSerdeExt, Table};
@@ -159,8 +159,6 @@ pub enum Message {
 pub enum Request {
     /// Request process list be shown.
     ShowProcesses,
-    /// Hide batch window.
-    HideBatch,
     /// Gather batch info.
     GatherBatchInfo(Scope),
     /// Request a cache reload.
@@ -329,107 +327,99 @@ impl State {
         }
     }
 
+    /// Get title of current script.
+    pub fn title(&self) -> &str {
+        &self.script_title
+    }
+
     /// View widget.
     pub fn view(&self) -> Element<'_, OrRequest<Message, Request>> {
-        widget::container(
-            widget::Column::new()
-                .push(
-                    widget::Row::new()
-                        .align_y(Center)
-                        .push(text(&self.script_title).center().width(Fill))
-                        .push(
-                            widget::pick_list(Scope::VARIANTS, Some(self.scope), |s| {
-                                OrRequest::Message(Message::Scope(s))
-                            })
-                            .padding(3),
-                        )
-                        .push(
-                            button("Run")
-                                .padding(3)
-                                .style(widget::button::success)
-                                .on_press_with(|| {
-                                    OrRequest::Request(Request::GatherBatchInfo(self.scope))
-                                }),
-                        )
-                        .push(
-                            button("Clear")
-                                .padding(3)
-                                .style(widget::button::danger)
-                                .on_press(OrRequest::Message(Message::Clear)),
-                        )
-                        .push(
-                            button("Open")
-                                .padding(3)
-                                .on_press(OrRequest::Message(Message::Open)),
-                        )
-                        .push(
-                            button("Save")
-                                .padding(3)
-                                .on_press(OrRequest::Message(Message::Save)),
-                        )
-                        .push(
-                            button("Hide")
-                                .padding(3)
-                                .style(widget::button::danger)
-                                .on_press_with(|| OrRequest::Request(Request::HideBatch)),
-                        )
-                        .padding(3)
-                        .spacing(3),
-                )
-                .push(widget::themer(
-                    ::iced_core::Theme::SolarizedDark,
-                    widget::text_editor(&self.script)
-                        .highlight_with::<Highlighter>(
-                            ::iced_highlighter::Settings {
-                                theme: ::iced_highlighter::Theme::SolarizedDark,
-                                token: String::from("lua"),
-                            },
-                            |h, _| h.to_format(),
-                        )
-                        .on_action(|act| OrRequest::Message(Message::Action(act)))
-                        .key_binding(|keypress| {
-                            if keypress.key.as_ref()
-                                == Key::Named(::iced_core::keyboard::key::Named::Tab)
-                            {
-                                Some(Binding::Custom(OrRequest::Message(Message::Indent)))
-                            } else if keypress.key.as_ref() == Key::Character("r")
-                                && keypress.modifiers == Modifiers::CTRL
-                            {
-                                Some(Binding::Custom(OrRequest::Request(
-                                    Request::GatherBatchInfo(self.scope),
-                                )))
-                            } else if keypress.modifiers == Modifiers::CTRL
-                                && keypress.key.as_ref() == Key::Character("d")
-                            {
-                                (1..=10)
-                                    .map(|id| BatchInfo {
-                                        id,
-                                        slug: format!("game-{id}"),
-                                        name: format!("Game {id}"),
-                                        runner: "wine".to_owned(),
-                                        config: "/dev/null".to_owned(),
-                                        hidden: false,
-                                        attrs: HashMap::default(),
-                                    })
-                                    .collect::<Vec<_>>()
-                                    .pipe(Message::RunBatch)
-                                    .pipe(OrRequest::Message)
-                                    .pipe(Binding::Custom)
-                                    .pipe(Some)
-                            } else {
-                                Binding::from_key_press(keypress)
-                            }
+        widget::Column::new()
+            .spacing(3)
+            .push(
+                widget::Row::new()
+                    .align_y(Center)
+                    .push(
+                        widget::pick_list(Scope::VARIANTS, Some(self.scope), |s| {
+                            OrRequest::Message(Message::Scope(s))
                         })
-                        .font(Font::MONOSPACE)
-                        .height(Fill),
-                ))
-                .height(Fill),
-        )
-        .style(|theme| {
-            ::spel_katalog_common::styling::box_border(theme).background(theme.palette().background)
-        })
-        .max_width(800)
-        .height(Fill)
-        .into()
+                        .padding(3),
+                    )
+                    .push(
+                        button("Run")
+                            .padding(3)
+                            .style(widget::button::success)
+                            .on_press_with(|| {
+                                OrRequest::Request(Request::GatherBatchInfo(self.scope))
+                            }),
+                    )
+                    .push(
+                        button("Clear")
+                            .padding(3)
+                            .style(widget::button::danger)
+                            .on_press(OrRequest::Message(Message::Clear)),
+                    )
+                    .push(
+                        button("Open")
+                            .padding(3)
+                            .on_press(OrRequest::Message(Message::Open)),
+                    )
+                    .push(
+                        button("Save")
+                            .padding(3)
+                            .on_press(OrRequest::Message(Message::Save)),
+                    )
+                    .spacing(3),
+            )
+            .push(widget::themer(
+                ::iced_core::Theme::SolarizedDark,
+                widget::text_editor(&self.script)
+                    .highlight_with::<Highlighter>(
+                        ::iced_highlighter::Settings {
+                            theme: ::iced_highlighter::Theme::SolarizedDark,
+                            token: String::from("lua"),
+                        },
+                        |h, _| h.to_format(),
+                    )
+                    .on_action(|act| OrRequest::Message(Message::Action(act)))
+                    .key_binding(|keypress| {
+                        if keypress.key.as_ref()
+                            == Key::Named(::iced_core::keyboard::key::Named::Tab)
+                        {
+                            Some(Binding::Custom(OrRequest::Message(Message::Indent)))
+                        } else if keypress.key.as_ref() == Key::Character("r")
+                            && keypress.modifiers == Modifiers::CTRL
+                        {
+                            Some(Binding::Custom(OrRequest::Request(
+                                Request::GatherBatchInfo(self.scope),
+                            )))
+                        } else if keypress.modifiers == Modifiers::CTRL
+                            && keypress.key.as_ref() == Key::Character("d")
+                        {
+                            (1..=10)
+                                .map(|id| BatchInfo {
+                                    id,
+                                    slug: format!("game-{id}"),
+                                    name: format!("Game {id}"),
+                                    runner: "wine".to_owned(),
+                                    config: "/dev/null".to_owned(),
+                                    hidden: false,
+                                    attrs: HashMap::default(),
+                                })
+                                .collect::<Vec<_>>()
+                                .pipe(Message::RunBatch)
+                                .pipe(OrRequest::Message)
+                                .pipe(Binding::Custom)
+                                .pipe(Some)
+                        } else {
+                            Binding::from_key_press(keypress)
+                        }
+                    })
+                    .font(Font::MONOSPACE)
+                    .height(Fill),
+            ))
+            .width(Fill)
+            .height(Fill)
+            .into()
     }
 }

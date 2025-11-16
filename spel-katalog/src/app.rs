@@ -4,8 +4,8 @@ use ::derive_more::IsVariant;
 use ::iced_core::{Alignment::Center, Length::Fill, window};
 use ::iced_runtime::Task;
 use ::iced_widget::{
-    self as widget, Row, horizontal_rule, horizontal_space, stack, text, text_input, toggler,
-    value, vertical_space,
+    self as widget, Row, horizontal_rule, horizontal_space, text, text_input, toggler, value,
+    vertical_space,
 };
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog_cli::Run;
@@ -44,7 +44,6 @@ pub(crate) struct App {
     pub view: view::State,
     pub info: ::spel_katalog_info::State,
     pub batch: ::spel_katalog_batch::State,
-    pub show_batch: bool,
     pub sender: StatusSender,
     pub process_list: Vec<process_info::ProcessInfo>,
     pub sink_builder: SinkBuilder,
@@ -134,7 +133,6 @@ impl Initial {
         let info = ::spel_katalog_info::State::default();
         let sender = status_tx.into();
         let process_list = Vec::new();
-        let show_batch = false;
         let windows = FxHashMap::default();
         let batch = Default::default();
         let (dialog_tx, dialog_rx) = ::flume::bounded(64);
@@ -157,7 +155,6 @@ impl Initial {
             process_list,
             sender,
             settings,
-            show_batch,
             sink_builder,
             status,
             terminal,
@@ -359,23 +356,8 @@ impl App {
             )
             .push(vertical_space().height(5))
             .push(
-                stack([self.view.view(
-                    &self.games,
-                    &self.info,
-                    &self.process_list,
-                    self.show_batch,
-                )])
-                .push_maybe(self.show_batch.then(|| {
-                    self.batch
-                        .view()
-                        .pipe(widget::container)
-                        .padding(50)
-                        .center_x(Fill)
-                        .height(Fill)
-                        .pipe(widget::opaque)
-                        .pipe(Element::from)
-                        .map(Message::Batch)
-                })),
+                self.view
+                    .view(&self.games, &self.info, &self.process_list, &self.batch),
             )
             .push(vertical_space().height(3))
             .push(horizontal_rule(2))
