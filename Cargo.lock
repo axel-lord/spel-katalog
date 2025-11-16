@@ -4730,11 +4730,17 @@ dependencies = [
 [[package]]
 name = "spel-katalog-reflect"
 version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+ "spel-katalog-reflect-derive",
+]
 
 [[package]]
 name = "spel-katalog-reflect-derive"
 version = "0.1.0"
 dependencies = [
+ "proc-macro2",
+ "spel-katalog-reflect-derive-lib",
  "syn 2.0.108",
 ]
 
