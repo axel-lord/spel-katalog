@@ -11,6 +11,7 @@ members = [
 	"spel-katalog-info",
 	"spel-katalog-lua",
 	"spel-katalog-lua-docs",
+	"spel-katalog-reflect",
 	"spel-katalog-settings",
 	"spel-katalog-sink",
 	"spel-katalog-terminal",
@@ -18,6 +19,11 @@ members = [
 ]
 resolver = "2"
 default-members = ["spel-katalog"]
+
+[workspace.package]
+edition = "2024"
+authors = ["Axel Lord"]
+license = "MIT OR Apache-2.0"
 
 [profile.release]
 strip = "debuginfo"

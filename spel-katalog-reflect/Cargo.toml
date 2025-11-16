@@ -1,0 +1,11 @@
+[package]
+name = "spel-katalog-reflect"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true
