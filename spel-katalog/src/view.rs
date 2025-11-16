@@ -24,10 +24,11 @@ pub struct State {
     aspect_ratio: Cell<f32>,
 }
 
-#[derive(Debug, Clone, From)]
+#[derive(Debug, Clone, Copy, From)]
 pub enum Message {
     #[from]
     Resized(pane_grid::ResizeEvent),
+    Close,
 }
 
 impl State {
@@ -54,20 +55,23 @@ impl State {
             Message::Resized(pane_grid::ResizeEvent { split, ratio }) => {
                 self.panes.resize(split, ratio.clamp(0.25, 0.75));
             }
+            Message::Close => {
+                self.show_info(false);
+            }
         };
         Task::none()
     }
 
     pub fn show_info(&mut self, show_info: bool) {
         match self.info.take() {
-            Some(info_pane) => {
-                if show_info {
-                    self.info = show_info.then_some(info_pane);
-                } else {
-                    self.panes.close(info_pane);
-                }
+            Some(info_pane) if show_info => {
+                self.info = Some(info_pane);
             }
-            None => {
+            Some(info_pane) => {
+                self.panes.close(info_pane);
+                self.info = None;
+            }
+            None if show_info => {
                 if self.aspect_ratio.get() > 1.0
                     && let Some((pane, split)) =
                         self.panes
@@ -83,7 +87,20 @@ impl State {
                     self.info = Some(pane);
                 }
             }
+            None => {}
         }
+    }
+
+    /// Create an element for titlebar buttons.
+    fn buttons<'a>() -> Element<'a, Message> {
+        widget::Row::new()
+            .push(
+                widget::button("Close")
+                    .padding(3)
+                    .style(widget::button::danger)
+                    .on_press_with(|| Message::Close),
+            )
+            .into()
     }
 
     pub fn view<'app>(
@@ -92,9 +109,7 @@ impl State {
         info: &'app spel_katalog_info::State,
         shadowed: bool,
     ) -> Element<'app, crate::Message> {
-        let style = |t: &iced_core::Theme| {
-            styling::box_border(t).background(Color::WHITE.scale_alpha(0.025))
-        };
+        let style = |t: &_| styling::box_border(t).background(Color::WHITE.scale_alpha(0.025));
         widget::responsive(move |size| {
             self.aspect_ratio.set(size.width / size.height);
 
@@ -102,14 +117,35 @@ impl State {
                 pane_grid::Content::new(
                     match state {
                         Pane::Games => games.view(shadowed).map(crate::Message::from),
-                        Pane::GameInfo => info
-                            .view(|id| games.by_id(id).map(|g| (&g.game, g.thumb.as_ref())))
-                            .map(crate::Message::from)
-                            .pipe(widget::container)
-                            .padding(5)
-                            .style(style)
-                            .height(Fill)
-                            .into(),
+                        Pane::GameInfo => {
+                            if let Some((id, game)) =
+                                info.id().and_then(|id| Some((id, games.by_id(id)?)))
+                            {
+                                widget::Column::new()
+                                    .push(
+                                        info.titlebar(
+                                            game,
+                                            game.thumb.as_ref(),
+                                            id,
+                                            Self::buttons(),
+                                        )
+                                        .map(crate::Message::from),
+                                    )
+                                    .push(widget::horizontal_rule(2))
+                                    .push(info.view(game.thumb.is_some()).map(crate::Message::from))
+                                    .spacing(3)
+                                    .padding(5)
+                                    .pipe(widget::container)
+                                    .style(style)
+                                    .height(Fill)
+                                    .into()
+                            } else {
+                                widget::container("No Game Selected")
+                                    .style(style)
+                                    .center(Fill)
+                                    .into()
+                            }
+                        }
                     }
                     .pipe(widget::container),
                 )

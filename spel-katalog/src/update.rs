@@ -200,7 +200,7 @@ impl App {
                         ::spel_katalog_info::Message::SetId { id },
                         &self.sender,
                         &self.settings,
-                        |id| self.games.by_id(id).map(|g| &g.game),
+                        &|id| self.games.by_id(id).map(|g| &g.game),
                     )
                     .map(Message::Info);
             }
@@ -351,7 +351,7 @@ impl App {
                 OrRequest::Message(message) => {
                     return self
                         .info
-                        .update(message, &self.sender, &self.settings, |id| {
+                        .update(message, &self.sender, &self.settings, &|id| {
                             self.games.by_id(id).map(|g| &g.game)
                         })
                         .map(Message::Info);

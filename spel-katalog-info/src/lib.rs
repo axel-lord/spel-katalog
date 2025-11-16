@@ -151,13 +151,22 @@ pub enum Request {
 }
 
 impl State {
+    /// Get id of currently viewed game.
+    pub const fn id(&self) -> Option<i64> {
+        if self.id == i64::MAX {
+            None
+        } else {
+            Some(self.id)
+        }
+    }
+
     /// Udate state of info display.
     pub fn update<'a>(
         &'a mut self,
         message: Message,
         tx: &'a StatusSender,
         settings: &'a Settings,
-        game_by_id: impl Fn(i64) -> Option<&'a ::spel_katalog_formats::Game>,
+        game_by_id: &dyn Fn(i64) -> Option<&'a ::spel_katalog_formats::Game>,
     ) -> Task<OrRequest<Message, Request>> {
         match message {
             Message::SetId { id } => {
@@ -647,28 +656,24 @@ impl State {
     }
 
     /// View game info.
-    fn view_info<'a>(
+    pub fn titlebar<'a, M: 'a>(
         &'a self,
         game: &'a ::spel_katalog_formats::Game,
         thumb: Option<&'a widget::image::Handle>,
         id: i64,
-    ) -> Element<'a, OrRequest<Message, Request>> {
+        buttons: Element<'a, M>,
+    ) -> Element<'a, M> {
         w::row()
             .align_y(Alignment::Start)
             .height(150)
-            .push_maybe(thumb.map(widget::image))
+            .push_maybe(thumb.map(|thumb| widget::image(thumb).width(150).height(150)))
             .push_maybe(thumb.is_some().then(|| widget::vertical_rule(2)))
             .push(
                 w::col()
                     .push(
                         w::row()
                             .push(widget::text(&game.name).width(Fill).align_x(Center))
-                            .push(
-                                widget::button("Close")
-                                    .padding(3)
-                                    .style(widget::button::danger)
-                                    .on_press_with(|| OrRequest::Request(Request::ShowInfo(false))),
-                            ),
+                            .push(buttons),
                     )
                     .push(horizontal_rule(2))
                     .push(
@@ -711,27 +716,10 @@ impl State {
     }
 
     /// View info.
-    pub fn view<'a>(
-        &'a self,
-        game_by_id: impl Fn(
-            i64,
-        ) -> Option<(
-            &'a ::spel_katalog_formats::Game,
-            Option<&'a widget::image::Handle>,
-        )>,
-    ) -> Element<'a, OrRequest<Message, Request>> {
-        let Some((game, thumb)) = game_by_id(self.id) else {
-            return w::col()
-                .align_x(Center)
-                .push("No Game Selected")
-                .push(horizontal_rule(2))
-                .into();
-        };
-        let id = game.id;
-
-        w::col()
-            .push(self.view_info(game, thumb, id))
-            .push(horizontal_rule(2))
+    pub fn view<'a>(&'a self, has_thumb: bool) -> Element<'a, OrRequest<Message, Request>> {
+        let id = self.id;
+        widget::Column::new()
+            .spacing(3)
             .push(
                 [
                     button("Sandbox")
@@ -743,16 +731,12 @@ impl State {
                     button("Lutris")
                         .on_press(OrRequest::Request(Request::RunLutrisInSandbox { id })),
                     button("+Thumb").padding(3).on_press_maybe(
-                        thumb
-                            .is_none()
-                            .then(|| OrRequest::Message(Message::AddThumb { id })),
+                        (!has_thumb).then(|| OrRequest::Message(Message::AddThumb { id })),
                     ),
                     button("-Thumb")
                         .style(widget::button::danger)
                         .on_press_maybe(
-                            thumb
-                                .is_some()
-                                .then(|| OrRequest::Message(Message::RemoveThumb { id })),
+                            has_thumb.then(|| OrRequest::Message(Message::RemoveThumb { id })),
                         ),
                     button("Open").on_press(OrRequest::Message(Message::OpenDir)),
                 ]
@@ -761,7 +745,8 @@ impl State {
             )
             .push(horizontal_rule(2))
             .push(w::scroll(
-                w::col()
+                widget::Column::new()
+                    .spacing(3)
                     .push("Root Directories")
                     .push(if self.additional.sandbox_root.is_empty() {
                         widget::value(self.common_parent.display())
@@ -839,7 +824,7 @@ impl State {
                                 |h, _| h.to_format(),
                             )
                             .on_action(|action| action.pipe(Message::from).pipe(OrRequest::Message))
-                            .padding(3),
+                            .padding(6),
                     ))
                     .push(horizontal_space().width(0)),
             ))
