@@ -4728,6 +4728,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "spel-katalog-reflect"
+version = "0.1.0"
+
+[[package]]
 name = "spel-katalog-settings"
 version = "0.1.0"
 dependencies = [
