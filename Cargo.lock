@@ -4732,6 +4732,22 @@ name = "spel-katalog-reflect"
 version = "0.1.0"
 
 [[package]]
+name = "spel-katalog-reflect-derive"
+version = "0.1.0"
+dependencies = [
+ "syn 2.0.108",
+]
+
+[[package]]
+name = "spel-katalog-reflect-derive-lib"
+version = "0.0.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.108",
+]
+
+[[package]]
 name = "spel-katalog-settings"
 version = "0.1.0"
 dependencies = [
