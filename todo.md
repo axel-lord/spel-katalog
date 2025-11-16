@@ -10,8 +10,8 @@
 - [x] Console Window
 - [ ] Move settings back to proc macros
 - [ ] Split up spel-katalog more
-- [ ] In info view rework buttons
-- [ ] In info and batch view, give editors dark backgrounds at all times
+- [ ] ~~In info view rework buttons~~
+- [x] In info and batch view, give editors dark backgrounds at all times
 - [ ] Merge process and batch view with info view, with some kind of switching mechanism
 - [ ] Unresized cover cache, and cover size option with different caches for different sizes
 - [ ] Add more refined database access limitations

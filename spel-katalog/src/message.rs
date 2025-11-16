@@ -37,6 +37,8 @@ pub enum QuickMessage {
     ToggleLuaApi,
     ToggleSettings,
     ToggleMain,
+    ToggleProcessInfo,
+    ToggleGameInfo,
 }
 
 #[derive(Debug, IsVariant, From)]
@@ -54,7 +56,7 @@ pub enum Message {
     Info(OrRequest<::spel_katalog_info::Message, ::spel_katalog_info::Request>),
     #[from]
     Quick(QuickMessage),
-    ProcessInfo(Option<Vec<process_info::ProcessInfo>>),
+    ProcessInfo(Vec<process_info::ProcessInfo>),
     Kill {
         pid: i64,
         terminate: bool,
@@ -68,4 +70,6 @@ pub enum Message {
     #[from]
     Terminal(::spel_katalog_terminal::Message),
     LuaDocs(::spel_katalog_lua_docs::Message),
+    #[from]
+    ShowInfo(crate::view::Displayed),
 }

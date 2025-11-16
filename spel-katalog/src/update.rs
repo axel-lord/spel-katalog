@@ -100,18 +100,14 @@ impl App {
     fn quick_update(&mut self, msg: QuickMessage) -> Task<Message> {
         match msg {
             QuickMessage::CloseAll => {
-                self.process_list = None;
-                self.view.show_info(false);
+                self.view.hide_info();
                 self.games.select(SelDir::None);
                 self.filter = String::new();
                 self.sort_games();
             }
             QuickMessage::ClosePane => {
-                if self.process_list.is_some() {
-                    self.process_list = None;
-                    self.set_status("closed process list");
-                } else if self.view.info_shown() {
-                    self.view.show_info(false);
+                if self.view.info_shown() {
+                    self.view.hide_info();
                     self.set_status("closed info pane");
                 } else if self.games.selected().is_some() {
                     self.games.select(SelDir::None);
@@ -121,7 +117,8 @@ impl App {
                 }
             }
             QuickMessage::OpenProcessInfo => {
-                return Task::future(Self::collect_process_info()).then(identity);
+                self.view.displayed = crate::view::Displayed::Processes;
+                self.view.show_info();
             }
             QuickMessage::CycleHidden => {
                 let next = self.settings.get::<Show>().cycle();
@@ -142,7 +139,7 @@ impl App {
                 self.sort_games();
             }
             QuickMessage::RefreshProcessInfo => {
-                if self.process_list.is_some() {
+                if self.view.displayed.is_processes() {
                     return Task::future(Self::collect_process_info()).then(identity);
                 }
             }
@@ -153,7 +150,9 @@ impl App {
                     return self.run_game(id, Safety::Firejail, false);
                 }
             }
-            QuickMessage::ToggleBatch => self.show_batch = !self.show_batch,
+            QuickMessage::ToggleBatch => {
+                self.view.toggle_displayed(crate::view::Displayed::Batch);
+            }
             QuickMessage::ToggleLuaApi => {
                 return self.toggle_window(
                     |t| t.is_lua_api(),
@@ -177,6 +176,10 @@ impl App {
                     },
                 );
             }
+            QuickMessage::ToggleProcessInfo => {
+                self.view
+                    .toggle_displayed(crate::view::Displayed::Processes);
+            }
             QuickMessage::ToggleMain => {
                 return self.toggle_window(
                     |t| t.is_main(),
@@ -187,22 +190,39 @@ impl App {
                     },
                 );
             }
+            QuickMessage::ToggleGameInfo => {
+                self.view.toggle_displayed(crate::view::Displayed::GameInfo);
+            }
         }
         Task::none()
     }
 
     fn games_request(&mut self, request: ::spel_katalog_games::Request) -> Task<Message> {
         match request {
-            ::spel_katalog_games::Request::SetId { id } => {
-                return self
-                    .info
-                    .update(
-                        ::spel_katalog_info::Message::SetId { id },
-                        &self.sender,
-                        &self.settings,
-                        |id| self.games.by_id(id).map(|g| &g.game),
-                    )
-                    .map(Message::Info);
+            ::spel_katalog_games::Request::ShowGame { id } => {
+                let Self {
+                    info,
+                    games,
+                    sender,
+                    settings,
+                    view,
+                    ..
+                } = self;
+                if view.info_shown() && view.displayed.is_game_info() && info.id() == Some(id) {
+                    view.hide_info();
+                } else if let Some(game) = games.by_id(id) {
+                    return info
+                        .set_game(sender, settings, game)
+                        .map(OrRequest::Message)
+                        .map(Message::Info)
+                        .then(|message| {
+                            Task::done(message).chain(Task::done(Message::ShowInfo(
+                                crate::view::Displayed::GameInfo,
+                            )))
+                        });
+                } else {
+                    info.clear();
+                }
             }
             ::spel_katalog_games::Request::Run { id, sandbox } => {
                 return self.run_game(
@@ -216,7 +236,9 @@ impl App {
                 );
             }
             ::spel_katalog_games::Request::CloseInfo => {
-                self.view.show_info(false);
+                if self.view.displayed.is_game_info() {
+                    self.view.hide_info();
+                }
                 self.games.select(SelDir::None);
             }
         }
@@ -225,56 +247,47 @@ impl App {
 
     fn info_request(&mut self, request: ::spel_katalog_info::Request) -> Task<Message> {
         match request {
-            ::spel_katalog_info::Request::ShowInfo(show) => {
-                self.view.show_info(show);
-            }
-            ::spel_katalog_info::Request::RemoveImage { slug } => {
-                return self
-                    .games
-                    .update(
-                        ::spel_katalog_games::Message::RemoveImage { slug },
-                        &self.sender,
-                        &self.settings,
-                        &self.filter,
-                    )
-                    .map(Message::Games);
-            }
-            ::spel_katalog_info::Request::SetImage { slug, image } => {
-                return self
-                    .games
-                    .update(
-                        ::spel_katalog_games::Message::SetImage {
-                            slug,
-                            image,
-                            add_to_cache: true,
-                        },
-                        &self.sender,
-                        &self.settings,
-                        &self.filter,
-                    )
-                    .map(Message::Games);
-            }
+            ::spel_katalog_info::Request::RemoveImage { slug } => self
+                .games
+                .update(
+                    ::spel_katalog_games::Message::RemoveImage { slug },
+                    &self.sender,
+                    &self.settings,
+                    &self.filter,
+                )
+                .map(Message::Games),
+            ::spel_katalog_info::Request::SetImage { slug, image } => self
+                .games
+                .update(
+                    ::spel_katalog_games::Message::SetImage {
+                        slug,
+                        image,
+                        add_to_cache: true,
+                    },
+                    &self.sender,
+                    &self.settings,
+                    &self.filter,
+                )
+                .map(Message::Games),
             ::spel_katalog_info::Request::RunGame { id, sandbox } => {
-                return self.run_game(id, Safety::from(sandbox), false);
+                self.run_game(id, Safety::from(sandbox), false)
             }
             ::spel_katalog_info::Request::RunLutrisInSandbox { id } => {
-                return self.run_game(id, Safety::Firejail, true);
+                self.run_game(id, Safety::Firejail, true)
             }
         }
-        Task::none()
     }
 
     fn batch_request(&mut self, request: ::spel_katalog_batch::Request) -> Task<Message> {
         match request {
             ::spel_katalog_batch::Request::ShowProcesses => {
-                return Task::done(Message::Quick(QuickMessage::OpenProcessInfo));
+                Task::done(Message::Quick(QuickMessage::OpenProcessInfo))
             }
-            ::spel_katalog_batch::Request::HideBatch => self.show_batch = false,
             ::spel_katalog_batch::Request::GatherBatchInfo(scope) => {
                 let yml_dir = self.settings.get::<YmlDir>();
                 let yml_dir = yml_dir.as_str();
                 let config_dir = self.settings.get::<ConfigDir>().as_str();
-                return match scope {
+                match scope {
                     ::spel_katalog_batch::Scope::All => gather(
                         yml_dir,
                         config_dir,
@@ -294,13 +307,12 @@ impl App {
                 .pipe(::spel_katalog_batch::Message::RunBatch)
                 .pipe(OrRequest::Message)
                 .pipe(Message::Batch)
-                .pipe(Task::done);
+                .pipe(Task::done)
             }
             ::spel_katalog_batch::Request::ReloadCache => {
-                return self.games.find_cached(&self.settings).map(Message::Games);
+                self.games.find_cached(&self.settings).map(Message::Games)
             }
         }
-        Task::none()
     }
 
     fn should_re_sort(msg: &::spel_katalog_settings::Message) -> bool {
@@ -351,7 +363,7 @@ impl App {
                 OrRequest::Message(message) => {
                     return self
                         .info
-                        .update(message, &self.sender, &self.settings, |id| {
+                        .update(message, &self.sender, &self.settings, &|id| {
                             self.games.by_id(id).map(|g| &g.game)
                         })
                         .map(Message::Info);
@@ -360,7 +372,7 @@ impl App {
             },
 
             Message::ProcessInfo(process_infos) => {
-                self.process_list = process_infos.filter(|infos| !infos.is_empty())
+                self.process_list = process_infos;
             }
             Message::Kill { pid, terminate } => {
                 let Ok(pid) = RawPid::try_from(pid) else {
@@ -449,6 +461,10 @@ impl App {
             }
             Message::LuaDocs(msg) => {
                 return self.docs_viewer.update(msg).map(Message::LuaDocs);
+            }
+            Message::ShowInfo(displayed) => {
+                self.view.displayed = displayed;
+                self.view.show_info();
             }
         }
         Task::none()

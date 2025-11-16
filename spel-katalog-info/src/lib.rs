@@ -71,11 +71,6 @@ impl Default for State {
 /// Message used by info display.
 #[derive(Debug, Clone, From, IsVariant)]
 pub enum Message {
-    /// Set current game.
-    SetId {
-        /// Id of game.
-        id: i64,
-    },
     /// Set content of config editor.
     SetContent {
         /// Id of game to verify match.
@@ -117,13 +112,13 @@ pub enum Message {
     OpenExe,
     /// Open directory of game.
     OpenDir,
+    /// Clear viewed content.
+    Clear,
 }
 
 /// Request application for action.
 #[derive(Debug, Clone, IsVariant)]
 pub enum Request {
-    /// Request display status of info.
-    ShowInfo(bool),
     /// Set image of game wiht given slug.
     SetImage {
         /// Slug of game to set image for.
@@ -151,82 +146,94 @@ pub enum Request {
 }
 
 impl State {
+    /// Get id of currently viewed game.
+    pub const fn id(&self) -> Option<i64> {
+        if self.id == i64::MAX {
+            None
+        } else {
+            Some(self.id)
+        }
+    }
+
+    /// Clear viewed contents.
+    pub fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    /// Set the id of the currently viewed game, and generate a task that finds
+    /// info for it.
+    pub fn set_game(
+        &mut self,
+        tx: &StatusSender,
+        settings: &Settings,
+        game: &::spel_katalog_formats::Game,
+    ) -> Task<Message> {
+        let id = game.id;
+
+        // We leave the rest of the content to avoid being empty.
+        self.id = id;
+
+        let path = settings
+            .get::<YmlDir>()
+            .as_path()
+            .join(&game.configpath)
+            .with_extension("yml");
+
+        let additional_path = settings
+            .get::<ConfigDir>()
+            .as_path()
+            .join("games")
+            .join(format!("{id}.toml"));
+
+        async fn read_additional(path: &Path) -> Option<AdditionalConfig> {
+            // Usually a bad idea however since we deal with it not existing correctly
+            // anyways this is just some redundancy that prevents log spam.
+            if !path.exists() {
+                return None;
+            };
+            ::smol::fs::read_to_string(path)
+                .await
+                .map_err(|err| ::log::error!("could not read {path:?} to string\n{err}"))
+                .ok()?
+                .pipe_deref(::toml::from_str)
+                .map_err(|err| ::log::error!("could not deserialize {path:?}\n{err}"))
+                .ok()
+        }
+
+        let tx = tx.clone();
+        Task::future(async move {
+            match ::smol::fs::read_to_string(&path).await {
+                Ok(value) => {
+                    let additional = read_additional(&additional_path).await.unwrap_or_default();
+                    Task::done(Message::SetContent {
+                        id,
+                        content: value,
+                        path: path.clone(),
+                        additional,
+                    })
+                }
+                Err(err) => {
+                    ::log::error!("failed to read yml {path:?}\n{err}");
+                    async_status!(tx, "could not read {path:?}").await;
+                    Task::done(Message::Clear)
+                }
+            }
+        })
+        .then(identity)
+    }
+
     /// Udate state of info display.
     pub fn update<'a>(
         &'a mut self,
         message: Message,
         tx: &'a StatusSender,
         settings: &'a Settings,
-        game_by_id: impl Fn(i64) -> Option<&'a ::spel_katalog_formats::Game>,
+        game_by_id: &dyn Fn(i64) -> Option<&'a ::spel_katalog_formats::Game>,
     ) -> Task<OrRequest<Message, Request>> {
         match message {
-            Message::SetId { id } => {
-                self.id = id;
-
-                let fill_content;
-
-                if let Some(game) = game_by_id(id) {
-                    let path = settings
-                        .get::<YmlDir>()
-                        .as_path()
-                        .join(&game.configpath)
-                        .with_extension("yml");
-
-                    let additional_path = settings
-                        .get::<ConfigDir>()
-                        .as_path()
-                        .join("games")
-                        .join(format!("{id}.toml"));
-
-                    async fn read_additional(path: &Path) -> Option<AdditionalConfig> {
-                        // Usually a bad idea however since we deal with it not existing correctly
-                        // anyways this is just some redundancy that prevents log spam.
-                        if !path.exists() {
-                            return None;
-                        };
-                        ::smol::fs::read_to_string(path)
-                            .await
-                            .map_err(|err| {
-                                ::log::error!("could not read {path:?} to string\n{err}")
-                            })
-                            .ok()?
-                            .pipe_deref(::toml::from_str)
-                            .map_err(|err| ::log::error!("could not deserialize {path:?}\n{err}"))
-                            .ok()
-                    }
-
-                    let tx = tx.clone();
-                    fill_content = Task::future(async move {
-                        match ::smol::fs::read_to_string(&path).await {
-                            Ok(value) => {
-                                let additional =
-                                    read_additional(&additional_path).await.unwrap_or_default();
-                                Message::SetContent {
-                                    id,
-                                    content: value,
-                                    path: path.clone(),
-                                    additional,
-                                }
-                                .pipe(OrRequest::Message)
-                                .pipe(Task::done)
-                            }
-                            Err(err) => {
-                                ::log::error!("failed to read yml {path:?}\n{err}");
-                                async_status!(tx, "could not read {path:?}").await;
-                                Task::none()
-                            }
-                        }
-                    })
-                    .then(identity);
-                } else {
-                    fill_content = Task::none();
-                }
-
-                let show_info = Request::ShowInfo(true)
-                    .pipe(OrRequest::Request)
-                    .pipe(Task::done);
-
-                Task::batch([fill_content, show_info])
+            Message::Clear => {
+                self.clear();
+                Task::none()
             }
             Message::SetContent {
                 id,
@@ -234,32 +241,35 @@ impl State {
                 path,
                 additional,
             } => {
-                if id == self.id {
-                    self.set_content(content.clone());
-
-                    self.config_path = Some(path.clone());
-                    self.additional_roots_content = widget::text_editor::Content::with_text(
-                        &additional.sandbox_root.join("\n"),
-                    );
-                    self.attrs = attrs::State::default();
-                    self.attrs.attrs = additional
-                        .attrs
-                        .iter()
-                        .map(|(key, value)| (key.clone(), value.clone()))
-                        .collect();
-                    self.additional = additional;
-
-                    let yml = match formats::Config::parse(&content) {
-                        Ok(yml) => yml,
-                        Err(err) => {
-                            ::log::error!("could not parse yml {path:?}\n{err}");
-                            status!(tx, "could not parse {path:?}");
-                            return Task::none();
-                        }
-                    };
-
-                    self.common_parent = yml.game.common_parent();
+                // Verify id matches.
+                if id != self.id {
+                    return Task::none();
                 }
+
+                self.set_content(content.clone());
+
+                self.config_path = Some(path.clone());
+                self.additional_roots_content =
+                    widget::text_editor::Content::with_text(&additional.sandbox_root.join("\n"));
+                self.attrs = attrs::State::default();
+                self.attrs.attrs = additional
+                    .attrs
+                    .iter()
+                    .map(|(key, value)| (key.clone(), value.clone()))
+                    .collect();
+                self.additional = additional;
+
+                // Move to task?
+                let yml = match formats::Config::parse(&content) {
+                    Ok(yml) => yml,
+                    Err(err) => {
+                        ::log::error!("could not parse yml {path:?}\n{err}");
+                        status!(tx, "could not parse {path:?}");
+                        return Task::none();
+                    }
+                };
+
+                self.common_parent = yml.game.common_parent();
 
                 Task::none()
             }
@@ -646,128 +656,98 @@ impl State {
         Some(())
     }
 
-    /// View info.
-    pub fn view<'a>(
+    /// View game info.
+    pub fn titlebar<'a, M: 'a>(
         &'a self,
-        game_by_id: impl Fn(
-            i64,
-        ) -> Option<(
-            &'a ::spel_katalog_formats::Game,
-            Option<&'a widget::image::Handle>,
-        )>,
-    ) -> Element<'a, OrRequest<Message, Request>> {
-        let Some((game, thumb)) = game_by_id(self.id) else {
-            return w::col()
-                .align_x(Center)
-                .push("No Game Selected")
-                .push(horizontal_rule(2))
-                .into();
-        };
-        let id = game.id;
-
-        w::col()
+        game: &'a ::spel_katalog_formats::Game,
+        thumb: Option<&'a widget::image::Handle>,
+        id: i64,
+        buttons: Element<'a, M>,
+    ) -> Element<'a, M> {
+        w::row()
+            .align_y(Alignment::Start)
+            .height(150)
+            .push_maybe(thumb.map(|thumb| widget::image(thumb).width(150).height(150)))
+            .push_maybe(thumb.is_some().then(|| widget::vertical_rule(2)))
             .push(
-                w::row()
-                    .align_y(Alignment::Start)
-                    .height(150)
-                    .push_maybe(thumb.map(widget::image))
-                    .push_maybe(thumb.is_some().then(|| widget::vertical_rule(2)))
+                w::col()
                     .push(
-                        w::col()
+                        w::row()
+                            .push(widget::text(&game.name).width(Fill).align_x(Center))
+                            .push(buttons),
+                    )
+                    .push(horizontal_rule(2))
+                    .push(
+                        w::row()
+                            .push(widget::text("Runner").font(Font::MONOSPACE))
+                            .push(vertical_rule(2))
                             .push(
-                                w::row().push(widget::text(&game.name).width(Fill).align_x(Center)),
-                            )
-                            .push(horizontal_rule(2))
+                                widget::value(&game.runner)
+                                    .font(Font::MONOSPACE)
+                                    .align_x(Alignment::Start)
+                                    .width(Fill),
+                            ),
+                    )
+                    .push(horizontal_rule(2))
+                    .push(
+                        w::row()
+                            .push(widget::text("Slug  ").font(Font::MONOSPACE))
+                            .push(vertical_rule(2))
                             .push(
-                                w::row()
-                                    .push(widget::text("Runner").font(Font::MONOSPACE))
-                                    .push(vertical_rule(2))
-                                    .push(
-                                        widget::value(&game.runner)
-                                            .font(Font::MONOSPACE)
-                                            .align_x(Alignment::Start)
-                                            .width(Fill),
-                                    ),
-                            )
-                            .push(horizontal_rule(2))
+                                widget::value(&game.slug)
+                                    .font(Font::MONOSPACE)
+                                    .align_x(Alignment::Start)
+                                    .width(Fill),
+                            ),
+                    )
+                    .push(horizontal_rule(2))
+                    .push(
+                        w::row()
+                            .push(widget::text("Id    ").font(Font::MONOSPACE))
+                            .push(vertical_rule(2))
                             .push(
-                                w::row()
-                                    .push(widget::text("Slug  ").font(Font::MONOSPACE))
-                                    .push(vertical_rule(2))
-                                    .push(
-                                        widget::value(&game.slug)
-                                            .font(Font::MONOSPACE)
-                                            .align_x(Alignment::Start)
-                                            .width(Fill),
-                                    ),
-                            )
-                            .push(horizontal_rule(2))
-                            .push(
-                                w::row()
-                                    .push(widget::text("Id    ").font(Font::MONOSPACE))
-                                    .push(vertical_rule(2))
-                                    .push(
-                                        widget::value(id)
-                                            .font(Font::MONOSPACE)
-                                            .align_x(Alignment::Start)
-                                            .width(Fill),
-                                    ),
+                                widget::value(id)
+                                    .font(Font::MONOSPACE)
+                                    .align_x(Alignment::Start)
+                                    .width(Fill),
                             ),
                     ),
             )
-            .push(horizontal_rule(2))
+            .into()
+    }
+
+    /// View info.
+    pub fn view<'a>(&'a self, has_thumb: bool) -> Element<'a, OrRequest<Message, Request>> {
+        let id = self.id;
+        widget::Column::new()
+            .spacing(3)
             .push(
-                w::row()
-                    .push(
-                        button("Sandbox")
-                            .padding(3)
-                            .style(widget::button::success)
-                            .on_press(OrRequest::Request(Request::RunGame { id, sandbox: true })),
-                    )
-                    .push(
-                        button("Run")
-                            .padding(3)
-                            .style(widget::button::danger)
-                            .on_press(OrRequest::Request(Request::RunGame { id, sandbox: false })),
-                    )
-                    .push(
-                        button("Lutris")
-                            .padding(3)
-                            .on_press(OrRequest::Request(Request::RunLutrisInSandbox { id })),
-                    )
-                    .push(
-                        button("+Thumb").padding(3).on_press_maybe(
-                            thumb
-                                .is_none()
-                                .then(|| OrRequest::Message(Message::AddThumb { id })),
-                        ),
-                    )
-                    .push(
-                        button("-Thumb")
-                            .padding(3)
-                            .style(widget::button::danger)
-                            .on_press_maybe(
-                                thumb
-                                    .is_some()
-                                    .then(|| OrRequest::Message(Message::RemoveThumb { id })),
-                            ),
-                    )
-                    .push(
-                        button("Open")
-                            .padding(3)
-                            .on_press(OrRequest::Message(Message::OpenDir)),
-                    )
-                    .push(horizontal_space())
-                    .push(
-                        widget::button("Close")
-                            .padding(3)
-                            .style(widget::button::secondary)
-                            .on_press_with(|| OrRequest::Request(Request::ShowInfo(false))),
+                [
+                    button("Sandbox")
+                        .style(widget::button::success)
+                        .on_press(OrRequest::Request(Request::RunGame { id, sandbox: true })),
+                    button("Run")
+                        .style(widget::button::danger)
+                        .on_press(OrRequest::Request(Request::RunGame { id, sandbox: false })),
+                    button("Lutris")
+                        .on_press(OrRequest::Request(Request::RunLutrisInSandbox { id })),
+                    button("+Thumb").padding(3).on_press_maybe(
+                        (!has_thumb).then(|| OrRequest::Message(Message::AddThumb { id })),
                     ),
+                    button("-Thumb")
+                        .style(widget::button::danger)
+                        .on_press_maybe(
+                            has_thumb.then(|| OrRequest::Message(Message::RemoveThumb { id })),
+                        ),
+                    button("Open").on_press(OrRequest::Message(Message::OpenDir)),
+                ]
+                .into_iter()
+                .fold(w::row(), |row, btn| row.push(btn.padding(3))),
             )
             .push(horizontal_rule(2))
             .push(w::scroll(
-                w::col()
+                widget::Column::new()
+                    .spacing(3)
                     .push("Root Directories")
                     .push(if self.additional.sandbox_root.is_empty() {
                         widget::value(self.common_parent.display())
@@ -834,7 +814,8 @@ impl State {
                                 ),
                             ),
                     )
-                    .push(
+                    .push(widget::themer(
+                        ::iced_core::Theme::SolarizedDark,
                         widget::text_editor(&self.content)
                             .highlight_with::<Highlighter>(
                                 ::iced_highlighter::Settings {
@@ -844,8 +825,8 @@ impl State {
                                 |h, _| h.to_format(),
                             )
                             .on_action(|action| action.pipe(Message::from).pipe(OrRequest::Message))
-                            .padding(3),
-                    )
+                            .padding(6),
+                    ))
                     .push(horizontal_space().width(0)),
             ))
             .into()

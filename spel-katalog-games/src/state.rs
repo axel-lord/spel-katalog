@@ -116,7 +116,7 @@ pub enum Message {
 #[derive(Debug, IsVariant)]
 pub enum Request {
     /// Set currently chosen game.
-    SetId {
+    ShowGame {
         /// Id of game
         id: i64,
     },
@@ -272,7 +272,7 @@ impl State {
             }
             Message::SelectId(id) => {
                 self.selected = Some(id);
-                Task::done(OrRequest::Request(Request::SetId { id }))
+                Task::done(OrRequest::Request(Request::ShowGame { id }))
             }
             Message::BatchSelect(id) => {
                 if let Some(game) = self.games.by_id_mut(id) {
@@ -403,11 +403,10 @@ impl State {
     }
 
     /// Render elements.
-    pub fn view(&self, shadowed: bool) -> Element<'_, OrRequest<Message, Request>> {
+    pub fn view(&self) -> Element<'_, OrRequest<Message, Request>> {
         fn card<'a>(
             game: &'a WithThumb,
             width: f32,
-            shadowed: bool,
             selected: Option<i64>,
         ) -> Element<'a, OrRequest<Message, Request>> {
             let handle = game.thumb.as_ref();
@@ -456,20 +455,10 @@ impl State {
                 }
                 None => widget::mouse_area(text),
             }
-            .interaction(if shadowed {
-                ::iced_core::mouse::Interaction::default()
-            } else {
-                ::iced_core::mouse::Interaction::Pointer
-            })
-            .pipe(|area| {
-                if shadowed {
-                    area
-                } else {
-                    area.on_release(AreaMessage::Select { id })
-                        .on_middle_release(AreaMessage::Run { id, sandbox: true })
-                        .on_right_release(AreaMessage::BatchSelect { id })
-                }
-            })
+            .interaction(::iced_core::mouse::Interaction::Pointer)
+            .on_release(AreaMessage::Select { id })
+            .on_middle_release(AreaMessage::Run { id, sandbox: true })
+            .on_right_release(AreaMessage::BatchSelect { id })
             .pipe(Element::from)
             .map(Into::into)
         }
@@ -482,7 +471,7 @@ impl State {
             w::scroll(w::col().align_x(Alignment::Start).width(Fill).extend(
                 self.displayed().chunks(columns).into_iter().map(|chunk| {
                     w::row()
-                        .extend(chunk.map(|game| card(game, width, shadowed, self.selected)))
+                        .extend(chunk.map(|game| card(game, width, self.selected)))
                         .into()
                 }),
             ))
