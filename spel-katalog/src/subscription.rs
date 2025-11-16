@@ -57,7 +57,7 @@ impl App {
             keyboard::Key::Unidentified => None,
         });
 
-        let refresh = if self.process_list.is_some() {
+        let refresh = if self.view.displayed.is_processes() {
             ::iced_futures::backend::default::time::every(Duration::from_millis(500))
                 .map(|_| Message::Quick(QuickMessage::RefreshProcessInfo))
         } else {

@@ -46,7 +46,7 @@ pub(crate) struct App {
     pub batch: ::spel_katalog_batch::State,
     pub show_batch: bool,
     pub sender: StatusSender,
-    pub process_list: Option<Vec<process_info::ProcessInfo>>,
+    pub process_list: Vec<process_info::ProcessInfo>,
     pub sink_builder: SinkBuilder,
     pub windows: FxHashMap<window::Id, WindowType>,
     pub dialog_tx: ::flume::Sender<DialogBuilder>,
@@ -133,7 +133,7 @@ impl Initial {
         let games = ::spel_katalog_games::State::default();
         let info = ::spel_katalog_info::State::default();
         let sender = status_tx.into();
-        let process_list = None;
+        let process_list = Vec::new();
         let show_batch = false;
         let windows = FxHashMap::default();
         let batch = Default::default();
@@ -294,7 +294,7 @@ impl App {
 
     pub async fn collect_process_info() -> Task<Message> {
         match process_info::ProcessInfo::open().await {
-            Ok(summary) => Task::done(Message::ProcessInfo(Some(summary))),
+            Ok(summary) => Task::done(Message::ProcessInfo(summary)),
             Err(err) => {
                 ::log::error!("whilst collecting info\n{err}");
                 Task::none()
@@ -362,7 +362,8 @@ impl App {
                 stack([self.view.view(
                     &self.games,
                     &self.info,
-                    self.process_list.is_some() || self.show_batch,
+                    &self.process_list,
+                    self.show_batch,
                 )])
                 .push_maybe(self.show_batch.then(|| {
                     self.batch
@@ -374,12 +375,7 @@ impl App {
                         .pipe(widget::opaque)
                         .pipe(Element::from)
                         .map(Message::Batch)
-                }))
-                .push_maybe(
-                    self.process_list
-                        .as_ref()
-                        .map(|process_info| process_info::ProcessInfo::view_list(process_info)),
-                ),
+                })),
             )
             .push(vertical_space().height(3))
             .push(horizontal_rule(2))

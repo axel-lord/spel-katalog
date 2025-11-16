@@ -54,7 +54,7 @@ pub enum Message {
     Info(OrRequest<::spel_katalog_info::Message, ::spel_katalog_info::Request>),
     #[from]
     Quick(QuickMessage),
-    ProcessInfo(Option<Vec<process_info::ProcessInfo>>),
+    ProcessInfo(Vec<process_info::ProcessInfo>),
     Kill {
         pid: i64,
         terminate: bool,

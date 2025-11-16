@@ -100,17 +100,13 @@ impl App {
     fn quick_update(&mut self, msg: QuickMessage) -> Task<Message> {
         match msg {
             QuickMessage::CloseAll => {
-                self.process_list = None;
                 self.view.show_info(false);
                 self.games.select(SelDir::None);
                 self.filter = String::new();
                 self.sort_games();
             }
             QuickMessage::ClosePane => {
-                if self.process_list.is_some() {
-                    self.process_list = None;
-                    self.set_status("closed process list");
-                } else if self.view.info_shown() {
+                if self.view.info_shown() {
                     self.view.show_info(false);
                     self.set_status("closed info pane");
                 } else if self.games.selected().is_some() {
@@ -121,7 +117,8 @@ impl App {
                 }
             }
             QuickMessage::OpenProcessInfo => {
-                return Task::future(Self::collect_process_info()).then(identity);
+                self.view.displayed = crate::view::Displayed::Processes;
+                self.view.show_info(true);
             }
             QuickMessage::CycleHidden => {
                 let next = self.settings.get::<Show>().cycle();
@@ -142,7 +139,7 @@ impl App {
                 self.sort_games();
             }
             QuickMessage::RefreshProcessInfo => {
-                if self.process_list.is_some() {
+                if self.view.displayed.is_processes() {
                     return Task::future(Self::collect_process_info()).then(identity);
                 }
             }
@@ -360,7 +357,7 @@ impl App {
             },
 
             Message::ProcessInfo(process_infos) => {
-                self.process_list = process_infos.filter(|infos| !infos.is_empty())
+                self.process_list = process_infos;
             }
             Message::Kill { pid, terminate } => {
                 let Ok(pid) = RawPid::try_from(pid) else {
