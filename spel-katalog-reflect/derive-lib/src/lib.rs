@@ -1,11 +1,14 @@
 //! Proc macro implementations.
 
+use ::core::ops::ControlFlow;
 use ::std::borrow::Cow;
 
 use ::proc_macro2::TokenStream;
 use ::quote::quote;
 use ::syn::{
-    Attribute, Fields, Ident, Token, parenthesized,
+    Attribute, Fields, Ident, Token,
+    meta::ParseNestedMeta,
+    parenthesized,
     parse::{Parse, ParseStream, Parser},
     parse_quote, parse_quote_spanned,
 };
@@ -143,6 +146,16 @@ fn variants(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
 
 /// Get crate_path attribute.
 fn get_crate_path(attrs: &[Attribute], attr_name: &str) -> ::syn::Result<::syn::ExprPath> {
+    get_crate_path_and(attrs, attr_name, |_| Ok(ControlFlow::Continue(())))
+}
+
+/// Get top level attributes. returning crate_path attributes and allowing a closure to be ran on
+/// other attributes.
+fn get_crate_path_and(
+    attrs: &[Attribute],
+    attr_name: &str,
+    mut with: impl FnMut(&ParseNestedMeta) -> ::syn::Result<ControlFlow<()>>,
+) -> ::syn::Result<::syn::ExprPath> {
     let mut crate_path = None;
     for attr in attrs {
         let Some(ident) = attr.path().get_ident() else {
@@ -172,10 +185,16 @@ fn get_crate_path(attrs: &[Attribute], attr_name: &str) -> ::syn::Result<::syn::
                     parenthesized!(content in meta.input);
                     parse_crate_path(&content)
                 }
-            } else if ident != "reflect" {
-                Err(meta.error("unsupported property"))
             } else {
-                Ok(())
+                match with(&meta)? {
+                    ControlFlow::Continue(_) => {}
+                    ControlFlow::Break(_) => return Ok(()),
+                };
+                if ident != "reflect" {
+                    Err(meta.error("unsupported property"))
+                } else {
+                    Ok(())
+                }
             }
         })?;
     }
