@@ -23,10 +23,7 @@ where
 /// # Safety
 /// `cycle_next` must return the cyclic next variant in `VARIANTS`.
 /// `cycle_prev` must return the cyclic previous variant in `VARIANTS`.
-pub unsafe trait Cycle
-where
-    Self: Variants,
-{
+pub unsafe trait Cycle {
     /// Get the next variant. For the last variant will return the first variant.
     fn cycle_next(&self) -> Self;
 
@@ -40,6 +37,13 @@ where
 pub trait AsStr {
     /// Get the name of the current variant.
     fn as_str<'a>(&self) -> &'a str;
+}
+
+impl<T: AsStr> AsStr for &T {
+    #[inline]
+    fn as_str<'a>(&self) -> &'a str {
+        T::as_str(self)
+    }
 }
 
 /// Error returned by [FromStr] implementations
