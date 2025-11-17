@@ -1,3 +1,5 @@
+#![no_std]
+
 //! Reflection utilities.
 
 /// Trait for simple enums to provide all values.
@@ -32,17 +34,27 @@ where
     fn cycle_prev(&self) -> Self;
 }
 
+/// Trait for getting the name of an enum variant.
+///
+/// By default round-trips with derived [FromStr] for simple enums.
+pub trait AsStr {
+    /// Get the name of the current variant.
+    fn as_str<'a>(&self) -> &'a str;
+}
+
 #[doc(inline)]
-pub use ::spel_katalog_reflect_derive::{Cycle, Variants};
+pub use ::spel_katalog_reflect_derive::{AsStr, Cycle, Variants};
+
+#[doc(inline)]
+pub use ::core::str::FromStr;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use ::pretty_assertions::assert_eq;
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Variants, Cycle)]
-    #[variants(crate_path = crate)]
-    #[cycle(crate_path = crate)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Variants, Cycle, AsStr)]
+    #[reflect(crate_path = crate)]
     enum VariantsTestEnum {
         First,
         Second,
@@ -69,5 +81,23 @@ mod tests {
 
         assert_eq!(Fourth.cycle_next(), First);
         assert_eq!(Fourth.cycle_prev(), Third);
+    }
+
+    #[test]
+    fn derived_as_str() {
+        use VariantsTestEnum::*;
+
+        assert_eq!(First.as_str(), "First");
+        assert_eq!(Second.as_str(), "Second");
+    }
+
+    #[test]
+    fn derived_as_str_variants() {
+        for (variant, str_rep) in VariantsTestEnum::VARIANTS
+            .iter()
+            .zip(["First", "Second", "Third", "Fourth"])
+        {
+            assert_eq!(variant.as_str(), str_rep);
+        }
     }
 }
