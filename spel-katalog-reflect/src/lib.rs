@@ -48,13 +48,18 @@ pub use ::spel_katalog_reflect_derive::{AsStr, Cycle, Variants};
 #[doc(inline)]
 pub use ::core::str::FromStr;
 
+#[doc(hidden)]
+pub mod __p {
+    pub use ::core::{convert::AsRef, fmt::Display};
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use ::pretty_assertions::assert_eq;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Variants, Cycle, AsStr)]
-    #[reflect(crate_path = crate)]
+    #[reflect(crate_path = crate, as_ref, display)]
     enum VariantsTestEnum {
         First,
         Second,

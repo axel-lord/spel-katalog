@@ -15,6 +15,9 @@ pub fn derive_cycle(item: TokenStream) -> TokenStream {
 }
 
 /// Derive implementation of `AsStr` for an enum.
+///
+/// With the `as_ref` and `display` attributes `AsRef<str>` and `Display`
+/// will also be derived using `AsStr` implementation.
 #[proc_macro_derive(AsStr, attributes(as_str, reflect))]
 pub fn derive_as_str(item: TokenStream) -> TokenStream {
     ::spel_katalog_reflect_derive_lib::derive_as_str(item.into()).into()

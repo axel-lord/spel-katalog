@@ -46,7 +46,21 @@ pub fn derive_as_str(tokens: TokenStream) -> TokenStream {
 
 /// Implement `AsStr` for an enum.
 fn as_str(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
-    let crate_path = get_crate_path(&item.attrs, "as_str")?;
+    let mut impl_display = false;
+    let mut impl_as_ref = false;
+
+    let crate_path = get_crate_path_and(&item.attrs, "as_str", |meta| {
+        Ok(if meta.path.is_ident("display") {
+            impl_display = true;
+            ControlFlow::Break(())
+        } else if meta.path.is_ident("as_ref") {
+            impl_as_ref = true;
+            ControlFlow::Break(())
+        } else {
+            ControlFlow::Continue(())
+        })
+    })?;
+
     let variant_pat = item
         .variants
         .iter()
@@ -68,6 +82,26 @@ fn as_str(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
 
     let ident = &item.ident;
 
+    let as_ref = impl_as_ref.then(|| {
+        quote! {
+            impl ::core::convert::AsRef<str> for #ident {
+                fn as_ref(&self) -> &str {
+                    <Self as #crate_path::AsStr>::as_str(self)
+                }
+            }
+        }
+    });
+
+    let display = impl_display.then(|| {
+        quote! {
+            impl ::core::fmt::Display for #ident {
+                fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                    f.write_str(<Self as #crate_path::AsStr>::as_str(self))
+                }
+            }
+        }
+    });
+
     Ok(quote! {
         const _: () = {
 
@@ -78,6 +112,9 @@ fn as_str(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
                 )*}
             }
         }
+
+        #as_ref
+        #display
 
         };
     })
