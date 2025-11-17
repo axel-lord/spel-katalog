@@ -42,28 +42,38 @@ pub trait AsStr {
     fn as_str<'a>(&self) -> &'a str;
 }
 
-#[doc(inline)]
-pub use ::spel_katalog_reflect_derive::{AsStr, Cycle, Variants};
+/// Error returned by [FromStr] implementations
+/// when trying to crate an enum from an unknown variant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct UnknownVariant;
 
+impl Display for UnknownVariant {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("no variant with given name available")
+    }
+}
+impl ::core::error::Error for UnknownVariant {}
+
+#[doc(inline)]
+pub use ::spel_katalog_reflect_derive::{AsStr, Cycle, FromStr, Variants};
+
+use ::core::fmt::Display;
 #[doc(inline)]
 pub use ::core::str::FromStr;
-
-#[doc(hidden)]
-pub mod __p {
-    pub use ::core::{convert::AsRef, fmt::Display};
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use ::pretty_assertions::assert_eq;
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Variants, Cycle, AsStr)]
-    #[reflect(crate_path = crate, as_ref, display)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Variants, Cycle, AsStr, FromStr)]
+    #[reflect(crate_path = crate, as_ref, display, try_from)]
     enum VariantsTestEnum {
         First,
         Second,
+        #[as_str = "3:rd"]
         Third,
+        #[as_str("4")]
         Fourth,
     }
 
@@ -100,9 +110,20 @@ mod tests {
     fn derived_as_str_variants() {
         for (variant, str_rep) in VariantsTestEnum::VARIANTS
             .iter()
-            .zip(["First", "Second", "Third", "Fourth"])
+            .zip(["First", "Second", "3:rd", "4"])
         {
             assert_eq!(variant.as_str(), str_rep);
         }
+    }
+
+    #[test]
+    fn derived_from_str() {
+        use VariantsTestEnum::*;
+
+        assert_eq!(Ok(First), "First".parse());
+        assert_eq!(Ok(Second), "Second".parse());
+        assert_eq!(Ok(Third), "3:rd".parse());
+        assert_eq!(Ok(Fourth), "4".parse());
+        assert_eq!(Err(UnknownVariant), "abc".parse::<VariantsTestEnum>());
     }
 }

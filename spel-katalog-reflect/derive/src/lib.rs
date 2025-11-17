@@ -22,3 +22,12 @@ pub fn derive_cycle(item: TokenStream) -> TokenStream {
 pub fn derive_as_str(item: TokenStream) -> TokenStream {
     ::spel_katalog_reflect_derive_lib::derive_as_str(item.into()).into()
 }
+
+/// Derive implementation of `FromStr` for an enum.
+///
+/// With the `try_from` attribute `TryFrom<S>` where S is `AsRef<str>`
+/// will also be derived using `FromStr` implementation.
+#[proc_macro_derive(FromStr, attributes(from_str, reflect))]
+pub fn derive_from_str(item: TokenStream) -> TokenStream {
+    ::spel_katalog_reflect_derive_lib::derive_from_str(item.into()).into()
+}

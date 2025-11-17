@@ -44,6 +44,61 @@ pub fn derive_as_str(tokens: TokenStream) -> TokenStream {
     narrow_item_enum(tokens, "AsStr", as_str)
 }
 
+/// Implement `FromStr` for an enum.
+pub fn derive_from_str(tokens: TokenStream) -> TokenStream {
+    narrow_item_enum(tokens, "FromStr", from_str)
+}
+
+/// Implement `FromStr` for an enum.
+fn from_str(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
+    let mut impl_try_from = false;
+    let crate_path = get_crate_path_and(&item.attrs, "from_str", |meta| {
+        Ok(if meta.path.is_ident("try_from") {
+            impl_try_from = true;
+            ControlFlow::Break(())
+        } else {
+            ControlFlow::Continue(())
+        })
+    })?;
+
+    let variants = get_unit_variants(&item)?;
+    let str_rep = get_variants_as_str_reprs(&item)?;
+    let ident = &item.ident;
+
+    let try_from = impl_try_from.then(|| {
+        quote! {
+            impl ::core::convert::TryFrom<&str> for #ident
+            {
+                type Error = #crate_path::UnknownVariant;
+
+                fn try_from(value: &str) -> ::core::result::Result<Self, Self::Error> {
+                    <Self as #crate_path::FromStr>::from_str(value)
+                }
+            }
+
+        }
+    });
+
+    Ok(quote! {
+        const _:() = {
+
+        impl #crate_path::FromStr for #ident {
+            type Err = #crate_path::UnknownVariant;
+
+            fn from_str(s: &str) -> ::core::result::Result<Self, Self::Err> {
+                match s {
+                    #( #str_rep => Ok(Self::#variants), )*
+                    _ => Err(#crate_path::UnknownVariant),
+                }
+            }
+        }
+
+        #try_from
+
+        };
+    })
+}
+
 /// Implement `AsStr` for an enum.
 fn as_str(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
     let mut impl_display = false;
@@ -74,11 +129,7 @@ fn as_str(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
             }
         })
         .collect::<Vec<::syn::Pat>>();
-    let str_rep = item
-        .variants
-        .iter()
-        .map(get_variant_as_str)
-        .collect::<Result<Vec<_>, _>>()?;
+    let str_rep = get_variants_as_str_reprs(&item)?;
 
     let ident = &item.ident;
 
@@ -239,48 +290,52 @@ fn get_crate_path_and(
     Ok(crate_path)
 }
 
-/// Get variant as a string literal, using as_str attribute if avaialable.
-fn get_variant_as_str(variant: &::syn::Variant) -> ::syn::Result<Cow<'_, ::syn::LitStr>> {
-    let mut str_rep = None;
-    for attr in &variant.attrs {
-        let Some(ident) = attr.path().get_ident() else {
-            continue;
-        };
+/// Get variants as string literals, using as_str attribute if avaialable.
+fn get_variants_as_str_reprs(item: &::syn::ItemEnum) -> ::syn::Result<Vec<Cow<'_, ::syn::LitStr>>> {
+    /// Get variant as a string literal, using as_str attribute if avaialable.
+    fn get_variant_as_str(variant: &::syn::Variant) -> ::syn::Result<Cow<'_, ::syn::LitStr>> {
+        let mut str_rep = None;
+        for attr in &variant.attrs {
+            let Some(ident) = attr.path().get_ident() else {
+                continue;
+            };
 
-        if ident != "as_str" {
-            continue;
-        }
-
-        let value = match &attr.meta {
-            ::syn::Meta::Path(path) => {
-                return Err(::syn::Error::new_spanned(
-                    path,
-                    "as_str property must be of the 'as_str = _' or 'as_str(_)' format",
-                ));
+            if ident != "as_str" {
+                continue;
             }
-            ::syn::Meta::List(meta_list) => Cow::Owned(meta_list.parse_args()?),
-            ::syn::Meta::NameValue(meta_name_value) => match &meta_name_value.value {
-                ::syn::Expr::Lit(::syn::ExprLit {
-                    lit: ::syn::Lit::Str(lit_str),
-                    ..
-                }) => Cow::Borrowed(lit_str),
-                other => {
+
+            let value = match &attr.meta {
+                ::syn::Meta::Path(path) => {
                     return Err(::syn::Error::new_spanned(
-                        other,
-                        "as_str propery must have a string literal value",
+                        path,
+                        "as_str property must be of the 'as_str = _' or 'as_str(_)' format",
                     ));
                 }
-            },
-        };
-        str_rep = Some(value);
-    }
+                ::syn::Meta::List(meta_list) => Cow::Owned(meta_list.parse_args()?),
+                ::syn::Meta::NameValue(meta_name_value) => match &meta_name_value.value {
+                    ::syn::Expr::Lit(::syn::ExprLit {
+                        lit: ::syn::Lit::Str(lit_str),
+                        ..
+                    }) => Cow::Borrowed(lit_str),
+                    other => {
+                        return Err(::syn::Error::new_spanned(
+                            other,
+                            "as_str propery must have a string literal value",
+                        ));
+                    }
+                },
+            };
+            str_rep = Some(value);
+        }
 
-    Ok(if let Some(str_rep) = str_rep {
-        str_rep
-    } else {
-        let str_rep = variant.ident.to_string();
-        Cow::Owned(parse_quote_spanned!(variant.ident.span()=> #str_rep))
-    })
+        Ok(if let Some(str_rep) = str_rep {
+            str_rep
+        } else {
+            let str_rep = variant.ident.to_string();
+            Cow::Owned(parse_quote_spanned!(variant.ident.span()=> #str_rep))
+        })
+    }
+    item.variants.iter().map(get_variant_as_str).collect()
 }
 
 /// Get idents of fields of enum if they are all unit fields.
