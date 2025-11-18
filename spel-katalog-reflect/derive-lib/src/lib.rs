@@ -1,7 +1,7 @@
 //! Proc macro implementations.
 
 use ::core::ops::ControlFlow;
-use ::std::borrow::Cow;
+use ::std::{borrow::Cow, cell::RefCell, mem};
 
 use ::proc_macro2::TokenStream;
 use ::quote::quote;
@@ -13,6 +13,28 @@ use ::syn::{
     parse_quote, parse_quote_spanned,
 };
 
+thread_local! {
+    static SOFT_ERR_STACK: RefCell<Vec<::syn::Error>> = RefCell::new(Vec::new());
+}
+
+/// Push an error to soft error stack.
+fn push_soft_err(err: ::syn::Error) {
+    SOFT_ERR_STACK.with(|stack| stack.borrow_mut().push(err));
+}
+
+fn with_soft_err_stack(f: impl FnOnce() -> TokenStream) -> TokenStream {
+    let mut backup = Vec::new();
+    SOFT_ERR_STACK.with(|stack| mem::swap(&mut backup, &mut *stack.borrow_mut()));
+    let mut tokens = f();
+    SOFT_ERR_STACK.with(|stack| mem::swap(&mut backup, &mut *stack.borrow_mut()));
+
+    for err in backup {
+        tokens.extend(err.into_compile_error());
+    }
+
+    tokens
+}
+
 /// Parse an item from tokens and ensure it is a [::syn::ItemEnum].
 fn narrow_item_enum(
     tokens: TokenStream,
@@ -21,9 +43,29 @@ fn narrow_item_enum(
 ) -> TokenStream {
     match ::syn::Item::parse.parse2(tokens) {
         Err(err) => err.into_compile_error(),
-        Ok(::syn::Item::Enum(item)) => with(item).unwrap_or_else(::syn::Error::into_compile_error),
+        Ok(::syn::Item::Enum(item)) => {
+            with_soft_err_stack(|| with(item).unwrap_or_else(::syn::Error::into_compile_error))
+        }
         Ok(item) => {
             ::syn::Error::new_spanned(item, format!("{name} may only be derived for enums"))
+                .into_compile_error()
+        }
+    }
+}
+
+/// Parse an item from tokens and ensure it is a [::syn::ItemStruct].
+fn narrow_item_struct(
+    tokens: TokenStream,
+    name: &str,
+    with: impl FnOnce(::syn::ItemStruct) -> ::syn::Result<TokenStream>,
+) -> TokenStream {
+    match ::syn::Item::parse.parse2(tokens) {
+        Err(err) => err.into_compile_error(),
+        Ok(::syn::Item::Struct(item)) => {
+            with_soft_err_stack(|| with(item).unwrap_or_else(::syn::Error::into_compile_error))
+        }
+        Ok(item) => {
+            ::syn::Error::new_spanned(item, format!("{name} may only be derived for structs"))
                 .into_compile_error()
         }
     }
@@ -47,6 +89,143 @@ pub fn derive_as_str(tokens: TokenStream) -> TokenStream {
 /// Implement `FromStr` for an enum.
 pub fn derive_from_str(tokens: TokenStream) -> TokenStream {
     narrow_item_enum(tokens, "FromStr", from_str)
+}
+
+/// Implement `OptionDefault` for an enum.
+pub fn derive_option_default(tokens: TokenStream) -> TokenStream {
+    narrow_item_struct(tokens, "OptionDefault", option_default)
+}
+
+/// Implement `OptDefault` for a struct.
+fn option_default(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
+    let mut all_option = false;
+    let _crate_path = get_crate_path_and(&item.attrs, "option_default", |meta| {
+        Ok(if meta.path.is_ident("option") {
+            all_option = true;
+            ControlFlow::Break(())
+        } else if meta.path.is_ident("no_option") {
+            all_option = false;
+            ControlFlow::Break(())
+        } else {
+            ControlFlow::Continue(())
+        })
+    })?;
+
+    let getters = item
+        .fields
+        .iter()
+        .enumerate()
+        .map(|(i, field)| {
+            let mut is_option = all_option;
+            get_attrs(&field.attrs, "option_default", |meta| {
+                Ok(if meta.path.is_ident("option") {
+                    is_option = true;
+                    ControlFlow::Break(())
+                } else if meta.path.is_ident("no_option") {
+                    is_option = false;
+                    ControlFlow::Break(())
+                } else {
+                    ControlFlow::Continue(())
+                })
+            })?;
+
+            let ty = unwrap_ty(&field.ty);
+            let doc = field
+                .attrs
+                .iter()
+                .filter(|attr| attr.path().is_ident("doc"));
+
+            if is_option {
+
+            let ::syn::Type::Path(ty_path) = ty else {
+                push_soft_err(::syn::Error::new_spanned(ty, "expected a type path"));
+                return Ok(TokenStream::default());
+            };
+
+            let Some(::syn::PathArguments::AngleBracketed(arguments)) = ty_path
+                .path
+                .segments
+                .last()
+                .map(|segment| &segment.arguments)
+            else {
+                push_soft_err(::syn::Error::new_spanned(
+                    ty_path,
+                    format!("expected a type argument"),
+                ));
+                return Ok(TokenStream::default());
+            };
+
+            let Some(::syn::GenericArgument::Type(ty)) = arguments
+                .args
+                .iter()
+                .find(|arg| matches!(arg, ::syn::GenericArgument::Type(..)))
+            else {
+                push_soft_err(::syn::Error::new_spanned(
+                    arguments,
+                    "expected at least one type argument",
+                ));
+                return Ok(TokenStream::default());
+            };
+
+            if let Some(ident) = &field.ident {
+                Ok(quote! {
+                    #(#doc)*
+                    pub fn #ident(self) -> &'__this #ty {
+                        static DEFAULT: ::std::sync::OnceLock<#ty> = ::std::sync::OnceLock::new();
+                        if let Some(value) = &self.0.#ident {
+                            value
+                        } else {
+                            DEFAULT.get_or_init(|| ::core::default::Default::default())
+                        }
+                    }
+                })
+            } else {
+                let ident = ::quote::format_ident!("_{i}");
+                Ok(quote! {
+                    #(#doc)*
+                    pub fn #ident(self) -> &'__this #ty {
+                        static DEFAULT: ::std::sync::OnceLock<#ty> = ::std::sync::OnceLock::new();
+                        if let Some(value) = &self.0.#i {
+                            value
+                        } else {
+                            DEFAULT.get_or_init(|| ::core::default::Default::default())
+                        }
+                    }
+                })
+            }
+            } else {
+            if let Some(ident) = &field.ident {
+                Ok(quote! {
+                    #(#doc)*
+                    pub fn #ident(self) -> &'__this #ty {
+                        &self.0.#ident
+                    }
+                })
+            } else {
+                let ident = ::quote::format_ident!("_{i}");
+                Ok(quote! {
+                    #(#doc)*
+                    pub fn #ident(self) -> &'__this #ty {
+                        &self.0.#i
+                    }
+                })
+            }
+            }
+        })
+        .collect::<::syn::Result<TokenStream>>()?;
+
+    let ident = &item.ident;
+
+    Ok(quote! {
+        const _: () = {
+            #[derive(Clone, Copy)]
+            #[doc = "Proxy Object"]
+            struct __Proxy<'__this>(&'__this #ident);
+            impl<'__this> __Proxy<'__this> {
+                #getters
+            }
+        };
+    })
 }
 
 /// Implement `FromStr` for an enum.
@@ -232,6 +411,37 @@ fn variants(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
     })
 }
 
+fn get_attrs(
+    attrs: &[Attribute],
+    attr_name: &str,
+    mut with: impl FnMut(&ParseNestedMeta) -> ::syn::Result<ControlFlow<()>>,
+) -> ::syn::Result<()> {
+    let mut attr_parsed = false;
+    for attr in attrs {
+        if attr.path().is_ident("reflect") {
+            attr.parse_nested_meta(|meta| {
+                _ = with(&meta)?;
+                Ok(())
+            })?;
+            if attr_parsed {
+                push_soft_err(::syn::Error::new_spanned(
+                    attr.path(),
+                    format!("reflect attribute should not be placed after {attr_name} attribute"),
+                ));
+            }
+        } else if attr.path().is_ident(attr_name) {
+            attr.parse_nested_meta(|meta| {
+                if let ControlFlow::Continue(_) = with(&meta)? {
+                    push_soft_err(meta.error("unsupported property"));
+                }
+                Ok(())
+            })?;
+            attr_parsed = true;
+        }
+    }
+    Ok(())
+}
+
 /// Get crate_path attribute.
 fn get_crate_path(attrs: &[Attribute], attr_name: &str) -> ::syn::Result<::syn::ExprPath> {
     get_crate_path_and(attrs, attr_name, |_| Ok(ControlFlow::Continue(())))
@@ -245,49 +455,31 @@ fn get_crate_path_and(
     mut with: impl FnMut(&ParseNestedMeta) -> ::syn::Result<ControlFlow<()>>,
 ) -> ::syn::Result<::syn::ExprPath> {
     let mut crate_path = None;
-    for attr in attrs {
-        let Some(ident) = attr.path().get_ident() else {
-            continue;
-        };
-
-        if ident != attr_name && ident != "reflect" {
-            continue;
-        }
-
-        attr.parse_nested_meta(|meta| {
-            let mut parse_crate_path = |tokens: ParseStream| -> Result<(), ::syn::Error> {
-                match tokens.parse::<::syn::Expr>()? {
-                    ::syn::Expr::Path(path) => {
-                        crate_path = Some(path);
-                        Ok(())
-                    }
-                    _ => Err(meta.error("crate_path must be a module path")),
-                }
-            };
-            if meta.path.is_ident("crate_path") {
-                if meta.input.peek(Token![=]) {
-                    let tokens = meta.value()?;
-                    parse_crate_path(tokens)
-                } else {
-                    let content;
-                    parenthesized!(content in meta.input);
-                    parse_crate_path(&content)
-                }
-            } else {
-                match with(&meta)? {
-                    ControlFlow::Continue(_) => {}
-                    ControlFlow::Break(_) => return Ok(()),
-                };
-                if ident != "reflect" {
-                    Err(meta.error("unsupported property"))
-                } else {
+    get_attrs(attrs, attr_name, |meta| {
+        let mut parse_crate_path = |tokens: ParseStream| -> Result<(), ::syn::Error> {
+            match tokens.parse::<::syn::Expr>()? {
+                ::syn::Expr::Path(path) => {
+                    crate_path = Some(path);
                     Ok(())
                 }
+                _ => Err(meta.error("crate_path must be a module path")),
             }
-        })?;
-    }
-    let crate_path = crate_path.unwrap_or_else(|| parse_quote!(::spel_katalog_reflect));
-    Ok(crate_path)
+        };
+        if meta.path.is_ident("crate_path") {
+            if meta.input.peek(Token![=]) {
+                let tokens = meta.value()?;
+                parse_crate_path(tokens)?;
+            } else {
+                let content;
+                parenthesized!(content in meta.input);
+                parse_crate_path(&content)?;
+            }
+            Ok(ControlFlow::Break(()))
+        } else {
+            with(meta)
+        }
+    })?;
+    Ok(crate_path.unwrap_or_else(|| parse_quote!(::spel_katalog_reflect)))
 }
 
 /// Get variants as string literals, using as_str attribute if avaialable.
@@ -353,4 +545,18 @@ fn get_unit_variants(item: &::syn::ItemEnum) -> ::syn::Result<Vec<&Ident>> {
             }
         })
         .collect()
+}
+
+/// Unwrap a syn type.
+fn unwrap_ty(ty: &::syn::Type) -> &::syn::Type {
+    let mut ty = ty;
+    loop {
+        match ty {
+            ::syn::Type::Group(::syn::TypeGroup { elem, .. })
+            | ::syn::Type::Paren(::syn::TypeParen { elem, .. }) => {
+                ty = &elem;
+            }
+            ty => return ty,
+        }
+    }
 }

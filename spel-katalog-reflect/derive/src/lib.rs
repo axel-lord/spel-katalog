@@ -25,9 +25,18 @@ pub fn derive_as_str(item: TokenStream) -> TokenStream {
 
 /// Derive implementation of `FromStr` for an enum.
 ///
-/// With the `try_from` attribute `TryFrom<S>` where S is `AsRef<str>`
+/// With the `try_from` attribute `TryFrom<&str>`
 /// will also be derived using `FromStr` implementation.
 #[proc_macro_derive(FromStr, attributes(from_str, reflect))]
 pub fn derive_from_str(item: TokenStream) -> TokenStream {
     ::spel_katalog_reflect_derive_lib::derive_from_str(item.into()).into()
+}
+
+/// Derive implementation of `OptionDefault` for an enum.
+///
+/// With the `option` or `no_option` attribute on struct or fields, set either
+/// all fields or single field as being/not being an option.
+#[proc_macro_derive(OptionDefault, attributes(option_default, reflect))]
+pub fn derive_option_default(item: TokenStream) -> TokenStream {
+    ::spel_katalog_reflect_derive_lib::derive_option_default(item.into()).into()
 }

@@ -1,6 +1,13 @@
-#![no_std]
-
+#![cfg_attr(not(test), no_std)]
 //! Reflection utilities.
+
+use ::core::{fmt::Display, ops::Deref};
+
+#[doc(inline)]
+pub use ::core::str::FromStr;
+
+#[doc(inline)]
+pub use ::spel_katalog_reflect_derive::{AsStr, Cycle, FromStr, OptionDefault, Variants};
 
 /// Trait for simple enums to provide all values.
 ///
@@ -58,12 +65,17 @@ impl Display for UnknownVariant {
 }
 impl ::core::error::Error for UnknownVariant {}
 
-#[doc(inline)]
-pub use ::spel_katalog_reflect_derive::{AsStr, Cycle, FromStr, Variants};
+/// Provide a proxy struct with getters for values of self.
+/// The getters will provide a default value for none options.
+pub trait OptionDefault {
+    /// Proxy type, should have getters matching fields of self.
+    type Proxy<'this>: Deref<Target = Self> + AsRef<Self> + Clone + Copy
+    where
+        Self: 'this;
 
-use ::core::fmt::Display;
-#[doc(inline)]
-pub use ::core::str::FromStr;
+    /// Return a proxy object which has values for all fields.
+    fn proxy(&self) -> Self::Proxy<'_>;
+}
 
 #[cfg(test)]
 mod tests {
@@ -79,6 +91,15 @@ mod tests {
         Third,
         #[as_str("4")]
         Fourth,
+    }
+
+    #[derive(Debug, OptionDefault)]
+    #[reflect(option)]
+    struct OptDefaultTestStruct {
+        first: Option<String>,
+        second: Option<i32>,
+        #[reflect(no_option)]
+        third: u32,
     }
 
     #[test]
