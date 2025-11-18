@@ -36,6 +36,14 @@ pub fn derive_from_str(item: TokenStream) -> TokenStream {
 ///
 /// With the `option` or `no_option` attribute on struct or fields, set either
 /// all fields or single field as being/not being an option.
+///
+/// The `default` attribute in `name = value`, or `list()` form, can be used to set
+/// an expression to use instead of `Default::default()`.
+///
+/// `some_pattern` in `name = value`, or `list()` form, replaces the path part of
+/// matching `Some(..)` for option fields. This combined with the way only the first type
+/// argument is used for the returned type may be used to allow types other than `Option`
+/// for fields, such as `Result`.
 #[proc_macro_derive(OptionDefault, attributes(option_default, reflect))]
 pub fn derive_option_default(item: TokenStream) -> TokenStream {
     ::spel_katalog_reflect_derive_lib::derive_option_default(item.into()).into()

@@ -94,12 +94,45 @@ mod tests {
     }
 
     #[derive(Debug, OptionDefault)]
-    #[reflect(option)]
+    #[reflect(crate_path = crate, option)]
     struct OptDefaultTestStruct {
         first: Option<String>,
+        #[option_default(default = 5)]
         second: Option<i32>,
         #[reflect(no_option)]
         third: u32,
+        #[reflect(some_pattern = Ok)]
+        fourth: Result<u8, ()>,
+    }
+
+    #[test]
+    fn derived_option_default_all_default() {
+        let s = OptDefaultTestStruct {
+            first: None,
+            second: None,
+            third: 7,
+            fourth: Err(()),
+        };
+
+        assert_eq!(s.proxy().first().as_str(), "");
+        assert_eq!(*s.proxy().second(), 5);
+        assert_eq!(*s.proxy().third(), 7);
+        assert_eq!(*s.proxy().fourth(), 0);
+    }
+
+    #[test]
+    fn derived_option_default_all_set() {
+        let s = OptDefaultTestStruct {
+            first: Some(String::from("Hello")),
+            second: Some(53),
+            third: 9,
+            fourth: Ok(15),
+        };
+
+        assert_eq!(s.proxy().first().as_str(), "Hello");
+        assert_eq!(*s.proxy().second(), 53);
+        assert_eq!(*s.proxy().third(), 9);
+        assert_eq!(*s.proxy().fourth(), 15);
     }
 
     #[test]

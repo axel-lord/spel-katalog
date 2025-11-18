@@ -56,30 +56,35 @@ pub fn crate_path_and(
 ) -> ::syn::Result<::syn::ExprPath> {
     let mut crate_path = None;
     attrs(attr_list, attr_name, |meta| {
-        let mut parse_crate_path = |tokens: ParseStream| -> Result<(), ::syn::Error> {
+        let parse_crate_path = |tokens: ParseStream| -> ::syn::Result<Option<::syn::ExprPath>> {
             match tokens.parse::<::syn::Expr>()? {
-                ::syn::Expr::Path(path) => {
-                    crate_path = Some(path);
-                    Ok(())
-                }
+                ::syn::Expr::Path(path) => Ok(Some(path)),
                 _ => Err(meta.error("crate_path must be a module path")),
             }
         };
         if meta.path.is_ident("crate_path") {
-            if meta.input.peek(Token![=]) {
-                let tokens = meta.value()?;
-                parse_crate_path(tokens)?;
-            } else {
-                let content;
-                parenthesized!(content in meta.input);
-                parse_crate_path(&content)?;
-            }
+            crate_path = list_or_name_value(meta.input, parse_crate_path)?;
             Ok(ControlFlow::Break(()))
         } else {
             with(meta)
         }
     })?;
     Ok(crate_path.unwrap_or_else(|| parse_quote!(::spel_katalog_reflect)))
+}
+
+/// Parse `name = value` or `list()`, content.
+pub fn list_or_name_value<T>(
+    stream: ParseStream,
+    parser: impl FnOnce(ParseStream) -> ::syn::Result<T>,
+) -> ::syn::Result<T> {
+    if stream.peek(Token![=]) {
+        _ = stream.parse::<Token![=]>()?;
+        parser(stream)
+    } else {
+        let content;
+        parenthesized!(content in stream);
+        parser(&content)
+    }
 }
 
 /// Get variants as string literals, using as_str attribute if avaialable.
