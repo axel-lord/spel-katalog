@@ -37,6 +37,11 @@ pub fn derive_from_str(item: TokenStream) -> TokenStream {
 /// With the `option` or `no_option` attribute on struct or fields, set either
 /// all fields or single field as being/not being an option.
 ///
+/// Using the `option_default` attribute on the struct or a field will
+/// generate getters for struct fields where option fields get a backing `OnceLock`
+/// for their default values (and as such require the type is sync). `no_option_default`
+/// may be used to disable getters for a specific field.
+///
 /// The `default` attribute in `name = value`, or `list(value)` form, can be used to set
 /// an expression to use instead of `Default::default()`.
 ///

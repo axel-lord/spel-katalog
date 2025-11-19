@@ -65,15 +65,14 @@ impl Display for UnknownVariant {
 }
 impl ::core::error::Error for UnknownVariant {}
 
-/// Provide a proxy struct with getters for values of self.
-/// The getters will provide a default value for none options.
+/// Provide a proxy struct with custom non-trait methods.
 pub trait Proxy {
-    /// Proxy type, should have getters matching fields of self.
+    /// Proxy type.
     type Proxy<'this>: Deref<Target = Self> + AsRef<Self> + Clone + Copy
     where
         Self: 'this;
 
-    /// Return a proxy object which has values for all fields.
+    /// Return proxy object.
     fn proxy(&self) -> Self::Proxy<'_>;
 }
 
@@ -94,7 +93,7 @@ mod tests {
     }
 
     #[derive(Debug, Proxy)]
-    #[reflect(crate_path = crate, option)]
+    #[reflect(crate_path = crate, option, option_default)]
     struct OptDefaultTestStruct {
         first: Option<String>,
         #[proxy(default = 5)]

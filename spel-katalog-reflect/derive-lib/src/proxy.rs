@@ -11,6 +11,7 @@ use crate::{get, soft_err::push_soft_err};
 /// Implement `OptDefault` for a struct.
 pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
     let mut all_option = false;
+    let mut all_getter = false;
     let mut proxy_name = None;
     let crate_path = get::crate_path_and(&item.attrs, "proxy", |meta| {
         Ok(if meta.path.is_ident("option") {
@@ -18,6 +19,12 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
             ControlFlow::Break(())
         } else if meta.path.is_ident("no_option") {
             all_option = false;
+            ControlFlow::Break(())
+        } else if meta.path.is_ident("option_default") {
+            all_getter = true;
+            ControlFlow::Break(())
+        } else if meta.path.is_ident("no_option_default") {
+            all_getter = false;
             ControlFlow::Break(())
         } else if meta.path.is_ident("proxy_name") {
             proxy_name = Some(get::list_or_name_value(meta.input, Ident::parse)?);
@@ -33,6 +40,7 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
         .enumerate()
         .map(|(i, field)| {
             let mut is_option = all_option;
+            let mut create_getter = all_getter;
             let mut default_expr = None;
             let mut some_pattern = None;
             get::attrs(&field.attrs, "proxy", |meta| {
@@ -41,6 +49,12 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
                     ControlFlow::Break(())
                 } else if meta.path.is_ident("no_option") {
                     is_option = false;
+                    ControlFlow::Break(())
+                } else if meta.path.is_ident("option_default") {
+                    create_getter = true;
+                    ControlFlow::Break(())
+                } else if meta.path.is_ident("no_option_default") {
+                    create_getter = false;
                     ControlFlow::Break(())
                 } else if meta.path.is_ident("default") {
                     default_expr = Some(get::list_or_name_value(meta.input, ::syn::Expr::parse)?);
@@ -59,25 +73,31 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
                 .iter()
                 .filter(|attr| attr.path().is_ident("doc"));
 
-            Ok(if is_option {
-                if let Some(ty) = option_ty(ty) {
-                    let default_expr = default_expr
-                        .unwrap_or_else(|| parse_quote!(::core::default::Default::default()));
-                    let some_pattern = some_pattern.unwrap_or_else(|| parse_quote!(Some));
-                    if let Some(ident) = &field.ident {
-                        emit_option(ident, ty, doc, ident, &default_expr, &some_pattern)
-                    } else {
-                        let ident = ::quote::format_ident!("_{i}");
-                        emit_option(&ident, ty, doc, i, &default_expr, &some_pattern)
-                    }
+            if !create_getter {
+                return Ok(TokenStream::default());
+            }
+
+            if !is_option {
+                return Ok(if let Some(ident) = &field.ident {
+                    emit_no_option(ident, ty, doc, ident)
                 } else {
-                    TokenStream::default()
+                    let ident = ::quote::format_ident!("_{i}");
+                    emit_no_option(&ident, ty, doc, i)
+                });
+            }
+
+            Ok(if let Some(ty) = option_ty(ty) {
+                let default_expr = default_expr
+                    .unwrap_or_else(|| parse_quote!(::core::default::Default::default()));
+                let some_pattern = some_pattern.unwrap_or_else(|| parse_quote!(Some));
+                if let Some(ident) = &field.ident {
+                    emit_option(ident, ty, doc, ident, &default_expr, &some_pattern)
+                } else {
+                    let ident = ::quote::format_ident!("_{i}");
+                    emit_option(&ident, ty, doc, i, &default_expr, &some_pattern)
                 }
-            } else if let Some(ident) = &field.ident {
-                emit_no_option(ident, ty, doc, ident)
             } else {
-                let ident = ::quote::format_ident!("_{i}");
-                emit_no_option(&ident, ty, doc, i)
+                TokenStream::default()
             })
         })
         .collect::<::syn::Result<TokenStream>>()?;
