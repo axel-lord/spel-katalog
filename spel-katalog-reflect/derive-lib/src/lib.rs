@@ -25,8 +25,8 @@ pub fn derive_from_str(tokens: TokenStream) -> TokenStream {
 }
 
 /// Implement `OptionDefault` for an enum.
-pub fn derive_option_default(tokens: TokenStream) -> TokenStream {
-    narrow_item_struct(tokens, "OptionDefault", option_default::option_default)
+pub fn derive_proxy(tokens: TokenStream) -> TokenStream {
+    narrow_item_struct(tokens, "Proxy", option_default::proxy)
 }
 
 mod as_str;

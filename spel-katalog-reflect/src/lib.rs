@@ -7,7 +7,7 @@ use ::core::{fmt::Display, ops::Deref};
 pub use ::core::str::FromStr;
 
 #[doc(inline)]
-pub use ::spel_katalog_reflect_derive::{AsStr, Cycle, FromStr, OptionDefault, Variants};
+pub use ::spel_katalog_reflect_derive::{AsStr, Cycle, FromStr, Proxy, Variants};
 
 /// Trait for simple enums to provide all values.
 ///
@@ -67,7 +67,7 @@ impl ::core::error::Error for UnknownVariant {}
 
 /// Provide a proxy struct with getters for values of self.
 /// The getters will provide a default value for none options.
-pub trait OptionDefault {
+pub trait Proxy {
     /// Proxy type, should have getters matching fields of self.
     type Proxy<'this>: Deref<Target = Self> + AsRef<Self> + Clone + Copy
     where
@@ -93,11 +93,11 @@ mod tests {
         Fourth,
     }
 
-    #[derive(Debug, OptionDefault)]
+    #[derive(Debug, Proxy)]
     #[reflect(crate_path = crate, option)]
     struct OptDefaultTestStruct {
         first: Option<String>,
-        #[option_default(default = 5)]
+        #[proxy(default = 5)]
         second: Option<i32>,
         #[reflect(no_option)]
         third: u32,

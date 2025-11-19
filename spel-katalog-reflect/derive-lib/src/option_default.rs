@@ -9,10 +9,10 @@ use ::syn::{Ident, parse::Parse, parse_quote};
 use crate::{get, soft_err::push_soft_err};
 
 /// Implement `OptDefault` for a struct.
-pub fn option_default(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
+pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
     let mut all_option = false;
     let mut proxy_name = None;
-    let crate_path = get::crate_path_and(&item.attrs, "option_default", |meta| {
+    let crate_path = get::crate_path_and(&item.attrs, "proxy", |meta| {
         Ok(if meta.path.is_ident("option") {
             all_option = true;
             ControlFlow::Break(())
@@ -35,7 +35,7 @@ pub fn option_default(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
             let mut is_option = all_option;
             let mut default_expr = None;
             let mut some_pattern = None;
-            get::attrs(&field.attrs, "option_default", |meta| {
+            get::attrs(&field.attrs, "proxy", |meta| {
                 Ok(if meta.path.is_ident("option") {
                     is_option = true;
                     ControlFlow::Break(())
@@ -125,7 +125,7 @@ pub fn option_default(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
                 }
             }
 
-            impl #crate_path::OptionDefault for #ident {
+            impl #crate_path::Proxy for #ident {
                 type Proxy<'__this> = #proxy_name<'__this>;
 
                 fn proxy(&self) -> Self::Proxy<'_> {

@@ -32,7 +32,7 @@ pub fn derive_from_str(item: TokenStream) -> TokenStream {
     ::spel_katalog_reflect_derive_lib::derive_from_str(item.into()).into()
 }
 
-/// Derive implementation of `OptionDefault` for an enum.
+/// Derive implementation of `proxy` for an enum.
 ///
 /// With the `option` or `no_option` attribute on struct or fields, set either
 /// all fields or single field as being/not being an option.
@@ -47,7 +47,7 @@ pub fn derive_from_str(item: TokenStream) -> TokenStream {
 ///
 /// Using `proxy_name` as a `list(value)` or `name = value` attribute exposes the proxy struct
 /// with the given name.
-#[proc_macro_derive(OptionDefault, attributes(option_default, reflect))]
-pub fn derive_option_default(item: TokenStream) -> TokenStream {
-    ::spel_katalog_reflect_derive_lib::derive_option_default(item.into()).into()
+#[proc_macro_derive(Proxy, attributes(proxy, reflect))]
+pub fn derive_proxy(item: TokenStream) -> TokenStream {
+    ::spel_katalog_reflect_derive_lib::derive_proxy(item.into()).into()
 }
