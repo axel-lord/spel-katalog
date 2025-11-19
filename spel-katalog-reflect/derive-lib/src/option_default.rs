@@ -3,20 +3,24 @@
 use ::core::ops::ControlFlow;
 
 use ::proc_macro2::TokenStream;
-use ::quote::{ToTokens, quote};
-use ::syn::{parse::Parse, parse_quote};
+use ::quote::{ToTokens, format_ident, quote};
+use ::syn::{Ident, parse::Parse, parse_quote};
 
 use crate::{get, soft_err::push_soft_err};
 
 /// Implement `OptDefault` for a struct.
 pub fn option_default(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
     let mut all_option = false;
+    let mut proxy_name = None;
     let crate_path = get::crate_path_and(&item.attrs, "option_default", |meta| {
         Ok(if meta.path.is_ident("option") {
             all_option = true;
             ControlFlow::Break(())
         } else if meta.path.is_ident("no_option") {
             all_option = false;
+            ControlFlow::Break(())
+        } else if meta.path.is_ident("proxy_name") {
+            proxy_name = Some(get::list_or_name_value(meta.input, Ident::parse)?);
             ControlFlow::Break(())
         } else {
             ControlFlow::Continue(())
@@ -79,17 +83,35 @@ pub fn option_default(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
         .collect::<::syn::Result<TokenStream>>()?;
 
     let ident = &item.ident;
+    let vis = item.vis;
+    let doc = format!("Proxy object for [{ident}]");
+
+    let (inner_outer, proxy_name) = if let Some(proxy_name) = proxy_name {
+        ([false, true], proxy_name)
+    } else {
+        ([true, false], format_ident!("__Proxy"))
+    };
+
+    let [inner, outer] = inner_outer.map(|exists| {
+        exists.then(|| {
+            quote! {
+                #[derive(Clone, Copy)]
+                #[doc = #doc]
+                #vis struct #proxy_name<'__this>(&'__this #ident);
+            }
+        })
+    });
 
     Ok(quote! {
+        #outer
         const _: () = {
-            #[derive(Clone, Copy)]
-            #[doc = "Proxy Object"]
-            struct __Proxy<'__this>(&'__this #ident);
-            impl<'__this> __Proxy<'__this> {
+            #inner
+
+            impl<'__this> #proxy_name<'__this> {
                 #getters
             }
 
-            impl ::core::ops::Deref for __Proxy<'_> {
+            impl ::core::ops::Deref for #proxy_name<'_> {
                 type Target = #ident;
 
                 fn deref(&self) -> &Self::Target {
@@ -97,17 +119,17 @@ pub fn option_default(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
                 }
             }
 
-            impl ::core::convert::AsRef<#ident> for __Proxy<'_> {
+            impl ::core::convert::AsRef<#ident> for #proxy_name<'_> {
                 fn as_ref(&self) -> &#ident {
                     &self.0
                 }
             }
 
             impl #crate_path::OptionDefault for #ident {
-                type Proxy<'__this> = __Proxy<'__this>;
+                type Proxy<'__this> = #proxy_name<'__this>;
 
                 fn proxy(&self) -> Self::Proxy<'_> {
-                    __Proxy(self)
+                    #proxy_name(self)
                 }
             }
         };
@@ -151,7 +173,7 @@ fn option_ty(ty: &::syn::Type) -> Option<&::syn::Type> {
 
 /// Emit getter for option fields.
 fn emit_option(
-    ident: &::syn::Ident,
+    ident: &Ident,
     ty: &::syn::Type,
     doc: impl Iterator<Item = impl ToTokens>,
     acc: impl ToTokens,
@@ -173,7 +195,7 @@ fn emit_option(
 
 /// Emit getter for option fields.
 fn emit_no_option(
-    ident: &::syn::Ident,
+    ident: &Ident,
     ty: &::syn::Type,
     doc: impl Iterator<Item = impl ToTokens>,
     acc: impl ToTokens,
