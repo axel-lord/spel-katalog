@@ -10,7 +10,7 @@ use crate::get;
 /// Implement `FromStr` for an enum.
 pub fn from_str(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
     let mut impl_try_from = false;
-    let crate_path = get::crate_path_and(&item.attrs, "from_str", |meta| {
+    let crate_path = get::crate_path_and(&item.attrs, &["from_str"], |meta| {
         Ok(if meta.path.is_ident("try_from") {
             impl_try_from = true;
             ControlFlow::Break(())

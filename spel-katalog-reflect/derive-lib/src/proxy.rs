@@ -14,7 +14,7 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
     let mut all_getter = false;
     let mut proxy_debug = false;
     let mut proxy_name = None;
-    let crate_path = get::crate_path_and(&item.attrs, "proxy", |meta| {
+    let crate_path = get::crate_path_and(&item.attrs, &["proxy"], |meta| {
         Ok(if meta.path.is_ident("option") {
             all_option = true;
             ControlFlow::Break(())
@@ -47,7 +47,7 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
             let mut create_getter = all_getter;
             let mut default_expr = None;
             let mut some_pattern = None;
-            get::attrs(&field.attrs, "proxy", |meta| {
+            get::attrs(&field.attrs, &["proxy"], |meta| {
                 Ok(if meta.path.is_ident("option") {
                     is_option = true;
                     ControlFlow::Break(())

@@ -13,7 +13,7 @@ pub fn as_str(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
     let mut impl_display = false;
     let mut impl_as_ref = false;
 
-    let crate_path = get::crate_path_and(&item.attrs, "as_str", |meta| {
+    let crate_path = get::crate_path_and(&item.attrs, &["as_str"], |meta| {
         Ok(if meta.path.is_ident("display") {
             impl_display = true;
             ControlFlow::Break(())

@@ -10,7 +10,7 @@ use crate::get;
 /// # Errors
 /// If the enum contains non-unit variants.
 pub fn variants(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
-    let crate_path = get::crate_path(&item.attrs, "variants")?;
+    let crate_path = get::crate_path(&item.attrs, &["variants"])?;
     let variants = get::unit_variants(&item)?;
 
     let indices = 0..variants.len();

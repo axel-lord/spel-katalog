@@ -1,6 +1,6 @@
 //! utility functions.
 
-use ::core::ops::ControlFlow;
+use ::core::ops::{ControlFlow, Deref};
 use ::std::borrow::Cow;
 
 use ::syn::{
@@ -10,40 +10,87 @@ use ::syn::{
 
 use crate::soft_err::push_soft_err;
 
+/// Match on attribute names.
+macro_rules! match_parsed_attr {
+    ($metar:expr;
+        $($name:literal => $expr:expr,)*
+    ) => {{
+        $(if $meta.path.is_ident($name) {
+            $expr;
+            ::core::ops::ControlFlow::Break(())
+        } else )* {
+            ::core::ops::ControlFlow::Continue(())
+        }
+    }};
+}
+pub(crate) use match_parsed_attr;
+
+/// Wrapper for `ParseNestedMeta` with additional context.
+#[expect(dead_code)]
+#[derive(Clone, Copy)]
+pub struct ParsedAttr<'a> {
+    /// Wrapped nested meta parser.
+    pub parse_nested_meta: &'a ParseNestedMeta<'a>,
+    /// Name of parsed attribute.
+    pub name: &'a str,
+    /// If the name is of the global attribute `reflect`.
+    pub is_global: bool,
+}
+
+impl<'a> Deref for ParsedAttr<'a> {
+    type Target = ParseNestedMeta<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        self.parse_nested_meta
+    }
+}
+
 /// Get attributes from attribute list.
 pub fn attrs(
     attr_list: &[Attribute],
-    attr_name: &str,
-    mut with: impl FnMut(&ParseNestedMeta) -> ::syn::Result<ControlFlow<()>>,
+    attr_name: &[&str],
+    mut with: impl FnMut(ParsedAttr) -> ::syn::Result<ControlFlow<()>>,
 ) -> ::syn::Result<()> {
     let mut attr_parsed = false;
     for attr in attr_list {
         if attr.path().is_ident("reflect") {
             attr.parse_nested_meta(|meta| {
-                _ = with(&meta)?;
+                _ = with(ParsedAttr {
+                    parse_nested_meta: &meta,
+                    name: "reflect",
+                    is_global: true,
+                })?;
                 Ok(())
             })?;
             if attr_parsed {
                 push_soft_err(::syn::Error::new_spanned(
                     attr.path(),
-                    format!("reflect attribute should not be placed after {attr_name} attribute"),
+                    format!("reflect attribute should not be placed after {attr_name:?} attribute"),
                 ));
             }
-        } else if attr.path().is_ident(attr_name) {
-            attr.parse_nested_meta(|meta| {
-                if let ControlFlow::Continue(_) = with(&meta)? {
-                    push_soft_err(meta.error("unsupported property"));
+        } else {
+            for attr_name in attr_name {
+                if attr.path().is_ident(attr_name) {
+                    attr.parse_nested_meta(|meta| {
+                        if let ControlFlow::Continue(_) = with(ParsedAttr {
+                            parse_nested_meta: &meta,
+                            name: attr_name,
+                            is_global: false,
+                        })? {
+                            push_soft_err(meta.error("unsupported property"));
+                        }
+                        Ok(())
+                    })?;
+                    attr_parsed = true;
                 }
-                Ok(())
-            })?;
-            attr_parsed = true;
+            }
         }
     }
     Ok(())
 }
 
 /// Get crate_path attribute.
-pub fn crate_path(attrs: &[Attribute], attr_name: &str) -> ::syn::Result<::syn::ExprPath> {
+pub fn crate_path(attrs: &[Attribute], attr_name: &[&str]) -> ::syn::Result<::syn::ExprPath> {
     crate_path_and(attrs, attr_name, |_| Ok(ControlFlow::Continue(())))
 }
 
@@ -51,8 +98,8 @@ pub fn crate_path(attrs: &[Attribute], attr_name: &str) -> ::syn::Result<::syn::
 /// other attributes.
 pub fn crate_path_and(
     attr_list: &[Attribute],
-    attr_name: &str,
-    mut with: impl FnMut(&ParseNestedMeta) -> ::syn::Result<ControlFlow<()>>,
+    attr_name: &[&str],
+    mut with: impl FnMut(ParsedAttr) -> ::syn::Result<ControlFlow<()>>,
 ) -> ::syn::Result<::syn::ExprPath> {
     let mut crate_path = None;
     attrs(attr_list, attr_name, |meta| {
