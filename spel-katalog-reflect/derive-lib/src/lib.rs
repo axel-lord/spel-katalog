@@ -37,3 +37,6 @@ mod narrow;
 mod proxy;
 mod soft_err;
 mod variants;
+mod delta {
+    //! Implementation for `Delta` derive macro.
+}

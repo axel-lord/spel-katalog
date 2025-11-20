@@ -9,6 +9,10 @@ pub use ::core::str::FromStr;
 #[doc(inline)]
 pub use ::spel_katalog_reflect_derive::{AsStr, Cycle, FromStr, Proxy, Variants};
 
+pub use self::delta::{Delta, DeltaCmp};
+
+mod delta;
+
 /// Trait for simple enums to provide all values.
 ///
 /// # Safety

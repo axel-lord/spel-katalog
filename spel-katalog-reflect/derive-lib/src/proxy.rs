@@ -1,4 +1,4 @@
-//! Implementation for `OptionDefault` derive macro.
+//! Implementation for `Proxy` derive macro.
 
 use ::proc_macro2::TokenStream;
 use ::quote::{ToTokens, format_ident, quote};
