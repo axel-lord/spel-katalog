@@ -20,10 +20,10 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
         } else if meta.path.is_ident("no_option") {
             all_option = false;
             ControlFlow::Break(())
-        } else if meta.path.is_ident("option_default") {
+        } else if meta.path.is_ident("getter") {
             all_getter = true;
             ControlFlow::Break(())
-        } else if meta.path.is_ident("no_option_default") {
+        } else if meta.path.is_ident("no_getter") {
             all_getter = false;
             ControlFlow::Break(())
         } else if meta.path.is_ident("proxy_name") {
