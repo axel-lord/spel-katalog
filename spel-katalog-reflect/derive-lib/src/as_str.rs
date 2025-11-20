@@ -1,12 +1,10 @@
 //! Implementation for `AsStr` derive macro.
 
-use ::core::ops::ControlFlow;
-
 use ::proc_macro2::TokenStream;
 use ::quote::quote;
 use ::syn::{Fields, parse_quote};
 
-use crate::get;
+use crate::get::{self, match_parsed_attr};
 
 /// Implement `AsStr` for an enum.
 pub fn as_str(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
@@ -14,14 +12,10 @@ pub fn as_str(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
     let mut impl_as_ref = false;
 
     let crate_path = get::crate_path_and(&item.attrs, &["as_str"], |meta| {
-        Ok(if meta.path.is_ident("display") {
-            impl_display = true;
-            ControlFlow::Break(())
-        } else if meta.path.is_ident("as_ref") {
-            impl_as_ref = true;
-            ControlFlow::Break(())
-        } else {
-            ControlFlow::Continue(())
+        Ok(match_parsed_attr! {
+            meta;
+            "display" => impl_display = true,
+            "as_ref" => impl_as_ref = true,
         })
     })?;
 

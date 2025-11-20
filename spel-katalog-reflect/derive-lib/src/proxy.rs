@@ -1,12 +1,13 @@
 //! Implementation for `OptionDefault` derive macro.
 
-use ::core::ops::ControlFlow;
-
 use ::proc_macro2::TokenStream;
 use ::quote::{ToTokens, format_ident, quote};
 use ::syn::{Ident, parse::Parse, parse_quote};
 
-use crate::{get, soft_err::push_soft_err};
+use crate::{
+    get::{self, match_parsed_attr},
+    soft_err::push_soft_err,
+};
 
 /// Implement `OptDefault` for a struct.
 pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
@@ -15,26 +16,14 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
     let mut proxy_debug = false;
     let mut proxy_name = None;
     let crate_path = get::crate_path_and(&item.attrs, &["proxy"], |meta| {
-        Ok(if meta.path.is_ident("option") {
-            all_option = true;
-            ControlFlow::Break(())
-        } else if meta.path.is_ident("no_option") {
-            all_option = false;
-            ControlFlow::Break(())
-        } else if meta.path.is_ident("getter") {
-            all_getter = true;
-            ControlFlow::Break(())
-        } else if meta.path.is_ident("no_getter") {
-            all_getter = false;
-            ControlFlow::Break(())
-        } else if meta.path.is_ident("proxy_name") {
-            proxy_name = Some(get::list_or_name_value(meta.input, Ident::parse)?);
-            ControlFlow::Break(())
-        } else if meta.path.is_ident("debug") {
-            proxy_debug = true;
-            ControlFlow::Break(())
-        } else {
-            ControlFlow::Continue(())
+        Ok(match_parsed_attr! {
+            meta;
+            "option" => all_option = true,
+            "no_option" => all_option = false,
+            "getter" => all_getter = true,
+            "no_getter" => all_getter = false,
+            "proxy_name" => proxy_name = Some(get::list_or_name_value(meta.input, Ident::parse)?),
+            "debuf" => proxy_debug = true,
         })
     })?;
 
@@ -48,26 +37,14 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
             let mut default_expr = None;
             let mut some_pattern = None;
             get::attrs(&field.attrs, &["proxy"], |meta| {
-                Ok(if meta.path.is_ident("option") {
-                    is_option = true;
-                    ControlFlow::Break(())
-                } else if meta.path.is_ident("no_option") {
-                    is_option = false;
-                    ControlFlow::Break(())
-                } else if meta.path.is_ident("option_default") {
-                    create_getter = true;
-                    ControlFlow::Break(())
-                } else if meta.path.is_ident("no_option_default") {
-                    create_getter = false;
-                    ControlFlow::Break(())
-                } else if meta.path.is_ident("default") {
-                    default_expr = Some(get::list_or_name_value(meta.input, ::syn::Expr::parse)?);
-                    ControlFlow::Break(())
-                } else if meta.path.is_ident("some_pattern") {
-                    some_pattern = Some(get::list_or_name_value(meta.input, ::syn::Path::parse)?);
-                    ControlFlow::Break(())
-                } else {
-                    ControlFlow::Continue(())
+                Ok(match_parsed_attr! {
+                    meta;
+                    "option" => is_option = true,
+                    "no_option" => is_option = false,
+                    "getter" => create_getter = true,
+                    "no_getter" => create_getter = false,
+                    "default" => default_expr = Some(get::list_or_name_value(meta.input, ::syn::Expr::parse)?),
+                    "some_pattern" => some_pattern = Some(get::list_or_name_value(meta.input, ::syn::Path::parse)?),
                 })
             })?;
 

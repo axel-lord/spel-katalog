@@ -11,8 +11,20 @@ use ::syn::{
 use crate::soft_err::push_soft_err;
 
 /// Match on attribute names.
+///
+/// ```ignore
+/// let mut is_cool = false;
+/// let mut is_kind = false;
+/// match_parsed_attr! {
+///     "cool" => is_cool = true,
+///     "kind" => is_kind = true,
+/// }?;
+///
+/// println!("neither cool nor kind");
+///
+/// ```
 macro_rules! match_parsed_attr {
-    ($metar:expr;
+    ($meta:expr;
         $($name:literal => $expr:expr,)*
     ) => {{
         $(if $meta.path.is_ident($name) {
