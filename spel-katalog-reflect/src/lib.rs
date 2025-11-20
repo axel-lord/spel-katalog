@@ -68,12 +68,10 @@ impl ::core::error::Error for UnknownVariant {}
 /// Provide a proxy struct with custom non-trait methods.
 pub trait Proxy {
     /// Proxy type.
-    type Proxy<'this>: Deref<Target = Self> + AsRef<Self> + Clone + Copy
-    where
-        Self: 'this;
+    type Proxy: Deref<Target = Self> + AsRef<Self>;
 
     /// Return proxy object.
-    fn proxy(&self) -> Self::Proxy<'_>;
+    fn proxy(&self) -> &Self::Proxy;
 }
 
 #[cfg(test)]
@@ -93,7 +91,7 @@ mod tests {
     }
 
     #[derive(Debug, Proxy)]
-    #[reflect(crate_path = crate, option, getter)]
+    #[reflect(crate_path = crate, option, getter, debug)]
     struct OptDefaultTestStruct {
         first: Option<String>,
         #[proxy(default = 5)]

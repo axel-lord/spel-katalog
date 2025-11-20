@@ -12,6 +12,7 @@ use crate::{get, soft_err::push_soft_err};
 pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
     let mut all_option = false;
     let mut all_getter = false;
+    let mut proxy_debug = false;
     let mut proxy_name = None;
     let crate_path = get::crate_path_and(&item.attrs, "proxy", |meta| {
         Ok(if meta.path.is_ident("option") {
@@ -28,6 +29,9 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
             ControlFlow::Break(())
         } else if meta.path.is_ident("proxy_name") {
             proxy_name = Some(get::list_or_name_value(meta.input, Ident::parse)?);
+            ControlFlow::Break(())
+        } else if meta.path.is_ident("debug") {
+            proxy_debug = true;
             ControlFlow::Break(())
         } else {
             ControlFlow::Continue(())
@@ -115,9 +119,9 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
     let [inner, outer] = inner_outer.map(|exists| {
         exists.then(|| {
             quote! {
-                #[derive(Clone, Copy)]
                 #[doc = #doc]
-                #vis struct #proxy_name<'__this>(&'__this #ident);
+                #[repr(transparent)]
+                #vis struct #proxy_name(#ident);
             }
         })
     });
@@ -127,11 +131,11 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
         const _: () = {
             #inner
 
-            impl<'__this> #proxy_name<'__this> {
+            impl #proxy_name {
                 #getters
             }
 
-            impl ::core::ops::Deref for #proxy_name<'_> {
+            impl ::core::ops::Deref for #proxy_name {
                 type Target = #ident;
 
                 fn deref(&self) -> &Self::Target {
@@ -139,17 +143,17 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
                 }
             }
 
-            impl ::core::convert::AsRef<#ident> for #proxy_name<'_> {
+            impl ::core::convert::AsRef<#ident> for #proxy_name {
                 fn as_ref(&self) -> &#ident {
                     &self.0
                 }
             }
 
             impl #crate_path::Proxy for #ident {
-                type Proxy<'__this> = #proxy_name<'__this>;
+                type Proxy = #proxy_name;
 
-                fn proxy(&self) -> Self::Proxy<'_> {
-                    #proxy_name(self)
+                fn proxy(&self) -> &Self::Proxy {
+                    unsafe { &*(self as *const _ as *const _) }
                 }
             }
         };
@@ -202,7 +206,7 @@ fn emit_option(
 ) -> TokenStream {
     quote! {
         #(#doc)*
-        pub fn #ident(self) -> &'__this #ty {
+        pub fn #ident(&self) -> &#ty {
             static DEFAULT: ::std::sync::OnceLock<#ty> = ::std::sync::OnceLock::new();
             if let #some_pattern(value) = &self.0.#acc {
                 value
@@ -222,7 +226,7 @@ fn emit_no_option(
 ) -> TokenStream {
     quote! {
         #(#doc)*
-        pub fn #ident(self) -> &'__this #ty {
+        pub fn #ident(&self) -> &#ty {
             &self.0.#acc
         }
     }
