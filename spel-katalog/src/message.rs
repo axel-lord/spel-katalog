@@ -23,22 +23,23 @@ impl From<bool> for Safety {
 
 #[derive(Debug, IsVariant, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum QuickMessage {
-    ClosePane,
     CloseAll,
-    OpenProcessInfo,
-    CycleHidden,
+    ClosePane,
     CycleFilter,
-    ToggleNetwork,
+    CycleHidden,
+    Next,
+    OpenProcessInfo,
+    OpenGameInfo,
+    Prev,
     RefreshProcessInfo,
     RunSelected,
-    Next,
-    Prev,
     ToggleBatch,
-    ToggleLuaApi,
-    ToggleSettings,
-    ToggleMain,
-    ToggleProcessInfo,
     ToggleGameInfo,
+    ToggleLuaApi,
+    ToggleMain,
+    ToggleNetwork,
+    ToggleProcessInfo,
+    ToggleSettings,
 }
 
 #[derive(Debug, IsVariant, From)]

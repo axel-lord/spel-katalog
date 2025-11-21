@@ -37,6 +37,12 @@ help = "How to filter games"
 variants = ["Filter", "Search", "Regex"]
 default = "Search"
 
+[OnRun]
+title = "On Run"
+help = "Should any information be opened when running game"
+variants = ["Process", "Info", "None"]
+default = "None"
+
 [SortBy]
 help = "How to sort games"
 variants = ["Id", "Name", "Slug"]
