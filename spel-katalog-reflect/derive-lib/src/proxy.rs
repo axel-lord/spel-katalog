@@ -15,15 +15,21 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
     let mut all_getter = false;
     let mut proxy_debug = false;
     let mut proxy_name = None;
+    let mut deref_to_proxy = false;
+    let mut as_ref_proxy = false;
     let crate_path = get::crate_path_and(&item.attrs, &["proxy"], |meta| {
         Ok(match_parsed_attr! {
             meta;
-            "option" => all_option = true,
-            "no_option" => all_option = false,
-            "getter" => all_getter = true,
-            "no_getter" => all_getter = false,
-            "proxy_name" => proxy_name = Some(get::list_or_name_value(meta.input, Ident::parse)?),
+            "as_ref" => as_ref_proxy = true,
             "debuf" => proxy_debug = true,
+            "deref" => deref_to_proxy = true,
+            "getter" => all_getter = true,
+            "no_as_ref" => as_ref_proxy = false,
+            "no_deref" => deref_to_proxy = false,
+            "no_getter" => all_getter = false,
+            "no_option" => all_option = false,
+            "option" => all_option = true,
+            "proxy_name" => proxy_name = Some(get::list_or_name_value(meta.input, Ident::parse)?),
         })
     })?;
 
@@ -103,24 +109,43 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
         })
     });
 
+    let deref = deref_to_proxy.then(|| {
+        quote! {
+            impl ::core::ops::Deref for #ident {
+                type Target = #proxy_name;
+
+                #[inline]
+                fn deref(&self) -> &Self::Target {
+                    <#ident as #crate_path::Proxy>::proxy(self)
+                }
+            }
+        }
+    });
+
+    let as_ref = as_ref_proxy.then(|| {
+        quote! {
+            impl ::core::convert::AsRef<#proxy_name> for #ident {
+                #[inline]
+                fn as_ref(&self) -> &#proxy_name {
+                    <#ident as #crate_path::Proxy>::proxy(self)
+                }
+            }
+        }
+    });
+
     Ok(quote! {
         #outer
         const _: () = {
             #inner
+            #deref
+            #as_ref
 
             impl #proxy_name {
                 #getters
             }
 
-            impl ::core::ops::Deref for #proxy_name {
-                type Target = #ident;
-
-                fn deref(&self) -> &Self::Target {
-                    &self.0
-                }
-            }
-
             impl ::core::convert::AsRef<#ident> for #proxy_name {
+                #[inline]
                 fn as_ref(&self) -> &#ident {
                     &self.0
                 }

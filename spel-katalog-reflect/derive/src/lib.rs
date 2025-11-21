@@ -52,6 +52,8 @@ pub fn derive_from_str(item: TokenStream) -> TokenStream {
 ///
 /// Using `proxy_name` as a `list(value)` or `name = value` attribute exposes the proxy struct
 /// with the given name.
+///
+/// `[no_]deref` and `[no_]as_ref` implement `Deref` and/or `AsRef` with the proxy as target.
 #[proc_macro_derive(Proxy, attributes(proxy, reflect))]
 pub fn derive_proxy(item: TokenStream) -> TokenStream {
     ::spel_katalog_reflect_derive_lib::derive_proxy(item.into()).into()

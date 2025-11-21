@@ -1,17 +1,13 @@
 #![cfg_attr(not(test), no_std)]
 //! Reflection utilities.
 
-use ::core::{fmt::Display, ops::Deref};
+use ::core::fmt::Display;
 
 #[doc(inline)]
 pub use ::core::str::FromStr;
 
 #[doc(inline)]
 pub use ::spel_katalog_reflect_derive::{AsStr, Cycle, FromStr, Proxy, Variants};
-
-pub use self::delta::{Delta, DeltaCmp};
-
-mod delta;
 
 /// Trait for simple enums to provide all values.
 ///
@@ -72,10 +68,19 @@ impl ::core::error::Error for UnknownVariant {}
 /// Provide a proxy struct with custom non-trait methods.
 pub trait Proxy {
     /// Proxy type.
-    type Proxy: Deref<Target = Self> + AsRef<Self>;
+    type Proxy: AsRef<Self>;
 
     /// Return proxy object.
     fn proxy(&self) -> &Self::Proxy;
+}
+
+/// Provide a type representing a change to implementor.
+pub trait Delta {
+    /// Delta type.
+    type Delta;
+
+    /// Apply change to self.
+    fn apply(&mut self, delta: Self::Delta);
 }
 
 #[cfg(test)]
