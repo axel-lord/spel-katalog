@@ -1,4 +1,4 @@
-use ::std::{convert::identity, path::Path};
+use ::std::path::Path;
 
 use ::iced_core::{Size, window};
 use ::iced_runtime::Task;
@@ -120,6 +120,10 @@ impl App {
                 self.view.displayed = crate::view::Displayed::Processes;
                 self.view.show_info();
             }
+            QuickMessage::OpenGameInfo => {
+                self.view.displayed = crate::view::Displayed::GameInfo;
+                self.view.show_info();
+            }
             QuickMessage::CycleHidden => {
                 let next = self.settings.get::<Show>().cycle();
                 self.settings.apply_from(next);
@@ -139,8 +143,15 @@ impl App {
                 self.sort_games();
             }
             QuickMessage::RefreshProcessInfo => {
-                if self.view.displayed.is_processes() {
-                    return Task::future(Self::collect_process_info()).then(identity);
+                if self.view.displayed.is_processes()
+                    && let Some(guard) = self.process_view_semaphore.try_acquire_arc()
+                {
+                    return Task::future(async move {
+                        let value = Self::collect_process_info().await;
+                        drop(guard);
+                        value
+                    })
+                    .then(|msg| msg.map_or_else(Task::none, Task::done));
                 }
             }
             QuickMessage::Next => return widget::focus_next(),
