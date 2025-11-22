@@ -24,13 +24,22 @@ use crate::soft_err::push_soft_err;
 ///
 /// ```
 macro_rules! match_parsed_attr {
-    ($meta:expr;
-        $($name:literal => $expr:expr,)*
-    ) => {{
-        $(if $meta.path.is_ident($name) {
+    (@arm $block:lifetime,  $meta:expr, $name:literal, $expr:expr) => {
+        if $meta.path.is_ident($name) {
             $expr;
-            ::core::ops::ControlFlow::Break(())
-        } else )* {
+            break $block ::core::ops::ControlFlow::Break(())
+        }
+    };
+    (@arm $block:lifetime,  $meta:expr, $name:ident, $expr:expr) => {
+        if $meta.path.is_ident(stringify!($name)) {
+            $expr;
+            break $block ::core::ops::ControlFlow::Break(())
+        }
+    };
+    ($meta:expr;
+        $($name:tt => $expr:expr,)*
+    ) => {'block: {
+        $( $crate ::get::match_parsed_attr!(@arm 'block, $meta, $name, $expr); )* {
             ::core::ops::ControlFlow::Continue(())
         }
     }};
