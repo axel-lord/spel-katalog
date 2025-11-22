@@ -30,3 +30,22 @@ impl<T> ResultExt<T> for Result<T, T> {
         }
     }
 }
+
+/// Extension trait for booleans.
+pub trait BoolExt {
+    /// Convert to a result.
+    ///
+    /// # Succeeds
+    /// If self is true.
+    ///
+    /// # Errors
+    /// If self is false.
+    fn to_result(self) -> Result<(), ()>;
+}
+
+impl BoolExt for bool {
+    #[inline]
+    fn to_result(self) -> Result<(), ()> {
+        if self { Ok(()) } else { Err(()) }
+    }
+}
