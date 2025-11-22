@@ -32,6 +32,7 @@ pub fn derive_proxy(tokens: TokenStream) -> TokenStream {
 mod as_str;
 mod cycle;
 mod delta;
+mod ext;
 mod from_str;
 mod get;
 mod narrow;

@@ -5,6 +5,7 @@ use ::quote::{ToTokens, format_ident, quote};
 use ::syn::{Ident, parse::Parse, parse_quote};
 
 use crate::{
+    ext::ResultExt,
     get::{self, match_parsed_attr},
     soft_err::push_soft_err,
 };
@@ -87,21 +88,20 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
     let vis = item.vis;
     let doc = format!("Proxy object for [{ident}]");
 
-    let (inner_outer, proxy_name) = if let Some(proxy_name) = proxy_name {
-        ([false, true], proxy_name)
-    } else {
-        ([true, false], format_ident!("__Proxy"))
-    };
-
-    let [inner, outer] = inner_outer.map(|exists| {
-        exists.then(|| {
-            quote! {
+    let mut proxy_name_ = None;
+    let [inner, outer] = proxy_name
+        .ok_or_else(|| format_ident!("__Proxy"))
+        .map_either(|proxy_name| {
+            let proxy = quote! {
                 #[doc = #doc]
                 #[repr(transparent)]
                 #vis struct #proxy_name(#ident);
-            }
+            };
+            proxy_name_ = Some(proxy_name);
+            proxy
         })
-    });
+        .split_result();
+    let proxy_name = proxy_name_.expect("should have been set by map_either");
 
     let deref = deref_to_proxy.then(|| {
         quote! {
