@@ -31,12 +31,10 @@ pub fn derive_proxy(tokens: TokenStream) -> TokenStream {
 
 mod as_str;
 mod cycle;
+mod delta;
 mod from_str;
 mod get;
 mod narrow;
 mod proxy;
 mod soft_err;
 mod variants;
-mod delta {
-    //! Implementation for `Delta` derive macro.
-}

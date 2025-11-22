@@ -9,7 +9,7 @@ use crate::{
     soft_err::push_soft_err,
 };
 
-/// Implement `OptDefault` for a struct.
+/// Implement `Proxy` for a struct.
 pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
     let mut all_option = false;
     let mut all_getter = false;

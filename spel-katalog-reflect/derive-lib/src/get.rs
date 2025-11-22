@@ -10,6 +10,19 @@ use ::syn::{
 
 use crate::soft_err::push_soft_err;
 
+/// Create a list of attr names from idents.
+///
+/// ```ignore
+/// assert_eq!(attrl![a b v], &["a", "b", "c"]);
+/// assert_eq!(attrl![a], &["a"]);
+/// ```
+macro_rules! attrl {
+    ($($ident:ident)*) => {
+        &[$(stringify!($ident)),*]
+    };
+}
+pub(crate) use attrl;
+
 /// Match on attribute names.
 ///
 /// ```ignore
