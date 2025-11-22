@@ -20,15 +20,11 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
     let crate_path = get::crate_path_and(&item.attrs, &["proxy"], |meta| {
         Ok(match_parsed_attr! {
             meta;
-            as_ref => as_ref_proxy = true,
-            debuf => proxy_debug = true,
-            deref => deref_to_proxy = true,
-            getter => all_getter = true,
-            no_as_ref => as_ref_proxy = false,
-            no_deref => deref_to_proxy = false,
-            no_getter => all_getter = false,
-            no_option => all_option = false,
-            option => all_option = true,
+            as_ref => :as_ref_proxy,
+            debuf => :proxy_debug,
+            deref => :deref_to_proxy,
+            getter => :all_getter,
+            option => :all_option,
             proxy_name => proxy_name = Some(get::list_or_name_value(meta.input, Ident::parse)?),
         })
     })?;
@@ -45,10 +41,8 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
             get::attrs(&field.attrs, &["proxy"], |meta| {
                 Ok(match_parsed_attr! {
                     meta;
-                    option => is_option = true,
-                    no_option => is_option = false,
-                    getter => create_getter = true,
-                    no_getter => create_getter = false,
+                    option => :is_option,
+                    getter => :create_getter,
                     default => default_expr = Some(get::list_or_name_value(meta.input, ::syn::Expr::parse)?),
                     some_pattern => some_pattern = Some(get::list_or_name_value(meta.input, ::syn::Path::parse)?),
                 })

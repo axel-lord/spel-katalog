@@ -15,31 +15,45 @@ use crate::soft_err::push_soft_err;
 /// ```ignore
 /// let mut is_cool = false;
 /// let mut is_kind = false;
+/// let mut is_mean = false;
 /// match_parsed_attr! {
+///     // Match on an attribute.
 ///     "cool" => is_cool = true,
-///     "kind" => is_kind = true,
+///     // Ident match.
+///     kind => is_kind = true,
+///     // Flag match same as above with an additional "no_mean"
+///     // match doing the opposite.
+///     "mean" => :is_mean,
 /// }?;
 ///
-/// println!("neither cool nor kind");
+/// println!("neither cool nor kind nor mean");
 ///
 /// ```
 macro_rules! match_parsed_attr {
-    (@arm $block:lifetime,  $meta:expr, $name:literal, $expr:expr) => {
+    // Match ident flag.
+    (@arm $($flag:ident)+ $block:lifetime, $meta:expr, $name:ident) => {
+        $crate::get::match_parsed_attr!(@arm $($flag)* $block, $meta, stringify!($name));
+    };
+    // Match ident with expr.
+    (@arm $block:lifetime, $meta:expr, $name:ident, $expr:expr) => {
+        $crate::get::match_parsed_attr!(@arm $block, $meta, stringify!($name), $expr);
+    };
+    // Match str flag.
+    (@arm $($flag:ident)+ $block:lifetime, $meta:expr, $name:expr) => {
+        $crate::get::match_parsed_attr!(@arm $block, $meta, $name, { $($flag = true;)* });
+        $crate::get::match_parsed_attr!(@arm $block, $meta, concat!("no_", $name), { $($flag = false;)* });
+    };
+    // Mathc expr.
+    (@arm $block:lifetime, $meta:expr, $name:expr, $expr:expr) => {
         if $meta.path.is_ident($name) {
             $expr;
             break $block ::core::ops::ControlFlow::Break(())
         }
     };
-    (@arm $block:lifetime,  $meta:expr, $name:ident, $expr:expr) => {
-        if $meta.path.is_ident(stringify!($name)) {
-            $expr;
-            break $block ::core::ops::ControlFlow::Break(())
-        }
-    };
     ($meta:expr;
-        $($name:tt => $expr:expr,)*
+        $($name:tt => $(:$flag:ident)* $($expr:expr)?,)*
     ) => {'block: {
-        $( $crate ::get::match_parsed_attr!(@arm 'block, $meta, $name, $expr); )* {
+        $( $crate ::get::match_parsed_attr!(@arm $($flag)* 'block, $meta, $name $(, $expr)*); )* {
             ::core::ops::ControlFlow::Continue(())
         }
     }};
