@@ -58,3 +58,9 @@ pub fn derive_from_str(item: TokenStream) -> TokenStream {
 pub fn derive_proxy(item: TokenStream) -> TokenStream {
     ::spel_katalog_reflect_derive_lib::derive_proxy(item.into()).into()
 }
+
+/// Derive implementation of `into_fields` for an enum.
+#[proc_macro_derive(IntoFields, attributes(into_fields, reflect))]
+pub fn derive_into_fields(item: TokenStream) -> TokenStream {
+    ::spel_katalog_reflect_derive_lib::derive_into_fields(item.into()).into()
+}

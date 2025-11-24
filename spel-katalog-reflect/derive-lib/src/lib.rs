@@ -24,17 +24,22 @@ pub fn derive_from_str(tokens: TokenStream) -> TokenStream {
     narrow_item_enum(tokens, "FromStr", from_str::from_str)
 }
 
-/// Implement `OptionDefault` for an enum.
+/// Implement `Proxy` for an enum.
 pub fn derive_proxy(tokens: TokenStream) -> TokenStream {
     narrow_item_struct(tokens, "Proxy", proxy::proxy)
 }
 
+/// Implement `IntoFields` for an enum.
+pub fn derive_into_fields(tokens: TokenStream) -> TokenStream {
+    narrow_item_struct(tokens, "IntoFields", into_fields::into_fields)
+}
+
 mod as_str;
 mod cycle;
-mod delta;
 mod ext;
 mod from_str;
 mod get;
+mod into_fields;
 mod narrow;
 mod proxy;
 mod soft_err;

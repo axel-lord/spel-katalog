@@ -7,7 +7,7 @@ use ::core::fmt::Display;
 pub use ::core::str::FromStr;
 
 #[doc(inline)]
-pub use ::spel_katalog_reflect_derive::{AsStr, Cycle, FromStr, Proxy, Variants};
+pub use ::spel_katalog_reflect_derive::{AsStr, Cycle, FromStr, IntoFields, Proxy, Variants};
 
 /// Trait for simple enums to provide all values.
 ///
@@ -74,13 +74,19 @@ pub trait Proxy {
     fn proxy(&self) -> &Self::Proxy;
 }
 
-/// Provide a type representing a change to implementor.
-pub trait Delta {
-    /// Delta type.
-    type Delta;
+/// Convert a struct to it's fields.
+pub trait IntoFields {
+    /// Representation of any non-skipped field.
+    type Field;
 
-    /// Apply change to self.
-    fn apply(&mut self, delta: Self::Delta);
+    /// Collection of all non-skipped fields of self.
+    type IntoFields: IntoIterator<Item = Self::Field> + AsRef<[Self::Field]>;
+
+    /// Convert self into a collection of fields.
+    fn into_fields(self) -> Self::IntoFields;
+
+    /// Apply a single field as a change to self.
+    fn delta(&mut self, delta: Self::Field);
 }
 
 #[cfg(test)]
@@ -99,7 +105,7 @@ mod tests {
         Fourth,
     }
 
-    #[derive(Debug, Proxy)]
+    #[derive(Debug, Proxy, IntoFields)]
     #[reflect(crate_path = crate, option, getter, debug)]
     struct OptDefaultTestStruct {
         first: Option<String>,
