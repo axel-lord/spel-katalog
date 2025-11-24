@@ -3,6 +3,7 @@
 use ::core::ops::{ControlFlow, Deref};
 use ::std::borrow::Cow;
 
+use ::proc_macro2::TokenTree;
 use ::syn::{
     Attribute, Fields, Ident, Token, meta::ParseNestedMeta, parenthesized, parse::ParseStream,
     parse_quote, parse_quote_spanned,
@@ -103,11 +104,28 @@ pub fn attrs(
     for attr in attr_list {
         if attr.path().is_ident("reflect") {
             attr.parse_nested_meta(|meta| {
-                _ = with(ParsedAttr {
+                let result = with(ParsedAttr {
                     parse_nested_meta: &meta,
                     name: "reflect",
                     is_global: true,
                 })?;
+
+                if result.is_continue() {
+                    meta.input.step(|cursor| {
+                        let mut remainder = *cursor;
+                        while let Some((tt, next)) = remainder.token_tree() {
+                            if let TokenTree::Punct(punct) = tt
+                                && punct.as_char() == ','
+                            {
+                                return Ok(((), remainder));
+                            };
+
+                            remainder = next;
+                        }
+                        Ok(((), remainder))
+                    })?;
+                }
+
                 Ok(())
             })?;
             if attr_parsed {

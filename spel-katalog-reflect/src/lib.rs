@@ -109,7 +109,7 @@ mod tests {
     #[reflect(crate_path = crate, option, getter, debug)]
     struct OptDefaultTestStruct {
         first: Option<String>,
-        #[proxy(default = 5)]
+        #[reflect(default = 5)]
         second: Option<i32>,
         #[reflect(no_option)]
         third: u32,

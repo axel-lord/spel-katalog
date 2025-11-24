@@ -123,9 +123,9 @@ pub fn into_fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::Toke
 
     Ok(quote! {
         #outer
-        const _:() {
+        const _: () = {
             #inner
-            impl #crate_path::IntoFields for  #ident {
+            impl #crate_path::IntoFields for #ident {
                 type Field = #into_fields_name;
                 type IntoFields = [Self::Field; #field_count];
 
@@ -140,6 +140,6 @@ pub fn into_fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::Toke
                     }
                 }
             }
-        }
+        };
     })
 }
