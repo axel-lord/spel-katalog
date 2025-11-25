@@ -1,7 +1,6 @@
 //! Proc macro implementations.
 
 use ::proc_macro2::TokenStream;
-use ::syn::parse::Parse;
 
 use crate::narrow::{narrow_item_enum, narrow_item_struct};
 

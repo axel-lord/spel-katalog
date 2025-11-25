@@ -104,6 +104,23 @@ pub fn attrs(
     for attr in attr_list {
         if attr.path().is_ident("reflect") {
             attr.parse_nested_meta(|meta| {
+                for attr_name in attr_name {
+                    if meta.path.is_ident(attr_name) {
+                        meta.parse_nested_meta(|meta| {
+                            let result = with(ParsedAttr {
+                                parse_nested_meta: &meta,
+                                name: attr_name,
+                                is_global: false,
+                            })?;
+                            if result.is_continue() {
+                                push_soft_err(meta.error("unsupported property"));
+                            }
+                            Ok(())
+                        })?;
+                        return Ok(());
+                    }
+                }
+
                 let result = with(ParsedAttr {
                     parse_nested_meta: &meta,
                     name: "reflect",
@@ -138,11 +155,12 @@ pub fn attrs(
             for attr_name in attr_name {
                 if attr.path().is_ident(attr_name) {
                     attr.parse_nested_meta(|meta| {
-                        if let ControlFlow::Continue(_) = with(ParsedAttr {
+                        let result = with(ParsedAttr {
                             parse_nested_meta: &meta,
                             name: attr_name,
                             is_global: false,
-                        })? {
+                        })?;
+                        if result.is_continue() {
                             push_soft_err(meta.error("unsupported property"));
                         }
                         Ok(())

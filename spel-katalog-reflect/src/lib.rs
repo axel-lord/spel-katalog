@@ -111,7 +111,7 @@ mod tests {
         first: Option<String>,
         #[reflect(default = 5)]
         second: Option<i32>,
-        #[reflect(no_option)]
+        #[reflect(proxy(no_option))]
         third: u32,
         #[reflect(some_pattern = Ok)]
         fourth: Result<u8, ()>,
