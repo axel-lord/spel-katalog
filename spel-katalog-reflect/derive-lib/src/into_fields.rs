@@ -18,7 +18,7 @@ pub fn into_fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::Toke
     let mut all_skip = false;
     let mut into_fields_name = None;
 
-    let crate_path = get::crate_path_and(&item.attrs, attrl![into_fields], |meta| {
+    let crate_path = get::crate_path_and(&item.attrs, attrl![fields], |meta| {
         Ok(match_parsed_attr! {
             meta;
             skip => :all_skip,
@@ -43,7 +43,7 @@ pub fn into_fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::Toke
             let mut skip = all_skip;
             let mut option = all_option;
 
-            get::attrs(&field.attrs, attrl![into_fields], |meta| {
+            get::attrs(&field.attrs, attrl![fields], |meta| {
                 Ok(match_parsed_attr! {
                     meta;
                     skip => :skip,

@@ -89,6 +89,61 @@ pub trait IntoFields {
     fn delta(&mut self, delta: Self::Field);
 }
 
+/// Get fields of a struct.
+pub trait RefFields {
+    /// Representation of a field reference.
+    type FieldRef<'f>
+    where
+        Self: 'f;
+
+    /// Collection of references to fields.
+    type Fields<'a>: IntoIterator<Item = Self::FieldRef<'a>> + AsRef<[Self::FieldRef<'a>]>
+    where
+        Self: 'a;
+
+    /// Get collection of field refs of self.
+    fn fields<'f>(&'f self) -> Self::FieldRef<'f>;
+}
+
+/// Get mut fields of a struct.
+pub trait MutFields {
+    /// Representation of a field mut reference.
+    type FieldMut<'f>
+    where
+        Self: 'f;
+
+    /// Collection of mutable references to fields.
+    type FieldsMut<'f>: IntoIterator<Item = Self::FieldMut<'f>> + AsRef<[Self::FieldMut<'f>]>
+    where
+        Self: 'f;
+
+    /// Get a collection of field mut refs of self.
+    fn fields_mut<'f>(&'f self) -> Self::FieldsMut<'f>;
+}
+
+/// Trait for structs providing an indexing enum to index fields.
+pub trait FieldsIdx
+where
+    Self: RefFields + MutFields,
+{
+    /// Type to index fields with.
+    type FieldIdx;
+
+    /// Get a field by index.
+    fn get<'f>(&self, idx: Self::FieldIdx) -> Self::FieldRef<'f>;
+
+    /// Get a mut field by index.
+    fn get_mut<'f>(&self, idx: Self::FieldIdx) -> Self::FieldMut<'f>;
+}
+
+/// Collection trait for all struct field access traits.
+pub trait Fields
+where
+    Self: IntoFields + RefFields + MutFields + FieldsIdx,
+{
+}
+impl<T: IntoFields + RefFields + MutFields + FieldsIdx> Fields for T {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
