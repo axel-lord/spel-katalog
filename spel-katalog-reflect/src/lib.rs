@@ -7,7 +7,7 @@ use ::core::fmt::Display;
 pub use ::core::str::FromStr;
 
 #[doc(inline)]
-pub use ::spel_katalog_reflect_derive::{AsStr, Cycle, FromStr, IntoFields, Proxy, Variants};
+pub use ::spel_katalog_reflect_derive::{AsStr, Cycle, Fields, FromStr, Proxy, Variants};
 
 /// Trait for simple enums to provide all values.
 ///
@@ -102,7 +102,7 @@ pub trait RefFields {
         Self: 'a;
 
     /// Get collection of field refs of self.
-    fn fields<'f>(&'f self) -> Self::FieldRef<'f>;
+    fn fields(&self) -> Self::FieldRef<'_>;
 }
 
 /// Get mut fields of a struct.
@@ -118,7 +118,7 @@ pub trait MutFields {
         Self: 'f;
 
     /// Get a collection of field mut refs of self.
-    fn fields_mut<'f>(&'f self) -> Self::FieldsMut<'f>;
+    fn fields_mut(&self) -> Self::FieldsMut<'_>;
 }
 
 /// Trait for structs providing an indexing enum to index fields.
@@ -130,10 +130,10 @@ where
     type FieldIdx;
 
     /// Get a field by index.
-    fn get<'f>(&self, idx: Self::FieldIdx) -> Self::FieldRef<'f>;
+    fn get(&self, idx: Self::FieldIdx) -> Self::FieldRef<'_>;
 
     /// Get a mut field by index.
-    fn get_mut<'f>(&self, idx: Self::FieldIdx) -> Self::FieldMut<'f>;
+    fn get_mut(&self, idx: Self::FieldIdx) -> Self::FieldMut<'_>;
 }
 
 /// Collection trait for all struct field access traits.
@@ -160,7 +160,7 @@ mod tests {
         Fourth,
     }
 
-    #[derive(Debug, Proxy, IntoFields)]
+    #[derive(Debug, Proxy, Fields)]
     #[reflect(crate_path = crate, option, getter, debug)]
     struct OptDefaultTestStruct {
         first: Option<String>,

@@ -30,16 +30,16 @@ pub fn derive_proxy(tokens: TokenStream) -> TokenStream {
 }
 
 /// Implement `IntoFields` for an enum.
-pub fn derive_into_fields(tokens: TokenStream) -> TokenStream {
-    narrow_item_struct(tokens, "IntoFields", into_fields::into_fields)
+pub fn derive_fields(tokens: TokenStream) -> TokenStream {
+    narrow_item_struct(tokens, "Fields", fields::fields)
 }
 
 mod as_str;
 mod cycle;
 mod ext;
+mod fields;
 mod from_str;
 mod get;
-mod into_fields;
 mod narrow;
 mod proxy;
 mod soft_err;

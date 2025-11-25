@@ -13,7 +13,7 @@ use crate::{
 };
 
 /// Implement `Proxy` for a struct.
-pub fn into_fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStream> {
+pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStream> {
     let mut all_option = false;
     let mut all_skip = false;
     let mut into_fields_name = None;
