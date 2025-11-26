@@ -38,6 +38,28 @@ pub fn from_str(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
 
         let arms = ::convert_case::Case::all_cases()
             .iter()
+            .filter(|case| {
+                matches!(
+                    case,
+                    ::convert_case::Case::Snake
+                        | ::convert_case::Case::Constant
+                        | ::convert_case::Case::UpperSnake
+                        | ::convert_case::Case::Ada
+                        | ::convert_case::Case::Kebab
+                        | ::convert_case::Case::Cobol
+                        | ::convert_case::Case::UpperKebab
+                        | ::convert_case::Case::Train
+                        | ::convert_case::Case::Flat
+                        | ::convert_case::Case::UpperFlat
+                        | ::convert_case::Case::Pascal
+                        | ::convert_case::Case::UpperCamel
+                        | ::convert_case::Case::Camel
+                        | ::convert_case::Case::Lower
+                        | ::convert_case::Case::Upper
+                        | ::convert_case::Case::Title
+                        | ::convert_case::Case::Sentence
+                )
+            })
             .flat_map(|case| {
                 spanned_strings
                     .iter()
