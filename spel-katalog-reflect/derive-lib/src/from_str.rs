@@ -1,7 +1,11 @@
 //! Implementation for `FromStr` derive macro.
 
+use ::std::borrow::Cow;
+
+use ::convert_case::Casing;
 use ::proc_macro2::TokenStream;
 use ::quote::quote;
+use ::syn::LitStr;
 
 use crate::get::{self, match_parsed_attr};
 
@@ -20,16 +24,33 @@ pub fn from_str(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
     let variants = get::unit_variants(&item)?;
     let str_rep = get::variants_as_str_reprs(&item)?;
 
-    let str_rep = if !case_convert {
+    let arms = if !case_convert {
         str_rep
+            .iter()
+            .zip(&variants)
+            .map(|(str_rep, variant)| quote! { #str_rep => Ok(Self::#variant) })
+            .collect::<Vec<_>>()
     } else {
         let spanned_strings = str_rep
             .iter()
             .map(|lit_str| (lit_str.span(), lit_str.value()))
             .collect::<Vec<_>>();
 
-        todo!()
+        ::convert_case::Case::all_cases()
+            .iter()
+            .flat_map(|case| {
+                spanned_strings
+                    .iter()
+                    .zip(&variants)
+                    .map(|((span, s), variant)| {
+                        let str_rep = LitStr::new(&s.to_case(*case), *span);
+
+                        quote! { #str_rep => Ok(Self::#variant) }
+                    })
+            })
+            .collect()
     };
+    let variants = variants.iter().cycle();
 
     let ident = &item.ident;
 

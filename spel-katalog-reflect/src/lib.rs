@@ -138,7 +138,7 @@ mod tests {
     use ::pretty_assertions::assert_eq;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Variants, Cycle, AsStr, FromStr)]
-    #[reflect(crate_path = crate, as_ref, display, try_from)]
+    #[reflect(crate_path = crate, as_ref, display, try_from, case_convert)]
     enum VariantsTestEnum {
         First,
         Second,
