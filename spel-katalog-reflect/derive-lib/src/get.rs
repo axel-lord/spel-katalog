@@ -248,7 +248,7 @@ pub fn variants_as_str_reprs(item: &::syn::ItemEnum) -> ::syn::Result<Vec<Cow<'_
                     other => {
                         return Err(::syn::Error::new_spanned(
                             other,
-                            "as_str propery must have a string literal value",
+                            "as_str property must have a string literal value",
                         ));
                     }
                 },

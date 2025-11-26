@@ -8,15 +8,29 @@ use crate::get::{self, match_parsed_attr};
 /// Implement `FromStr` for an enum.
 pub fn from_str(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
     let mut impl_try_from = false;
+    let mut case_convert = false;
     let crate_path = get::crate_path_and(&item.attrs, &["from_str"], |meta| {
         Ok(match_parsed_attr! {
             meta;
-            "try_from" => impl_try_from = true,
+            try_from => impl_try_from = true,
+            case_convert => :case_convert,
         })
     })?;
 
     let variants = get::unit_variants(&item)?;
     let str_rep = get::variants_as_str_reprs(&item)?;
+
+    let str_rep = if !case_convert {
+        str_rep
+    } else {
+        let spanned_strings = str_rep
+            .iter()
+            .map(|lit_str| (lit_str.span(), lit_str.value()))
+            .collect::<Vec<_>>();
+
+        todo!()
+    };
+
     let ident = &item.ident;
 
     let try_from = impl_try_from.then(|| {
