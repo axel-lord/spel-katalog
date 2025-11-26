@@ -5,6 +5,7 @@ use ::std::borrow::Cow;
 use ::convert_case::Casing;
 use ::proc_macro2::TokenStream;
 use ::quote::quote;
+use ::rustc_hash::FxHashMap;
 use ::syn::LitStr;
 
 use crate::get::{self, match_parsed_attr};
@@ -26,9 +27,8 @@ pub fn from_str(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
 
     let arms = if !case_convert {
         str_rep
-            .iter()
-            .zip(&variants)
-            .map(|(str_rep, variant)| quote! { #str_rep => Ok(Self::#variant) })
+            .into_iter()
+            .zip(variants.iter().copied())
             .collect::<Vec<_>>()
     } else {
         let spanned_strings = str_rep
@@ -36,21 +36,26 @@ pub fn from_str(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
             .map(|lit_str| (lit_str.span(), lit_str.value()))
             .collect::<Vec<_>>();
 
-        ::convert_case::Case::all_cases()
+        let arms = ::convert_case::Case::all_cases()
             .iter()
             .flat_map(|case| {
                 spanned_strings
                     .iter()
-                    .zip(&variants)
+                    .zip(variants.iter().copied())
                     .map(|((span, s), variant)| {
                         let str_rep = LitStr::new(&s.to_case(*case), *span);
 
-                        quote! { #str_rep => Ok(Self::#variant) }
+                        (Cow::Owned(str_rep), variant)
                     })
             })
-            .collect()
+            .collect::<FxHashMap<_, _>>();
+
+        Vec::from_iter(arms)
     };
-    let variants = variants.iter().cycle();
+
+    let arms = arms
+        .iter()
+        .map(|(str_rep, variant)| quote! { #str_rep => Ok(Self::#variant) });
 
     let ident = &item.ident;
 
@@ -76,7 +81,7 @@ pub fn from_str(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
 
             fn from_str(s: &str) -> ::core::result::Result<Self, Self::Err> {
                 match s {
-                    #( #str_rep => Ok(Self::#variants), )*
+                    #( #arms, )*
                     _ => Err(#crate_path::UnknownVariant),
                 }
             }
