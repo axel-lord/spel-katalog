@@ -89,60 +89,48 @@ pub trait IntoFields {
     fn delta(&mut self, delta: Self::Field);
 }
 
-/// Get fields of a struct.
-pub trait RefFields {
-    /// Representation of a field reference.
-    type FieldRef<'f>
-    where
-        Self: 'f;
-
-    /// Collection of references to fields.
-    type Fields<'a>: IntoIterator<Item = Self::FieldRef<'a>> + AsRef<[Self::FieldRef<'a>]>
-    where
-        Self: 'a;
-
-    /// Get collection of field refs of self.
-    fn fields(&self) -> Self::FieldRef<'_>;
-}
-
-/// Get mut fields of a struct.
-pub trait MutFields {
-    /// Representation of a field mut reference.
-    type FieldMut<'f>
-    where
-        Self: 'f;
-
-    /// Collection of mutable references to fields.
-    type FieldsMut<'f>: IntoIterator<Item = Self::FieldMut<'f>> + AsRef<[Self::FieldMut<'f>]>
-    where
-        Self: 'f;
-
-    /// Get a collection of field mut refs of self.
-    fn fields_mut(&self) -> Self::FieldsMut<'_>;
-}
-
 /// Trait for structs providing an indexing enum to index fields.
 pub trait FieldsIdx
 where
-    Self: RefFields + MutFields,
+    for<'this> &'this Self: IntoFields,
 {
     /// Type to index fields with.
     type FieldIdx;
 
     /// Get a field by index.
-    fn get(&self, idx: Self::FieldIdx) -> Self::FieldRef<'_>;
+    fn get(&self, idx: Self::FieldIdx) -> <&Self as IntoFields>::Field;
+}
 
+/// Trait for structs providing an indexing enum to index fields mutably.
+pub trait FieldsIdxMut
+where
+    for<'this> &'this Self: IntoFields,
+    for<'this> &'this mut Self: IntoFields,
+    Self: FieldsIdx,
+{
     /// Get a mut field by index.
-    fn get_mut(&self, idx: Self::FieldIdx) -> Self::FieldMut<'_>;
+    fn get_mut(&mut self, idx: Self::FieldIdx) -> <&mut Self as IntoFields>::Field;
 }
 
 /// Collection trait for all struct field access traits.
 pub trait Fields
 where
-    Self: IntoFields + RefFields + MutFields + FieldsIdx,
+    for<'this> &'this Self: IntoFields,
+    for<'this> &'this mut Self: IntoFields,
+    Self: IntoFields + FieldsIdx + FieldsIdxMut,
 {
+    /// Get references to fields.
+    #[inline]
+    fn fields(&self) -> <&Self as IntoFields>::IntoFields {
+        self.into_fields()
+    }
+
+    /// Get mutable references to fields.
+    #[inline]
+    fn fields_mut(&mut self) -> <&mut Self as IntoFields>::IntoFields {
+        self.into_fields()
+    }
 }
-impl<T: IntoFields + RefFields + MutFields + FieldsIdx> Fields for T {}
 
 #[cfg(test)]
 mod tests {
