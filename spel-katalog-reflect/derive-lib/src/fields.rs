@@ -134,7 +134,9 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
                     let Self { #(#field_names),* } = self;
                     [#(#into_fields_name::#variant_names(#field_names)),*]
                 }
+            }
 
+            impl #crate_path::FieldDelta for #ident {
                 fn delta(&mut self, delta: Self::Field) {
                     match delta {
                         #apply_arms

@@ -84,7 +84,13 @@ pub trait IntoFields {
 
     /// Convert self into a collection of fields.
     fn into_fields(self) -> Self::IntoFields;
+}
 
+/// Apply a field as a delta updating the current value.
+pub trait FieldDelta
+where
+    Self: IntoFields,
+{
     /// Apply a single field as a change to self.
     fn delta(&mut self, delta: Self::Field);
 }
