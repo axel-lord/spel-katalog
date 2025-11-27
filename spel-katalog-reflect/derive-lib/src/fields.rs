@@ -3,7 +3,7 @@
 use ::std::borrow::Cow;
 
 use ::convert_case::ccase;
-use ::proc_macro2::TokenStream;
+use ::proc_macro2::{Span, TokenStream};
 use ::quote::{ToTokens, format_ident, quote};
 use ::syn::Ident;
 
@@ -17,6 +17,8 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
     let mut all_option = false;
     let mut all_skip = false;
     let mut into_fields_name = None;
+    let mut fields_ref_name = None;
+    let mut fields_mut_name = None;
 
     let crate_path = get::crate_path_and(&item.attrs, attrl![fields], |meta| {
         Ok(match_parsed_attr! {
@@ -24,18 +26,34 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
             skip => :all_skip,
             option => :all_option,
             fields_name => into_fields_name = Some(get::list_or_name_value(meta.input, get::ident_from_expr("fields_name"))?),
+            fields_name_ref => fields_ref_name = Some(get::list_or_name_value(meta.input, get::ident_from_expr("fields_name_ref"))?),
+            fields_name_mut => fields_mut_name = Some(get::list_or_name_value(meta.input, get::ident_from_expr("fields_name_mut"))?),
 
         })
     })?;
 
-    let is_non_anon = into_fields_name.is_some();
+    let is_fields_public = into_fields_name.is_some();
+    let is_fields_ref_public = fields_ref_name.is_some();
+    let is_fields_mut_public = fields_mut_name.is_some();
     let into_fields_name = into_fields_name.unwrap_or_else(|| format_ident!("__IntoField"));
+    let fields_ref_name = fields_ref_name.unwrap_or_else(|| format_ident!("__FieldsRef"));
+    let fields_mut_name = fields_mut_name.unwrap_or_else(|| format_ident!("__FieldsMut"));
 
-    let mut delta_variants = TokenStream::default();
+    let mut fields_variants = TokenStream::default();
+    let mut fields_ref_variants = TokenStream::default();
+    let mut fields_mut_variants = TokenStream::default();
     let mut apply_arms = TokenStream::default();
     let mut field_count = 0usize;
     let mut field_names = Vec::new();
     let mut variant_names = Vec::new();
+
+    let lt_variance = get::xor_hash((
+        &into_fields_name,
+        &fields_ref_name,
+        &fields_mut_name,
+        &item.ident,
+    ));
+    let lt = ::syn::Lifetime::new(&format!("'_lt_{lt_variance}"), Span::call_site());
 
     item.fields
         .iter()
@@ -85,11 +103,21 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
 
             let ty = get::unwrapped_ty(&field.ty);
 
-            let doc = format!("Delta variant for the {member} field");
+            let doc = format!("Variant for the {member} field");
 
-            delta_variants.extend(quote! {
+            fields_variants.extend(quote! {
                 #[doc = #doc]
                 #variant_name(#ty),
+            });
+
+            fields_ref_variants.extend(quote! {
+                #[doc = #doc]
+                #variant_name(&#lt #ty),
+            });
+
+            fields_mut_variants.extend(quote! {
+                #[doc = #doc]
+                #variant_name(&#lt mut #ty),
             });
 
             apply_arms.extend(quote! {
@@ -110,22 +138,50 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
         "[IntoFields::Field][{}::IntoFields::Field] enum for {ident}",
         crate_path.to_token_stream()
     );
-    let [outer, inner] = is_non_anon
+    let [into_fields_outer, into_fields_inner] = is_fields_public
         .to_result()
         .map_either(|_| {
             quote! {
                 #[doc = #doc]
                 #vis enum #into_fields_name {
-                    #delta_variants
+                    #fields_variants
+                }
+            }
+        })
+        .split_result();
+
+    let [fields_ref_outer, fields_ref_inner] = is_fields_ref_public
+        .to_result()
+        .map_either(|_| {
+            quote! {
+                #[doc = #doc]
+                #vis enum #fields_ref_name<#lt> {
+                    #fields_ref_variants
+                }
+            }
+        })
+        .split_result();
+
+    let [fields_mut_outer, fields_mut_inner] = is_fields_mut_public
+        .to_result()
+        .map_either(|_| {
+            quote! {
+                #[doc = #doc]
+                #vis enum #fields_mut_name<#lt> {
+                    #fields_mut_variants
                 }
             }
         })
         .split_result();
 
     Ok(quote! {
-        #outer
+        #fields_ref_outer
+        #fields_mut_outer
+        #into_fields_outer
         const _: () = {
-            #inner
+            #fields_ref_inner
+            #fields_mut_inner
+            #into_fields_inner
             impl #crate_path::IntoFields for #ident {
                 type Field = #into_fields_name;
                 type IntoFields = [Self::Field; #field_count];

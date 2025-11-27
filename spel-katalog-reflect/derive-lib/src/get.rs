@@ -1,6 +1,9 @@
 //! utility functions.
 
-use ::core::ops::{ControlFlow, Deref};
+use ::core::{
+    hash::{Hash, Hasher},
+    ops::{ControlFlow, Deref},
+};
 use ::std::borrow::Cow;
 
 use ::proc_macro2::TokenTree;
@@ -327,4 +330,27 @@ pub fn unwrapped_ty(ty: &::syn::Type) -> &::syn::Type {
             ty => return ty,
         }
     }
+}
+
+/// Get a quick dirty xor hash.
+pub fn xor_hash<T: Hash>(of: T) -> u16 {
+    #[derive(Debug, Default)]
+    struct H(Vec<u8>);
+    impl Hasher for H {
+        fn finish(&self) -> u64 {
+            0
+        }
+
+        fn write(&mut self, bytes: &[u8]) {
+            self.0.extend_from_slice(bytes);
+        }
+    }
+
+    let mut h = H::default();
+    of.hash(&mut h);
+
+    h.0.as_chunks::<2>()
+        .0
+        .iter()
+        .fold(0u16, |acc, bytes| u16::from_ne_bytes(*bytes) | acc)
 }
