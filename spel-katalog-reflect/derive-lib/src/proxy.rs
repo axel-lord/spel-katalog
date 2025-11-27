@@ -2,7 +2,7 @@
 
 use ::proc_macro2::TokenStream;
 use ::quote::{ToTokens, format_ident, quote};
-use ::syn::{Ident, parse::Parse, parse_quote};
+use ::syn::{Ident, parse_quote};
 
 use crate::{
     ext::ResultExt,
@@ -26,7 +26,7 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
             deref => :deref_to_proxy,
             getter => :all_getter,
             option => :all_option,
-            proxy_name => proxy_name = Some(get::list_or_name_value(meta.input, Ident::parse)?),
+            proxy_name => proxy_name = Some(get::list_or_name_value(meta.input, get::ident_from_expr("proxy_name"))?),
         })
     })?;
 
@@ -44,8 +44,8 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
                     meta;
                     option => :is_option,
                     getter => :create_getter,
-                    default => default_expr = Some(get::list_or_name_value(meta.input, ::syn::Expr::parse)?),
-                    some_pattern => some_pattern = Some(get::list_or_name_value(meta.input, ::syn::Path::parse)?),
+                    default => default_expr = Some(get::list_or_name_value(meta.input, Ok)?),
+                    some_pattern => some_pattern = Some(get::list_or_name_value(meta.input, get::path_from_expr("some_pattern"))?),
                 })
             })?;
 

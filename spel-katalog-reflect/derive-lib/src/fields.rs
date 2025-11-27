@@ -5,7 +5,7 @@ use ::std::borrow::Cow;
 use ::convert_case::ccase;
 use ::proc_macro2::TokenStream;
 use ::quote::{ToTokens, format_ident, quote};
-use ::syn::{Ident, parse::Parse};
+use ::syn::Ident;
 
 use crate::{
     ext::{BoolExt, ResultExt},
@@ -23,7 +23,8 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
             meta;
             skip => :all_skip,
             option => :all_option,
-            fields_name => into_fields_name = Some(get::list_or_name_value(meta.input, Ident::parse)?),
+            fields_name => into_fields_name = Some(get::list_or_name_value(meta.input, get::ident_from_expr("fields_name"))?),
+
         })
     })?;
 

@@ -128,19 +128,24 @@ pub fn attrs(
                 })?;
 
                 if result.is_continue() {
-                    meta.input.step(|cursor| {
-                        let mut remainder = *cursor;
-                        while let Some((tt, next)) = remainder.token_tree() {
-                            if let TokenTree::Punct(punct) = tt
-                                && punct.as_char() == ','
-                            {
-                                return Ok(((), remainder));
-                            };
+                    if meta.input.peek(Token![=]) {
+                        _ = meta.input.parse::<Token![=]>()?;
+                        _ = meta.input.parse::<::syn::Expr>()?;
+                    } else {
+                        meta.input.step(|cursor| {
+                            let mut remainder = *cursor;
+                            while let Some((tt, next)) = remainder.token_tree() {
+                                if let TokenTree::Punct(punct) = tt
+                                    && punct.as_char() == ','
+                                {
+                                    return Ok(((), remainder));
+                                };
 
-                            remainder = next;
-                        }
-                        Ok(((), remainder))
-                    })?;
+                                remainder = next;
+                            }
+                            Ok(((), remainder))
+                        })?;
+                    }
                 }
 
                 Ok(())
@@ -187,14 +192,11 @@ pub fn crate_path_and(
 ) -> ::syn::Result<::syn::ExprPath> {
     let mut crate_path = None;
     attrs(attr_list, attr_name, |meta| {
-        let parse_crate_path = |tokens: ParseStream| -> ::syn::Result<Option<::syn::ExprPath>> {
-            match tokens.parse::<::syn::Expr>()? {
+        if meta.path.is_ident("crate_path") {
+            crate_path = list_or_name_value(meta.input, |expr| match expr {
                 ::syn::Expr::Path(path) => Ok(Some(path)),
                 _ => Err(meta.error("crate_path must be a module path")),
-            }
-        };
-        if meta.path.is_ident("crate_path") {
-            crate_path = list_or_name_value(meta.input, parse_crate_path)?;
+            })?;
             Ok(ControlFlow::Break(()))
         } else {
             with(meta)
@@ -206,15 +208,45 @@ pub fn crate_path_and(
 /// Parse `name = value` or `list()`, content.
 pub fn list_or_name_value<T>(
     stream: ParseStream,
-    parser: impl FnOnce(ParseStream) -> ::syn::Result<T>,
+    parser: impl FnOnce(::syn::Expr) -> ::syn::Result<T>,
 ) -> ::syn::Result<T> {
     if stream.peek(Token![=]) {
         _ = stream.parse::<Token![=]>()?;
-        parser(stream)
+        parser(stream.parse()?)
     } else {
         let content;
         parenthesized!(content in stream);
-        parser(&content)
+        parser(content.parse()?)
+    }
+}
+
+/// Get an ident from an expr.
+pub fn ident_from_expr(requester: &str) -> impl Fn(::syn::Expr) -> ::syn::Result<Ident> {
+    move |expr| match expr {
+        ::syn::Expr::Path(path) if path.qself.is_none() && path.path.get_ident().is_some() => {
+            Ok(path
+                .path
+                .segments
+                .into_iter()
+                .next()
+                .expect("path should have 1 segment")
+                .ident)
+        }
+        other => Err(::syn::Error::new_spanned(
+            other,
+            format!("{requester} expects an ident"),
+        )),
+    }
+}
+
+/// Get an ident from an expr.
+pub fn path_from_expr(requester: &str) -> impl Fn(::syn::Expr) -> ::syn::Result<::syn::Path> {
+    move |expr| match expr {
+        ::syn::Expr::Path(path) if path.qself.is_none() => Ok(path.path),
+        other => Err(::syn::Error::new_spanned(
+            other,
+            format!("{requester} expects a path"),
+        )),
     }
 }
 
