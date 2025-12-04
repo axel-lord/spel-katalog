@@ -14,6 +14,13 @@ pub enum MemberRef<'i> {
     Idx(usize),
 }
 
+impl<'i> MemberRef<'i> {
+    /// If `ident` is some reference it, otherwise use `idx`.
+    pub fn from_ident_or(ident: Option<&'i ::syn::Ident>, idx: usize) -> Self {
+        Self::from(ident.ok_or(idx))
+    }
+}
+
 impl Display for MemberRef<'_> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
         match self {

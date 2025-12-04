@@ -87,43 +87,51 @@ pub trait IntoFields {
 }
 
 /// Apply a field as a delta updating the current value.
-pub trait FieldDelta
-where
-    Self: IntoFields,
-{
+pub trait FieldDelta {
+    /// Field delta which may be applied.
+    type FieldDelta;
+
     /// Apply a single field as a change to self.
-    fn delta(&mut self, delta: Self::Field);
+    fn delta(&mut self, delta: Self::FieldDelta);
 }
 
 /// Trait for structs providing an indexing enum to index fields.
-pub trait FieldsIdx
-where
-    for<'this> &'this Self: IntoFields,
-{
+pub trait FieldsIdx {
     /// Type to index fields with.
     type FieldIdx;
 
+    /// Type for field reference.
+    type FieldRef<'this>
+    where
+        Self: 'this;
+
     /// Get a field by index.
-    fn get(&self, idx: Self::FieldIdx) -> <&Self as IntoFields>::Field;
+    fn get(&self, idx: Self::FieldIdx) -> Self::FieldRef<'_>;
 }
 
 /// Trait for structs providing an indexing enum to index fields mutably.
 pub trait FieldsIdxMut
 where
-    for<'this> &'this Self: IntoFields,
-    for<'this> &'this mut Self: IntoFields,
     Self: FieldsIdx,
 {
+    /// Type for field reference.
+    type FieldMut<'this>
+    where
+        Self: 'this;
+
     /// Get a mut field by index.
-    fn get_mut(&mut self, idx: Self::FieldIdx) -> <&mut Self as IntoFields>::Field;
+    fn get_mut(&mut self, idx: Self::FieldIdx) -> Self::FieldMut<'_>;
 }
 
 /// Collection trait for all struct field access traits.
 pub trait Fields
 where
-    for<'this> &'this Self: IntoFields,
-    for<'this> &'this mut Self: IntoFields,
-    Self: IntoFields + FieldsIdx + FieldsIdxMut + FieldDelta,
+    Self: IntoFields
+        + FieldsIdx
+        + FieldsIdxMut
+        + FieldDelta<FieldDelta = <Self as IntoFields>::Field>,
+    for<'this> &'this Self: IntoFields<Field = <Self as FieldsIdx>::FieldRef<'this>>,
+    for<'this> &'this mut Self: IntoFields<Field = <Self as FieldsIdxMut>::FieldMut<'this>>,
 {
     /// Get references to fields.
     #[inline]

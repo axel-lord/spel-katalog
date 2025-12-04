@@ -104,7 +104,7 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
                 },
             )?;
 
-            let member = MemberRef::from(field.ident.as_ref().ok_or(i));
+            let member = MemberRef::from_ident_or(field.ident.as_ref(), i);
 
             let field_name = field
                 .ident
@@ -266,6 +266,7 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
             #[automatically_derived]
             impl #crate_path::FieldsIdx for #ident {
                 type FieldIdx = #fields_idx_name;
+                type FieldRef<#lt> = #fields_ref_name<#lt>;
 
                 fn get(&self, idx: Self::FieldIdx) -> #fields_ref_name<'_> {
                     let #ident #expansion = self;
@@ -279,6 +280,7 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
 
             #[automatically_derived]
             impl #crate_path::FieldsIdxMut for #ident {
+                type FieldMut<#lt> = #fields_mut_name<#lt>;
 
                 fn get_mut(&mut self, idx: Self::FieldIdx) -> #fields_mut_name<'_> {
                     let #ident #expansion = self;
@@ -292,7 +294,8 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
 
             #[automatically_derived]
             impl #crate_path::FieldDelta for #ident {
-                fn delta(&mut self, delta: Self::Field) {
+                type FieldDelta = #into_fields_name;
+                fn delta(&mut self, delta: Self::FieldDelta) {
                     match delta {
                         #(
                         #into_fields_name::#variant_names(value) => self.#field_members = value,
