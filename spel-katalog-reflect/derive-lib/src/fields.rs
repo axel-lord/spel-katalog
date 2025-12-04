@@ -32,12 +32,24 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
         })
     })?;
 
+    let ident = &item.ident;
+    let variance = get::xor_hash((
+        &into_fields_name,
+        &fields_ref_name,
+        &fields_mut_name,
+        &item.ident,
+        item.fields.len(),
+    ));
+
     let is_fields_public = into_fields_name.is_some();
     let is_fields_ref_public = fields_ref_name.is_some();
     let is_fields_mut_public = fields_mut_name.is_some();
-    let into_fields_name = into_fields_name.unwrap_or_else(|| format_ident!("__IntoField"));
-    let fields_ref_name = fields_ref_name.unwrap_or_else(|| format_ident!("__FieldsRef"));
-    let fields_mut_name = fields_mut_name.unwrap_or_else(|| format_ident!("__FieldsMut"));
+    let into_fields_name =
+        into_fields_name.unwrap_or_else(|| format_ident!("__{ident}IntoField{variance}"));
+    let fields_ref_name =
+        fields_ref_name.unwrap_or_else(|| format_ident!("__{ident}FieldsRef{variance}"));
+    let fields_mut_name =
+        fields_mut_name.unwrap_or_else(|| format_ident!("__{ident}FieldsMut{variance}"));
 
     let mut fields_variants = TokenStream::default();
     let mut fields_ref_variants = TokenStream::default();
@@ -47,13 +59,7 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
     let mut field_names = Vec::new();
     let mut variant_names = Vec::new();
 
-    let lt_variance = get::xor_hash((
-        &into_fields_name,
-        &fields_ref_name,
-        &fields_mut_name,
-        &item.ident,
-    ));
-    let lt = ::syn::Lifetime::new(&format!("'_lt_{lt_variance}"), Span::call_site());
+    let lt = ::syn::Lifetime::new(&format!("'_lt_{variance}"), Span::call_site());
 
     item.fields
         .iter()
@@ -133,7 +139,6 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
         })?;
 
     let vis = &item.vis;
-    let ident = &item.ident;
     let doc = format!(
         "[IntoFields::Field][{}::IntoFields::Field] enum for {ident}",
         crate_path.to_token_stream()
