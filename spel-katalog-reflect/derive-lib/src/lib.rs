@@ -40,6 +40,7 @@ mod ext;
 mod fields;
 mod from_str;
 mod get;
+mod intermediate;
 mod narrow;
 mod proxy;
 mod soft_err;

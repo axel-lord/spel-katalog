@@ -10,6 +10,7 @@ use ::syn::Ident;
 use crate::{
     ext::{BoolExt, ResultExt},
     get::{self, attrl, match_parsed_attr},
+    intermediate::MemberRef,
 };
 
 /// Implement `Proxy` for a struct.
@@ -103,10 +104,7 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
                 },
             )?;
 
-            let member = field
-                .ident
-                .as_ref()
-                .map_or_else(|| i.to_token_stream(), |ident| ident.to_token_stream());
+            let member = MemberRef::from(field.ident.as_ref().ok_or(i));
 
             let field_name = field
                 .ident
