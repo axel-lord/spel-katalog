@@ -19,6 +19,7 @@ pub fn variants(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
     Ok(quote! {
         const _: () = {
 
+        #[automatically_derived]
         unsafe impl #crate_path::Variants for #ident {
             const VARIANTS: &[Self] = &[#(Self::#variants),*];
 

@@ -149,6 +149,7 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
         .map_either(|_| {
             quote! {
                 #[doc = #doc]
+                #[automatically_derived]
                 #vis enum #into_fields_name {
                     #fields_variants
                 }
@@ -161,6 +162,7 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
         .map_either(|_| {
             quote! {
                 #[doc = #doc]
+                #[automatically_derived]
                 #vis enum #fields_ref_name<#lt> {
                     #fields_ref_variants
                 }
@@ -173,6 +175,7 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
         .map_either(|_| {
             quote! {
                 #[doc = #doc]
+                #[automatically_derived]
                 #vis enum #fields_mut_name<#lt> {
                     #fields_mut_variants
                 }
@@ -188,6 +191,8 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
             #fields_ref_inner
             #fields_mut_inner
             #into_fields_inner
+
+            #[automatically_derived]
             impl #crate_path::IntoFields for #ident {
                 type Field = #into_fields_name;
                 type IntoFields = [Self::Field; #field_count];
@@ -198,6 +203,7 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
                 }
             }
 
+            #[automatically_derived]
             impl<#lt> #crate_path::IntoFields for &#lt #ident {
                 type Field = #fields_ref_name<#lt>;
                 type IntoFields = [Self::Field; #field_count];
@@ -208,6 +214,7 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
                 }
             }
 
+            #[automatically_derived]
             impl<#lt> #crate_path::IntoFields for &#lt mut #ident {
                 type Field = #fields_mut_name<#lt>;
                 type IntoFields = [Self::Field; #field_count];
@@ -218,6 +225,7 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
                 }
             }
 
+            #[automatically_derived]
             impl #crate_path::FieldDelta for #ident {
                 fn delta(&mut self, delta: Self::Field) {
                     match delta {

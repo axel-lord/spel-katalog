@@ -20,6 +20,7 @@ pub fn cycle(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
     Ok(quote! {
         const _: () = {
 
+        #[automatically_derived]
         unsafe impl #crate_path::Cycle for #ident {
             fn cycle_next(&self) -> Self {
                 match self {#(

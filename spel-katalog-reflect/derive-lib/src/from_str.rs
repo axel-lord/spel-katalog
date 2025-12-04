@@ -83,6 +83,7 @@ pub fn from_str(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
 
     let try_from = impl_try_from.then(|| {
         quote! {
+            #[automatically_derived]
             impl ::core::convert::TryFrom<&str> for #ident
             {
                 type Error = #crate_path::UnknownVariant;
@@ -98,6 +99,7 @@ pub fn from_str(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
     Ok(quote! {
         const _:() = {
 
+        #[automatically_derived]
         impl #crate_path::FromStr for #ident {
             type Err = #crate_path::UnknownVariant;
 

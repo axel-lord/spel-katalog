@@ -95,6 +95,7 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
             let proxy = quote! {
                 #[doc = #doc]
                 #[repr(transparent)]
+                #[automatically_derived]
                 #vis struct #proxy_name(#ident);
             };
             proxy_name_ = Some(proxy_name);
@@ -105,6 +106,7 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
 
     let deref = deref_to_proxy.then(|| {
         quote! {
+            #[automatically_derived]
             impl ::core::ops::Deref for #ident {
                 type Target = #proxy_name;
 
@@ -118,6 +120,7 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
 
     let as_ref = as_ref_proxy.then(|| {
         quote! {
+            #[automatically_derived]
             impl ::core::convert::AsRef<#proxy_name> for #ident {
                 #[inline]
                 fn as_ref(&self) -> &#proxy_name {
@@ -134,10 +137,12 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
             #deref
             #as_ref
 
+            #[automatically_derived]
             impl #proxy_name {
                 #getters
             }
 
+            #[automatically_derived]
             impl ::core::convert::AsRef<#ident> for #proxy_name {
                 #[inline]
                 fn as_ref(&self) -> &#ident {
@@ -145,6 +150,7 @@ pub fn proxy(item: ::syn::ItemStruct) -> ::syn::Result<TokenStream> {
                 }
             }
 
+            #[automatically_derived]
             impl #crate_path::Proxy for #ident {
                 type Proxy = #proxy_name;
 

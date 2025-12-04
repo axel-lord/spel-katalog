@@ -38,6 +38,7 @@ pub fn as_str(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
 
     let as_ref = impl_as_ref.then(|| {
         quote! {
+            #[automatically_derived]
             impl ::core::convert::AsRef<str> for #ident {
                 fn as_ref(&self) -> &str {
                     <Self as #crate_path::AsStr>::as_str(self)
@@ -48,6 +49,7 @@ pub fn as_str(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
 
     let display = impl_display.then(|| {
         quote! {
+            #[automatically_derived]
             impl ::core::fmt::Display for #ident {
                 fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
                     f.write_str(<Self as #crate_path::AsStr>::as_str(self))
@@ -59,6 +61,7 @@ pub fn as_str(item: ::syn::ItemEnum) -> ::syn::Result<TokenStream> {
     Ok(quote! {
         const _: () = {
 
+        #[automatically_derived]
         impl #crate_path::AsStr for #ident {
             fn as_str<'__a>(&self) -> &'__a str {
                 match self {#(
