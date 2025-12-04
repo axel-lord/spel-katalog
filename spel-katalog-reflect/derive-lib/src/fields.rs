@@ -2,7 +2,7 @@
 
 use ::std::borrow::Cow;
 
-use ::convert_case::ccase;
+use ::convert_case::{Case, Casing, ccase};
 use ::proc_macro2::{Span, TokenStream};
 use ::quote::{ToTokens, format_ident, quote};
 use ::syn::Ident;
@@ -59,7 +59,8 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
     let mut field_names = Vec::new();
     let mut variant_names = Vec::new();
 
-    let lt = ::syn::Lifetime::new(&format!("'_lt_{variance}"), Span::call_site());
+    let lt_name = ident.to_string().to_case(Case::Snake);
+    let lt = ::syn::Lifetime::new(&format!("'__{lt_name}_{variance}"), Span::call_site());
 
     item.fields
         .iter()
@@ -194,6 +195,26 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
                 fn into_fields(self) -> Self::IntoFields {
                     let Self { #(#field_names),* } = self;
                     [#(#into_fields_name::#variant_names(#field_names)),*]
+                }
+            }
+
+            impl<#lt> #crate_path::IntoFields for &#lt #ident {
+                type Field = #fields_ref_name<#lt>;
+                type IntoFields = [Self::Field; #field_count];
+
+                fn into_fields(self) -> Self::IntoFields {
+                    let #ident { #(#field_names),* } = self;
+                    [#(#fields_ref_name::#variant_names(#field_names)),*]
+                }
+            }
+
+            impl<#lt> #crate_path::IntoFields for &#lt mut #ident {
+                type Field = #fields_mut_name<#lt>;
+                type IntoFields = [Self::Field; #field_count];
+
+                fn into_fields(self) -> Self::IntoFields {
+                    let #ident { #(#field_names),* } = self;
+                    [#(#fields_mut_name::#variant_names(#field_names)),*]
                 }
             }
 
