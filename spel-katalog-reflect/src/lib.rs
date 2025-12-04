@@ -130,8 +130,12 @@ where
         + FieldsIdx
         + FieldsIdxMut
         + FieldDelta<FieldDelta = <Self as IntoFields>::Field>,
-    for<'this> &'this Self: IntoFields<Field = <Self as FieldsIdx>::FieldRef<'this>>,
-    for<'this> &'this mut Self: IntoFields<Field = <Self as FieldsIdxMut>::FieldMut<'this>>,
+    <Self as FieldsIdx>::FieldIdx: AsRef<<Self as FieldsIdx>::FieldIdx>,
+    <Self as IntoFields>::Field: AsRef<<Self as FieldsIdx>::FieldIdx>,
+    for<'f> <Self as FieldsIdx>::FieldRef<'f>: AsRef<<Self as FieldsIdx>::FieldIdx>,
+    for<'f> <Self as FieldsIdxMut>::FieldMut<'f>: AsRef<<Self as FieldsIdx>::FieldIdx>,
+    for<'f> &'f Self: IntoFields<Field = <Self as FieldsIdx>::FieldRef<'f>>,
+    for<'f> &'f mut Self: IntoFields<Field = <Self as FieldsIdxMut>::FieldMut<'f>>,
 {
     /// Get references to fields.
     #[inline]

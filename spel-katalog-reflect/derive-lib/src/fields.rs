@@ -149,6 +149,17 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
                     #variant_names(#field_types),
                     )*
                 }
+
+                #[automatically_derived]
+                impl ::core::convert::AsRef<#fields_idx_name> for #into_fields_name {
+                    fn as_ref(&self) -> &#fields_idx_name {
+                        match self {
+                            #(
+                            Self:: #variant_names(..) => &#fields_idx_name::#variant_names,
+                            )*
+                        }
+                    }
+                }
             }
         })
         .split_result();
@@ -169,6 +180,17 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
                     #variant_names(&#lt #field_types),
                     )*
                 }
+
+                #[automatically_derived]
+                impl ::core::convert::AsRef<#fields_idx_name> for #fields_ref_name<'_> {
+                    fn as_ref(&self) -> &#fields_idx_name {
+                        match self {
+                            #(
+                            Self:: #variant_names(..) => &#fields_idx_name::#variant_names,
+                            )*
+                        }
+                    }
+                }
             }
         })
         .split_result();
@@ -188,6 +210,17 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
                     #[doc = #variant_docs]
                     #variant_names(&#lt mut #field_types),
                     )*
+                }
+
+                #[automatically_derived]
+                impl ::core::convert::AsRef<#fields_idx_name> for #fields_mut_name<'_> {
+                    fn as_ref(&self) -> &#fields_idx_name {
+                        match self {
+                            #(
+                            Self:: #variant_names(..) => &#fields_idx_name::#variant_names,
+                            )*
+                        }
+                    }
                 }
             }
         })
@@ -214,6 +247,13 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
                     #[doc = #variant_docs]
                     #variant_names,
                     )*
+                }
+
+                #[automatically_derived]
+                impl ::core::convert::AsRef<#fields_idx_name> for #fields_idx_name {
+                    fn as_ref(&self) -> &#fields_idx_name {
+                        self
+                    }
                 }
             }
         })
