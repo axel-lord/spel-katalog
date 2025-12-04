@@ -123,7 +123,7 @@ pub trait Fields
 where
     for<'this> &'this Self: IntoFields,
     for<'this> &'this mut Self: IntoFields,
-    Self: IntoFields + FieldsIdx + FieldsIdxMut,
+    Self: IntoFields + FieldsIdx + FieldsIdxMut + FieldDelta,
 {
     /// Get references to fields.
     #[inline]
