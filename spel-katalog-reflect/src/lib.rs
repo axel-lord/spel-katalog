@@ -1,7 +1,7 @@
 #![cfg_attr(not(test), no_std)]
 //! Reflection utilities.
 
-use ::core::fmt::Display;
+use ::core::{fmt::Display, hash::Hash};
 
 #[doc(inline)]
 pub use ::core::str::FromStr;
@@ -124,30 +124,56 @@ where
 }
 
 /// Collection trait for all struct field access traits.
+///
+/// Should be derived.
 pub trait Fields
 where
-    Self: IntoFields
-        + FieldsIdx
-        + FieldsIdxMut
-        + FieldDelta<FieldDelta = <Self as IntoFields>::Field>,
-    <Self as FieldsIdx>::FieldIdx: AsRef<<Self as FieldsIdx>::FieldIdx>,
-    <Self as IntoFields>::Field: AsRef<<Self as FieldsIdx>::FieldIdx>,
-    for<'f> <Self as FieldsIdx>::FieldRef<'f>: AsRef<<Self as FieldsIdx>::FieldIdx>,
-    for<'f> <Self as FieldsIdxMut>::FieldMut<'f>: AsRef<<Self as FieldsIdx>::FieldIdx>,
-    for<'f> &'f Self: IntoFields<Field = <Self as FieldsIdx>::FieldRef<'f>>,
-    for<'f> &'f mut Self: IntoFields<Field = <Self as FieldsIdxMut>::FieldMut<'f>>,
+    for<'f> Self: 'f
+        + IntoFields<Field = <Self as Fields>::Field>
+        + FieldsIdx<
+            FieldIdx = <Self as Fields>::FieldIdx,
+            FieldRef<'f> = <Self as Fields>::FieldRef<'f>,
+        >
+        + FieldsIdxMut<FieldMut<'f> = <Self as Fields>::FieldMut<'f>>
+        + FieldDelta<FieldDelta = <Self as Fields>::Field>,
 {
+    /// An enum which may be any field of struct.
+    type Field: AsRef<<Self as Fields>::FieldIdx>;
+
+    /// Type used when indexing fields.
+    type FieldIdx: AsRef<<Self as Fields>::FieldIdx>
+        + AsStr
+        + FromStr
+        + Variants
+        + Cycle
+        + Copy
+        + Eq
+        + Ord
+        + Hash;
+
+    /// A reference to a field.
+    type FieldRef<'f>: AsRef<<Self as Fields>::FieldIdx>;
+
+    /// A mutable reference to a field.
+    type FieldMut<'f>: AsRef<<Self as Fields>::FieldIdx>;
+
+    /// Container of references to fields.
+    type FieldsRef<'f>: IntoIterator<Item = <Self as Fields>::FieldRef<'f>>
+        + AsRef<[<Self as FieldsIdx>::FieldRef<'f>]>
+    where
+        Self: 'f;
+
+    /// Container of mutable references to fields.
+    type FieldsMut<'f>: IntoIterator<Item = <Self as Fields>::FieldMut<'f>>
+        + AsRef<[<Self as FieldsIdxMut>::FieldMut<'f>]>
+    where
+        Self: 'f;
+
     /// Get references to fields.
-    #[inline]
-    fn fields(&self) -> <&Self as IntoFields>::IntoFields {
-        self.into_fields()
-    }
+    fn fields(&self) -> <Self as Fields>::FieldsRef<'_>;
 
     /// Get mutable references to fields.
-    #[inline]
-    fn fields_mut(&mut self) -> <&mut Self as IntoFields>::IntoFields {
-        self.into_fields()
-    }
+    fn fields_mut(&mut self) -> <Self as Fields>::FieldsMut<'_>;
 }
 
 #[cfg(test)]

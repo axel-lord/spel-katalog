@@ -239,7 +239,7 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
                 #[derive(
                     Debug, Clone, Copy, PartialEq, Eq, PartialOrd,
                     Ord, Hash, #crate_path::Variants, #crate_path::Cycle,
-                    #crate_path::AsStr
+                    #crate_path::AsStr, #crate_path::FromStr
                 )]
                 #[reflect(crate_path(#crate_path))]
                 #vis enum #fields_idx_name {
@@ -345,7 +345,24 @@ pub fn fields(item: ::syn::ItemStruct) -> ::syn::Result<::proc_macro2::TokenStre
             }
 
             #[automatically_derived]
-            impl #crate_path::Fields for #ident {}
+            impl #crate_path::Fields for #ident {
+                type Field = #into_fields_name;
+                type FieldIdx = #fields_idx_name;
+                type FieldRef<#lt> = #fields_ref_name<#lt>;
+                type FieldMut<#lt> = #fields_mut_name<#lt>;
+                type FieldsRef<#lt> = [#fields_ref_name<#lt>; #field_count];
+                type FieldsMut<#lt> = [#fields_mut_name<#lt>; #field_count];
+
+                #[inline]
+                fn fields(&self) -> <Self as Fields>::FieldsRef<'_> {
+                    self.into_fields()
+                }
+
+                #[inline]
+                fn fields_mut(&mut self) -> <Self as Fields>::FieldsMut<'_> {
+                    self.into_fields()
+                }
+            }
         };
     })
 }
