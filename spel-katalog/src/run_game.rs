@@ -10,7 +10,7 @@ use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::status;
 use ::spel_katalog_formats::AdditionalConfig;
 use ::spel_katalog_info::formats;
-use ::spel_katalog_settings::{ConfigDir, FirejailExe, LutrisExe, Network, YmlDir};
+use ::spel_katalog_settings::{ConfigDir, FirejailExe, LutrisExe, Network, OnRun, YmlDir};
 use ::spel_katalog_sink::SinkIdentity;
 
 use crate::{App, Message, QuickMessage, Safety, oneshot_broadcast::oneshot_broadcast};
@@ -105,9 +105,14 @@ impl App {
 
         let (send_open, recv_open) = oneshot_broadcast();
 
-        let open_process_list = Task::future(async {
+        let to_open = *self.settings.get::<OnRun>();
+        let open_process_list = Task::future(async move {
             match recv_open.recv_async().await {
-                Some(_) => Some(Message::Quick(QuickMessage::OpenProcessInfo)),
+                Some(_) => match to_open {
+                    OnRun::Process => Some(Message::Quick(QuickMessage::OpenProcessInfo)),
+                    OnRun::Info => Some(Message::Quick(QuickMessage::OpenGameInfo)),
+                    OnRun::None => None,
+                },
                 None => {
                     ::log::error!("could not receive open signel through oneshot");
                     None

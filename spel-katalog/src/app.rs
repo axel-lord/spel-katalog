@@ -51,6 +51,7 @@ pub(crate) struct App {
     pub dialog_tx: ::flume::Sender<DialogBuilder>,
     pub terminal: ::spel_katalog_terminal::Terminal,
     pub docs_viewer: ::spel_katalog_lua_docs::DocsViewer,
+    pub process_view_semaphore: Arc<::smol::lock::Semaphore>,
 }
 
 /// Virtual table passed to lua.
@@ -138,6 +139,7 @@ impl Initial {
         let (dialog_tx, dialog_rx) = ::flume::bounded(64);
         let terminal = ::spel_katalog_terminal::Terminal::default().with_limit(256);
         let docs_viewer = Default::default();
+        let process_view_semaphore = Arc::new(::smol::lock::Semaphore::new(1));
 
         let (sink_builder, terminal_rx) = if show_terminal {
             let (terminal_tx, terminal_rx) = ::flume::unbounded();
@@ -161,6 +163,7 @@ impl Initial {
             view,
             windows,
             docs_viewer,
+            process_view_semaphore,
         };
 
         Ok(Self {
@@ -289,12 +292,12 @@ impl App {
         })
     }
 
-    pub async fn collect_process_info() -> Task<Message> {
+    pub async fn collect_process_info() -> Option<Message> {
         match process_info::ProcessInfo::open().await {
-            Ok(summary) => Task::done(Message::ProcessInfo(summary)),
+            Ok(summary) => Some(Message::ProcessInfo(summary)),
             Err(err) => {
                 ::log::error!("whilst collecting info\n{err}");
-                Task::none()
+                None
             }
         }
     }
