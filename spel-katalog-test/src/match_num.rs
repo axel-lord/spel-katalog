@@ -250,7 +250,7 @@ impl State {
     }
 }
 
-impl ::iced_winit::Program for State {
+impl iced_program::Program for State {
     type Message = Msg;
 
     type Theme = Theme;

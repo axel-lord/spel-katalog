@@ -24,7 +24,7 @@ pub fn scroll<'a, M, R>(
     element: impl Into<Element<'a, M, ::iced_core::Theme, R>>,
 ) -> Scrollable<'a, M, ::iced_core::Theme, R>
 where
-    R: ::iced_core::Renderer,
+    R: ::iced_core::Renderer + iced_core::text::Renderer,
 {
     scrollable(element).style(|theme, status| {
         let scrollable::Style {
