@@ -1,0 +1,66 @@
+//! Derive macros used for reflection.
+
+use ::proc_macro::TokenStream;
+
+/// Derive implementation of `Variants` for an enum.
+#[proc_macro_derive(Variants, attributes(variants, reflect))]
+pub fn derive_variants(item: TokenStream) -> TokenStream {
+    ::spel_katalog_reflect_derive_lib::derive_variants(item.into()).into()
+}
+
+/// Derive implementation of `Cycle` for an enum.
+#[proc_macro_derive(Cycle, attributes(cycle, reflect))]
+pub fn derive_cycle(item: TokenStream) -> TokenStream {
+    ::spel_katalog_reflect_derive_lib::derive_cycle(item.into()).into()
+}
+
+/// Derive implementation of `AsStr` for an enum.
+///
+/// With the `as_ref` and `display` attributes `AsRef<str>` and `Display`
+/// will also be derived using `AsStr` implementation.
+#[proc_macro_derive(AsStr, attributes(as_str, reflect))]
+pub fn derive_as_str(item: TokenStream) -> TokenStream {
+    ::spel_katalog_reflect_derive_lib::derive_as_str(item.into()).into()
+}
+
+/// Derive implementation of `FromStr` for an enum.
+///
+/// With the `try_from` attribute `TryFrom<&str>`
+/// will also be derived using `FromStr` implementation.
+#[proc_macro_derive(FromStr, attributes(from_str, reflect))]
+pub fn derive_from_str(item: TokenStream) -> TokenStream {
+    ::spel_katalog_reflect_derive_lib::derive_from_str(item.into()).into()
+}
+
+/// Derive implementation of `proxy` for an enum.
+///
+/// With the `option` or `no_option` attribute on struct or fields, set either
+/// all fields or single field as being/not being an option.
+///
+/// Using the `getter` attribute on the struct or a field will
+/// generate getters for struct fields where option fields get a backing `OnceLock`
+/// for their default values (and as such require the type is sync). `no_getter`
+/// may be used to disable getters for a specific field.
+///
+/// The `default` attribute in `name = value`, or `list(value)` form, can be used to set
+/// an expression to use instead of `Default::default()`.
+///
+/// `some_pattern` in `name = value`, or `list(value)` form, replaces the path part of
+/// matching `Some(..)` for option fields. This combined with the way only the first type
+/// argument is used for the returned type may be used to allow types other than `Option`
+/// for fields, such as `Result`.
+///
+/// Using `proxy_name` as a `list(value)` or `name = value` attribute exposes the proxy struct
+/// with the given name.
+///
+/// `[no_]deref` and `[no_]as_ref` implement `Deref` and/or `AsRef` with the proxy as target.
+#[proc_macro_derive(Proxy, attributes(proxy, reflect))]
+pub fn derive_proxy(item: TokenStream) -> TokenStream {
+    ::spel_katalog_reflect_derive_lib::derive_proxy(item.into()).into()
+}
+
+/// Derive implementation of `into_fields` for an enum.
+#[proc_macro_derive(Fields, attributes(fields, reflect))]
+pub fn derive_fields(item: TokenStream) -> TokenStream {
+    ::spel_katalog_reflect_derive_lib::derive_fields(item.into()).into()
+}
