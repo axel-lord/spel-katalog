@@ -1,6 +1,6 @@
 //! Common widgets.
 
-use ::iced_core::{Alignment::Center, Color, Element};
+use ::iced_core::{Alignment::Center, Background, Color, Element};
 use ::iced_widget::{Column, Row, Scrollable, scrollable};
 
 /// Create a column.
@@ -32,22 +32,31 @@ where
             mut vertical_rail,
             mut horizontal_rail,
             gap,
+            auto_scroll,
         } = scrollable::default(theme, status);
 
         vertical_rail.background = None;
         horizontal_rail.background = None;
 
+        let scale_bg = |bg: Background| -> Background {
+            match bg {
+                Background::Color(clr) => Background::Color(clr.scale_alpha(0.5)),
+                other => other,
+            }
+        };
+
         match status {
-            scrollable::Status::Active => {
-                vertical_rail.scroller.color = Color::TRANSPARENT;
-                horizontal_rail.scroller.color = Color::TRANSPARENT;
+            scrollable::Status::Active { .. } => {
+                vertical_rail.scroller.background = Background::Color(Color::TRANSPARENT);
+                horizontal_rail.scroller.background = Background::Color(Color::TRANSPARENT);
             }
             scrollable::Status::Hovered {
                 is_horizontal_scrollbar_hovered,
                 is_vertical_scrollbar_hovered,
+                ..
             } => {
-                vertical_rail.scroller.color = vertical_rail.scroller.color.scale_alpha(0.5);
-                horizontal_rail.scroller.color = horizontal_rail.scroller.color.scale_alpha(0.5);
+                vertical_rail.scroller.background = scale_bg(vertical_rail.scroller.background);
+                horizontal_rail.scroller.background = scale_bg(horizontal_rail.scroller.background);
                 _ = (
                     is_horizontal_scrollbar_hovered,
                     is_vertical_scrollbar_hovered,
@@ -56,6 +65,7 @@ where
             scrollable::Status::Dragged {
                 is_horizontal_scrollbar_dragged,
                 is_vertical_scrollbar_dragged,
+                ..
             } => {
                 _ = (
                     is_vertical_scrollbar_dragged,
@@ -69,6 +79,7 @@ where
             vertical_rail,
             horizontal_rail,
             gap,
+            auto_scroll,
         }
     })
 }

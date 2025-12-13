@@ -3,10 +3,7 @@ use ::std::{collections::HashMap, convert::identity, io::PipeReader, path::PathB
 use ::derive_more::IsVariant;
 use ::iced_core::{Alignment::Center, Length::Fill, window};
 use ::iced_runtime::Task;
-use ::iced_widget::{
-    self as widget, Row, horizontal_rule, horizontal_space, text, text_input, toggler, value,
-    vertical_space,
-};
+use ::iced_widget::{self as widget, Row, text, text_input, toggler, value};
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog_cli::Run;
 use ::spel_katalog_common::{OrRequest, StatusSender, w};

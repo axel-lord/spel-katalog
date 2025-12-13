@@ -372,7 +372,7 @@ impl State {
                     .spacing(3),
             )
             .push(widget::themer(
-                ::iced_core::Theme::SolarizedDark,
+                Some(::iced_core::Theme::SolarizedDark),
                 widget::text_editor(&self.script)
                     .highlight_with::<Highlighter>(
                         ::iced_highlighter::Settings {

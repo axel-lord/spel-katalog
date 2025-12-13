@@ -5,7 +5,7 @@ use ::std::sync::LazyLock;
 use ::derive_more::From;
 use ::iced_core::{Color, Length::Fill, alignment::Vertical};
 use ::iced_runtime::Task;
-use ::iced_widget::{self as widget, horizontal_space, rich_text, text::Span};
+use ::iced_widget::{self as widget, rich_text, text::Span};
 use ::indexmap::IndexMap;
 use ::tap::TryConv;
 use ::yaml_rust2::Yaml;
@@ -77,7 +77,7 @@ impl<S: AsRef<str>> Item<S> {
 fn indented<'a, M: 'a>(elem: impl Into<Element<'a, M>>) -> Element<'a, M> {
     widget::Row::new()
         .align_y(Vertical::Top)
-        .push(horizontal_space().width(20))
+        .push(widget::space().width(20))
         .push(elem)
         .into()
 }

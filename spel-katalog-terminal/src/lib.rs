@@ -10,6 +10,7 @@ use ::std::{
 use ::iced_core::{Alignment::Center, Length::Fill};
 use ::iced_runtime::Task;
 use ::iced_widget as widget;
+use ::spel_katalog_common::PushMaybe;
 use ::spel_katalog_common::w;
 use ::spel_katalog_sink::SinkIdentity;
 
@@ -478,7 +479,7 @@ impl Terminal {
             .padding(3)
             .spacing(3)
             .push(widget::themer(
-                ::iced_core::Theme::Dark,
+                Some(::iced_core::Theme::Dark),
                 w::scroll(
                     widget::container(
                         self.lines
@@ -486,7 +487,7 @@ impl Terminal {
                             .fold(widget::Column::new(), |column, line| {
                                 column.push(
                                     widget::Text::new(line.1.as_str())
-                                        .size(self.text_size)
+                                        .size(u32::from(self.text_size))
                                         .font(::iced_core::font::Font::MONOSPACE)
                                         .wrapping(self.wrap.into()),
                                 )
@@ -499,7 +500,7 @@ impl Terminal {
                 .anchor_bottom()
                 .height(Fill),
             ))
-            .push(widget::horizontal_rule(3))
+            .push(widget::rule::horizontal(3))
             .push(
                 widget::Row::new()
                     .align_y(Center)
@@ -526,7 +527,7 @@ impl Terminal {
                         )
                         .map(|idx| Message::SetCurrent { idx })
                     }))
-                    .push(widget::horizontal_space())
+                    .push(widget::space::horizontal())
                     .push("Size")
                     .push(
                         Element::from(

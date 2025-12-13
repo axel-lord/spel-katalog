@@ -4,16 +4,15 @@ use ::core::time::Duration;
 use ::std::{collections::HashSet, f32, io::Write};
 
 use ::clap::Parser;
-use ::iced_core::{Element, Length::Fill, Theme};
-use ::iced_futures::backend;
-use ::iced_renderer::{Compositor, Renderer};
-use ::iced_runtime::Task;
-use ::iced_widget::{self as widget, Button, Column, Row, button, horizontal_space, text};
-use ::iced_winit::program;
+use ::iced::{
+    Element,
+    Length::Fill,
+    Task, Theme,
+    widget::{self, Button, Column, Row, button, text},
+};
 use ::log::LevelFilter;
 use ::rand::{Rng, seq::SliceRandom};
 use ::tap::Tap;
-use iced_futures::Subscription;
 
 /// Cli
 #[derive(Debug, Parser)]
@@ -36,10 +35,6 @@ enum Msg {
     Fill,
     /// Reset board.
     Reset,
-    /// Window closed.
-    Close(::iced_core::window::Id),
-    /// Window opened.
-    Open(::iced_core::window::Id),
 }
 
 /// A game cell.
@@ -53,12 +48,7 @@ struct Cell {
 
 impl Cell {
     /// View cell.
-    pub fn view<'a, R: 'a + ::iced_core::text::Renderer>(
-        &'a self,
-        x: usize,
-        y: usize,
-        is_success: bool,
-    ) -> Button<'a, Msg, Theme, R> {
+    pub fn view<'a>(&'a self, x: usize, y: usize, is_success: bool) -> Button<'a, Msg> {
         button(
             if self.is_selected {
                 text(format!("[{}]", self.value))
@@ -93,8 +83,6 @@ struct State {
     dupe: String,
     /// Is selection success.
     is_success: bool,
-    /// Open windows.
-    windows: HashSet<::iced_core::window::Id>,
 }
 
 impl State {
@@ -190,33 +178,17 @@ impl State {
                     })
                 }
             }
-            Msg::Open(id) => {
-                self.windows.insert(id);
-                Task::none()
-            }
-            Msg::Close(id) => {
-                self.windows.remove(&id);
-
-                if self.windows.is_empty() {
-                    ::iced_runtime::exit()
-                } else {
-                    Task::none()
-                }
-            }
         }
     }
 
     /// View game board.
-    pub fn view<'a, R>(&'a self) -> Element<'a, Msg, Theme, R>
-    where
-        R: 'a + ::iced_core::Renderer + ::iced_core::text::Renderer,
-    {
+    pub fn view(&self) -> Element<'_, Msg> {
         self.cells
             .iter()
             .enumerate()
             .fold(
-                Column::<_, _, R>::new().padding(3).spacing(3).push(
-                    Row::<_, _, R>::new()
+                Column::new().padding(3).spacing(3).push(
+                    Row::new()
                         .width(Fill)
                         .push(
                             button("Fill")
@@ -233,7 +205,7 @@ impl State {
                                 .on_press_with(|| Msg::Wave(1.0))
                                 .style(widget::button::secondary),
                         )
-                        .push(horizontal_space()),
+                        .push(widget::space::horizontal()),
                 ),
                 |column, (y, cells)| {
                     column.push(
@@ -250,46 +222,6 @@ impl State {
     }
 }
 
-impl iced_program::Program for State {
-    type Message = Msg;
-
-    type Theme = Theme;
-
-    type Executor = backend::default::Executor;
-
-    type Renderer = Renderer;
-
-    type Flags = ();
-
-    fn new(_flags: Self::Flags) -> (Self, Task<Self::Message>) {
-        let (_, task) = ::iced_runtime::window::open(Default::default());
-        (Self::default(), task.map(Msg::Open))
-    }
-
-    fn title(&self, _window: ::iced_core::window::Id) -> String {
-        "Match Num".to_owned()
-    }
-
-    fn update(&mut self, message: Self::Message) -> Task<Self::Message> {
-        self.update(message)
-    }
-
-    fn view(
-        &self,
-        _window: ::iced_core::window::Id,
-    ) -> Element<'_, Self::Message, Self::Theme, Self::Renderer> {
-        self.view()
-    }
-
-    fn theme(&self, _window: ::iced_core::window::Id) -> Self::Theme {
-        Theme::Light
-    }
-
-    fn subscription(&self) -> Subscription<Self::Message> {
-        ::iced_runtime::window::close_events().map(Msg::Close)
-    }
-}
-
 /// Application entry.
 fn main() -> ::color_eyre::Result<()> {
     let Cli {} = Cli::parse();
@@ -300,7 +232,10 @@ fn main() -> ::color_eyre::Result<()> {
         .init();
     ::log::info!("log initialized");
 
-    program::run::<State, Compositor>(Default::default(), Default::default(), None, ())?;
+    ::iced::application(State::default, State::update, State::view)
+        .theme(|_: &State| Theme::Light)
+        .title(|_: &State| "Match Num".to_owned())
+        .run()?;
 
     Ok(())
 }

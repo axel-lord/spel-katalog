@@ -16,13 +16,12 @@ use ::iced_core::{
 use ::iced_highlighter::Highlighter;
 use ::iced_runtime::Task;
 use ::iced_widget::{
-    self as widget, button, horizontal_rule, horizontal_space,
+    self as widget, button,
     text_editor::{Action, Edit},
-    vertical_rule,
 };
 use ::image::ImageError;
 use ::open::that;
-use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, styling, w};
+use ::spel_katalog_common::{OrRequest, PushMaybe, StatusSender, async_status, status, styling, w};
 use ::spel_katalog_formats::AdditionalConfig;
 use ::spel_katalog_settings::{ConfigDir, CoverartDir, Settings, YmlDir};
 use ::tap::Pipe;
@@ -430,8 +429,8 @@ impl State {
                 self.additional.sandbox_root = self
                     .additional_roots_content
                     .lines()
-                    .filter(|line| !line.trim().is_empty())
-                    .map(|s| s.trim().to_owned())
+                    .filter(|line| !line.text.trim().is_empty())
+                    .map(|s| s.text.trim().to_owned())
                     .collect();
 
                 Task::none()
@@ -668,7 +667,7 @@ impl State {
             .align_y(Alignment::Start)
             .height(150)
             .push_maybe(thumb.map(|thumb| widget::image(thumb).width(150).height(150)))
-            .push_maybe(thumb.is_some().then(|| widget::vertical_rule(2)))
+            .push_maybe(thumb.is_some().then(|| widget::rule::vertical(2)))
             .push(
                 w::col()
                     .push(
@@ -676,11 +675,11 @@ impl State {
                             .push(widget::text(&game.name).width(Fill).align_x(Center))
                             .push(buttons),
                     )
-                    .push(horizontal_rule(2))
+                    .push(widget::rule::horizontal(2))
                     .push(
                         w::row()
                             .push(widget::text("Runner").font(Font::MONOSPACE))
-                            .push(vertical_rule(2))
+                            .push(widget::rule::horizontal(2))
                             .push(
                                 widget::value(&game.runner)
                                     .font(Font::MONOSPACE)
@@ -688,11 +687,11 @@ impl State {
                                     .width(Fill),
                             ),
                     )
-                    .push(horizontal_rule(2))
+                    .push(widget::rule::horizontal(2))
                     .push(
                         w::row()
                             .push(widget::text("Slug  ").font(Font::MONOSPACE))
-                            .push(vertical_rule(2))
+                            .push(widget::rule::vertical(2))
                             .push(
                                 widget::value(&game.slug)
                                     .font(Font::MONOSPACE)
@@ -700,11 +699,11 @@ impl State {
                                     .width(Fill),
                             ),
                     )
-                    .push(horizontal_rule(2))
+                    .push(widget::rule::horizontal(2))
                     .push(
                         w::row()
                             .push(widget::text("Id    ").font(Font::MONOSPACE))
-                            .push(vertical_rule(2))
+                            .push(widget::rule::vertical(2))
                             .push(
                                 widget::value(id)
                                     .font(Font::MONOSPACE)
@@ -744,7 +743,7 @@ impl State {
                 .into_iter()
                 .fold(w::row(), |row, btn| row.push(btn.padding(3))),
             )
-            .push(horizontal_rule(2))
+            .push(widget::rule::horizontal(2))
             .push(w::scroll(
                 widget::Column::new()
                     .spacing(3)
@@ -762,7 +761,7 @@ impl State {
                             .push_maybe(iter.next())
                             .extend(
                                 iter.flat_map(|row| {
-                                    [widget::horizontal_rule(2).into(), row.into()]
+                                    [widget::rule::horizontal(2).into(), row.into()]
                                 }),
                             )
                             .pipe(widget::container)
@@ -772,13 +771,16 @@ impl State {
                             .into()
                     })
                     .push(
-                        w::row().push("Additional").push(horizontal_space()).push(
-                            button("Save")
-                                .padding(3)
-                                .on_press(OrRequest::Message(Message::SaveAdditional)),
-                        ),
+                        w::row()
+                            .push("Additional")
+                            .push(widget::space::horizontal())
+                            .push(
+                                button("Save")
+                                    .padding(3)
+                                    .on_press(OrRequest::Message(Message::SaveAdditional)),
+                            ),
                     )
-                    .push(horizontal_rule(2))
+                    .push(widget::rule::horizontal(2))
                     .push("Sandbox Roots")
                     .push(
                         widget::text_editor(&self.additional_roots_content)
@@ -796,11 +798,11 @@ impl State {
                             .map(Message::UpdateAttrs)
                             .map(OrRequest::Message),
                     )
-                    .push(horizontal_rule(2))
+                    .push(widget::rule::horizontal(2))
                     .push(
                         w::row()
                             .push(widget::container("Game Yml").padding(3))
-                            .push(widget::horizontal_space())
+                            .push(widget::space::horizontal())
                             .push(
                                 button("Exe")
                                     .padding(3)
@@ -815,7 +817,7 @@ impl State {
                             ),
                     )
                     .push(widget::themer(
-                        ::iced_core::Theme::SolarizedDark,
+                        Some(::iced_core::Theme::SolarizedDark),
                         widget::text_editor(&self.content)
                             .highlight_with::<Highlighter>(
                                 ::iced_highlighter::Settings {
@@ -827,7 +829,7 @@ impl State {
                             .on_action(|action| action.pipe(Message::from).pipe(OrRequest::Message))
                             .padding(6),
                     ))
-                    .push(horizontal_space().width(0)),
+                    .push(widget::space::horizontal().width(0)),
             ))
             .into()
     }

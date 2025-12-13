@@ -3,7 +3,7 @@
 use ::core::mem;
 
 use ::iced_runtime::Task;
-use ::iced_widget::{self as widget, horizontal_space};
+use ::iced_widget::{self as widget, space};
 use ::spel_katalog_common::w;
 
 use crate::Element;
@@ -81,7 +81,7 @@ impl State {
                     .push(key.as_str())
                     .push("=")
                     .push(value.as_str())
-                    .push(horizontal_space())
+                    .push(space::horizontal())
                     .push(
                         widget::button("Edit")
                             .padding(3)

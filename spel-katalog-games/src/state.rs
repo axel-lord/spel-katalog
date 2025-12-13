@@ -475,7 +475,7 @@ impl State {
                         .into()
                 }),
             ))
-            .id(widget::scrollable::Id::new("games-view"))
+            .id(widget::Id::new("games-view"))
             .into()
         })
         .pipe(Element::from)
