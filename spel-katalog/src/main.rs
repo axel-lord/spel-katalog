@@ -55,18 +55,8 @@ fn api_docs() -> ::color_eyre::Result<()> {
         Close(::iced_core::window::Id),
     }
 
-    impl ::iced_winit::Program for State {
-        type Message = Msg;
-
-        type Theme = ::iced_core::Theme;
-
-        type Executor = ::iced_futures::backend::default::Executor;
-
-        type Renderer = ::iced_renderer::Renderer;
-
-        type Flags = ();
-
-        fn new(_flags: Self::Flags) -> (Self, iced_runtime::Task<Self::Message>) {
+    impl State {
+        fn new() -> (Self, iced_runtime::Task<Msg>) {
             let (_, task) = ::iced_runtime::window::open(Default::default());
             (Self::default(), task.map(Msg::Open))
         }
@@ -75,7 +65,7 @@ fn api_docs() -> ::color_eyre::Result<()> {
             "Lua Api Docs".to_owned()
         }
 
-        fn update(&mut self, message: Self::Message) -> iced_runtime::Task<Self::Message> {
+        fn update(&mut self, message: Msg) -> iced_runtime::Task<Msg> {
             match message {
                 Msg::DocsViewer(id, message) => {
                     if let Some(viewer) = self.windows.get_mut(&id) {
@@ -101,10 +91,7 @@ fn api_docs() -> ::color_eyre::Result<()> {
             }
         }
 
-        fn view(
-            &self,
-            window: iced_core::window::Id,
-        ) -> iced_core::Element<'_, Self::Message, Self::Theme, Self::Renderer> {
+        fn view(&self, window: ::iced::window::Id) -> ::iced::Element<'_, Msg> {
             if let Some(viewer) = self.windows.get(&window) {
                 viewer.view().map(move |msg| Msg::DocsViewer(window, msg))
             } else {
@@ -112,23 +99,23 @@ fn api_docs() -> ::color_eyre::Result<()> {
             }
         }
 
-        fn subscription(&self) -> iced_futures::Subscription<Self::Message> {
+        fn subscription(&self) -> iced_futures::Subscription<Msg> {
             ::iced_runtime::window::close_events().map(Msg::Close)
         }
 
-        fn theme(&self, _window: iced_core::window::Id) -> Self::Theme {
+        fn theme(&self, _window: iced_core::window::Id) -> ::iced_core::Theme {
             ::iced_core::Theme::Dark
         }
     }
 
     init_log(None);
-    ::iced_winit::program::run::<State, ::iced_renderer::Compositor>(
-        Default::default(),
-        Default::default(),
-        Default::default(),
-        (),
-    )
-    .map_err(|err| ::color_eyre::eyre::eyre!(err))
+
+    ::iced::daemon(State::new, State::update, State::view)
+        .theme(State::theme)
+        .subscription(State::subscription)
+        .title(State::title)
+        .run()
+        .map_err(|err| ::color_eyre::eyre::eyre!(err))
 }
 
 fn main() -> ::color_eyre::Result<()> {

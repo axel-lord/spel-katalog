@@ -1,7 +1,7 @@
 //! Sample game, should run on all platforms, and log with color.
 
 use ::core::time::Duration;
-use ::std::{collections::HashSet, f32, io::Write};
+use ::std::io::Write;
 
 use ::clap::Parser;
 use ::iced::{
@@ -160,7 +160,7 @@ impl State {
                 if off >= 128.0 {
                     Task::none()
                 } else {
-                    let mag = ((f32::consts::PI * 2.0 * off / 64.0).sin() + 1.0) * 128.0;
+                    let mag = ((::core::f32::consts::PI * 2.0 * off / 64.0).sin() + 1.0) * 128.0;
                     let mut stdout = ::std::io::stdout().lock();
 
                     (0..(mag.round() as usize)).for_each(|_| {

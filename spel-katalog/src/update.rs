@@ -2,7 +2,6 @@ use ::std::path::Path;
 
 use ::iced_core::{Size, window};
 use ::iced_runtime::Task;
-use ::iced_widget as widget;
 use ::rustc_hash::FxHashMap;
 use ::rustix::process::{Pid, RawPid};
 use ::spel_katalog_batch::BatchInfo;
