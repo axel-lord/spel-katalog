@@ -12,6 +12,7 @@ use ::iced_core::{
     Alignment::{self},
     Border,
     Length::Fill,
+    text::Wrapping,
 };
 use ::iced_futures::Subscription;
 use ::iced_runtime::Task;
@@ -435,7 +436,7 @@ impl State {
                 style = container::bordered_box;
             };
 
-            let text = container(name)
+            let text = widget::text(name).wrapping(Wrapping::WordOrGlyph).pipe(container)
                 .padding(3)
                 .style(style)
                 .pipe(container)
