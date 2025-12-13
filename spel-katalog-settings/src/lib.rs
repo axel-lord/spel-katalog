@@ -3,7 +3,7 @@
 use ::derive_more::{Deref, DerefMut, From, IsVariant};
 use ::iced_core::{Alignment, Element, Length::Fill};
 use ::iced_runtime::Task;
-use ::iced_widget::{button, horizontal_rule, horizontal_space, text};
+use ::iced_widget::{button, rule, space, text};
 
 use ::spel_katalog_common::{StatusSender, async_status, w};
 use ::std::{collections::HashMap, path::PathBuf};
@@ -318,12 +318,12 @@ impl State {
                     .push(text("Settings").align_x(Alignment::Center).width(Fill))
                     .push(button("Save").padding(3).on_press(Message::Save)),
             )
-            .push(horizontal_rule(2))
+            .push(rule::horizontal(2))
             .push(self.view_enums().map(Message::Delta).pipe(w::scroll))
-            .push(horizontal_rule(2))
+            .push(rule::horizontal(2))
             .push(
                 self.view_paths()
-                    .push(horizontal_space().width(0))
+                    .push(space())
                     .pipe(Element::from)
                     .map(Message::Delta)
                     .pipe(w::scroll),

@@ -19,7 +19,7 @@ pub fn default_config() -> &'static Path {
 }
 
 /// Application Cli.
-#[derive(Debug, Args)]
+#[derive(Debug, Args, Clone)]
 pub struct Run {
     /// Settings to set for this run.
     #[command(flatten)]

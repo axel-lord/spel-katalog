@@ -70,7 +70,7 @@ impl<S: AsRef<str>> Simple<S> {
     /// View a simple item with an optional name.
     fn view_<'a>(&'a self, name: Option<&'a str>) -> Element<'a, Message> {
         let Self { doc, ty } = self;
-        let [name, sep] = name
+        let [name, sep]: [Span<Message>; 2] = name
             .map(|name| [name.name(), " ".into_span()])
             .unwrap_or_else(empty_spans);
         let [doc_sep, doc] = doc

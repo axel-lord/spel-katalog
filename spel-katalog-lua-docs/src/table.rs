@@ -6,6 +6,8 @@ use ::std::sync::LazyLock;
 use ::derive_more::IsVariant;
 use ::iced_core::Font;
 use ::iced_widget::{self as widget, rich_text, text::Span};
+use ::spel_katalog_common::PushMaybe;
+use ::tap::Pipe;
 use ::yaml_rust2::Yaml;
 
 use crate::{
@@ -270,7 +272,7 @@ impl<S: AsRef<str>> Table<S> {
             return rich_text(self.function_signature(name, kind)).into();
         }
 
-        let [prefix, name] = name
+        let [prefix, name]: [Span<Message>; 2] = name
             .name()
             .map(|name| [" ".into_span(), name.link(Message::Toggle(self.id))])
             .unwrap_or_else(empty_spans);
@@ -279,14 +281,18 @@ impl<S: AsRef<str>> Table<S> {
 
     /// View documentation of table.
     fn view_docs(&self) -> Option<Element<'_, Message>> {
-        self.doc
-            .as_ref()
-            .map(|docs| rich_text(["# ", docs.as_ref()].doc()).into())
+        self.doc.as_ref().map(|docs| {
+            rich_text([
+                <&str as SpanExt<Span<Message>>>::doc("# "),
+                AsRef::<str>::as_ref(docs).doc(),
+            ])
+            .pipe(Element::from)
+        })
     }
 
     /// Display an enum value and it's documentation.
     fn view_enum_value_doc<'a>(value: &'a str, doc: Option<&'a str>) -> Element<'a, Message> {
-        let [doc_sep, doc] = doc
+        let [doc_sep, doc]: [Span<Message>; 2] = doc
             .as_ref()
             .map(|doc| [" # ", doc])
             .doc()

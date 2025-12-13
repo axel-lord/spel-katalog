@@ -3,10 +3,7 @@ use ::std::{collections::HashMap, convert::identity, io::PipeReader, path::PathB
 use ::derive_more::IsVariant;
 use ::iced_core::{Alignment::Center, Length::Fill, window};
 use ::iced_runtime::Task;
-use ::iced_widget::{
-    self as widget, Row, horizontal_rule, horizontal_space, text, text_input, toggler, value,
-    vertical_space,
-};
+use ::iced_widget::{self as widget, Row, text, text_input, toggler, value};
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog_cli::Run;
 use ::spel_katalog_common::{OrRequest, StatusSender, w};
@@ -176,6 +173,7 @@ impl Initial {
     }
 }
 
+/*
 impl ::iced_winit::Program for App {
     type Message = Message;
 
@@ -200,6 +198,47 @@ impl ::iced_winit::Program for App {
             exit_recv,
         }: Self::Flags,
     ) -> (Self, Task<Self::Message>) {
+    }
+
+    fn title(&self, _window: window::Id) -> String {
+        "Lutris Games".to_owned()
+    }
+
+    fn update(&mut self, message: Self::Message) -> Task<Self::Message> {
+        self.update(message)
+    }
+
+    fn view(
+        &self,
+        window: window::Id,
+    ) -> iced_core::Element<'_, Self::Message, Self::Theme, Self::Renderer> {
+        self.view(window)
+    }
+
+    fn subscription(&self) -> iced_futures::Subscription<Self::Message> {
+        self.subscription()
+    }
+
+    fn theme(&self, _window: window::Id) -> Self::Theme {
+        ::iced_core::Theme::from(*self.settings.get::<Theme>())
+    }
+}
+*/
+
+impl App {
+    fn new(
+        Flags {
+            initial:
+                Initial {
+                    app,
+                    status_rx,
+                    dialog_rx,
+                    terminal_rx,
+                    show_settings,
+                },
+            exit_recv,
+        }: Flags,
+    ) -> (Self, Task<Message>) {
         let (_, open_main) = ::iced_runtime::window::open(::iced_core::window::Settings::default());
         let main = open_main.map(|id| Message::OpenWindow(id, WindowType::Main));
         let load_db = app
@@ -243,45 +282,28 @@ impl ::iced_winit::Program for App {
         (app, batch)
     }
 
-    fn title(&self, _window: window::Id) -> String {
-        "Lutris Games".to_owned()
-    }
-
-    fn update(&mut self, message: Self::Message) -> Task<Self::Message> {
-        self.update(message)
-    }
-
-    fn view(
-        &self,
-        window: window::Id,
-    ) -> iced_core::Element<'_, Self::Message, Self::Theme, Self::Renderer> {
-        self.view(window)
-    }
-
-    fn subscription(&self) -> iced_futures::Subscription<Self::Message> {
-        self.subscription()
-    }
-
-    fn theme(&self, _window: window::Id) -> Self::Theme {
-        ::iced_core::Theme::from(*self.settings.get::<Theme>())
-    }
-}
-
-impl App {
     pub fn run(
         run: Run,
         sink_builder: SinkBuilder,
-        exit_recv: Option<ExitReceiver>,
+        _exit_recv: Option<ExitReceiver>,
     ) -> ::color_eyre::Result<()> {
-        ::iced_winit::program::run::<Self, ::iced_renderer::Compositor>(
-            Default::default(),
-            Default::default(),
-            Default::default(),
-            Flags {
-                initial: Initial::new(run, sink_builder)?,
-                exit_recv,
+        ::iced::daemon(
+            move || {
+                Self::new(Flags {
+                    initial: Initial::new(run.clone(), sink_builder.clone())
+                        .expect("should be able to create initial state"),
+                    exit_recv: None,
+                })
             },
+            Self::update,
+            Self::view,
         )
+        .title(|_: &Self, _| "Spel-Katalog".to_owned())
+        .subscription(Self::subscription)
+        .theme(|this: &Self, _: window::Id| {
+            Some(::iced_core::Theme::from(*this.settings.get::<Theme>()))
+        })
+        .run()
         .map_err(|err| ::color_eyre::eyre::eyre!(err))
     }
 
@@ -321,7 +343,7 @@ impl App {
             WindowType::Main => self.view_main(),
             WindowType::LuaApi => widget::container(
                 widget::container(widget::themer(
-                    ::iced_core::Theme::Dark,
+                    Some(::iced_core::Theme::Dark),
                     self.docs_viewer.view().map(Message::LuaDocs),
                 ))
                 .style(widget::container::dark),
@@ -357,26 +379,26 @@ impl App {
                 .pipe(Element::from)
                 .map(Message::Filter),
             )
-            .push(vertical_space().height(5))
+            .push(widget::space::vertical().height(5))
             .push(
                 self.view
                     .view(&self.games, &self.info, &self.process_list, &self.batch),
             )
-            .push(vertical_space().height(3))
-            .push(horizontal_rule(2))
-            .push(vertical_space().height(3))
+            .push(widget::space::vertical().height(3))
+            .push(widget::rule::horizontal(2))
+            .push(widget::space::vertical().height(3))
             .push(
                 Row::new()
                     .align_y(Center)
                     .push(text(&self.status).width(Fill))
                     .push(text("Displayed / All").style(widget::text::secondary))
-                    .push(horizontal_space().width(5))
+                    .push(widget::space::horizontal().width(5))
                     .push(value(self.games.displayed_count()))
                     .push(text(" / "))
                     .push(value(self.games.all_count()))
-                    .push(horizontal_space().width(7))
+                    .push(widget::space::horizontal().width(7))
                     .push(text("Network").style(widget::text::secondary))
-                    .push(horizontal_space().width(5))
+                    .push(widget::space::horizontal().width(5))
                     .push(
                         toggler(self.settings.get::<Network>().is_enabled())
                             .spacing(0)
