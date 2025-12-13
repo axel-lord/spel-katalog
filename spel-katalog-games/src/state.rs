@@ -436,7 +436,9 @@ impl State {
                 style = container::bordered_box;
             };
 
-            let text = widget::text(name).wrapping(Wrapping::WordOrGlyph).pipe(container)
+            let text = widget::text(name)
+                .wrapping(Wrapping::WordOrGlyph)
+                .pipe(container)
                 .padding(3)
                 .style(style)
                 .pipe(container)
