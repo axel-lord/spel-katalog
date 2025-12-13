@@ -1,7 +1,7 @@
 use ::std::time::Duration;
 
 use ::iced_core::keyboard::{self, Modifiers, key::Named};
-use ::iced_futures::{Subscription, keyboard::on_key_press};
+use ::iced_futures::Subscription;
 use ::spel_katalog_common::OrRequest;
 use ::spel_katalog_games::SelDir;
 use ::tap::Pipe;
@@ -17,8 +17,17 @@ impl App {
                 .pipe(Message::Games)
                 .pipe(Some)
         }
-        let on_key = on_key_press(|key, modifiers| {
-            Some(Message::Quick(if modifiers.is_empty() {
+
+        let key_event = ::iced::keyboard::listen().filter_map(|event| match event {
+            keyboard::Event::KeyPressed {
+                key,
+                modified_key: _,
+                physical_key: _,
+                location: _,
+                modifiers,
+                text: _,
+                repeat: _,
+            } => Some(Message::Quick(if modifiers.is_empty() {
                 match key.as_ref() {
                     keyboard::Key::Character(chr) => match chr {
                         "q" => QuickMessage::ClosePane,
@@ -74,7 +83,8 @@ impl App {
                 }
             } else {
                 return None;
-            }))
+            })),
+            _ => None,
         });
 
         let refresh = if self.view.displayed.is_processes() {
@@ -91,6 +101,6 @@ impl App {
             .map(OrRequest::Message)
             .map(Message::Games);
 
-        Subscription::batch([on_key, window_close, refresh, games])
+        Subscription::batch([key_event, window_close, refresh, games])
     }
 }

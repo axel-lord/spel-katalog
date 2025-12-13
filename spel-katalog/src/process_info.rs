@@ -5,8 +5,9 @@ use ::iced_core::{
     Length::{self, Fill},
     alignment::Horizontal::Left,
 };
-use ::iced_widget::{self as widget, button, container, horizontal_space, opaque, text, value};
+use ::iced_widget::{self as widget, button, container, opaque, text, value};
 use ::smol::stream::StreamExt;
+use ::spel_katalog_common::PushMaybe;
 use ::spel_katalog_common::{styling, w};
 use ::tap::Pipe;
 
@@ -62,7 +63,7 @@ impl ProcessInfo {
 
         w::row()
             .spacing(6)
-            .push(horizontal_space().width(Length::Fixed(level.min(24).mul(12) as f32)))
+            .push(widget::space::horizontal().width(Length::Fixed(level.min(24).mul(12) as f32)))
             .push(button("X").padding(3).style(button::danger).on_press(Kill {
                 pid,
                 terminate: true,

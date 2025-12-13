@@ -3,7 +3,7 @@ use ::std::sync::Arc;
 use ::iced_core::Length::Fill;
 use ::iced_runtime::Task;
 use ::tap::Pipe;
-use iced_widget::{Column, Row, button, container, horizontal_rule, horizontal_space, scrollable};
+use iced_widget::{self as widget, Column, Row, button, container, scrollable};
 
 use crate::Element;
 
@@ -132,16 +132,19 @@ impl Dialog {
                     .center(Fill)
                     .pipe(Element::from)
             })
-            .push(horizontal_rule(3))
-            .push(Row::new().spacing(3).push(horizontal_space()).extend(
-                self.buttons.iter().rev().map(|(label, style)| {
-                    button(label.as_str())
-                        .style(|t, s| style.style(t, s))
-                        .padding(3)
-                        .on_press_with(|| Message::Clicked(label.clone()))
-                        .pipe(Element::from)
-                }),
-            ))
+            .push(widget::rule::horizontal(3))
+            .push(
+                Row::new()
+                    .spacing(3)
+                    .push(widget::space::horizontal())
+                    .extend(self.buttons.iter().rev().map(|(label, style)| {
+                        button(label.as_str())
+                            .style(|t, s| style.style(t, s))
+                            .padding(3)
+                            .on_press_with(|| Message::Clicked(label.clone()))
+                            .pipe(Element::from)
+                    })),
+            )
             .into()
     }
 }

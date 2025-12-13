@@ -154,8 +154,8 @@ impl App {
                     .then(|msg| msg.map_or_else(Task::none, Task::done));
                 }
             }
-            QuickMessage::Next => return widget::focus_next(),
-            QuickMessage::Prev => return widget::focus_previous(),
+            QuickMessage::Next => return ::iced::widget::operation::focus_next(),
+            QuickMessage::Prev => return ::iced::widget::operation::focus_previous(),
             QuickMessage::RunSelected => {
                 if let Some(id) = self.games.selected() {
                     return self.run_game(id, Safety::Firejail, false);
