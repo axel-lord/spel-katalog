@@ -500,7 +500,7 @@ impl Terminal {
                 .anchor_bottom()
                 .height(Fill),
             ))
-            .push(widget::rule::horizontal(3))
+            .push(widget::rule::horizontal(2))
             .push(
                 widget::Row::new()
                     .align_y(Center)

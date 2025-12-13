@@ -679,7 +679,7 @@ impl State {
                     .push(
                         w::row()
                             .push(widget::text("Runner").font(Font::MONOSPACE))
-                            .push(widget::rule::horizontal(2))
+                            .push(widget::rule::vertical(2))
                             .push(
                                 widget::value(&game.runner)
                                     .font(Font::MONOSPACE)

@@ -132,7 +132,7 @@ impl Dialog {
                     .center(Fill)
                     .pipe(Element::from)
             })
-            .push(widget::rule::horizontal(3))
+            .push(widget::rule::horizontal(2))
             .push(
                 Row::new()
                     .spacing(3)
