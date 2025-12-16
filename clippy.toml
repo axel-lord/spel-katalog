@@ -36,4 +36,11 @@ disallowed-methods = [
 	"tokio::fs::read_dir",
 	"tokio::sync::oneshot::channel",
 	"tokio::process::Command::new",
+	{ path = "spel_katalog_common::w::scroll", replacement = "spel_katalog_widget::scrollable" },
+	{ path = "iced_widget::rule::horizontal", replacement = "spel_katalog_widget::rule::horizontal" },
+	{ path = "iced_widget::rule::vertical", replacement = "spel_katalog_widget::rule::vertical" },
+	{ path = "iced_widget::scrollable", replacement = "spel_katalog_widget::scrollable" },
+	{ path = "iced::widget::rule::horizontal", replacement = "spel_katalog_widget::rule::horizontal" },
+	{ path = "iced::widget::rule::vertical", replacement = "spel_katalog_widget::rule::vertical" },
+	{ path = "iced::widget::scrollable", replacement = "spel_katalog_widget::scrollable" },
 ]

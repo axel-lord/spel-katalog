@@ -19,6 +19,7 @@ tap.workspace = true
 thiserror.workspace = true
 yaml-rust2.workspace = true
 spel-katalog-common.workspace = true
+spel-katalog-widget.workspace = true
 
 [lints]
 workspace = true

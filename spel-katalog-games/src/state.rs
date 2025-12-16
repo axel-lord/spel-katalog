@@ -471,7 +471,7 @@ impl State {
             let width = ((size.width / columns as f32) - 3.0).clamp(150.0, 300.0);
             self.columns.set(columns);
 
-            w::scroll(w::col().align_x(Alignment::Start).width(Fill).extend(
+            spel_katalog_widget::scrollable(w::col().align_x(Alignment::Start).width(Fill).extend(
                 self.displayed().chunks(columns).into_iter().map(|chunk| {
                     w::row()
                         .extend(chunk.map(|game| card(game, width, self.selected)))

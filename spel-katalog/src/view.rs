@@ -184,7 +184,7 @@ impl State {
                             info.titlebar(game, game.thumb.as_ref(), id, self.buttons())
                                 .map(crate::Message::from),
                         )
-                        .push(widget::rule::horizontal(2))
+                        .push(spel_katalog_widget::rule::horizontal())
                         .push(info.view(game.thumb.is_some()).map(crate::Message::from))
                         .spacing(3)
                         .padding(5)
@@ -195,7 +195,7 @@ impl State {
                 } else {
                     widget::Column::new()
                         .push(self.auto_titlebar())
-                        .push(widget::rule::horizontal(2))
+                        .push(spel_katalog_widget::rule::horizontal())
                         .push(widget::space::vertical())
                         .padding(5)
                         .spacing(3)
@@ -206,7 +206,7 @@ impl State {
             }
             Displayed::Processes => widget::Column::new()
                 .push(self.auto_titlebar())
-                .push(widget::rule::horizontal(2))
+                .push(spel_katalog_widget::rule::horizontal())
                 .push(ProcessInfo::view_list(process_info))
                 .padding(5)
                 .spacing(3)
@@ -215,7 +215,7 @@ impl State {
                 .into(),
             Displayed::Batch => widget::Column::new()
                 .push(self.titlebar(batch_view.title()))
-                .push(widget::rule::horizontal(2))
+                .push(spel_katalog_widget::rule::horizontal())
                 .push(batch_view.view().map(crate::Message::from))
                 .padding(5)
                 .spacing(3)

@@ -3,7 +3,7 @@ use ::std::sync::Arc;
 use ::iced_core::Length::Fill;
 use ::iced_runtime::Task;
 use ::tap::Pipe;
-use iced_widget::{self as widget, Column, Row, button, container, scrollable};
+use iced_widget::{self as widget, Column, Row, button, container};
 
 use crate::Element;
 
@@ -123,7 +123,7 @@ impl Dialog {
             .padding(3)
             .spacing(3)
             .push(if self.multiline {
-                scrollable(self.text.as_str())
+                spel_katalog_widget::scrollable(self.text.as_str())
                     .height(Fill)
                     .width(Fill)
                     .pipe(Element::from)
@@ -132,7 +132,7 @@ impl Dialog {
                     .center(Fill)
                     .pipe(Element::from)
             })
-            .push(widget::rule::horizontal(2))
+            .push(spel_katalog_widget::rule::horizontal())
             .push(
                 Row::new()
                     .spacing(3)

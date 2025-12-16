@@ -7,6 +7,7 @@ pub mod rule {
     //! Standardized rules.
 
     /// A horizontal rule.
+    #[expect(clippy::disallowed_methods)]
     pub fn horizontal<'a, Theme>() -> ::iced_widget::Rule<'a, Theme>
     where
         Theme: ::iced_widget::rule::Catalog,
@@ -15,6 +16,7 @@ pub mod rule {
     }
 
     /// A vertical rule.
+    #[expect(clippy::disallowed_methods)]
     pub fn vertical<'a, Theme>() -> ::iced_widget::Rule<'a, Theme>
     where
         Theme: ::iced_widget::rule::Catalog,
@@ -24,7 +26,8 @@ pub mod rule {
 }
 
 /// Create a scrollable widget.
-pub fn scollable<'a, Message, Renderer>(
+#[expect(clippy::disallowed_methods)]
+pub fn scrollable<'a, Message, Renderer>(
     element: impl Into<Element<'a, Message, Theme, Renderer>>,
 ) -> Scrollable<'a, Message, Theme, Renderer>
 where

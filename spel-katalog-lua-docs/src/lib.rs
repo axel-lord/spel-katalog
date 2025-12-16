@@ -177,7 +177,7 @@ impl DocsViewer {
 
     /// Render documentaion viewer as an element.
     pub fn view(&self) -> Element<'_, Message> {
-        widget::scrollable(
+        spel_katalog_widget::scrollable(
             self.docs
                 .iter()
                 .fold(
