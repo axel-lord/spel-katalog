@@ -18,6 +18,7 @@ members = [
 	"spel-katalog-sink",
 	"spel-katalog-terminal",
 	"spel-katalog-test",
+	"spel-katalog-widget",
 ]
 resolver = "2"
 default-members = ["spel-katalog"]
@@ -125,6 +126,7 @@ spel-katalog-reflect-derive-lib = { path = "spel-katalog-reflect/derive-lib" }
 spel-katalog-settings = { path = "spel-katalog-settings" }
 spel-katalog-sink = { path = "spel-katalog-sink" }
 spel-katalog-terminal = { path = "spel-katalog-terminal" }
+spel-katalog-widget = { path = "spel-katalog-widget" }
 strsim = "0.11.1"
 strum = "0.27.2"
 syn = { version = "2.0.111", default-features = false, features = ["full", "parsing", "printing"] }

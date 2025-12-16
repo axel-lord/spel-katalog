@@ -11,7 +11,6 @@ use ::iced_core::{Alignment::Center, Length::Fill};
 use ::iced_runtime::Task;
 use ::iced_widget as widget;
 use ::spel_katalog_common::PushMaybe;
-use ::spel_katalog_common::w;
 use ::spel_katalog_sink::SinkIdentity;
 
 /// Element alias.
@@ -480,7 +479,7 @@ impl Terminal {
             .spacing(3)
             .push(widget::themer(
                 Some(::iced_core::Theme::Dark),
-                w::scroll(
+                spel_katalog_widget::scrollable(
                     widget::container(
                         self.lines
                             .iter()
@@ -500,7 +499,7 @@ impl Terminal {
                 .anchor_bottom()
                 .height(Fill),
             ))
-            .push(widget::rule::horizontal(2))
+            .push(spel_katalog_widget::rule::horizontal())
             .push(
                 widget::Row::new()
                     .align_y(Center)

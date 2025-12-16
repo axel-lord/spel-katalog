@@ -28,7 +28,7 @@ impl ProcessInfo {
                 .push("Process Tree")
                 .extend(list.iter().map(|info| info.view()))
                 .align_x(Left)
-                .pipe(w::scroll)
+                .pipe(spel_katalog_widget::scrollable)
                 .pipe(container)
                 .style(container::bordered_box)
                 .padding(3),

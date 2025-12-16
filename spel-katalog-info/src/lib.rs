@@ -667,7 +667,7 @@ impl State {
             .align_y(Alignment::Start)
             .height(150)
             .push_maybe(thumb.map(|thumb| widget::image(thumb).width(150).height(150)))
-            .push_maybe(thumb.is_some().then(|| widget::rule::vertical(2)))
+            .push_maybe(thumb.is_some().then(spel_katalog_widget::rule::vertical))
             .push(
                 w::col()
                     .push(
@@ -675,11 +675,11 @@ impl State {
                             .push(widget::text(&game.name).width(Fill).align_x(Center))
                             .push(buttons),
                     )
-                    .push(widget::rule::horizontal(2))
+                    .push(spel_katalog_widget::rule::horizontal())
                     .push(
                         w::row()
                             .push(widget::text("Runner").font(Font::MONOSPACE))
-                            .push(widget::rule::vertical(2))
+                            .push(spel_katalog_widget::rule::vertical())
                             .push(
                                 widget::value(&game.runner)
                                     .font(Font::MONOSPACE)
@@ -687,11 +687,11 @@ impl State {
                                     .width(Fill),
                             ),
                     )
-                    .push(widget::rule::horizontal(2))
+                    .push(spel_katalog_widget::rule::horizontal())
                     .push(
                         w::row()
                             .push(widget::text("Slug  ").font(Font::MONOSPACE))
-                            .push(widget::rule::vertical(2))
+                            .push(spel_katalog_widget::rule::vertical())
                             .push(
                                 widget::value(&game.slug)
                                     .font(Font::MONOSPACE)
@@ -699,11 +699,11 @@ impl State {
                                     .width(Fill),
                             ),
                     )
-                    .push(widget::rule::horizontal(2))
+                    .push(spel_katalog_widget::rule::horizontal())
                     .push(
                         w::row()
                             .push(widget::text("Id    ").font(Font::MONOSPACE))
-                            .push(widget::rule::vertical(2))
+                            .push(spel_katalog_widget::rule::vertical())
                             .push(
                                 widget::value(id)
                                     .font(Font::MONOSPACE)
@@ -743,8 +743,8 @@ impl State {
                 .into_iter()
                 .fold(w::row(), |row, btn| row.push(btn.padding(3))),
             )
-            .push(widget::rule::horizontal(2))
-            .push(w::scroll(
+            .push(spel_katalog_widget::rule::horizontal())
+            .push(spel_katalog_widget::scrollable(
                 widget::Column::new()
                     .spacing(3)
                     .push("Root Directories")
@@ -759,11 +759,9 @@ impl State {
                         let mut iter = self.additional.sandbox_root.iter().map(widget::text);
                         w::col()
                             .push_maybe(iter.next())
-                            .extend(
-                                iter.flat_map(|row| {
-                                    [widget::rule::horizontal(2).into(), row.into()]
-                                }),
-                            )
+                            .extend(iter.flat_map(|row| {
+                                [spel_katalog_widget::rule::horizontal().into(), row.into()]
+                            }))
                             .pipe(widget::container)
                             .width(Fill)
                             .padding(3)
@@ -780,7 +778,7 @@ impl State {
                                     .on_press(OrRequest::Message(Message::SaveAdditional)),
                             ),
                     )
-                    .push(widget::rule::horizontal(2))
+                    .push(spel_katalog_widget::rule::horizontal())
                     .push("Sandbox Roots")
                     .push(
                         widget::text_editor(&self.additional_roots_content)
@@ -798,7 +796,7 @@ impl State {
                             .map(Message::UpdateAttrs)
                             .map(OrRequest::Message),
                     )
-                    .push(widget::rule::horizontal(2))
+                    .push(spel_katalog_widget::rule::horizontal())
                     .push(
                         w::row()
                             .push(widget::container("Game Yml").padding(3))

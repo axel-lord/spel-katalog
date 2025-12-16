@@ -16,6 +16,7 @@ log.workspace = true
 serde = { workspace = true, features = ["derive"] }
 smol.workspace = true
 spel-katalog-common.workspace = true
+spel-katalog-widget.workspace = true
 tap.workspace = true
 toml.workspace = true
 whoami = { workspace = true }

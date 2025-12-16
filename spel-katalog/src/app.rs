@@ -385,7 +385,7 @@ impl App {
                     .view(&self.games, &self.info, &self.process_list, &self.batch),
             )
             .push(widget::space::vertical().height(3))
-            .push(widget::rule::horizontal(2))
+            .push(spel_katalog_widget::rule::horizontal())
             .push(widget::space::vertical().height(3))
             .push(
                 Row::new()
