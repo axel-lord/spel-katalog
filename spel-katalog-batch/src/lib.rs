@@ -192,9 +192,9 @@ pub enum Scope {
     /// Use all games.
     All,
     /// Use currently shown games.
-    #[default]
     Shown,
     /// Use currently batch selected games.
+    #[default]
     Batch,
 }
 
