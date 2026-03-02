@@ -136,3 +136,4 @@ toml = "0.9.8"
 vte = "0.15.0"
 whoami = { version = "1.6.1", default-features = false }
 yaml-rust2 = "0.10.4"
+mimalloc = "0.1.48"
