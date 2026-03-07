@@ -19,6 +19,7 @@ pub struct State {
     value: String,
 }
 
+/// Message used by attribute editor.
 #[derive(Debug, Clone)]
 pub enum Message {
     /// Current key should be set to value.

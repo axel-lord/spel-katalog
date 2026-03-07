@@ -48,6 +48,7 @@ pub struct CoverGatherer {
     receiver: ::flume::Receiver<(String, ::spel_katalog_formats::Image)>,
 }
 
+/// Gather covers from directory reader.
 fn gather_covers(dir: ReadDir) -> FxHashMap<String, PathBuf> {
     dir.par_bridge()
         .filter_map(|dir_entry| {

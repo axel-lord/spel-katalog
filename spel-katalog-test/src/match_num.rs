@@ -11,7 +11,7 @@ use ::iced::{
     widget::{self, Button, Column, Row, button, text},
 };
 use ::log::LevelFilter;
-use ::rand::{Rng, seq::SliceRandom};
+use ::rand::{RngExt as _, seq::SliceRandom};
 use ::tap::Tap;
 
 /// Cli
