@@ -19,6 +19,7 @@ spel-katalog-common.workspace = true
 spel-katalog-widget.workspace = true
 tap.workspace = true
 toml.workspace = true
+rustix.workspace = true
 whoami = { workspace = true }
 
 [build-dependencies]

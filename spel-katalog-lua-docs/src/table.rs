@@ -37,6 +37,7 @@ struct Keys {
     r#enum: Yaml,
 }
 
+/// Access to keys in use.
 static KEYS: LazyLock<Keys> = LazyLock::new(|| Keys {
     doc: Yaml::String("doc".to_owned()),
     fields: Yaml::String("fields".to_owned()),

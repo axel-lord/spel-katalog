@@ -13,7 +13,38 @@ mod list;
 
 mod environment {
     //! Environment available for settings.
+    use ::core::fmt::Display;
+    use ::std::fmt;
+
+    use ::rustix::{fs::Uid, process::getuid};
     use ::spel_katalog_common::lazy::Lazy;
+
+    /// Displayable user, may be either a numeric id or a username.
+    #[derive(Debug)]
+    enum User {
+        /// Display a user id.
+        Id(Uid),
+        /// Display a username.
+        Name(String),
+    }
+
+    impl User {
+        /// Get a User for current process.
+        fn current() -> Self {
+            ::whoami::username()
+                .map(Self::Name)
+                .unwrap_or_else(|_| Self::Id(getuid()))
+        }
+    }
+
+    impl Display for User {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                User::Id(uid) => Display::fmt(uid, f),
+                User::Name(name) => Display::fmt(name, f),
+            }
+        }
+    }
 
     /// Remove trailing newlines.
     fn remove_trailing(mut s: String) -> String {
@@ -27,7 +58,7 @@ mod environment {
         ::std::env::var("HOME").map_or_else(
             |err| {
                 ::log::warn!("could not get home directory, {err}");
-                format!("/tmp/spel-katalog.{}", ::whoami::username())
+                format!("/tmp/spel-katalog.{}", User::current())
             },
             remove_trailing,
         )
@@ -260,6 +291,10 @@ pub struct State {
     pub config: PathBuf,
 }
 
+/// Save settings to given path.
+///
+/// # Errors
+/// If settings cannot be either serialized or saved.
 async fn save(settings: Settings, path: PathBuf) -> Result<PathBuf, PathBuf> {
     match ::toml::to_string_pretty(&settings) {
         Ok(contents) => match ::smol::fs::write(&path, contents).await {
