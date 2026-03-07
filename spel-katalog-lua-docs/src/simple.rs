@@ -18,6 +18,7 @@ pub struct Simple<S> {
     pub ty: SimpleTy<S>,
 }
 
+/// Possible state of a simple type.
 #[derive(Debug, Clone)]
 pub enum SimpleTy<S> {
     /// A single type.
@@ -26,6 +27,7 @@ pub enum SimpleTy<S> {
     Tuple(Vec<(S, Attr)>),
 }
 
+/// Special attribute of a value.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Attr {
     /// Value does not have any special attributes.

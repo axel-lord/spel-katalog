@@ -72,7 +72,7 @@ path = "/usr/bin/firejail"
 [CoverartDir]
 title = "Coverart Directory"
 help = "Path to coverart directory"
-path = "{CACHE}/lutris/coverart"
+path = "{DATA}/lutris/coverart"
 
 [LutrisDb]
 title = "Lutris Database"

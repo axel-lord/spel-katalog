@@ -1,10 +1,14 @@
 use ::std::io::{IsTerminal, Read};
 
+use ::mimalloc::MiMalloc;
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog::run as run_app;
 use ::spel_katalog_cli::{Cli, Subcmd, SubcmdCallbacks};
 use ::spel_katalog_lua_docs::DocsViewer;
 use ::spel_katalog_sink::SinkBuilder;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 fn init_log(target: Option<::env_logger::Target>) {
     let mut log_builder = ::env_logger::builder();
