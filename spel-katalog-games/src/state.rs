@@ -414,30 +414,42 @@ impl State {
             let name = game.name.as_str();
             let id = game.id;
 
-            let style: fn(&::iced_core::Theme) -> container::Style;
-            if selected == Some(id) {
-                if game.batch_selected {
-                    style = |theme| {
-                        container::bordered_box(theme)
-                            .border(Border {
-                                width: 1.0,
-                                radius: 0.into(),
-                                color: theme.palette().danger,
-                            })
-                            .background(theme.palette().primary)
-                    };
-                } else {
-                    style =
-                        |theme| container::bordered_box(theme).background(theme.palette().primary);
-                }
-            } else if game.batch_selected {
-                style = |theme| container::bordered_box(theme).background(theme.palette().danger);
-            } else {
-                style = container::bordered_box;
-            };
+            fn base(theme: &::iced_core::Theme) -> container::Style {
+                let style = container::bordered_box(theme);
+                style.border(Border {
+                    radius: 0.into(),
+                    ..style.border
+                })
+            }
+
+            fn batch_and_select(theme: &::iced_core::Theme) -> container::Style {
+                let style = select(theme);
+                style.border(style.border.color(theme.palette().danger))
+            }
+
+            fn select(theme: &::iced_core::Theme) -> container::Style {
+                base(theme).background(theme.palette().primary.scale_alpha(0.9))
+            }
+
+            fn batch(theme: &::iced_core::Theme) -> container::Style {
+                base(theme).background(theme.palette().danger.scale_alpha(0.9))
+            }
+
+            fn not_selected(theme: &::iced_core::Theme) -> container::Style {
+                base(theme).background(theme.palette().background.scale_alpha(0.95))
+            }
+
+            let style: fn(&::iced_core::Theme) -> container::Style =
+                match (selected, game.batch_selected) {
+                    (Some(id), false) if game.id == id => select,
+                    (Some(id), true) if game.id == id => batch_and_select,
+                    (_, true) => batch,
+                    (_, false) => not_selected,
+                };
 
             let text = widget::text(name)
                 .wrapping(Wrapping::WordOrGlyph)
+                .size(14)
                 .pipe(container)
                 .padding(3)
                 .style(style)
