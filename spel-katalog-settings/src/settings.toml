@@ -37,6 +37,12 @@ help = "How to filter games"
 variants = ["Filter", "Search", "Regex"]
 default = "Search"
 
+[SandboxMode]
+title = "Sandbox Tool"
+help = "How to sandbox games"
+variants = ["Firejail", "Bubblewrap"]
+default = "Firejail"
+
 [OnRun]
 title = "On Run"
 help = "Should any information be opened when running game"
@@ -68,6 +74,16 @@ path = "/usr/bin/lutris"
 title = "Firejail Executable"
 help = "Path to firejail executable"
 path = "/usr/bin/firejail"
+
+[BubblewrapExe]
+title = "Bubblewrap Executable"
+help = "Path to bwrap executable"
+path = "/usr/bin/bwrap"
+
+[UmuRunExe]
+title = "UMU Executable"
+help = "Path to umu-run executable"
+path = "/usr/bin/umu-run"
 
 [CoverartDir]
 title = "Coverart Directory"

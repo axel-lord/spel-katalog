@@ -1,6 +1,7 @@
 use ::std::{
     ffi::{OsStr, OsString},
-    path::PathBuf,
+    path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use ::iced_runtime::Task;
@@ -8,12 +9,15 @@ use ::mlua::Lua;
 use ::smol::stream::StreamExt;
 use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::status;
-use ::spel_katalog_formats::AdditionalConfig;
+use ::spel_katalog_formats::{AdditionalConfig, Runner};
 use ::spel_katalog_info::formats;
-use ::spel_katalog_settings::{ConfigDir, FirejailExe, LutrisExe, Network, OnRun, YmlDir};
-use ::spel_katalog_sink::SinkIdentity;
+use ::spel_katalog_settings::{
+    BubblewrapExe, ConfigDir, FirejailExe, LutrisExe, Network, OnRun, SandboxMode, UmuRunExe,
+    YmlDir,
+};
+use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 
-use crate::{App, Message, QuickMessage, Safety, oneshot_broadcast::oneshot_broadcast};
+use crate::{App, Message, QuickMessage, Safety, app::LuaVt, oneshot_broadcast::oneshot_broadcast};
 
 #[derive(Debug, ::thiserror::Error)]
 enum ScriptGatherError {
@@ -78,6 +82,120 @@ async fn gather_scripts(script_dir: PathBuf) -> Result<Vec<PathBuf>, ScriptGathe
     Ok(lua_scripts)
 }
 
+async fn parse_extra_config(extra_config_path: &Path) -> Result<AdditionalConfig, String> {
+    ::toml::from_str::<AdditionalConfig>(
+        &::smol::fs::read_to_string(&extra_config_path)
+            .await
+            .map_err(|err| {
+                ::log::error!("could not read {extra_config_path:?}\n{err}");
+                format!("could not read {extra_config_path:?}")
+            })?,
+    )
+    .map_err(|err| {
+        ::log::error!("could not parse {extra_config_path:?}\n{err}");
+        format!("could not parse {extra_config_path:?}")
+    })
+}
+
+#[derive(Debug, Clone, Copy)]
+struct BatchView<'a> {
+    id: i64,
+    slug: &'a str,
+    name: &'a str,
+    runner: &'a Runner,
+    config: &'a str,
+    extra: Option<&'a AdditionalConfig>,
+    hidden: bool,
+}
+
+impl From<BatchView<'_>> for BatchInfo {
+    fn from(
+        BatchView {
+            id,
+            slug,
+            name,
+            runner,
+            config,
+            extra,
+            hidden,
+        }: BatchView,
+    ) -> Self {
+        BatchInfo {
+            id,
+            slug: slug.to_owned(),
+            name: name.to_owned(),
+            runner: runner.to_string(),
+            config: config.to_owned(),
+            attrs: extra
+                .map(|extra_config| extra_config.attrs.clone())
+                .unwrap_or_default(),
+            hidden,
+        }
+    }
+}
+
+async fn run_script(
+    script_dir: PathBuf,
+    batch_view: BatchView<'_>,
+    sink_builder: &SinkBuilder,
+    lua_vt: Arc<LuaVt>,
+) -> Result<(), ScriptGatherError> {
+    let lua_scripts = gather_scripts(script_dir).await?;
+
+    if !lua_scripts.is_empty() {
+        let batch_info = BatchInfo::from(batch_view);
+
+        let sink_builder = sink_builder.clone();
+        ::smol::unblock(move || {
+            let scripts = lua_scripts
+                .into_iter()
+                .map(|path| match ::std::fs::read_to_string(&path) {
+                    Ok(content) => Ok(content),
+                    Err(err) => Err(ScriptGatherError::ReadLuaScript(err, path)),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let lua = Lua::new();
+            ::spel_katalog_lua::Module {
+                sink_builder: &sink_builder,
+                vt: lua_vt,
+            }
+            .register(&lua)
+            .and_then(|skeleton| {
+                let module = &skeleton.module;
+                let game = batch_info.to_lua(&lua, &skeleton.game_data)?;
+
+                module.set("game", game)?;
+
+                for script in scripts {
+                    lua.load(script).exec()?;
+                }
+
+                Ok(())
+            })
+            .map_err(|err| LuaError(err.to_string()))?;
+            Ok::<_, ScriptGatherError>(())
+        })
+        .await?;
+    }
+
+    Ok(())
+}
+
+/// Convert inputs to an array of [OsString]
+///
+/// ```
+/// assert_eq!(
+///     args!["echo", "Hello", "World!"],
+///     [OsString::from("echo"), OsString::from("Hello"), OsString::from("World!")]
+/// );
+/// ```
+macro_rules! args {
+    ($($arg:expr),* $(,)?) => {
+        [$(OsString::from($arg)),*]
+    };
+}
+
 impl App {
     pub fn run_game(&mut self, id: i64, safety: Safety, no_game: bool) -> Task<Message> {
         let Some(game) = self.games.by_id(id) else {
@@ -87,6 +205,9 @@ impl App {
 
         let lutris = self.settings.get::<LutrisExe>().clone();
         let firejail = self.settings.get::<FirejailExe>().clone();
+        let bwrap = self.settings.get::<BubblewrapExe>().clone();
+        let umu = self.settings.get::<UmuRunExe>().clone();
+        let sandbox_mode = *self.settings.get::<SandboxMode>();
         let slug = game.slug.clone();
         let name = game.name.clone();
         let runner = game.runner.clone();
@@ -126,7 +247,6 @@ impl App {
             let config = async {
                 let config = ::smol::fs::read_to_string(&configpath).await?;
                 let config = formats::Config::parse(&config)?;
-
                 Ok::<_, ConfigError>(config)
             };
 
@@ -139,80 +259,25 @@ impl App {
             };
 
             let extra_config = if extra_config_path.exists() {
-                let Some(content) = ::smol::fs::read_to_string(&extra_config_path)
-                    .await
-                    .map_err(|err| ::log::error!("could not read {extra_config_path:?}\n{err}"))
-                    .ok()
-                else {
-                    return format!("could not read {extra_config_path:?}").into();
-                };
-                let Some(additional) = ::toml::from_str::<AdditionalConfig>(&content)
-                    .map_err(|err| ::log::error!("could not parse {extra_config_path:?}\n{err}"))
-                    .ok()
-                else {
-                    return format!("could not parse {extra_config_path:?}").into();
-                };
-
-                Some(additional)
+                match parse_extra_config(&extra_config_path).await {
+                    Err(err) => return err.into(),
+                    Ok(additional) => Some(additional),
+                }
             } else {
                 None
             };
 
-            let scripts_result = async {
-                let lua_scripts = gather_scripts(script_dir).await?;
-
-                if !lua_scripts.is_empty() {
-                    let batch_info = BatchInfo {
-                        id,
-                        slug: slug.clone(),
-                        name: name.clone(),
-                        runner: runner.to_string(),
-                        config: configpath.clone(),
-                        attrs: extra_config
-                            .as_ref()
-                            .map(|extra_config| extra_config.attrs.clone())
-                            .unwrap_or_default(),
-                        hidden,
-                    };
-
-                    let sink_builder = sink_builder.clone();
-                    ::smol::unblock(move || {
-                        let scripts = lua_scripts
-                            .into_iter()
-                            .map(|path| match ::std::fs::read_to_string(&path) {
-                                Ok(content) => Ok(content),
-                                Err(err) => Err(ScriptGatherError::ReadLuaScript(err, path)),
-                            })
-                            .collect::<Result<Vec<_>, _>>()?;
-
-                        let lua = Lua::new();
-                        ::spel_katalog_lua::Module {
-                            sink_builder: &sink_builder,
-                            vt: lua_vt,
-                        }
-                        .register(&lua)
-                        .and_then(|skeleton| {
-                            let module = &skeleton.module;
-                            let game = batch_info.to_lua(&lua, &skeleton.game_data)?;
-
-                            module.set("game", game)?;
-
-                            for script in scripts {
-                                lua.load(script).exec()?;
-                            }
-
-                            Ok(())
-                        })
-                        .map_err(|err| LuaError(err.to_string()))?;
-                        Ok::<_, ScriptGatherError>(())
-                    })
-                    .await?;
-                }
-
-                Ok::<_, ScriptGatherError>(())
+            let view = BatchView {
+                id,
+                slug: &slug,
+                name: &name,
+                runner: &runner,
+                config: &configpath,
+                extra: extra_config.as_ref(),
+                hidden,
             };
 
-            if let Err(err) = scripts_result.await {
+            if let Err(err) = run_script(script_dir, view, &sink_builder, lua_vt).await {
                 ::log::error!("failure when gathering/runnings scripts\n{err}");
                 return "running scripts failed".to_owned().into();
             }
@@ -238,8 +303,8 @@ impl App {
                 }
             };
 
-            let cmd = match safety {
-                Safety::None => {
+            let cmd = match (safety, sandbox_mode) {
+                (Safety::None, _) => {
                     ::log::info!("executing {lutris:?} with arguments\n{:#?}", &[&rungame]);
                     ::smol::process::Command::new(lutris)
                         .args(rungame)
@@ -248,7 +313,7 @@ impl App {
                         .stderr(stderr)
                         .status()
                 }
-                Safety::Firejail => {
+                (Safety::Sandbox, SandboxMode::Firejail) => {
                     let mut args = Vec::new();
                     ::log::info!("parsed game config\n{config:#?}");
                     if let Some(additional) = extra_config
@@ -273,6 +338,103 @@ impl App {
                     ::log::info!("executing {firejail:?} with arguments\n{args:#?}");
 
                     ::smol::process::Command::new(firejail)
+                        .args(args)
+                        .kill_on_drop(true)
+                        .stdout(stdout)
+                        .stderr(stderr)
+                        .status()
+                }
+                (Safety::Sandbox, SandboxMode::Bubblewrap) => {
+                    let bwrap = bwrap.as_path();
+                    let Some(home) = ::std::env::home_dir() else {
+                        ::log::error!("could not find user home directory");
+                        return "could not find user home directory".to_owned().into();
+                    };
+                    let exe = config.game.exe.as_path();
+                    let umu = umu.as_path();
+                    let Some(directory) = config.game.exe.parent() else {
+                        ::log::error!("executable {exe:?} has no parent");
+                        return "missing executable parent".to_owned().into();
+                    };
+                    let xauthority = home.join(".Xauthority");
+                    let umu_dir = home.join(".local/share/umu");
+                    let umu_prefix = directory.join(".umu_pfx");
+
+                    #[rustfmt::skip]
+                    let mut args = Vec::<OsString>::from(args![
+                        "--dev", "/dev",
+                        "--proc", "/proc",
+                        "--ro-bind", "/usr", "/usr",
+                        "--ro-bind", "/etc", "/etc",
+                        "--ro-bind", "/var", "/var",
+                        "--ro-bind", "/run", "/run",
+                        "--ro-bind", "/sys", "/sys",
+                        "--ro-bind-try", "/opt/rocm", "/opt/rocm",
+                        "--symlink", "/usr/lib", "/lib",
+                        "--symlink", "/usr/lib64", "/lib64",
+                        "--symlink", "/usr/lib32", "/lib32",
+                        "--symlink", "/usr/bin", "/bin",
+                        "--symlink", "/usr/bin", "/sbin",
+                        "--tmpfs", "/home",
+                        "--tmpfs", "/tmp",
+                        "--ro-bind", "/tmp/.X11-unix/X0", "/tmp/.X11-unix/X0",
+                        "--ro-bind", &xauthority, xauthority,
+                        "--dev-bind", "/dev/dri", "/dev/dri",
+                        "--bind", &umu_dir, umu_dir,
+                        "--setenv", "PATH", "/usr/bin",
+                        "--hostname", "games",
+                        "--die-with-parent",
+                        "--new-session",
+                        "--unshare-all",
+                    ]);
+
+                    let additional_roots = extra_config
+                        .as_ref()
+                        .map_or(&[][..], |extra| extra.sandbox_root.as_slice());
+
+                    let mut directory_bound = false;
+                    if additional_roots.is_empty() {
+                        let common_parent = config.game.common_parent();
+                        if common_parent == directory {
+                            directory_bound = true;
+                        }
+                        args.extend(args!["--bind", &common_parent, common_parent]);
+                    } else {
+                        for root in additional_roots {
+                            if root == directory {
+                                directory_bound = true;
+                            }
+                            args.extend(args!["--bind", root, root]);
+                        }
+                    }
+                    let directory_bound = directory_bound;
+
+                    if !is_net_disabled {
+                        args.extend(args!["--share-net"]);
+                    }
+
+                    #[rustfmt::skip]
+                    args.extend(args![
+                        "--chdir", &directory,
+                    ]);
+
+                    if let Some(_prefix) = &config.game.prefix {
+                        #[rustfmt::skip]
+                        args.extend(args![
+                            "--setenv", "WINEPREFIX", umu_prefix,
+                            umu,
+                        ]);
+                    }
+
+                    if !directory_bound {
+                        args.extend(args!["--bind", &directory, directory,]);
+                    }
+
+                    args.extend(args![exe]);
+
+                    ::log::info!("running with config {args:#?}");
+
+                    ::smol::process::Command::new(bwrap)
                         .args(args)
                         .kill_on_drop(true)
                         .stdout(stdout)

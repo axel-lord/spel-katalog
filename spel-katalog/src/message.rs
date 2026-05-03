@@ -12,12 +12,12 @@ use crate::{
 pub enum Safety {
     None,
     #[default]
-    Firejail,
+    Sandbox,
 }
 
 impl From<bool> for Safety {
     fn from(value: bool) -> Self {
-        if value { Self::Firejail } else { Self::None }
+        if value { Self::Sandbox } else { Self::None }
     }
 }
 

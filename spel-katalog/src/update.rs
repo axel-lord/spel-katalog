@@ -157,7 +157,7 @@ impl App {
             QuickMessage::Prev => return ::iced::widget::operation::focus_previous(),
             QuickMessage::RunSelected => {
                 if let Some(id) = self.games.selected() {
-                    return self.run_game(id, Safety::Firejail, false);
+                    return self.run_game(id, Safety::Sandbox, false);
                 }
             }
             QuickMessage::ToggleBatch => {
@@ -238,7 +238,7 @@ impl App {
                 return self.run_game(
                     id,
                     if sandbox {
-                        Safety::Firejail
+                        Safety::Sandbox
                     } else {
                         Safety::None
                     },
@@ -283,7 +283,7 @@ impl App {
                 self.run_game(id, Safety::from(sandbox), false)
             }
             ::spel_katalog_info::Request::RunLutrisInSandbox { id } => {
-                self.run_game(id, Safety::Firejail, true)
+                self.run_game(id, Safety::Sandbox, true)
             }
         }
     }
