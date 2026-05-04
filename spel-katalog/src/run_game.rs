@@ -1,6 +1,8 @@
+use ::core::fmt::{Arguments, Display};
 use ::std::{
     ffi::{OsStr, OsString},
     path::{Path, PathBuf},
+    process::Stdio,
     sync::Arc,
 };
 
@@ -10,14 +12,67 @@ use ::smol::stream::StreamExt;
 use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::status;
 use ::spel_katalog_formats::{AdditionalConfig, Runner};
-use ::spel_katalog_info::formats;
+use ::spel_katalog_info::formats::{self, Config};
 use ::spel_katalog_settings::{
     BubblewrapExe, ConfigDir, FirejailExe, LutrisExe, Network, OnRun, SandboxMode, UmuRunExe,
     YmlDir,
 };
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 
-use crate::{App, Message, QuickMessage, Safety, app::LuaVt, oneshot_broadcast::oneshot_broadcast};
+use crate::{
+    App, Message, QuickMessage, Safety,
+    app::LuaVt,
+    oneshot_broadcast::{Sender, oneshot_broadcast},
+};
+
+/// Convert inputs to an array of [OsString]
+///
+/// ```
+/// assert_eq!(
+///     args!["echo", "Hello", "World!"],
+///     [OsString::from("echo"), OsString::from("Hello"), OsString::from("World!")]
+/// );
+/// ```
+macro_rules! args {
+    ($($arg:expr),* $(,)?) => {
+        [$(OsString::from($arg)),*]
+    };
+}
+
+/// Error type converting error to a string.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct StrError(String);
+
+impl StrError {
+    /// Create formatted string errror.
+    pub fn fmt(args: Arguments<'_>) -> Self {
+        Self(::std::fmt::format(args))
+    }
+}
+
+impl<E: ::core::error::Error> From<E> for StrError {
+    fn from(value: E) -> Self {
+        Self(value.to_string())
+    }
+}
+
+impl Display for StrError {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        <String as Display>::fmt(&self.0, f)
+    }
+}
+
+impl From<StrError> for Message {
+    fn from(value: StrError) -> Self {
+        value.0.into()
+    }
+}
+
+macro_rules! strerror {
+    ($($arg:tt)*) => {
+        StrError::fmt(format_args!($($arg)*))
+    };
+}
 
 #[derive(Debug, ::thiserror::Error)]
 enum ScriptGatherError {
@@ -182,18 +237,144 @@ async fn run_script(
     Ok(())
 }
 
-/// Convert inputs to an array of [OsString]
-///
-/// ```
-/// assert_eq!(
-///     args!["echo", "Hello", "World!"],
-///     [OsString::from("echo"), OsString::from("Hello"), OsString::from("World!")]
-/// );
-/// ```
-macro_rules! args {
-    ($($arg:expr),* $(,)?) => {
-        [$(OsString::from($arg)),*]
-    };
+#[derive(Debug)]
+struct UmuCtx<'a> {
+    slug: &'a str,
+    name: &'a str,
+    bwrap: &'a Path,
+    exe: &'a Path,
+    umu: &'a Path,
+    config: &'a Config,
+    extra_config: Option<&'a AdditionalConfig>,
+    is_net_disabled: bool,
+    stdout: Stdio,
+    stderr: Stdio,
+    send_open: Sender<()>,
+}
+
+async fn umu_run(ctx: UmuCtx<'_>) -> Result<String, StrError> {
+    let UmuCtx {
+        slug,
+        name,
+        bwrap,
+        exe,
+        umu,
+        config,
+        extra_config,
+        is_net_disabled,
+        stdout,
+        stderr,
+        send_open,
+    } = ctx;
+    let home = ::std::env::home_dir().ok_or_else(|| {
+        ::log::error!("could not find user home directory");
+        StrError("could not find user home directory".to_owned())
+    })?;
+    let directory = exe.parent().ok_or_else(|| {
+        ::log::error!("executable {exe:?} has no parent");
+        StrError("missing executable parent".to_owned())
+    })?;
+    let xauthority = home.join(".Xauthority");
+    let umu_dir = home.join(".local/share/umu");
+    let umu_prefix = directory.join(".umu_pfx");
+
+    if !umu_prefix.exists() {
+        let status = ::smol::process::Command::new(umu)
+            .arg("")
+            .kill_on_drop(true)
+            .status()
+            .await
+            .map_err(|err| {
+                ::log::error!("could not run command to create umu prefix {umu_prefix:?}, {err}");
+                strerror!("could not create umu prefix")
+            })?;
+
+        if !status.success() {
+            ::log::error!("failed to create umu prefix {status:?}");
+            return Err(strerror!("could not create umu prefix"));
+        }
+    }
+
+    #[rustfmt::skip]
+    let mut args = Vec::<OsString>::from(args![
+        "--dev", "/dev",
+        "--proc", "/proc",
+        "--ro-bind", "/usr", "/usr",
+        "--ro-bind", "/etc", "/etc",
+        "--ro-bind", "/var", "/var",
+        "--ro-bind", "/run", "/run",
+        "--ro-bind", "/sys", "/sys",
+        "--ro-bind-try", "/opt/rocm", "/opt/rocm",
+        "--symlink", "/usr/lib", "/lib",
+        "--symlink", "/usr/lib64", "/lib64",
+        "--symlink", "/usr/lib32", "/lib32",
+        "--symlink", "/usr/bin", "/bin",
+        "--symlink", "/usr/bin", "/sbin",
+        "--tmpfs", "/home",
+        "--tmpfs", "/tmp",
+        "--ro-bind", "/tmp/.X11-unix/X0", "/tmp/.X11-unix/X0",
+        "--ro-bind", &xauthority, xauthority,
+        "--dev-bind", "/dev/dri", "/dev/dri",
+        "--bind", &umu_dir, umu_dir,
+        "--setenv", "PATH", "/usr/bin",
+        "--hostname", "games",
+        "--die-with-parent",
+        "--new-session",
+        "--unshare-all",
+    ]);
+
+    let additional_roots = extra_config.map_or(&[][..], |extra| extra.sandbox_root.as_slice());
+
+    let mut directory_bound = false;
+    if additional_roots.is_empty() {
+        let common_parent = config.game.common_parent();
+        if common_parent == directory {
+            directory_bound = true;
+        }
+        args.extend(args!["--bind", &common_parent, common_parent]);
+    } else {
+        for root in additional_roots {
+            if root == directory {
+                directory_bound = true;
+            }
+            args.extend(args!["--bind", root, root]);
+        }
+    }
+    let directory_bound = directory_bound;
+
+    if !is_net_disabled {
+        args.extend(args!["--share-net"]);
+    }
+
+    if !directory_bound {
+        args.extend(args!["--bind", &directory, directory,]);
+    }
+
+    args.extend(args!["--chdir", &directory,]);
+
+    if let Some(_prefix) = &config.game.prefix {
+        args.extend(args!["--setenv", "WINEPREFIX", umu_prefix, umu,]);
+    }
+
+    args.extend(args![exe]);
+
+    ::log::info!("running with config {args:#?}");
+
+    let cmd = ::smol::process::Command::new(bwrap)
+        .args(args)
+        .kill_on_drop(true)
+        .stdout(stdout)
+        .stderr(stderr)
+        .status();
+
+    send_open.send(());
+
+    let status = cmd.await.map_err(|err| {
+        ::log::error!("could not run {slug}\n{err}");
+        strerror!("could not run {slug}")
+    })?;
+
+    Ok(format!("{name} exited with {status}"))
 }
 
 impl App {
@@ -345,104 +526,21 @@ impl App {
                         .status()
                 }
                 (Safety::Sandbox, SandboxMode::Bubblewrap) => {
-                    let bwrap = bwrap.as_path();
-                    let Some(home) = ::std::env::home_dir() else {
-                        ::log::error!("could not find user home directory");
-                        return "could not find user home directory".to_owned().into();
-                    };
-                    let exe = config.game.exe.as_path();
-                    let umu = umu.as_path();
-                    let Some(directory) = config.game.exe.parent() else {
-                        ::log::error!("executable {exe:?} has no parent");
-                        return "missing executable parent".to_owned().into();
-                    };
-                    let xauthority = home.join(".Xauthority");
-                    let umu_dir = home.join(".local/share/umu");
-                    let umu_prefix = directory.join(".umu_pfx");
-
-                    // TODO: if missing create prefix using umu-run "", with network enabled, then 
-                    // if required fix prefix.
-
-                    #[rustfmt::skip]
-                    let mut args = Vec::<OsString>::from(args![
-                        "--dev", "/dev",
-                        "--proc", "/proc",
-                        "--ro-bind", "/usr", "/usr",
-                        "--ro-bind", "/etc", "/etc",
-                        "--ro-bind", "/var", "/var",
-                        "--ro-bind", "/run", "/run",
-                        "--ro-bind", "/sys", "/sys",
-                        "--ro-bind-try", "/opt/rocm", "/opt/rocm",
-                        "--symlink", "/usr/lib", "/lib",
-                        "--symlink", "/usr/lib64", "/lib64",
-                        "--symlink", "/usr/lib32", "/lib32",
-                        "--symlink", "/usr/bin", "/bin",
-                        "--symlink", "/usr/bin", "/sbin",
-                        "--tmpfs", "/home",
-                        "--tmpfs", "/tmp",
-                        "--ro-bind", "/tmp/.X11-unix/X0", "/tmp/.X11-unix/X0",
-                        "--ro-bind", &xauthority, xauthority,
-                        "--dev-bind", "/dev/dri", "/dev/dri",
-                        "--bind", &umu_dir, umu_dir,
-                        "--setenv", "PATH", "/usr/bin",
-                        "--hostname", "games",
-                        "--die-with-parent",
-                        "--new-session",
-                        "--unshare-all",
-                    ]);
-
-                    let additional_roots = extra_config
-                        .as_ref()
-                        .map_or(&[][..], |extra| extra.sandbox_root.as_slice());
-
-                    let mut directory_bound = false;
-                    if additional_roots.is_empty() {
-                        let common_parent = config.game.common_parent();
-                        if common_parent == directory {
-                            directory_bound = true;
-                        }
-                        args.extend(args!["--bind", &common_parent, common_parent]);
-                    } else {
-                        for root in additional_roots {
-                            if root == directory {
-                                directory_bound = true;
-                            }
-                            args.extend(args!["--bind", root, root]);
-                        }
-                    }
-                    let directory_bound = directory_bound;
-
-                    if !is_net_disabled {
-                        args.extend(args!["--share-net"]);
-                    }
-
-                    if !directory_bound {
-                        args.extend(args!["--bind", &directory, directory,]);
-                    }
-
-                    #[rustfmt::skip]
-                    args.extend(args![
-                        "--chdir", &directory,
-                    ]);
-
-                    if let Some(_prefix) = &config.game.prefix {
-                        #[rustfmt::skip]
-                        args.extend(args![
-                            "--setenv", "WINEPREFIX", umu_prefix,
-                            umu,
-                        ]);
-                    }
-
-                    args.extend(args![exe]);
-
-                    ::log::info!("running with config {args:#?}");
-
-                    ::smol::process::Command::new(bwrap)
-                        .args(args)
-                        .kill_on_drop(true)
-                        .stdout(stdout)
-                        .stderr(stderr)
-                        .status()
+                    return umu_run(UmuCtx {
+                        name: &name,
+                        slug: &slug,
+                        bwrap: bwrap.as_path(),
+                        exe: &config.game.exe,
+                        umu: umu.as_path(),
+                        config: &config,
+                        extra_config: extra_config.as_ref(),
+                        is_net_disabled,
+                        stdout,
+                        stderr,
+                        send_open,
+                    })
+                    .await
+                    .into();
                 }
             };
 

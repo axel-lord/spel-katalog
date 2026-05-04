@@ -74,3 +74,16 @@ pub enum Message {
     #[from]
     ShowInfo(crate::view::Displayed),
 }
+
+impl<T, E> From<Result<T, E>> for Message
+where
+    T: Into<Message>,
+    E: Into<Message>,
+{
+    fn from(value: Result<T, E>) -> Self {
+        match value {
+            Ok(value) => value.into(),
+            Err(value) => value.into(),
+        }
+    }
+}
