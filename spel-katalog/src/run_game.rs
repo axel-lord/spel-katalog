@@ -360,6 +360,9 @@ impl App {
                     let umu_dir = home.join(".local/share/umu");
                     let umu_prefix = directory.join(".umu_pfx");
 
+                    // TODO: if missing create prefix using umu-run "", with network enabled, then 
+                    // if required fix prefix.
+
                     #[rustfmt::skip]
                     let mut args = Vec::<OsString>::from(args![
                         "--dev", "/dev",
@@ -413,6 +416,10 @@ impl App {
                         args.extend(args!["--share-net"]);
                     }
 
+                    if !directory_bound {
+                        args.extend(args!["--bind", &directory, directory,]);
+                    }
+
                     #[rustfmt::skip]
                     args.extend(args![
                         "--chdir", &directory,
@@ -424,10 +431,6 @@ impl App {
                             "--setenv", "WINEPREFIX", umu_prefix,
                             umu,
                         ]);
-                    }
-
-                    if !directory_bound {
-                        args.extend(args!["--bind", &directory, directory,]);
                     }
 
                     args.extend(args![exe]);
