@@ -244,6 +244,7 @@ struct UmuCtx<'a> {
     bwrap: &'a Path,
     exe: &'a Path,
     umu: &'a Path,
+    wine_prefix: Option<&'a Path>,
     config: &'a Config,
     extra_config: Option<&'a AdditionalConfig>,
     is_net_disabled: bool,
@@ -252,12 +253,31 @@ struct UmuCtx<'a> {
     send_open: Sender<()>,
 }
 
+/// If possible bind user in wine prefix to steamuser in umu prefix.
+fn bind_user(wine_prefix: &Path, umu_prefix: &Path) -> Option<[OsString; 3]> {
+    const USERS: &str = "drive_c/users";
+    let username = ::users::get_current_username()?;
+
+    let wine_home = wine_prefix.join(USERS).join(&username);
+    if !wine_home.exists() {
+        ::log::info!("user {username:?} not found in wine prefix {wine_prefix:?}");
+        return None;
+    }
+
+    let umu_home = umu_prefix.join(USERS).join("steamuser");
+
+    ::log::info!("binding {wine_home:?} to {umu_home:?}");
+
+    Some(args!["--bind", wine_home, umu_home])
+}
+
 async fn umu_run(ctx: UmuCtx<'_>) -> Result<String, StrError> {
     let UmuCtx {
         slug,
         name,
         bwrap,
         exe,
+        wine_prefix,
         umu,
         config,
         extra_config,
@@ -349,6 +369,13 @@ async fn umu_run(ctx: UmuCtx<'_>) -> Result<String, StrError> {
     if !directory_bound {
         args.extend(args!["--bind", &directory, directory,]);
     }
+
+    args.extend(
+        wine_prefix
+            .and_then(|pfx| bind_user(pfx, &umu_prefix))
+            .into_iter()
+            .flatten(),
+    );
 
     args.extend(args!["--chdir", &directory,]);
 
@@ -531,6 +558,7 @@ impl App {
                         slug: &slug,
                         bwrap: bwrap.as_path(),
                         exe: &config.game.exe,
+                        wine_prefix: config.game.prefix.as_deref(),
                         umu: umu.as_path(),
                         config: &config,
                         extra_config: extra_config.as_ref(),

@@ -49,6 +49,7 @@ strsim.workspace = true
 tap.workspace = true
 thiserror.workspace = true
 toml.workspace = true
+users = { version = "0.11.0", default-features = false }
 yaml-rust2.workspace = true
 
 [build-dependencies]
