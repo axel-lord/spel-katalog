@@ -137,3 +137,4 @@ vte = "0.15.0"
 whoami = { version = "2.1.1", default-features = false }
 yaml-rust2 = "0.11.0"
 mimalloc = "0.1.48"
+users = { version = "0.11.0", default-features = false }
