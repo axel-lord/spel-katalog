@@ -298,7 +298,7 @@ async fn umu_run(ctx: UmuCtx<'_>) -> Result<String, StrError> {
     let umu_dir = home.join(".local/share/umu");
     let umu_prefix = directory.join(".umu_pfx");
 
-    if !umu_prefix.exists() {
+    if !umu_prefix.exists() && config.game.prefix.is_some() {
         let status = ::smol::process::Command::new(umu)
             .arg("")
             .kill_on_drop(true)
@@ -377,9 +377,11 @@ async fn umu_run(ctx: UmuCtx<'_>) -> Result<String, StrError> {
             .flatten(),
     );
 
-    args.extend(args!["--chdir", &directory,]);
+    args.extend(args!["--chdir", directory]);
 
     if let Some(_prefix) = &config.game.prefix {
+        let dir_device = umu_prefix.join("dosdevices").join("g:");
+        args.extend(args!["--symlink", "../..", dir_device]);
         args.extend(args!["--setenv", "WINEPREFIX", umu_prefix, umu,]);
     }
 
