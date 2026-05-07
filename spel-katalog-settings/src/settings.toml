@@ -85,6 +85,16 @@ title = "UMU Executable"
 help = "Path to umu-run executable"
 path = "/usr/bin/umu-run"
 
+[ShellExe]
+title = "Shell executable"
+help = "Path to shell executable"
+path = "/usr/bin/bash"
+
+[TermCommand]
+title = "Terminal Command"
+help = "Arguments prepended to command to run in terminal"
+string = "/usr/bin/urxvt -e"
+
 [CoverartDir]
 title = "Coverart Directory"
 help = "Path to coverart directory"

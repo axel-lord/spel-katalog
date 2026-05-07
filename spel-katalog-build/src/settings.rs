@@ -266,6 +266,108 @@ fn emit_path(setting: &Setting, name: &str, ident: &Ident, path: &str) -> Emit {
     }
 }
 
+/// create an [Emit] for a string setting.
+fn emit_string(setting: &Setting, name: &str, ident: &Ident, path: &str) -> Emit {
+    let title_body = title_expr(name, setting.title.as_deref());
+    let doc = doc_str(&setting.help);
+    let default_value = str_expr(path);
+
+    let ty = parse_quote! {
+        #[derive(
+            Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash,
+            ::serde::Serialize, ::serde::Deserialize
+        )]
+        #[doc = #doc]
+        #[serde(transparent)]
+        pub struct #ident(String);
+    };
+
+    let impls = item::file(
+        &mut [
+            parse_quote! {
+                impl #ident {
+                    #[doc = "Construct a new value from a string."]
+                    #[inline]
+                    pub const fn new(string: ::std::string::String) -> Self {
+                        Self(string)
+                    }
+
+                    #[doc = "Unwrap into inner string value."]
+                    #[inline]
+                    pub fn into_inner(self) -> ::std::string::String {
+                        let Self(string) = self;
+                        string
+                    }
+
+                    #[doc = "Get setting as a string slice."]
+                    #[inline]
+                    pub const fn as_str(&self) -> &str {
+                        self.0.as_str()
+                    }
+
+                    #[doc = "Get setting as an os string."]
+                    #[inline]
+                    pub fn as_os_str(&self) -> &::std::ffi::OsStr{
+                        ::std::ffi::OsStr::new(self.as_str())
+                    }
+                }
+            },
+            item::title(ident, &title_body),
+            item::help(ident, &str_expr(doc.trim_end_matches('.'))),
+            item::default_str(ident, &default_value),
+            item::default(
+                ident,
+                &quote! { Self(<Self as crate::DefaultStr>::default_str().into()) },
+            ),
+            item::display(ident, &quote! { f.write_str(self.as_str()) }),
+            item::deref(ident, &quote! { str }, &quote! { self.as_str() }),
+            item::as_ref(ident, &quote! { str }, &quote! { self.as_str() }),
+            item::as_ref(
+                ident,
+                &quote! { ::std::ffi::OsStr },
+                &quote! { self.as_os_str() },
+            ),
+            item::as_ref(
+                ident,
+                &quote! { ::std::string::String },
+                &quote! { &self.0 },
+            ),
+            item::as_mut(
+                ident,
+                &quote! { ::std::string::String },
+                &quote! { &mut self.0 },
+            ),
+            item::from(
+                ident,
+                &quote! { ::std::string::String },
+                &quote! { Self::new(value) },
+            ),
+            item::from(
+                &quote! { ::std::string::String },
+                ident,
+                &quote! { value.into_inner() },
+            ),
+        ]
+        .into_iter(),
+    );
+
+    let from_str = parse_quote! {
+        impl ::core::str::FromStr for #ident {
+            type Err = ::core::convert::Infallible;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                Ok(Self(s.into()))
+            }
+        }
+    };
+
+    Emit {
+        ty,
+        impls,
+        from_str,
+    }
+}
+
 /// Create an [Emit] based on the provided setting.
 fn emit_type(setting: &Setting, name: &str) -> Emit {
     let ident = format_ident!("{}", name.to_case(Case::Pascal));
@@ -274,6 +376,7 @@ fn emit_type(setting: &Setting, name: &str) -> Emit {
             emit_enum(setting, name, &ident, variants, default)
         }
         SettingContent::Path { path } => emit_path(setting, name, &ident, path),
+        SettingContent::String { string } => emit_string(setting, name, &ident, string),
     }
 }
 
@@ -331,6 +434,14 @@ pub fn write(settings: Settings, dest: &Path) {
                 ));
             }
             SettingContent::Path { .. } => {
+                path_field_names.push(format_ident!("{snake_ident}"));
+                path_field_names_mut.push(format_ident!("{snake_ident}_mut"));
+                path_ty_names.push(format_ident!("{pascal_ident}"));
+                path_ty_doc.push(format!(
+                    "Get the [{pascal_ident}][super::{pascal_ident}] setting."
+                ));
+            }
+            SettingContent::String{ .. } => {
                 path_field_names.push(format_ident!("{snake_ident}"));
                 path_field_names_mut.push(format_ident!("{snake_ident}_mut"));
                 path_ty_names.push(format_ident!("{pascal_ident}"));

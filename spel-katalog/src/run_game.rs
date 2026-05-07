@@ -1,78 +1,31 @@
-use ::core::fmt::{Arguments, Display};
 use ::std::{
     ffi::{OsStr, OsString},
     path::{Path, PathBuf},
-    process::Stdio,
-    sync::Arc,
 };
 
 use ::iced_runtime::Task;
-use ::mlua::Lua;
-use ::smol::stream::StreamExt;
-use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::status;
-use ::spel_katalog_formats::{AdditionalConfig, Runner};
-use ::spel_katalog_info::formats::{self, Config};
+use ::spel_katalog_formats::AdditionalConfig;
+use ::spel_katalog_info::formats;
 use ::spel_katalog_settings::{
-    BubblewrapExe, ConfigDir, FirejailExe, LutrisExe, Network, OnRun, SandboxMode, UmuRunExe,
-    YmlDir,
+    BubblewrapExe, ConfigDir, FirejailExe, LutrisExe, Network, OnRun, SandboxMode, ShellExe,
+    TermCommand, UmuRunExe, YmlDir,
 };
-use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
+use ::spel_katalog_sink::SinkIdentity;
 
 use crate::{
     App, Message, QuickMessage, Safety,
-    app::LuaVt,
-    oneshot_broadcast::{Sender, oneshot_broadcast},
+    oneshot_broadcast::oneshot_broadcast,
+    run_game::{
+        run_script::BatchView,
+        run_umu::{UmuCtx, umu_run},
+    },
 };
 
-/// Convert inputs to an array of [OsString]
-///
-/// ```
-/// assert_eq!(
-///     args!["echo", "Hello", "World!"],
-///     [OsString::from("echo"), OsString::from("Hello"), OsString::from("World!")]
-/// );
-/// ```
-macro_rules! args {
-    ($($arg:expr),* $(,)?) => {
-        [$(OsString::from($arg)),*]
-    };
-}
-
-/// Error type converting error to a string.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct StrError(String);
-
-impl StrError {
-    /// Create formatted string errror.
-    pub fn fmt(args: Arguments<'_>) -> Self {
-        Self(::std::fmt::format(args))
-    }
-}
-
-impl<E: ::core::error::Error> From<E> for StrError {
-    fn from(value: E) -> Self {
-        Self(value.to_string())
-    }
-}
-
-impl Display for StrError {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-        <String as Display>::fmt(&self.0, f)
-    }
-}
-
-impl From<StrError> for Message {
-    fn from(value: StrError) -> Self {
-        value.0.into()
-    }
-}
-
-macro_rules! strerror {
-    ($($arg:tt)*) => {
-        StrError::fmt(format_args!($($arg)*))
-    };
-}
+mod macros;
+mod run_script;
+mod run_umu;
+mod strerror;
 
 #[derive(Debug, ::thiserror::Error)]
 enum ScriptGatherError {
@@ -99,44 +52,6 @@ enum ConfigError {
     Scan(#[from] ::yaml_rust2::ScanError),
 }
 
-async fn gather_scripts(script_dir: PathBuf) -> Result<Vec<PathBuf>, ScriptGatherError> {
-    if !script_dir.exists() {
-        ::log::info!("no script dir, skipping");
-        return Ok(Vec::new());
-    }
-    let mut lua_scripts = Vec::new();
-    let mut stack = Vec::new();
-
-    stack.push(script_dir);
-
-    while let Some(dir) = stack.pop() {
-        let mut dir = ::smol::fs::read_dir(dir).await?;
-        while let Some(entry) = dir.next().await.transpose()? {
-            let ft = entry.file_type().await?;
-
-            let path = entry.path();
-
-            if ft.is_dir() {
-                stack.push(path);
-            } else if ft.is_file() {
-                if path
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"))
-                {
-                    lua_scripts.push(path);
-                }
-            } else {
-                ::log::warn!("non file or directory path in script dir, {path:?}")
-            }
-        }
-    }
-
-    lua_scripts.sort_unstable();
-
-    Ok(lua_scripts)
-}
-
 async fn parse_extra_config(extra_config_path: &Path) -> Result<AdditionalConfig, String> {
     ::toml::from_str::<AdditionalConfig>(
         &::smol::fs::read_to_string(&extra_config_path)
@@ -152,268 +67,6 @@ async fn parse_extra_config(extra_config_path: &Path) -> Result<AdditionalConfig
     })
 }
 
-#[derive(Debug, Clone, Copy)]
-struct BatchView<'a> {
-    id: i64,
-    slug: &'a str,
-    name: &'a str,
-    runner: &'a Runner,
-    config: &'a str,
-    extra: Option<&'a AdditionalConfig>,
-    hidden: bool,
-}
-
-impl From<BatchView<'_>> for BatchInfo {
-    fn from(
-        BatchView {
-            id,
-            slug,
-            name,
-            runner,
-            config,
-            extra,
-            hidden,
-        }: BatchView,
-    ) -> Self {
-        BatchInfo {
-            id,
-            slug: slug.to_owned(),
-            name: name.to_owned(),
-            runner: runner.to_string(),
-            config: config.to_owned(),
-            attrs: extra
-                .map(|extra_config| extra_config.attrs.clone())
-                .unwrap_or_default(),
-            hidden,
-        }
-    }
-}
-
-async fn run_script(
-    script_dir: PathBuf,
-    batch_view: BatchView<'_>,
-    sink_builder: &SinkBuilder,
-    lua_vt: Arc<LuaVt>,
-) -> Result<(), ScriptGatherError> {
-    let lua_scripts = gather_scripts(script_dir).await?;
-
-    if !lua_scripts.is_empty() {
-        let batch_info = BatchInfo::from(batch_view);
-
-        let sink_builder = sink_builder.clone();
-        ::smol::unblock(move || {
-            let scripts = lua_scripts
-                .into_iter()
-                .map(|path| match ::std::fs::read_to_string(&path) {
-                    Ok(content) => Ok(content),
-                    Err(err) => Err(ScriptGatherError::ReadLuaScript(err, path)),
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-
-            let lua = Lua::new();
-            ::spel_katalog_lua::Module {
-                sink_builder: &sink_builder,
-                vt: lua_vt,
-            }
-            .register(&lua)
-            .and_then(|skeleton| {
-                let module = &skeleton.module;
-                let game = batch_info.to_lua(&lua, &skeleton.game_data)?;
-
-                module.set("game", game)?;
-
-                for script in scripts {
-                    lua.load(script).exec()?;
-                }
-
-                Ok(())
-            })
-            .map_err(|err| LuaError(err.to_string()))?;
-            Ok::<_, ScriptGatherError>(())
-        })
-        .await?;
-    }
-
-    Ok(())
-}
-
-#[derive(Debug)]
-struct UmuCtx<'a> {
-    slug: &'a str,
-    name: &'a str,
-    bwrap: &'a Path,
-    exe: &'a Path,
-    umu: &'a Path,
-    wine_prefix: Option<&'a Path>,
-    config: &'a Config,
-    extra_config: Option<&'a AdditionalConfig>,
-    is_net_disabled: bool,
-    stdout: Stdio,
-    stderr: Stdio,
-    send_open: Sender<()>,
-}
-
-/// If possible bind user in wine prefix to steamuser in umu prefix.
-fn bind_user(wine_prefix: &Path, umu_prefix: &Path) -> Option<[OsString; 3]> {
-    const USERS: &str = "drive_c/users";
-    let username = ::users::get_current_username()?;
-
-    let wine_home = wine_prefix.join(USERS).join(&username);
-    if !wine_home.exists() {
-        ::log::info!("user {username:?} not found in wine prefix {wine_prefix:?}");
-        return None;
-    }
-
-    let umu_home = umu_prefix.join(USERS).join("steamuser");
-
-    ::log::info!("binding {wine_home:?} to {umu_home:?}");
-
-    Some(args!["--bind", wine_home, umu_home])
-}
-
-async fn umu_run(ctx: UmuCtx<'_>) -> Result<String, StrError> {
-    let UmuCtx {
-        slug,
-        name,
-        bwrap,
-        exe,
-        wine_prefix,
-        umu,
-        config,
-        extra_config,
-        is_net_disabled,
-        stdout,
-        stderr,
-        send_open,
-    } = ctx;
-    let home = ::std::env::home_dir().ok_or_else(|| {
-        ::log::error!("could not find user home directory");
-        StrError("could not find user home directory".to_owned())
-    })?;
-    let directory = exe.parent().ok_or_else(|| {
-        ::log::error!("executable {exe:?} has no parent");
-        StrError("missing executable parent".to_owned())
-    })?;
-    let xauthority = home.join(".Xauthority");
-    let umu_dir = home.join(".local/share/umu");
-    let umu_prefix = directory.join(".umu_pfx");
-
-    if !umu_prefix.exists() && config.game.prefix.is_some() {
-        let status = ::smol::process::Command::new(umu)
-            .arg("")
-            .kill_on_drop(true)
-            .status()
-            .await
-            .map_err(|err| {
-                ::log::error!("could not run command to create umu prefix {umu_prefix:?}, {err}");
-                strerror!("could not create umu prefix")
-            })?;
-
-        if !status.success() {
-            ::log::error!("failed to create umu prefix {status:?}");
-            return Err(strerror!("could not create umu prefix"));
-        }
-    }
-
-    #[rustfmt::skip]
-    let mut args = Vec::<OsString>::from(args![
-        "--dev", "/dev",
-        "--proc", "/proc",
-        "--ro-bind", "/usr", "/usr",
-        "--ro-bind", "/etc", "/etc",
-        "--ro-bind", "/var", "/var",
-        "--ro-bind", "/run", "/run",
-        "--ro-bind", "/sys", "/sys",
-        "--ro-bind-try", "/opt/rocm", "/opt/rocm",
-        "--symlink", "/usr/lib", "/lib",
-        "--symlink", "/usr/lib64", "/lib64",
-        "--symlink", "/usr/lib32", "/lib32",
-        "--symlink", "/usr/bin", "/bin",
-        "--symlink", "/usr/bin", "/sbin",
-        "--tmpfs", "/home",
-        "--tmpfs", "/tmp",
-        "--ro-bind", "/tmp/.X11-unix/X0", "/tmp/.X11-unix/X0",
-        "--ro-bind", &xauthority, xauthority,
-        "--dev-bind", "/dev/dri", "/dev/dri",
-        "--bind", &umu_dir, umu_dir,
-        "--setenv", "PATH", "/usr/bin",
-        "--hostname", "games",
-        "--die-with-parent",
-        "--new-session",
-        "--unshare-all",
-    ]);
-
-    let additional_roots = extra_config.map_or(&[][..], |extra| extra.sandbox_root.as_slice());
-
-    let mut directory_bound = false;
-    if additional_roots.is_empty() {
-        let common_parent = config.game.common_parent();
-        if common_parent == directory {
-            directory_bound = true;
-        }
-        args.extend(args!["--bind", &common_parent, common_parent]);
-    } else {
-        for root in additional_roots {
-            if root == directory {
-                directory_bound = true;
-            }
-            args.extend(args!["--bind", root, root]);
-        }
-    }
-    let directory_bound = directory_bound;
-
-    if !is_net_disabled {
-        args.extend(args!["--share-net"]);
-    }
-
-    if !directory_bound {
-        args.extend(args!["--bind", &directory, directory,]);
-    }
-
-    args.extend(
-        wine_prefix
-            .and_then(|pfx| bind_user(pfx, &umu_prefix))
-            .into_iter()
-            .flatten(),
-    );
-
-    args.extend(
-        config
-            .system
-            .env
-            .iter()
-            .flat_map(|(key, value)| args!["--setenv", key, value]),
-    );
-
-    args.extend(args!["--chdir", directory]);
-
-    if let Some(_prefix) = &config.game.prefix {
-        let dir_device = umu_prefix.join("dosdevices").join("g:");
-        args.extend(args!["--symlink", "../..", dir_device]);
-        args.extend(args!["--setenv", "WINEPREFIX", umu_prefix, umu,]);
-    }
-
-    args.extend(args![exe]);
-
-    ::log::info!("running with config {args:#?}");
-
-    let cmd = ::smol::process::Command::new(bwrap)
-        .args(args)
-        .kill_on_drop(true)
-        .stdout(stdout)
-        .stderr(stderr)
-        .status();
-
-    send_open.send(());
-
-    let status = cmd.await.map_err(|err| {
-        ::log::error!("could not run {slug}\n{err}");
-        strerror!("could not run {slug}")
-    })?;
-
-    Ok(format!("{name} exited with {status}"))
-}
-
 impl App {
     pub fn run_game(&mut self, id: i64, safety: Safety, no_game: bool) -> Task<Message> {
         let Some(game) = self.games.by_id(id) else {
@@ -423,8 +76,10 @@ impl App {
 
         let lutris = self.settings.get::<LutrisExe>().clone();
         let firejail = self.settings.get::<FirejailExe>().clone();
+        let term = self.settings.get::<TermCommand>().clone();
         let bwrap = self.settings.get::<BubblewrapExe>().clone();
         let umu = self.settings.get::<UmuRunExe>().clone();
+        let shell = self.settings.get::<ShellExe>().clone();
         let sandbox_mode = *self.settings.get::<SandboxMode>();
         let slug = game.slug.clone();
         let name = game.name.clone();
@@ -480,7 +135,9 @@ impl App {
                 hidden,
             };
 
-            if let Err(err) = run_script(script_dir, view, &sink_builder, lua_vt).await {
+            if let Err(err) =
+                self::run_script::run_script(script_dir, view, &sink_builder, lua_vt).await
+            {
                 ::log::error!("failure when gathering/runnings scripts\n{err}");
                 return "running scripts failed".to_owned().into();
             }
@@ -547,21 +204,56 @@ impl App {
                         .stderr(stderr)
                         .status()
                 }
+
+                (Safety::SandboxShell, SandboxMode::Firejail) => {
+                    ::log::error!("shell requires sandbox mode of bubblewrap");
+                    return "only bubblewrap supported for shell".to_owned().into();
+                }
                 (Safety::Sandbox, SandboxMode::Bubblewrap) => {
-                    return umu_run(UmuCtx {
-                        name: &name,
-                        slug: &slug,
-                        bwrap: bwrap.as_path(),
-                        exe: &config.game.exe,
-                        wine_prefix: config.game.prefix.as_deref(),
-                        umu: umu.as_path(),
-                        config: &config,
-                        extra_config: extra_config.as_ref(),
-                        is_net_disabled,
-                        stdout,
-                        stderr,
-                        send_open,
-                    })
+                    return umu_run(
+                        UmuCtx {
+                            name: &name,
+                            slug: &slug,
+                            bwrap: bwrap.as_path(),
+                            shell: shell.as_path(),
+                            term: &term,
+                            exe: &config.game.exe,
+                            wine_prefix: config.game.prefix.as_deref(),
+                            umu: umu.as_path(),
+                            config: &config,
+                            extra_config: extra_config.as_ref(),
+                            is_net_disabled,
+                            stdout,
+                            stderr,
+                            send_open,
+                            runner,
+                        },
+                        false,
+                    )
+                    .await
+                    .into();
+                }
+                (Safety::SandboxShell, SandboxMode::Bubblewrap) => {
+                    return umu_run(
+                        UmuCtx {
+                            name: &name,
+                            slug: &slug,
+                            bwrap: bwrap.as_path(),
+                            shell: shell.as_path(),
+                            term: &term,
+                            exe: &config.game.exe,
+                            wine_prefix: config.game.prefix.as_deref(),
+                            umu: umu.as_path(),
+                            config: &config,
+                            extra_config: extra_config.as_ref(),
+                            is_net_disabled,
+                            stdout,
+                            stderr,
+                            send_open,
+                            runner,
+                        },
+                        true,
+                    )
                     .await
                     .into();
                 }

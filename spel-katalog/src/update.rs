@@ -282,6 +282,9 @@ impl App {
             ::spel_katalog_info::Request::RunGame { id, sandbox } => {
                 self.run_game(id, Safety::from(sandbox), false)
             }
+            ::spel_katalog_info::Request::OpenShell { id } => {
+                self.run_game(id, Safety::SandboxShell, false)
+            }
             ::spel_katalog_info::Request::RunLutrisInSandbox { id } => {
                 self.run_game(id, Safety::Sandbox, true)
             }

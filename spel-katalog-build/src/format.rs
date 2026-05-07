@@ -46,6 +46,11 @@ pub mod settings {
             /// Setting default path.
             path: String,
         },
+        /// Setting is a string.
+        String {
+            /// Setting default string.
+            string: String,
+        }
     }
 
     /// A Single setting.

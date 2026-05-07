@@ -137,6 +137,11 @@ pub enum Request {
         /// Should game be sandboxed.
         sandbox: bool,
     },
+    /// Open shell in game sandbox.
+    OpenShell {
+        /// id of game to open shell for.
+        id: i64,
+    },
     /// Run lutris in sandbox of game.
     RunLutrisInSandbox {
         /// Id of game to run lutris in sandbox of.
@@ -728,6 +733,9 @@ impl State {
                     button("Run")
                         .style(widget::button::danger)
                         .on_press(OrRequest::Request(Request::RunGame { id, sandbox: false })),
+                    button("Shell")
+                        .style(widget::button::secondary)
+                        .on_press(OrRequest::Request(Request::OpenShell { id })),
                     button("Lutris")
                         .on_press(OrRequest::Request(Request::RunLutrisInSandbox { id })),
                     button("+Thumb").padding(3).on_press_maybe(

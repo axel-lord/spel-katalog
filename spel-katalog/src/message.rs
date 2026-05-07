@@ -13,6 +13,7 @@ pub enum Safety {
     None,
     #[default]
     Sandbox,
+    SandboxShell,
 }
 
 impl From<bool> for Safety {
