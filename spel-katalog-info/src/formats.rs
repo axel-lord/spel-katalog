@@ -5,6 +5,7 @@ use ::std::{
     sync::LazyLock,
 };
 
+use ::rustc_hash::FxHashMap;
 use ::yaml_rust2::{ScanError, Yaml, YamlLoader};
 
 /// A game config.
@@ -12,6 +13,8 @@ use ::yaml_rust2::{ScanError, Yaml, YamlLoader};
 pub struct Config {
     /// Game field.
     pub game: Game,
+    /// System field.
+    pub system: System,
 }
 
 /// Game fields.
@@ -46,14 +49,25 @@ impl Game {
     }
 }
 
+/// System fields.
+#[derive(Debug, Clone, Default)]
+pub struct System {
+    /// Environment variables.
+    pub env: FxHashMap<String, String>,
+}
+
 /// Yaml item to get game field.
 pub static GAME: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("game".into()));
+/// Yaml item to get system field.
+pub static SYSTEM: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("system".into()));
 /// Yaml item to get exe field.
 pub static EXE: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("exe".into()));
 /// Yaml item to get prefix field.
 pub static PREFIX: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("prefix".into()));
 /// Yaml item to get arch field.
 pub static ARCH: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("arch".into()));
+/// Yaml item to get env field.
+pub static ENV: LazyLock<Yaml> = LazyLock::new(|| Yaml::String("env".into()));
 
 /// Get exe of game config.
 fn get_exe(yml: &Yaml) -> Option<PathBuf> {
@@ -85,6 +99,22 @@ fn get_arch(yml: &Yaml) -> Option<String> {
         .map(String::from)
 }
 
+/// Get environment of config.
+fn get_env(yml: &Yaml) -> Option<FxHashMap<String, String>> {
+    yml.as_hash()?
+        .get(&SYSTEM)?
+        .as_hash()?
+        .get(&ENV)?
+        .as_hash()
+        .map(|env| {
+            env.into_iter()
+                .filter_map(|(key, value)| {
+                    Some((key.as_str()?.to_owned(), value.as_str()?.to_owned()))
+                })
+                .collect()
+        })
+}
+
 impl Config {
     /// Parse game config.
     ///
@@ -97,6 +127,9 @@ impl Config {
                 exe: doc.first().and_then(get_exe).unwrap_or_default(),
                 prefix: doc.first().and_then(get_prefix),
                 arch: doc.first().and_then(get_arch),
+            },
+            system: System {
+                env: doc.first().and_then(get_env).unwrap_or_default(),
             },
         })
     }

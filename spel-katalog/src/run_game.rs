@@ -377,6 +377,14 @@ async fn umu_run(ctx: UmuCtx<'_>) -> Result<String, StrError> {
             .flatten(),
     );
 
+    args.extend(
+        config
+            .system
+            .env
+            .iter()
+            .flat_map(|(key, value)| args!["--setenv", key, value]),
+    );
+
     args.extend(args!["--chdir", directory]);
 
     if let Some(_prefix) = &config.game.prefix {
@@ -436,24 +444,9 @@ impl App {
 
         let (send_open, recv_open) = oneshot_broadcast();
 
-        let to_open = *self.settings.get::<OnRun>();
-        let open_process_list = Task::future(async move {
-            match recv_open.recv_async().await {
-                Some(_) => match to_open {
-                    OnRun::Process => Some(Message::Quick(QuickMessage::OpenProcessInfo)),
-                    OnRun::Info => Some(Message::Quick(QuickMessage::OpenGameInfo)),
-                    OnRun::None => None,
-                },
-                None => {
-                    ::log::error!("could not receive open signel through oneshot");
-                    None
-                }
-            }
-        })
-        .then(|msg| msg.map_or_else(Task::none, Task::done));
-
         let lua_vt = self.lua_vt();
-        let task = Task::future(async move {
+
+        let cmd_task = Task::future(async move {
             let config = async {
                 let config = ::smol::fs::read_to_string(&configpath).await?;
                 let config = formats::Config::parse(&config)?;
@@ -585,6 +578,22 @@ impl App {
             }
         });
 
-        Task::batch([task, open_process_list])
+        let to_open = *self.settings.get::<OnRun>();
+        let open_process_list = Task::future(async move {
+            match recv_open.recv_async().await {
+                Some(_) => match to_open {
+                    OnRun::Process => Some(Message::Quick(QuickMessage::OpenProcessInfo)),
+                    OnRun::Info => Some(Message::Quick(QuickMessage::OpenGameInfo)),
+                    OnRun::None => None,
+                },
+                None => {
+                    ::log::error!("could not receive open signel through oneshot");
+                    None
+                }
+            }
+        })
+        .then(|msg| msg.map_or_else(Task::none, Task::done));
+
+        Task::batch([cmd_task, open_process_list])
     }
 }
