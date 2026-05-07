@@ -13,21 +13,22 @@ use crate::{
 
 #[derive(Debug)]
 pub struct UmuCtx<'a> {
-    pub slug: &'a str,
-    pub name: &'a str,
     pub bwrap: &'a Path,
-    pub exe: &'a Path,
-    pub umu: &'a Path,
-    pub shell: &'a Path,
-    pub term: &'a str,
-    pub wine_prefix: Option<&'a Path>,
     pub config: &'a Config,
+    pub exe: &'a Path,
     pub extra_config: Option<&'a AdditionalConfig>,
     pub is_net_disabled: bool,
-    pub stdout: Stdio,
-    pub stderr: Stdio,
-    pub send_open: Sender<()>,
+    pub name: &'a str,
     pub runner: Runner,
+    pub sandbox_extras: &'a str,
+    pub send_open: Sender<()>,
+    pub shell: &'a Path,
+    pub slug: &'a str,
+    pub stderr: Stdio,
+    pub stdout: Stdio,
+    pub term: &'a str,
+    pub umu: &'a Path,
+    pub wine_prefix: Option<&'a Path>,
 }
 
 /// If possible bind user in wine prefix to steamuser in umu prefix.
@@ -50,21 +51,22 @@ fn bind_user(wine_prefix: &Path, umu_prefix: &Path) -> Option<[OsString; 3]> {
 
 pub async fn umu_run(ctx: UmuCtx<'_>, run_shell: bool) -> Result<String, StrError> {
     let UmuCtx {
-        slug,
-        name,
         bwrap,
-        exe,
-        wine_prefix,
-        umu,
         config,
+        exe,
         extra_config,
         is_net_disabled,
-        stdout,
-        stderr,
-        send_open,
+        name,
         runner,
-        term,
+        sandbox_extras,
+        send_open,
         shell,
+        slug,
+        stderr,
+        stdout,
+        term,
+        umu,
+        wine_prefix,
     } = ctx;
     let home = ::std::env::home_dir().ok_or_else(|| {
         ::log::error!("could not find user home directory");
@@ -140,6 +142,15 @@ pub async fn umu_run(ctx: UmuCtx<'_>, run_shell: bool) -> Result<String, StrErro
         "--new-session",
         "--unshare-all",
     ]);
+
+    for root in sandbox_extras
+        .split(';')
+        .filter(|s| !s.is_empty())
+        .map(Path::new)
+        .filter(|p| p.exists())
+    {
+        args.extend(args!["--ro-bind", root, root]);
+    }
 
     let additional_roots = extra_config.map_or(&[][..], |extra| extra.sandbox_root.as_slice());
 

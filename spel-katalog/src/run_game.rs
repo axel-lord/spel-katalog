@@ -8,8 +8,8 @@ use ::spel_katalog_common::status;
 use ::spel_katalog_formats::AdditionalConfig;
 use ::spel_katalog_info::formats;
 use ::spel_katalog_settings::{
-    BubblewrapExe, ConfigDir, FirejailExe, LutrisExe, Network, OnRun, SandboxMode, ShellExe,
-    TermCommand, UmuRunExe, YmlDir,
+    BubblewrapExe, ConfigDir, FirejailExe, LutrisExe, Network, OnRun, SandboxExtras, SandboxMode,
+    ShellExe, TermCommand, UmuRunExe, YmlDir,
 };
 use ::spel_katalog_sink::SinkIdentity;
 
@@ -81,6 +81,7 @@ impl App {
         let umu = self.settings.get::<UmuRunExe>().clone();
         let shell = self.settings.get::<ShellExe>().clone();
         let sandbox_mode = *self.settings.get::<SandboxMode>();
+        let sandbox_extras = self.settings.get::<SandboxExtras>().clone();
         let slug = game.slug.clone();
         let name = game.name.clone();
         let runner = game.runner.clone();
@@ -212,21 +213,22 @@ impl App {
                 (Safety::Sandbox, SandboxMode::Bubblewrap) => {
                     return umu_run(
                         UmuCtx {
-                            name: &name,
-                            slug: &slug,
                             bwrap: bwrap.as_path(),
-                            shell: shell.as_path(),
-                            term: &term,
-                            exe: &config.game.exe,
-                            wine_prefix: config.game.prefix.as_deref(),
-                            umu: umu.as_path(),
                             config: &config,
+                            exe: &config.game.exe,
                             extra_config: extra_config.as_ref(),
                             is_net_disabled,
-                            stdout,
-                            stderr,
-                            send_open,
+                            name: &name,
                             runner,
+                            sandbox_extras: &sandbox_extras,
+                            send_open,
+                            shell: shell.as_path(),
+                            slug: &slug,
+                            stderr,
+                            stdout,
+                            term: &term,
+                            umu: umu.as_path(),
+                            wine_prefix: config.game.prefix.as_deref(),
                         },
                         false,
                     )
@@ -236,21 +238,22 @@ impl App {
                 (Safety::SandboxShell, SandboxMode::Bubblewrap) => {
                     return umu_run(
                         UmuCtx {
-                            name: &name,
-                            slug: &slug,
                             bwrap: bwrap.as_path(),
-                            shell: shell.as_path(),
-                            term: &term,
-                            exe: &config.game.exe,
-                            wine_prefix: config.game.prefix.as_deref(),
-                            umu: umu.as_path(),
                             config: &config,
+                            exe: &config.game.exe,
                             extra_config: extra_config.as_ref(),
                             is_net_disabled,
-                            stdout,
-                            stderr,
-                            send_open,
+                            name: &name,
                             runner,
+                            sandbox_extras: &sandbox_extras,
+                            send_open,
+                            shell: shell.as_path(),
+                            slug: &slug,
+                            stderr,
+                            stdout,
+                            term: &term,
+                            umu: umu.as_path(),
+                            wine_prefix: config.game.prefix.as_deref(),
                         },
                         true,
                     )
