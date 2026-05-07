@@ -50,7 +50,7 @@ pub mod settings {
         String {
             /// Setting default string.
             string: String,
-        }
+        },
     }
 
     /// A Single setting.

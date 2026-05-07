@@ -441,7 +441,7 @@ pub fn write(settings: Settings, dest: &Path) {
                     "Get the [{pascal_ident}][super::{pascal_ident}] setting."
                 ));
             }
-            SettingContent::String{ .. } => {
+            SettingContent::String { .. } => {
                 path_field_names.push(format_ident!("{snake_ident}"));
                 path_field_names_mut.push(format_ident!("{snake_ident}_mut"));
                 path_ty_names.push(format_ident!("{pascal_ident}"));

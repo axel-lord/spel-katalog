@@ -30,4 +30,3 @@ impl From<StrError> for Message {
         value.0.into()
     }
 }
-

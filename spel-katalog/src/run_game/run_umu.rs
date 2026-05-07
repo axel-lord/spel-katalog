@@ -134,6 +134,7 @@ pub async fn umu_run(ctx: UmuCtx<'_>, run_shell: bool) -> Result<String, StrErro
         "--dev-bind", "/dev/dri", "/dev/dri",
         "--bind", &umu_dir, umu_dir,
         "--setenv", "PATH", "/usr/bin",
+        "--setenv", "WINEDLLOVERRIDES", "steam_api64,version,winhttp=n,b",
         "--hostname", "games",
         "--die-with-parent",
         "--new-session",
