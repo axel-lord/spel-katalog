@@ -225,6 +225,7 @@ function GameData:setAttrs(attrs) end
 ---@field SortBy ("Id" | "Name" | "Slug")
 ---@field SortDir ("Forward" | "Reverse")
 ---@field Network ("Disabled" | "Enabled")
+---@field SandboxMode ("Firejail" | "Bubblewrap")
 ---@field LutrisExe string
 ---@field FirejailExe string
 ---@field CoverartDir string

@@ -12,12 +12,13 @@ use crate::{
 pub enum Safety {
     None,
     #[default]
-    Firejail,
+    Sandbox,
+    SandboxShell,
 }
 
 impl From<bool> for Safety {
     fn from(value: bool) -> Self {
-        if value { Self::Firejail } else { Self::None }
+        if value { Self::Sandbox } else { Self::None }
     }
 }
 
@@ -73,4 +74,17 @@ pub enum Message {
     LuaDocs(::spel_katalog_lua_docs::Message),
     #[from]
     ShowInfo(crate::view::Displayed),
+}
+
+impl<T, E> From<Result<T, E>> for Message
+where
+    T: Into<Message>,
+    E: Into<Message>,
+{
+    fn from(value: Result<T, E>) -> Self {
+        match value {
+            Ok(value) => value.into(),
+            Err(value) => value.into(),
+        }
+    }
 }

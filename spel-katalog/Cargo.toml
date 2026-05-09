@@ -49,6 +49,7 @@ strsim.workspace = true
 tap.workspace = true
 thiserror.workspace = true
 toml.workspace = true
+users.workspace = true
 yaml-rust2.workspace = true
 
 [build-dependencies]

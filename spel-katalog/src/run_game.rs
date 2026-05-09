@@ -1,19 +1,31 @@
 use ::std::{
     ffi::{OsStr, OsString},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use ::iced_runtime::Task;
-use ::mlua::Lua;
-use ::smol::stream::StreamExt;
-use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::status;
 use ::spel_katalog_formats::AdditionalConfig;
 use ::spel_katalog_info::formats;
-use ::spel_katalog_settings::{ConfigDir, FirejailExe, LutrisExe, Network, OnRun, YmlDir};
+use ::spel_katalog_settings::{
+    BubblewrapExe, ConfigDir, FirejailExe, LutrisExe, Network, OnRun, SandboxExtras, SandboxMode,
+    ShellExe, TermCommand, UmuRunExe, YmlDir,
+};
 use ::spel_katalog_sink::SinkIdentity;
 
-use crate::{App, Message, QuickMessage, Safety, oneshot_broadcast::oneshot_broadcast};
+use crate::{
+    App, Message, QuickMessage, Safety,
+    oneshot_broadcast::oneshot_broadcast,
+    run_game::{
+        run_script::BatchView,
+        run_umu::{UmuCtx, umu_run},
+    },
+};
+
+mod macros;
+mod run_script;
+mod run_umu;
+mod strerror;
 
 #[derive(Debug, ::thiserror::Error)]
 enum ScriptGatherError {
@@ -40,42 +52,19 @@ enum ConfigError {
     Scan(#[from] ::yaml_rust2::ScanError),
 }
 
-async fn gather_scripts(script_dir: PathBuf) -> Result<Vec<PathBuf>, ScriptGatherError> {
-    if !script_dir.exists() {
-        ::log::info!("no script dir, skipping");
-        return Ok(Vec::new());
-    }
-    let mut lua_scripts = Vec::new();
-    let mut stack = Vec::new();
-
-    stack.push(script_dir);
-
-    while let Some(dir) = stack.pop() {
-        let mut dir = ::smol::fs::read_dir(dir).await?;
-        while let Some(entry) = dir.next().await.transpose()? {
-            let ft = entry.file_type().await?;
-
-            let path = entry.path();
-
-            if ft.is_dir() {
-                stack.push(path);
-            } else if ft.is_file() {
-                if path
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"))
-                {
-                    lua_scripts.push(path);
-                }
-            } else {
-                ::log::warn!("non file or directory path in script dir, {path:?}")
-            }
-        }
-    }
-
-    lua_scripts.sort_unstable();
-
-    Ok(lua_scripts)
+async fn parse_extra_config(extra_config_path: &Path) -> Result<AdditionalConfig, String> {
+    ::toml::from_str::<AdditionalConfig>(
+        &::smol::fs::read_to_string(&extra_config_path)
+            .await
+            .map_err(|err| {
+                ::log::error!("could not read {extra_config_path:?}\n{err}");
+                format!("could not read {extra_config_path:?}")
+            })?,
+    )
+    .map_err(|err| {
+        ::log::error!("could not parse {extra_config_path:?}\n{err}");
+        format!("could not parse {extra_config_path:?}")
+    })
 }
 
 impl App {
@@ -87,6 +76,12 @@ impl App {
 
         let lutris = self.settings.get::<LutrisExe>().clone();
         let firejail = self.settings.get::<FirejailExe>().clone();
+        let term = self.settings.get::<TermCommand>().clone();
+        let bwrap = self.settings.get::<BubblewrapExe>().clone();
+        let umu = self.settings.get::<UmuRunExe>().clone();
+        let shell = self.settings.get::<ShellExe>().clone();
+        let sandbox_mode = *self.settings.get::<SandboxMode>();
+        let sandbox_extras = self.settings.get::<SandboxExtras>().clone();
         let slug = game.slug.clone();
         let name = game.name.clone();
         let runner = game.runner.clone();
@@ -105,28 +100,12 @@ impl App {
 
         let (send_open, recv_open) = oneshot_broadcast();
 
-        let to_open = *self.settings.get::<OnRun>();
-        let open_process_list = Task::future(async move {
-            match recv_open.recv_async().await {
-                Some(_) => match to_open {
-                    OnRun::Process => Some(Message::Quick(QuickMessage::OpenProcessInfo)),
-                    OnRun::Info => Some(Message::Quick(QuickMessage::OpenGameInfo)),
-                    OnRun::None => None,
-                },
-                None => {
-                    ::log::error!("could not receive open signel through oneshot");
-                    None
-                }
-            }
-        })
-        .then(|msg| msg.map_or_else(Task::none, Task::done));
-
         let lua_vt = self.lua_vt();
-        let task = Task::future(async move {
+
+        let cmd_task = Task::future(async move {
             let config = async {
                 let config = ::smol::fs::read_to_string(&configpath).await?;
                 let config = formats::Config::parse(&config)?;
-
                 Ok::<_, ConfigError>(config)
             };
 
@@ -139,80 +118,27 @@ impl App {
             };
 
             let extra_config = if extra_config_path.exists() {
-                let Some(content) = ::smol::fs::read_to_string(&extra_config_path)
-                    .await
-                    .map_err(|err| ::log::error!("could not read {extra_config_path:?}\n{err}"))
-                    .ok()
-                else {
-                    return format!("could not read {extra_config_path:?}").into();
-                };
-                let Some(additional) = ::toml::from_str::<AdditionalConfig>(&content)
-                    .map_err(|err| ::log::error!("could not parse {extra_config_path:?}\n{err}"))
-                    .ok()
-                else {
-                    return format!("could not parse {extra_config_path:?}").into();
-                };
-
-                Some(additional)
+                match parse_extra_config(&extra_config_path).await {
+                    Err(err) => return err.into(),
+                    Ok(additional) => Some(additional),
+                }
             } else {
                 None
             };
 
-            let scripts_result = async {
-                let lua_scripts = gather_scripts(script_dir).await?;
-
-                if !lua_scripts.is_empty() {
-                    let batch_info = BatchInfo {
-                        id,
-                        slug: slug.clone(),
-                        name: name.clone(),
-                        runner: runner.to_string(),
-                        config: configpath.clone(),
-                        attrs: extra_config
-                            .as_ref()
-                            .map(|extra_config| extra_config.attrs.clone())
-                            .unwrap_or_default(),
-                        hidden,
-                    };
-
-                    let sink_builder = sink_builder.clone();
-                    ::smol::unblock(move || {
-                        let scripts = lua_scripts
-                            .into_iter()
-                            .map(|path| match ::std::fs::read_to_string(&path) {
-                                Ok(content) => Ok(content),
-                                Err(err) => Err(ScriptGatherError::ReadLuaScript(err, path)),
-                            })
-                            .collect::<Result<Vec<_>, _>>()?;
-
-                        let lua = Lua::new();
-                        ::spel_katalog_lua::Module {
-                            sink_builder: &sink_builder,
-                            vt: lua_vt,
-                        }
-                        .register(&lua)
-                        .and_then(|skeleton| {
-                            let module = &skeleton.module;
-                            let game = batch_info.to_lua(&lua, &skeleton.game_data)?;
-
-                            module.set("game", game)?;
-
-                            for script in scripts {
-                                lua.load(script).exec()?;
-                            }
-
-                            Ok(())
-                        })
-                        .map_err(|err| LuaError(err.to_string()))?;
-                        Ok::<_, ScriptGatherError>(())
-                    })
-                    .await?;
-                }
-
-                Ok::<_, ScriptGatherError>(())
+            let view = BatchView {
+                id,
+                slug: &slug,
+                name: &name,
+                runner: &runner,
+                config: &configpath,
+                extra: extra_config.as_ref(),
+                hidden,
             };
 
-            if let Err(err) = scripts_result.await {
+            if let Err(err) =
+                self::run_script::run_script(script_dir, view, &sink_builder, lua_vt).await
+            {
                 ::log::error!("failure when gathering/runnings scripts\n{err}");
                 return "running scripts failed".to_owned().into();
             }
@@ -238,8 +164,8 @@ impl App {
                 }
             };
 
-            let cmd = match safety {
-                Safety::None => {
+            let cmd = match (safety, sandbox_mode) {
+                (Safety::None, _) => {
                     ::log::info!("executing {lutris:?} with arguments\n{:#?}", &[&rungame]);
                     ::smol::process::Command::new(lutris)
                         .args(rungame)
@@ -248,7 +174,7 @@ impl App {
                         .stderr(stderr)
                         .status()
                 }
-                Safety::Firejail => {
+                (Safety::Sandbox, SandboxMode::Firejail) => {
                     let mut args = Vec::new();
                     ::log::info!("parsed game config\n{config:#?}");
                     if let Some(additional) = extra_config
@@ -279,6 +205,61 @@ impl App {
                         .stderr(stderr)
                         .status()
                 }
+
+                (Safety::SandboxShell, SandboxMode::Firejail) => {
+                    ::log::error!("shell requires sandbox mode of bubblewrap");
+                    return "only bubblewrap supported for shell".to_owned().into();
+                }
+                (Safety::Sandbox, SandboxMode::Bubblewrap) => {
+                    return umu_run(
+                        UmuCtx {
+                            bwrap: bwrap.as_path(),
+                            config: &config,
+                            exe: &config.game.exe,
+                            extra_config: extra_config.as_ref(),
+                            is_net_disabled,
+                            name: &name,
+                            runner,
+                            sandbox_extras: &sandbox_extras,
+                            send_open,
+                            shell: shell.as_path(),
+                            slug: &slug,
+                            stderr,
+                            stdout,
+                            term: &term,
+                            umu: umu.as_path(),
+                            wine_prefix: config.game.prefix.as_deref(),
+                        },
+                        false,
+                    )
+                    .await
+                    .into();
+                }
+                (Safety::SandboxShell, SandboxMode::Bubblewrap) => {
+                    return umu_run(
+                        UmuCtx {
+                            bwrap: bwrap.as_path(),
+                            config: &config,
+                            exe: &config.game.exe,
+                            extra_config: extra_config.as_ref(),
+                            is_net_disabled,
+                            name: &name,
+                            runner,
+                            sandbox_extras: &sandbox_extras,
+                            send_open,
+                            shell: shell.as_path(),
+                            slug: &slug,
+                            stderr,
+                            stdout,
+                            term: &term,
+                            umu: umu.as_path(),
+                            wine_prefix: config.game.prefix.as_deref(),
+                        },
+                        true,
+                    )
+                    .await
+                    .into();
+                }
             };
 
             send_open.send(());
@@ -292,6 +273,22 @@ impl App {
             }
         });
 
-        Task::batch([task, open_process_list])
+        let to_open = *self.settings.get::<OnRun>();
+        let open_process_list = Task::future(async move {
+            match recv_open.recv_async().await {
+                Some(_) => match to_open {
+                    OnRun::Process => Some(Message::Quick(QuickMessage::OpenProcessInfo)),
+                    OnRun::Info => Some(Message::Quick(QuickMessage::OpenGameInfo)),
+                    OnRun::None => None,
+                },
+                None => {
+                    ::log::error!("could not receive open signel through oneshot");
+                    None
+                }
+            }
+        })
+        .then(|msg| msg.map_or_else(Task::none, Task::done));
+
+        Task::batch([cmd_task, open_process_list])
     }
 }
