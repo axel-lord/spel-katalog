@@ -9,4 +9,3 @@ pub struct PerformError {
     /// Path of database.
     pub(crate) db: DbPath,
 }
-

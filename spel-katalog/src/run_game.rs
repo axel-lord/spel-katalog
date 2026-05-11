@@ -8,8 +8,8 @@ use ::spel_katalog_common::status;
 use ::spel_katalog_formats::AdditionalConfig;
 use ::spel_katalog_info::formats;
 use ::spel_katalog_settings::{
-    BubblewrapExe, ConfigDir, FirejailExe, LutrisExe, Network, OnRun, SandboxExtras, SandboxMode,
-    ShellExe, TermCommand, UmuRunExe, YmlDir,
+    BubblewrapExe, ConfigDir, DllOverrides, FirejailExe, LutrisExe, Network, OnRun, SandboxExtras,
+    SandboxMode, ShellExe, TermCommand, UmuRunExe, YmlDir,
 };
 use ::spel_katalog_sink::SinkIdentity;
 
@@ -82,6 +82,14 @@ impl App {
         let shell = self.settings.get::<ShellExe>().clone();
         let sandbox_mode = *self.settings.get::<SandboxMode>();
         let sandbox_extras = self.settings.get::<SandboxExtras>().clone();
+        let dll_overrides = self
+            .settings
+            .get::<DllOverrides>()
+            .split(';')
+            .map(|ovr| ovr.trim())
+            .filter(|ovr| !ovr.is_empty())
+            .map(String::from)
+            .collect();
         let slug = game.slug.clone();
         let name = game.name.clone();
         let runner = game.runner.clone();
@@ -229,6 +237,7 @@ impl App {
                             term: &term,
                             umu: umu.as_path(),
                             wine_prefix: config.game.prefix.as_deref(),
+                            dll_overrides,
                         },
                         false,
                     )
@@ -254,6 +263,7 @@ impl App {
                             term: &term,
                             umu: umu.as_path(),
                             wine_prefix: config.game.prefix.as_deref(),
+                            dll_overrides,
                         },
                         true,
                     )

@@ -29,6 +29,7 @@ pub struct UmuCtx<'a> {
     pub term: &'a str,
     pub umu: &'a Path,
     pub wine_prefix: Option<&'a Path>,
+    pub dll_overrides: Vec<String>,
 }
 
 /// If possible bind user in wine prefix to steamuser in umu prefix.
@@ -67,6 +68,7 @@ pub async fn umu_run(ctx: UmuCtx<'_>, run_shell: bool) -> Result<String, StrErro
         term,
         umu,
         wine_prefix,
+        dll_overrides,
     } = ctx;
     let home = ::std::env::home_dir().ok_or_else(|| {
         ::log::error!("could not find user home directory");
@@ -97,9 +99,10 @@ pub async fn umu_run(ctx: UmuCtx<'_>, run_shell: bool) -> Result<String, StrErro
         term_path = None;
     }
 
-    if !umu_prefix.exists() && config.game.prefix.is_some() {
+    if runner.is_wine() && !umu_prefix.exists() {
         let status = ::smol::process::Command::new(umu)
-            .arg("")
+            .args(args!["winetricks", "fontsmooth=gray"])
+            .env("WINEPREFIX", &umu_prefix)
             .kill_on_drop(true)
             .status()
             .await
@@ -111,6 +114,35 @@ pub async fn umu_run(ctx: UmuCtx<'_>, run_shell: bool) -> Result<String, StrErro
         if !status.success() {
             ::log::error!("failed to create umu prefix {status:?}");
             return Err(strerror!("could not create umu prefix"));
+        }
+    }
+
+    for dll_override in &dll_overrides {
+        ::log::info!("adding dll override {dll_override:?}");
+        let status = ::smol::process::Command::new("wine")
+            .args(args![
+                "reg",
+                "add",
+                r"HKCU\Software\Wine\DllOverrides",
+                "/f",
+                "/v",
+                dll_override,
+                "/d",
+                "native,builtin"
+            ])
+            .env("WINEPREFIX", &umu_prefix)
+            .env("WINEDEBUG", "-all")
+            .kill_on_drop(true)
+            .status()
+            .await
+            .map_err(|err| ::log::error!("failed to add dll override {dll_override:?}\n{err}"));
+
+        if let Ok(status) = status
+            && !status.success()
+        {
+            ::log::error!(
+                "could not add dll override {dll_override:?}, wine exited with status {status}"
+            );
         }
     }
 
@@ -136,7 +168,6 @@ pub async fn umu_run(ctx: UmuCtx<'_>, run_shell: bool) -> Result<String, StrErro
         "--dev-bind", "/dev/dri", "/dev/dri",
         "--bind", &umu_dir, umu_dir,
         "--setenv", "PATH", "/usr/bin",
-        "--setenv", "WINEDLLOVERRIDES", "steam_api64,version,winhttp=n,b",
         "--hostname", "games",
         "--die-with-parent",
         "--new-session",

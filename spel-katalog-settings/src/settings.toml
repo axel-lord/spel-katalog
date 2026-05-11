@@ -95,6 +95,11 @@ title = "Terminal Command"
 help = "Arguments prepended to command to run in terminal"
 string = "/usr/bin/urxvt -e"
 
+[DllOverrides]
+title = "Wine Dll Overrides"
+help = "Dlls to override with \"native,builtin\", separated by ';'"
+string = ""
+
 [SandboxExtras]
 title = "Sandbox Extras"
 help = "Additional paths which may be read from sandbox, separated by ';'"

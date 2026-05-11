@@ -6,7 +6,7 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-dashmap = "6.1.0"
+dashmap.workspace = true
 derive_more = { workspace = true, features = ["from"] }
 flume.workspace = true
 log.workspace = true
