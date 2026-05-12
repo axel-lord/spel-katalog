@@ -140,3 +140,4 @@ yaml-rust2 = "0.11.0"
 mimalloc = "0.1.50"
 users = { version = "0.11.0", default-features = false }
 dashmap = "6.1.0"
+uuid = "1.23.1"

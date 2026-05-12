@@ -1,12 +1,13 @@
 //! Shared data formats in use buy application.
 
-use ::core::{convert::Infallible, str::FromStr};
+use ::core::{convert::Infallible, num::NonZero, str::FromStr};
 use ::std::path::PathBuf;
 
 use ::bytes::Bytes;
 use ::derive_more::{Display, IsVariant};
 use ::rustc_hash::FxHashMap;
 use ::serde::{Deserialize, Serialize};
+use ::uuid::Uuid;
 
 /// Additional config values not used by lutris.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -85,13 +86,13 @@ impl From<Bind_> for Bind {
 #[serde(rename_all = "kebab-case")]
 pub struct NativeGame {
     /// Numeric id of game.
-    pub id: i64,
+    pub uuid: Uuid,
 
     /// Title used for game.
     pub name: String,
 
-    /// Is the game hidden.
-    pub hidden: bool,
+    /// Executable of game.
+    pub exe: PathBuf,
 
     /// Runner used for game.
     pub runner: NativeRunner,
@@ -100,36 +101,41 @@ pub struct NativeGame {
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub prefix: Option<PathBuf>,
 
-    /// Executable of game.
-    pub exe: PathBuf,
-
-    /// Environment variabnles of game.
-    #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
-    pub env: FxHashMap<String, String>,
-
-    /// Dll overrides of game.
-    #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    pub dll_override: Vec<String>,
-
-    /// Additional directories sandbox will be given read and write access to.
-    #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    pub binds: Vec<Bind>,
-
-    /// Winetricks verbs to apply to prefix.
-    #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    pub wt_verb: Vec<String>,
+    /// Is the game hidden.
+    #[serde(skip_serializing_if = "::core::ops::Not::not", default)]
+    pub hidden: bool,
 
     /// Should net always be enabled/disabled.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub net: Option<bool>,
 
-    /// Additional directories sandbox will be given read access to.
-    #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    pub ro_bind: Vec<Bind>,
+    /// Where to place the game relative to lutris games.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub anchor: Option<NonZero<i64>>,
+
+    /// Environment variabnles of game.
+    #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
+    pub env: FxHashMap<String, String>,
 
     /// Custom attributes for game.
     #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
     pub attrs: FxHashMap<String, String>,
+
+    /// Dll overrides of game.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub dll_override: Vec<String>,
+
+    /// Winetricks verbs to apply to prefix.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub wt_verb: Vec<String>,
+
+    /// Additional directories sandbox will be given read and write access to.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub bind: Vec<Bind>,
+
+    /// Additional directories sandbox will be given read access to.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub ro_bind: Vec<Bind>,
 }
 
 /// Runner used for native games.
