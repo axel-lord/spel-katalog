@@ -4,7 +4,7 @@ use ::std::path::Path;
 
 use ::rusqlite::{Connection, OpenFlags};
 use ::rustc_hash::{FxHashMap, FxHashSet};
-use ::spel_katalog_formats::Game;
+use ::spel_katalog_formats::LutrisGame;
 
 use crate::LoadDbError;
 
@@ -12,7 +12,7 @@ use crate::LoadDbError;
 ///
 /// # Errors
 /// If games cannot be loaded from database.
-pub fn load_games_from_database(db_path: &Path) -> Result<Vec<Game>, LoadDbError> {
+pub fn load_games_from_database(db_path: &Path) -> Result<Vec<LutrisGame>, LoadDbError> {
     let db = Connection::open_with_flags(
         db_path,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -52,7 +52,7 @@ pub fn load_games_from_database(db_path: &Path) -> Result<Vec<Game>, LoadDbError
     let mut games = Vec::new();
 
     while let Some(row) = rows.next()? {
-        fn game_from_row(row: &::rusqlite::Row) -> Option<Game> {
+        fn game_from_row(row: &::rusqlite::Row) -> Option<LutrisGame> {
             let slug = row
                 .get("slug")
                 .map_err(|err| ::log::error!("could not read slug of row\n{err}"))
@@ -78,7 +78,7 @@ pub fn load_games_from_database(db_path: &Path) -> Result<Vec<Game>, LoadDbError
                 .map_err(|err| ::log::error!("could not read configpath of row\n{err}"))
                 .ok()?;
 
-            Some(Game {
+            Some(LutrisGame {
                 slug,
                 id,
                 name,

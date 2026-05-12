@@ -24,7 +24,7 @@ use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelItera
 use ::rusqlite::{Connection, Statement, named_params};
 use ::rustc_hash::FxHashSet;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, w};
-use ::spel_katalog_formats::Game;
+use ::spel_katalog_formats::LutrisGame;
 use ::spel_katalog_gather::{
     CoverGatherer, CoverGathererOptions, LoadDbError, load_games_from_database,
     load_thumbnail_database,
@@ -78,7 +78,7 @@ pub enum Message {
     /// Set loaded games.
     SetGames {
         /// Games to set content to.
-        games: Vec<Game>,
+        games: Vec<LutrisGame>,
     },
     /// Set thumbnails.
     SetImages {

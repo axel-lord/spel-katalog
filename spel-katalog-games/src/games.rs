@@ -6,7 +6,7 @@ use ::derive_more::{Deref, DerefMut};
 use ::itertools::izip;
 use ::regex::RegexBuilder;
 use ::rustc_hash::FxHashMap;
-use ::spel_katalog_formats::Game;
+use ::spel_katalog_formats::LutrisGame;
 use ::spel_katalog_settings::{AsIndex, FilterMode, Settings, Show, SortBy, SortDir};
 use ::tap::TapFallible;
 
@@ -25,18 +25,18 @@ pub struct WithThumb {
     /// Game.
     #[deref]
     #[deref_mut]
-    pub game: Game,
+    pub game: LutrisGame,
     /// Thumbnail.
     pub thumb: Option<::iced_widget::image::Handle>,
 }
 
-impl From<Game> for WithThumb {
-    fn from(game: Game) -> Self {
+impl From<LutrisGame> for WithThumb {
+    fn from(game: LutrisGame) -> Self {
         Self { game, thumb: None }
     }
 }
 
-impl From<WithThumb> for Game {
+impl From<WithThumb> for LutrisGame {
     fn from(WithThumb { game, .. }: WithThumb) -> Self {
         game
     }
@@ -107,9 +107,9 @@ impl Games {
             .collect::<Vec<_>>();
 
         fn filter_hidden<'a>(
-            to_be: Vec<(usize, &'a mut Game, &'a mut Option<GameCache>)>,
+            to_be: Vec<(usize, &'a mut LutrisGame, &'a mut Option<GameCache>)>,
             show: ::spel_katalog_settings::Show,
-        ) -> Vec<(usize, &'a mut Game, &'a mut Option<GameCache>)> {
+        ) -> Vec<(usize, &'a mut LutrisGame, &'a mut Option<GameCache>)> {
             match show {
                 ::spel_katalog_settings::Show::Apparent => to_be
                     .into_iter()
@@ -123,7 +123,7 @@ impl Games {
             }
         }
 
-        fn get_cache<'a>(game: &Game, cache: &'a mut Option<GameCache>) -> &'a GameCache {
+        fn get_cache<'a>(game: &LutrisGame, cache: &'a mut Option<GameCache>) -> &'a GameCache {
             cache.get_or_insert_with(|| GameCache {
                 slug: game.slug.to_uppercase(),
                 name: game.name.to_uppercase(),

@@ -1,6 +1,7 @@
 //! Shared data formats in use buy application.
 
 use ::core::{convert::Infallible, str::FromStr};
+use ::std::path::PathBuf;
 
 use ::bytes::Bytes;
 use ::derive_more::{Display, IsVariant};
@@ -30,9 +31,121 @@ pub struct Image {
     pub bytes: Bytes,
 }
 
+/// Type used for [Deserialize] impl of [Bind].
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum Bind_ {
+    /// Path is mirrored in sandbox.
+    MirrorA {
+        /// Source to bind.
+        src: PathBuf,
+    },
+    /// Path is mirrored in sandbox.
+    MirrorB(PathBuf),
+    /// Src is bound to dest in sandbox.
+    AsymA {
+        /// Source to bind.
+        src: PathBuf,
+        /// Where to bind src.
+        dest: PathBuf,
+    },
+    /// Src is bound to dest in sandbox.
+    AsymB(PathBuf, PathBuf),
+}
+
+/// A Single bind.
+#[derive(Debug, Clone, IsVariant, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(untagged, from = "Bind_")]
+pub enum Bind {
+    /// Path is mirrored in sandbox.
+    Mirror {
+        /// Source to bind.
+        src: PathBuf,
+    },
+    /// Src is bound to dest in sandbox.
+    Asym {
+        /// Source to bind.
+        src: PathBuf,
+        /// Where to bind src.
+        dest: PathBuf,
+    },
+}
+
+impl From<Bind_> for Bind {
+    fn from(value: Bind_) -> Self {
+        match value {
+            Bind_::MirrorA { src } | Bind_::MirrorB(src) => Bind::Mirror { src },
+            Bind_::AsymA { src, dest } | Bind_::AsymB(src, dest) => Bind::Asym { src, dest },
+        }
+    }
+}
+
 /// Loaded game data.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Game {
+#[serde(rename_all = "kebab-case")]
+pub struct NativeGame {
+    /// Numeric id of game.
+    pub id: i64,
+
+    /// Title used for game.
+    pub name: String,
+
+    /// Is the game hidden.
+    pub hidden: bool,
+
+    /// Runner used for game.
+    pub runner: NativeRunner,
+
+    /// Prefix of game.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub prefix: Option<PathBuf>,
+
+    /// Executable of game.
+    pub exe: PathBuf,
+
+    /// Environment variabnles of game.
+    #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
+    pub env: FxHashMap<String, String>,
+
+    /// Dll overrides of game.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub dll_override: Vec<String>,
+
+    /// Additional directories sandbox will be given read and write access to.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub binds: Vec<Bind>,
+
+    /// Winetricks verbs to apply to prefix.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub wt_verb: Vec<String>,
+
+    /// Should net always be enabled/disabled.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub net: Option<bool>,
+
+    /// Additional directories sandbox will be given read access to.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub ro_bind: Vec<Bind>,
+
+    /// Custom attributes for game.
+    #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
+    pub attrs: FxHashMap<String, String>,
+}
+
+/// Runner used for native games.
+#[derive(
+    Debug, Clone, IsVariant, PartialEq, Eq, PartialOrd, Ord, Hash, Display, Serialize, Deserialize,
+)]
+pub enum NativeRunner {
+    /// Game is ran using wine.
+    Wine,
+    /// Game is ran as a native binary.
+    Linux,
+}
+
+/// Loaded lutris game data.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LutrisGame {
     /// Slug assinged in lutris.
     pub slug: String,
     /// Numeric id of game.
@@ -40,7 +153,7 @@ pub struct Game {
     /// Title used for game.
     pub name: String,
     /// Runner in use.
-    pub runner: Runner,
+    pub runner: LutrisRunner,
     /// Path to lutris yml for game.
     pub configpath: String,
     /// Is the game hidden.
@@ -53,7 +166,7 @@ pub struct Game {
 #[derive(
     Debug, Clone, IsVariant, PartialEq, Eq, PartialOrd, Ord, Hash, Display, Serialize, Deserialize,
 )]
-pub enum Runner {
+pub enum LutrisRunner {
     /// Game uses wine.
     #[display("wine")]
     Wine,
@@ -65,7 +178,7 @@ pub enum Runner {
     Other(String),
 }
 
-impl From<&str> for Runner {
+impl From<&str> for LutrisRunner {
     fn from(value: &str) -> Self {
         if value
             .chars()
@@ -85,7 +198,7 @@ impl From<&str> for Runner {
     }
 }
 
-impl FromStr for Runner {
+impl FromStr for LutrisRunner {
     type Err = Infallible;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -93,12 +206,12 @@ impl FromStr for Runner {
     }
 }
 
-impl AsRef<str> for Runner {
+impl AsRef<str> for LutrisRunner {
     fn as_ref(&self) -> &str {
         match self {
-            Runner::Wine => "wine",
-            Runner::Linux => "linux",
-            Runner::Other(other) => other,
+            LutrisRunner::Wine => "wine",
+            LutrisRunner::Linux => "linux",
+            LutrisRunner::Other(other) => other,
         }
     }
 }

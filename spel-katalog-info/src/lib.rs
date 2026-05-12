@@ -170,7 +170,7 @@ impl State {
         &mut self,
         tx: &StatusSender,
         settings: &Settings,
-        game: &::spel_katalog_formats::Game,
+        game: &::spel_katalog_formats::LutrisGame,
     ) -> Task<Message> {
         let id = game.id;
 
@@ -232,7 +232,7 @@ impl State {
         message: Message,
         tx: &'a StatusSender,
         settings: &'a Settings,
-        game_by_id: &dyn Fn(i64) -> Option<&'a ::spel_katalog_formats::Game>,
+        game_by_id: &dyn Fn(i64) -> Option<&'a ::spel_katalog_formats::LutrisGame>,
     ) -> Task<OrRequest<Message, Request>> {
         match message {
             Message::Clear => {
@@ -663,7 +663,7 @@ impl State {
     /// View game info.
     pub fn titlebar<'a, M: 'a>(
         &'a self,
-        game: &'a ::spel_katalog_formats::Game,
+        game: &'a ::spel_katalog_formats::LutrisGame,
         thumb: Option<&'a widget::image::Handle>,
         id: i64,
         buttons: Element<'a, M>,

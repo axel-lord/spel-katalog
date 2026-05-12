@@ -1,6 +1,6 @@
 use ::std::{ffi::OsString, path::Path, process::Stdio};
 
-use ::spel_katalog_formats::{AdditionalConfig, Runner};
+use ::spel_katalog_formats::{AdditionalConfig, LutrisRunner};
 use ::spel_katalog_info::formats::Config;
 
 use crate::{
@@ -19,7 +19,7 @@ pub struct UmuCtx<'a> {
     pub extra_config: Option<&'a AdditionalConfig>,
     pub is_net_disabled: bool,
     pub name: &'a str,
-    pub runner: Runner,
+    pub runner: LutrisRunner,
     pub sandbox_extras: &'a str,
     pub send_open: Sender<()>,
     pub shell: &'a Path,

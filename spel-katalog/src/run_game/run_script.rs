@@ -3,7 +3,7 @@ use ::std::{path::PathBuf, sync::Arc};
 use ::mlua::Lua;
 use ::smol::stream::StreamExt as _;
 use ::spel_katalog_batch::BatchInfo;
-use ::spel_katalog_formats::{AdditionalConfig, Runner};
+use ::spel_katalog_formats::{AdditionalConfig, LutrisRunner};
 use ::spel_katalog_sink::SinkBuilder;
 
 use crate::{
@@ -16,7 +16,7 @@ pub struct BatchView<'a> {
     pub id: i64,
     pub slug: &'a str,
     pub name: &'a str,
-    pub runner: &'a Runner,
+    pub runner: &'a LutrisRunner,
     pub config: &'a str,
     pub extra: Option<&'a AdditionalConfig>,
     pub hidden: bool,
