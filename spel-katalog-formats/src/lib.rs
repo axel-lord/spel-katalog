@@ -164,8 +164,6 @@ pub struct LutrisGame {
     pub configpath: String,
     /// Is the game hidden.
     pub hidden: bool,
-    /// Is the game selected for batch commands.
-    pub batch_selected: bool,
 }
 
 /// Runner used by a game profile.

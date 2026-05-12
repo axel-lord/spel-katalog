@@ -85,7 +85,6 @@ pub fn load_games_from_database(db_path: &Path) -> Result<Vec<LutrisGame>, LoadD
                 runner,
                 configpath,
                 hidden: false,
-                batch_selected: false,
             })
         }
 

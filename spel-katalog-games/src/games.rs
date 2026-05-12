@@ -28,11 +28,17 @@ pub struct WithThumb {
     pub game: LutrisGame,
     /// Thumbnail.
     pub thumb: Option<::iced_widget::image::Handle>,
+    /// Is the game batch selected.
+    pub batch_selected: bool,
 }
 
 impl From<LutrisGame> for WithThumb {
     fn from(game: LutrisGame) -> Self {
-        Self { game, thumb: None }
+        Self {
+            game,
+            thumb: None,
+            batch_selected: false,
+        }
     }
 }
 
