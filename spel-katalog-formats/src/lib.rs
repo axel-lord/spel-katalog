@@ -1,13 +1,12 @@
 //! Shared data formats in use buy application.
 
 use ::core::{convert::Infallible, num::NonZero, str::FromStr};
-use ::std::path::PathBuf;
+use ::std::path::{Path, PathBuf};
 
 use ::bytes::Bytes;
 use ::derive_more::{Display, IsVariant};
 use ::rustc_hash::FxHashMap;
 use ::serde::{Deserialize, Serialize};
-use ::uuid::Uuid;
 
 /// Additional config values not used by lutris.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -72,6 +71,17 @@ pub enum Bind {
     },
 }
 
+impl Bind {
+    /// Get source and destination as `[src, dest]`,
+    /// If mirrored `src` is used for both.
+    pub fn normalize(&self) -> [&Path; 2] {
+        match self {
+            Bind::Mirror { src } => [src, src],
+            Bind::Asym { src, dest } => [src, dest],
+        }
+    }
+}
+
 impl From<Bind_> for Bind {
     fn from(value: Bind_) -> Self {
         match value {
@@ -81,13 +91,19 @@ impl From<Bind_> for Bind {
     }
 }
 
+/// Representation of a symlink.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct Drive {
+    /// Source to point to.
+    pub link: PathBuf,
+    /// Where to place link.
+    pub letter: char,
+}
+
 /// Loaded game data.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct NativeGame {
-    /// Numeric id of game.
-    pub uuid: Uuid,
-
     /// Title used for game.
     pub name: String,
 
@@ -136,6 +152,9 @@ pub struct NativeGame {
     /// Additional directories sandbox will be given read access to.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub ro_bind: Vec<Bind>,
+
+    /// Drive letters to create in prefix.
+    pub drive: Vec<Drive>,
 }
 
 /// Runner used for native games.

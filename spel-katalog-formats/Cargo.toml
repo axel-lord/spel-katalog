@@ -12,7 +12,6 @@ indexmap.workspace = true
 rustc-hash.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_bytes.workspace = true
-uuid = { workspace = true, features = ["serde"] }
 
 [lints]
 workspace = true

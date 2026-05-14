@@ -18,7 +18,7 @@ use crate::{
     oneshot_broadcast::oneshot_broadcast,
     run_game::{
         run_script::BatchView,
-        run_umu::{UmuCtx, umu_run},
+        run_umu::{CommonUmuCtx, LutrisUmuCtx},
     },
 };
 
@@ -81,7 +81,14 @@ impl App {
         let umu = self.settings.get::<UmuRunExe>().clone();
         let shell = self.settings.get::<ShellExe>().clone();
         let sandbox_mode = *self.settings.get::<SandboxMode>();
-        let sandbox_extras = self.settings.get::<SandboxExtras>().clone();
+        let sandbox_ro_dirs = self
+            .settings
+            .get::<SandboxExtras>()
+            .split(';')
+            .map(|sb| sb.trim())
+            .filter(|sb| !sb.is_empty())
+            .map(PathBuf::from)
+            .collect();
         let dll_overrides = self
             .settings
             .get::<DllOverrides>()
@@ -94,7 +101,7 @@ impl App {
         let name = game.name.clone();
         let runner = game.runner.clone();
         let hidden = game.hidden;
-        let is_net_disabled = self.settings.get::<Network>().is_disabled();
+        let net_disabled = self.settings.get::<Network>().is_disabled();
         let sink_builder = self.sink_builder.clone();
         let yml_dir = self.settings.get::<YmlDir>();
         let configpath = format!("{yml_dir}/{}.yml", game.configpath);
@@ -194,7 +201,7 @@ impl App {
                         args.push(wl(config.game.common_parent()));
                     }
 
-                    if is_net_disabled {
+                    if net_disabled {
                         args.push("--net=none".into());
                     }
 
@@ -219,54 +226,54 @@ impl App {
                     return "only bubblewrap supported for shell".to_owned().into();
                 }
                 (Safety::Sandbox, SandboxMode::Bubblewrap) => {
-                    return umu_run(
-                        UmuCtx {
+                    return LutrisUmuCtx {
+                        common: CommonUmuCtx {
                             bwrap: bwrap.as_path(),
-                            config: &config,
-                            exe: &config.game.exe,
-                            extra_config: extra_config.as_ref(),
-                            is_net_disabled,
-                            name: &name,
-                            runner,
-                            sandbox_extras: &sandbox_extras,
-                            send_open,
-                            shell: shell.as_path(),
-                            slug: &slug,
                             stderr,
                             stdout,
                             term: &term,
                             umu: umu.as_path(),
-                            wine_prefix: config.game.prefix.as_deref(),
+                            net_disabled,
+                            sandbox_ro_dirs,
+                            send_open,
+                            shell: shell.as_path(),
                             dll_overrides,
                         },
-                        false,
-                    )
+                        config: &config,
+                        exe: &config.game.exe,
+                        extra_config: extra_config.as_ref(),
+                        name: &name,
+                        runner,
+                        slug: &slug,
+                        wine_prefix: config.game.prefix.as_deref(),
+                    }
+                    .run()
                     .await
                     .into();
                 }
                 (Safety::SandboxShell, SandboxMode::Bubblewrap) => {
-                    return umu_run(
-                        UmuCtx {
+                    return LutrisUmuCtx {
+                        common: CommonUmuCtx {
                             bwrap: bwrap.as_path(),
-                            config: &config,
-                            exe: &config.game.exe,
-                            extra_config: extra_config.as_ref(),
-                            is_net_disabled,
-                            name: &name,
-                            runner,
-                            sandbox_extras: &sandbox_extras,
+                            net_disabled,
+                            sandbox_ro_dirs,
                             send_open,
                             shell: shell.as_path(),
-                            slug: &slug,
                             stderr,
                             stdout,
                             term: &term,
                             umu: umu.as_path(),
-                            wine_prefix: config.game.prefix.as_deref(),
                             dll_overrides,
                         },
-                        true,
-                    )
+                        config: &config,
+                        exe: &config.game.exe,
+                        extra_config: extra_config.as_ref(),
+                        name: &name,
+                        runner,
+                        slug: &slug,
+                        wine_prefix: config.game.prefix.as_deref(),
+                    }
+                    .run_terminal()
                     .await
                     .into();
                 }
