@@ -51,8 +51,8 @@ default = "None"
 
 [SortBy]
 help = "How to sort games"
-variants = ["Id", "Name", "Slug"]
-default = "Id"
+variants = ["Added", "Id", "Name", "Slug"]
+default = "Added"
 
 [SortDir]
 title = "Sort Direction"
