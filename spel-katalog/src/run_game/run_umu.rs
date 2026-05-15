@@ -1,3 +1,4 @@
+use ::core::iter;
 use ::std::{
     collections::BTreeSet,
     ffi::OsString,
@@ -7,7 +8,7 @@ use ::std::{
 };
 
 use ::smol::process::Command;
-use ::spel_katalog_formats::{AdditionalConfig, Drive, LutrisRunner, NativeGame};
+use ::spel_katalog_formats::{AdditionalConfig, LutrisRunner, NativeGame};
 use ::spel_katalog_info::formats::Config;
 
 use crate::{
@@ -42,8 +43,8 @@ async fn init_umu_prefix(
     umu: &Path,
     umu_prefix: &Path,
     verbs: &[String],
-    dll_override: Box<dyn '_ + Send + Iterator<Item = &str>>,
-    symlinks: &[Drive],
+    dll_override: &mut (dyn '_ + Send + Sync + Iterator<Item = &str>),
+    drives: &mut (dyn '_ + Send + Sync + Iterator<Item = (char, &Path)>),
 ) -> Result<(), StrError> {
     let status = Command::new(umu)
         .args(
@@ -71,7 +72,7 @@ async fn init_umu_prefix(
         add_dll_override(dll_override, umu_prefix).await;
     }
 
-    for Drive { link, letter } in symlinks {
+    for (letter, link) in drives {
         if let Err(err) =
             ::smol::fs::unix::symlink(link, umu_prefix.join(format!("dosdevices/{letter}:"))).await
             && !matches!(err.kind(), ErrorKind::AlreadyExists)
@@ -149,6 +150,7 @@ impl NativeUmuCtx<'_> {
                     runner,
                     prefix,
                     hidden: _,
+                    timestamp: _,
                     net,
                     anchor: _,
                     env,
@@ -157,7 +159,7 @@ impl NativeUmuCtx<'_> {
                     wt_verb,
                     bind,
                     ro_bind,
-                    drive,
+                    drives,
                 },
         } = self;
         let home = ::std::env::home_dir().ok_or_else(|| {
@@ -185,13 +187,13 @@ impl NativeUmuCtx<'_> {
                 umu,
                 prefix,
                 &wt_verb,
-                Box::new(
-                    global_dll_override
-                        .iter()
-                        .chain(&dll_override)
-                        .map(String::as_str),
-                ),
-                &drive,
+                &mut global_dll_override
+                    .iter()
+                    .chain(&dll_override)
+                    .map(String::as_str),
+                &mut drives
+                    .iter()
+                    .map(|(letter, link)| (*letter, link.as_path())),
             )
             .await?;
         }
@@ -348,11 +350,8 @@ impl LutrisUmuCtx<'_> {
                 umu,
                 &umu_prefix,
                 &[],
-                Box::new(dll_overrides.iter().map(String::as_str)),
-                &[Drive {
-                    link: PathBuf::from("../.."),
-                    letter: 'g',
-                }],
+                &mut dll_overrides.iter().map(String::as_str),
+                &mut iter::once(('g', Path::new("../.."))),
             )
             .await?;
         }
