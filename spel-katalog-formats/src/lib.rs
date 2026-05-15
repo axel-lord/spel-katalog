@@ -6,7 +6,7 @@ pub use self::{
     image::Image,
     lutris_game::{LutrisGame, LutrisRunner},
     native_game::{NativeGame, NativeRunner},
-    timestamp::{TimeStampParseError, Timestamp},
+    timestamp::{TimeStampParseError, Timestamp, TimestampFromIntError},
 };
 
 mod addititional_config;

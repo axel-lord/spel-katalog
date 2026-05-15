@@ -41,6 +41,15 @@ pub enum TimeStampParseError {
     Invalid,
 }
 
+/// Error returned when trying to convert integers to timestamps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, ::thiserror::Error)]
+#[repr(transparent)]
+#[error("could not parse {value} as a timestamp")]
+pub struct TimestampFromIntError {
+    /// Value of numeric timestamp.
+    value: i64,
+}
+
 impl FromStr for Timestamp {
     type Err = TimeStampParseError;
 
@@ -73,5 +82,23 @@ impl<'de> Deserialize<'de> for Timestamp {
     {
         String::deserialize(deserializer)
             .and_then(|s| s.parse::<Timestamp>().map_err(de::Error::custom))
+    }
+}
+
+impl TryFrom<i64> for Timestamp {
+    type Error = TimestampFromIntError;
+
+    fn try_from(value: i64) -> Result<Self, Self::Error> {
+        Local
+            .timestamp_opt(value, 0)
+            .latest()
+            .ok_or(TimestampFromIntError { value })
+            .map(Self)
+    }
+}
+
+impl From<Timestamp> for i64 {
+    fn from(Timestamp(value): Timestamp) -> Self {
+        value.timestamp()
     }
 }
