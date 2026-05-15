@@ -7,7 +7,7 @@ license.workspace = true
 
 [dependencies]
 bytes = { workspace = true, features = ["serde"] }
-chrono = { version = "0.4.44", default-features = false, features = ["clock", "std"] }
+chrono = { workspace = true, features = ["clock", "std"] }
 derive_more = { workspace = true, features = ["is_variant", "display", "from", "into", "deref", "deref_mut", "as_ref"] }
 indexmap.workspace = true
 rustc-hash.workspace = true

@@ -47,7 +47,8 @@ pub fn load_games_from_database(db_path: &Path) -> Result<Vec<LutrisGame>, LoadD
             },
         );
 
-    let mut stmt = db.prepare_cached("SELECT id,name,slug,runner,configpath FROM games")?;
+    let mut stmt =
+        db.prepare_cached("SELECT id,name,slug,runner,configpath,installed_at FROM games")?;
     let mut rows = stmt.query([])?;
     let mut games = Vec::new();
 
@@ -77,6 +78,10 @@ pub fn load_games_from_database(db_path: &Path) -> Result<Vec<LutrisGame>, LoadD
                 .get("configpath")
                 .map_err(|err| ::log::error!("could not read configpath of row\n{err}"))
                 .ok()?;
+            let installed_at = row
+                .get("installed_at")
+                .map_err(|err| ::log::error!("could not read installed_at of row\n{err}"))
+                .ok()?;
 
             Some(LutrisGame {
                 slug,
@@ -84,6 +89,7 @@ pub fn load_games_from_database(db_path: &Path) -> Result<Vec<LutrisGame>, LoadD
                 name,
                 runner,
                 configpath,
+                installed_at,
                 hidden: false,
             })
         }

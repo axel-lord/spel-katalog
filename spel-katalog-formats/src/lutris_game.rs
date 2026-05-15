@@ -20,6 +20,8 @@ pub struct LutrisGame {
     pub configpath: String,
     /// Is the game hidden.
     pub hidden: bool,
+    /// When was the game installed.
+    pub installed_at: i64,
 }
 
 /// Runner used by a game profile.
