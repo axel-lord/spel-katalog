@@ -14,7 +14,7 @@ use ::tap::TapFallible;
 #[derive(Debug)]
 struct GameCache {
     /// Game slug as uppercase.
-    slug: String,
+    slug: Option<String>,
     /// Game name as uppercase.
     name: String,
 }
@@ -136,7 +136,7 @@ impl Games {
 
         fn get_cache<'a>(game: &LutrisGame, cache: &'a mut Option<GameCache>) -> &'a GameCache {
             cache.get_or_insert_with(|| GameCache {
-                slug: game.slug.to_uppercase(),
+                slug: Some(game.slug.to_uppercase()),
                 name: game.name.to_uppercase(),
             })
         }
@@ -186,7 +186,12 @@ impl Games {
                             let cache = get_cache(game, cache);
 
                             for filter in &filters {
-                                if cache.name.contains(filter) || cache.slug.contains(filter) {
+                                if cache.name.contains(filter) {
+                                    continue;
+                                }
+                                if let Some(slug) = &cache.slug
+                                    && slug.contains(filter)
+                                {
                                     continue;
                                 }
                                 return None;
