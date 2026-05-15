@@ -324,7 +324,7 @@ impl LutrisUmuCtx<'_> {
             ::log::error!("could not find user home directory");
             StrError("could not find user home directory".to_owned())
         })?;
-        let directory = exe.parent().ok_or_else(|| {
+        let directory = wine_prefix.unwrap_or(exe).parent().ok_or_else(|| {
             ::log::error!("executable {exe:?} has no parent");
             StrError("missing executable parent".to_owned())
         })?;
