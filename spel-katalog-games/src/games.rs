@@ -147,9 +147,7 @@ impl Games {
             sort_dir: SortDir,
         ) {
             match sort_by {
-                SortBy::Id => items.sort_by(|a, b| a.1.id.cmp(&b.1.id).reverse()),
                 SortBy::Name => items.sort_by(|a, b| a.1.name.cmp(&b.1.name)),
-                SortBy::Slug => items.sort_by(|a, b| a.1.slug.cmp(&b.1.slug)),
                 SortBy::Added => {
                     items.sort_by(|a, b| a.1.installed_at.cmp(&b.1.installed_at).reverse())
                 }
