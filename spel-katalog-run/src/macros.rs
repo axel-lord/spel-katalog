@@ -1,3 +1,5 @@
+//! Macros in use to create values.
+
 /// Convert inputs to an array of [OsString]
 ///
 /// ```
@@ -18,7 +20,7 @@ macro_rules! args {
 /// ```
 macro_rules! strerror {
     ($($arg:tt)*) => {
-        $crate::run_game::strerror::StrError::fmt(format_args!($($arg)*))
+        $crate::strerror::StrError::fmt(format_args!($($arg)*))
     };
 }
 

@@ -1,3 +1,5 @@
+//! Run games using bubblewrap and umu.
+
 use ::std::{
     collections::BTreeSet,
     ffi::OsString,
@@ -9,35 +11,47 @@ use ::std::{
 use ::rustc_hash::FxHashMap;
 use ::smol::process::Command;
 use ::spel_katalog_formats::{
-    AdditionalConfig, Bind, LutrisRunner, NativeGame, NativeRunner, Timestamp,
+    AdditionalConfig, Bind, LutrisRunner, NativeGame, NativeRunner, Timestamp, lutris_config,
 };
-use ::spel_katalog_info::formats::Config;
 
 use crate::{
-    oneshot_broadcast::Sender,
-    run_game::{
-        macros::{args, strerror},
-        strerror::StrError,
-    },
+    Callback,
+    macros::{args, strerror},
+    strerror::StrError,
 };
 
+/// Context needed to run game with bubblewrap and umu.
 #[derive(Debug)]
 pub struct CommonUmuCtx<'a> {
+    /// Path to `bwrap` executable.
     pub bwrap: &'a Path,
+    /// Path to `umu-run` executable.
     pub umu: &'a Path,
+    /// Path to shell executable.
     pub shell: &'a Path,
+    /// Command line to prefix command with
+    /// to start in a terminal.
     pub term: &'a str,
+    /// Is net disabled.
     pub net_disabled: bool,
+    /// Where to redirect errors.
     pub stderr: Stdio,
+    /// Where to redirect output.
     pub stdout: Stdio,
+    /// Global dll overrides.
     pub dll_overrides: Vec<String>,
+    /// Global sandbox read only additions.
     pub sandbox_ro_dirs: Vec<PathBuf>,
-    pub send_open: Sender<()>,
+    /// Callback used to signal game was started.
+    pub callback: Callback,
 }
 
+/// Context needed to run native games.
 #[derive(Debug)]
 pub struct NativeUmuCtx<'a> {
+    /// Common context.
     pub common: CommonUmuCtx<'a>,
+    /// Game config.
     pub config: NativeGame,
 }
 
@@ -108,6 +122,7 @@ async fn init_umu_prefix(
     Ok(())
 }
 
+/// Add a dell override to prefix.
 async fn add_dll_override(dll_override: &str, umu_prefix: &Path) {
     ::log::info!("adding dll override {dll_override:?}");
     let status = Command::new("wine")
@@ -137,6 +152,7 @@ async fn add_dll_override(dll_override: &str, umu_prefix: &Path) {
     }
 }
 
+/// Split terminal command line into executable and arguments.
 fn term_path(term: &str) -> Result<(PathBuf, Vec<PathBuf>), StrError> {
     let term_command =
         ::shell_words::split(term).map_err(|err| strerror!("could not split {term}, {err}"))?;
@@ -152,13 +168,22 @@ fn term_path(term: &str) -> Result<(PathBuf, Vec<PathBuf>), StrError> {
 
 impl NativeUmuCtx<'_> {
     /// Run shell in prefix.
+    ///
+    /// # Errors
+    /// If context cannot run shell.
     pub async fn run_shell(self) -> Result<String, StrError> {
         self.run_(true).await
     }
+
     /// Run game.
+    ///
+    /// # Errors
+    /// If context cannot run.
     pub async fn run(self) -> Result<String, StrError> {
         self.run_(false).await
     }
+
+    /// Run context.
     async fn run_(self, run_shell: bool) -> Result<String, StrError> {
         let NativeUmuCtx {
             common:
@@ -172,7 +197,7 @@ impl NativeUmuCtx<'_> {
                     stdout,
                     dll_overrides: global_dll_override,
                     sandbox_ro_dirs: global_ro_bind,
-                    send_open,
+                    callback: send_open,
                 },
             config,
         } = self;
@@ -302,7 +327,7 @@ impl NativeUmuCtx<'_> {
             .stderr(stderr)
             .status();
 
-        send_open.send(());
+        send_open.call();
 
         let status = cmd.await.map_err(|err| {
             ::log::error!("could not run {name}\n{err}");
@@ -313,21 +338,50 @@ impl NativeUmuCtx<'_> {
     }
 }
 
+/// Context needed to run lutris games.
 #[derive(Debug)]
 pub struct LutrisUmuCtx<'a> {
+    /// Common context.
     pub common: CommonUmuCtx<'a>,
-    pub config: &'a Config,
+    /// Lutris yml config of game.
+    pub config: &'a lutris_config::Config,
+    /// Path to game executable.
     pub exe: &'a Path,
+    /// Additional config of game.
     pub extra_config: Option<&'a AdditionalConfig>,
+    /// Name of game.
     pub name: &'a str,
+    /// Runner used for game.
     pub runner: LutrisRunner,
+    /// Wine prefix of game.
     pub wine_prefix: Option<&'a Path>,
+    /// Is the game hidden.
     pub hidden: bool,
+    /// When was the game installed.
     pub installed_at: i64,
 }
 
 impl<'a> LutrisUmuCtx<'a> {
+    /// Run shell in prefix.
+    ///
+    /// # Errors
+    /// If context cannot run shell.
+    pub async fn run_shell(self) -> Result<String, StrError> {
+        self.into_native()?.run_shell().await
+    }
+
+    /// Run game.
+    ///
+    /// # Errors
+    /// If context cannot run.
+    pub async fn run(self) -> Result<String, StrError> {
+        self.into_native()?.run().await
+    }
+
     /// Convert into a native game run context.
+    ///
+    /// # Errors
+    /// If the lutris context cannot produce a native context.
     pub fn into_native(self) -> Result<NativeUmuCtx<'a>, StrError> {
         let LutrisUmuCtx {
             common,
@@ -351,7 +405,9 @@ impl<'a> LutrisUmuCtx<'a> {
             }));
         } else if runner.is_wine() {
             bind.push(Bind::MirrorNamed {
-                src: config.game.common_parent(),
+                src: config
+                    .game
+                    .common_parent(|| ::spel_katalog_settings::HOME.as_path()),
             });
         } else if let Some(parent) = exe.parent() {
             bind.push(Bind::MirrorNamed {

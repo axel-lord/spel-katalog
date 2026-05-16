@@ -22,12 +22,10 @@ use ::iced_widget::{
 use ::image::ImageError;
 use ::open::that;
 use ::spel_katalog_common::{OrRequest, PushMaybe, StatusSender, async_status, status, styling, w};
-use ::spel_katalog_formats::AdditionalConfig;
+use ::spel_katalog_formats::{AdditionalConfig, lutris_config};
 use ::spel_katalog_settings::{ConfigDir, CoverartDir, Settings, YmlDir};
 use ::tap::Pipe;
 use ::yaml_rust2::Yaml;
-
-pub mod formats;
 
 mod attrs;
 
@@ -264,7 +262,7 @@ impl State {
                 self.additional = additional;
 
                 // Move to task?
-                let yml = match formats::Config::parse(&content) {
+                let yml = match lutris_config::Config::parse(&content) {
                     Ok(yml) => yml,
                     Err(err) => {
                         ::log::error!("could not parse yml {path:?}\n{err}");
@@ -273,7 +271,9 @@ impl State {
                     }
                 };
 
-                self.common_parent = yml.game.common_parent();
+                self.common_parent = yml
+                    .game
+                    .common_parent(|| ::spel_katalog_settings::HOME.as_path());
 
                 Task::none()
             }
@@ -515,7 +515,7 @@ impl State {
                         }
                     };
 
-                    let config = match formats::Config::parse(&content) {
+                    let config = match lutris_config::Config::parse(&content) {
                         Ok(config) => config,
                         Err(err) => {
                             async_status!(&tx, "could not parse {config_path:?}").await;
@@ -572,7 +572,7 @@ impl State {
     /// Open dialog to replace exe in config.
     fn open_exe(&mut self, tx: &StatusSender) -> Option<Task<OrRequest<Message, Request>>> {
         let tx = tx.clone();
-        let exe = formats::Config::parse(&self.content.text())
+        let exe = lutris_config::Config::parse(&self.content.text())
             .map_err(|err| {
                 ::log::error!("could not load yaml\n{err}");
                 status!(&tx, "could not load yaml");
@@ -582,7 +582,7 @@ impl State {
             .exe
             .to_path_buf();
 
-        let Some(dir) = formats::Config::parse(&self.content.text())
+        let Some(dir) = lutris_config::Config::parse(&self.content.text())
             .map_err(|err| {
                 ::log::error!("could not load yaml\n{err}");
                 status!(&tx, "could not load yaml");
@@ -632,9 +632,9 @@ impl State {
         let exe = yml
             .first_mut()?
             .as_mut_hash()?
-            .get_mut(&formats::GAME)?
+            .get_mut(&lutris_config::GAME)?
             .as_mut_hash()?
-            .get_mut(&formats::EXE)?;
+            .get_mut(&lutris_config::EXE)?;
 
         *exe = Yaml::String(path);
 

@@ -1,6 +1,7 @@
 use ::derive_more::{From, IsVariant};
 use ::iced_core::window;
 use ::spel_katalog_common::OrRequest;
+use ::spel_katalog_run::strerror::StrError;
 
 use crate::{
     app::WindowType,
@@ -86,5 +87,11 @@ where
             Ok(value) => value.into(),
             Err(value) => value.into(),
         }
+    }
+}
+
+impl From<StrError> for Message {
+    fn from(value: StrError) -> Self {
+        value.0.into()
     }
 }

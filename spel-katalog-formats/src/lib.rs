@@ -15,3 +15,5 @@ mod image;
 mod lutris_game;
 mod native_game;
 mod timestamp;
+
+pub mod lutris_config;

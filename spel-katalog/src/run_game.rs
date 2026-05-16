@@ -5,8 +5,11 @@ use ::std::{
 
 use ::iced_runtime::Task;
 use ::spel_katalog_common::status;
-use ::spel_katalog_formats::AdditionalConfig;
-use ::spel_katalog_info::formats;
+use ::spel_katalog_formats::{AdditionalConfig, lutris_config};
+use ::spel_katalog_run::{
+    Callback,
+    run_umu::{CommonUmuCtx, LutrisUmuCtx},
+};
 use ::spel_katalog_settings::{
     BubblewrapExe, ConfigDir, DllOverrides, FirejailExe, LutrisExe, Network, OnRun, SandboxExtras,
     SandboxMode, ShellExe, TermCommand, UmuRunExe, YmlDir,
@@ -14,18 +17,11 @@ use ::spel_katalog_settings::{
 use ::spel_katalog_sink::SinkIdentity;
 
 use crate::{
-    App, Message, QuickMessage, Safety,
-    oneshot_broadcast::oneshot_broadcast,
-    run_game::{
-        run_script::BatchView,
-        run_umu::{CommonUmuCtx, LutrisUmuCtx},
-    },
+    App, Message, QuickMessage, Safety, oneshot_broadcast::oneshot_broadcast,
+    run_game::run_script::BatchView,
 };
 
-mod macros;
 mod run_script;
-mod run_umu;
-mod strerror;
 
 #[derive(Debug, ::thiserror::Error)]
 enum ScriptGatherError {
@@ -121,7 +117,7 @@ impl App {
         let cmd_task = Task::future(async move {
             let config = async {
                 let config = ::smol::fs::read_to_string(&configpath).await?;
-                let config = formats::Config::parse(&config)?;
+                let config = lutris_config::Config::parse(&config)?;
                 Ok::<_, ConfigError>(config)
             };
 
@@ -199,7 +195,9 @@ impl App {
                     {
                         args.extend(additional.into_iter().map(wl));
                     } else {
-                        args.push(wl(config.game.common_parent()));
+                        args.push(wl(config
+                            .game
+                            .common_parent(|| ::spel_katalog_settings::HOME.as_path())));
                     }
 
                     if net_disabled {
@@ -227,64 +225,58 @@ impl App {
                     return "only bubblewrap supported for shell".to_owned().into();
                 }
                 (Safety::Sandbox, SandboxMode::Bubblewrap) => {
-                    let run = async {
-                        LutrisUmuCtx {
-                            common: CommonUmuCtx {
-                                bwrap: bwrap.as_path(),
-                                stderr,
-                                stdout,
-                                term: &term,
-                                umu: umu.as_path(),
-                                net_disabled,
-                                sandbox_ro_dirs,
-                                send_open,
-                                shell: shell.as_path(),
-                                dll_overrides,
-                            },
-                            config: &config,
-                            exe: &config.game.exe,
-                            extra_config: extra_config.as_ref(),
-                            name: &name,
-                            runner,
-                            wine_prefix: config.game.prefix.as_deref(),
-                            hidden,
-                            installed_at,
-                        }
-                        .into_native()?
-                        .run()
-                        .await
-                    };
-                    return run.await.into();
+                    return LutrisUmuCtx {
+                        common: CommonUmuCtx {
+                            bwrap: bwrap.as_path(),
+                            stderr,
+                            stdout,
+                            term: &term,
+                            umu: umu.as_path(),
+                            net_disabled,
+                            sandbox_ro_dirs,
+                            callback: Callback::new(|| send_open.send(())),
+                            shell: shell.as_path(),
+                            dll_overrides,
+                        },
+                        config: &config,
+                        exe: &config.game.exe,
+                        extra_config: extra_config.as_ref(),
+                        name: &name,
+                        runner,
+                        wine_prefix: config.game.prefix.as_deref(),
+                        hidden,
+                        installed_at,
+                    }
+                    .run()
+                    .await
+                    .into();
                 }
                 (Safety::SandboxShell, SandboxMode::Bubblewrap) => {
-                    let run = async {
-                        LutrisUmuCtx {
-                            common: CommonUmuCtx {
-                                bwrap: bwrap.as_path(),
-                                net_disabled,
-                                sandbox_ro_dirs,
-                                send_open,
-                                shell: shell.as_path(),
-                                stderr,
-                                stdout,
-                                term: &term,
-                                umu: umu.as_path(),
-                                dll_overrides,
-                            },
-                            config: &config,
-                            exe: &config.game.exe,
-                            extra_config: extra_config.as_ref(),
-                            name: &name,
-                            runner,
-                            wine_prefix: config.game.prefix.as_deref(),
-                            hidden,
-                            installed_at,
-                        }
-                        .into_native()?
-                        .run_shell()
-                        .await
-                    };
-                    return run.await.into();
+                    return LutrisUmuCtx {
+                        common: CommonUmuCtx {
+                            bwrap: bwrap.as_path(),
+                            net_disabled,
+                            sandbox_ro_dirs,
+                            callback: Callback::new(|| send_open.send(())),
+                            shell: shell.as_path(),
+                            stderr,
+                            stdout,
+                            term: &term,
+                            umu: umu.as_path(),
+                            dll_overrides,
+                        },
+                        config: &config,
+                        exe: &config.game.exe,
+                        extra_config: extra_config.as_ref(),
+                        name: &name,
+                        runner,
+                        wine_prefix: config.game.prefix.as_deref(),
+                        hidden,
+                        installed_at,
+                    }
+                    .run_shell()
+                    .await
+                    .into();
                 }
             };
 
