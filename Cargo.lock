@@ -1022,20 +1022,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 
 [[package]]
-name = "dashmap"
-version = "6.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
-dependencies = [
- "cfg-if",
- "crossbeam-utils",
- "hashbrown 0.14.5",
- "lock_api",
- "once_cell",
- "parking_lot_core",
-]
-
-[[package]]
 name = "deranged"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1874,12 +1860,6 @@ dependencies = [
  "read-fonts 0.35.0",
  "smallvec",
 ]
-
-[[package]]
-name = "hashbrown"
-version = "0.14.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
 
 [[package]]
 name = "hashbrown"
@@ -4492,19 +4472,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "spel-katalog-db"
-version = "0.1.0"
-dependencies = [
- "dashmap",
- "derive_more",
- "flume",
- "log",
- "rusqlite",
- "rustc-hash 2.1.2",
- "thiserror 2.0.18",
-]
-
-[[package]]
 name = "spel-katalog-formats"
 version = "0.1.0"
 dependencies = [
@@ -4516,6 +4483,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "thiserror 2.0.18",
+ "uuid",
  "yaml-rust2",
 ]
 
@@ -4547,6 +4515,7 @@ dependencies = [
  "strsim",
  "tap",
  "thiserror 2.0.18",
+ "uuid",
 ]
 
 [[package]]
@@ -4562,6 +4531,7 @@ dependencies = [
  "rustc-hash 2.1.2",
  "spel-katalog-formats",
  "thiserror 2.0.18",
+ "uuid",
 ]
 
 [[package]]
@@ -5262,6 +5232,16 @@ name = "utf8parse"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
+
+[[package]]
+name = "uuid"
+version = "1.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddd74a9687298c6858e9b88ec8935ec45d22e8fd5e6394fa1bd4e99a87789c76"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+]
 
 [[package]]
 name = "v_frame"

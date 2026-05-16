@@ -24,7 +24,7 @@ use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelItera
 use ::rusqlite::{Connection, Statement, named_params};
 use ::rustc_hash::FxHashSet;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, w};
-use ::spel_katalog_formats::LutrisGame;
+use ::spel_katalog_formats::{Game, GameId};
 use ::spel_katalog_gather::{
     CoverGatherer, CoverGathererOptions, LoadDbError, load_games_from_database,
     load_thumbnail_database,
@@ -47,7 +47,7 @@ pub struct State {
     /// Queue used for batching caching of thumbnails.
     cache_queue: (Vec<String>, Vec<::spel_katalog_formats::Image>),
     /// Indices of currently selected games.
-    selected: Option<i64>,
+    selected: Option<GameId>,
     /// How many columns to display.
     columns: Cell<usize>,
 }
@@ -78,7 +78,7 @@ pub enum Message {
     /// Set loaded games.
     SetGames {
         /// Games to set content to.
-        games: Vec<LutrisGame>,
+        games: Vec<Game>,
     },
     /// Set thumbnails.
     SetImages {
@@ -106,9 +106,9 @@ pub enum Message {
     /// Move selection.
     Select(SelDir),
     /// Select an id.
-    SelectId(i64),
+    SelectId(GameId),
     /// Batch select game.
-    BatchSelect(i64),
+    BatchSelect(GameId),
     /// FLush thumbnail cache to database.
     FlushCache,
 }
@@ -119,12 +119,12 @@ pub enum Request {
     /// Set currently chosen game.
     ShowGame {
         /// Id of game
-        id: i64,
+        id: GameId,
     },
     /// Run a game.
     Run {
         /// Id of game.
-        id: i64,
+        id: GameId,
         /// Should the game be sandboxed.
         sandbox: bool,
     },
@@ -138,17 +138,17 @@ pub enum AreaMessage {
     /// Select a game.
     Select {
         /// Numeric id of game.
-        id: i64,
+        id: GameId,
     },
     /// Given id was batch selected.
     BatchSelect {
         /// Numeric id game.
-        id: i64,
+        id: GameId,
     },
     /// Run game.
     Run {
         /// Numeric id of game.
-        id: i64,
+        id: GameId,
         /// Should the game be sandboxed.
         sandbox: bool,
     },
@@ -171,7 +171,7 @@ impl State {
     }
 
     /// Get id of currently selected game, if any.
-    pub const fn selected(&self) -> Option<i64> {
+    pub const fn selected(&self) -> Option<GameId> {
         self.selected
     }
 
@@ -215,7 +215,14 @@ impl State {
             }
             Message::SetGames { games } => {
                 self.set(
-                    games.into_iter().map(WithThumb::from).collect(),
+                    games
+                        .into_iter()
+                        .map(|game| WithThumb {
+                            game,
+                            thumb: None,
+                            batch_selected: false,
+                        })
+                        .collect(),
                     settings,
                     filter,
                 );
@@ -292,7 +299,7 @@ impl State {
         let game_slugs = self
             .all()
             .iter()
-            .map(|game| game.slug.clone())
+            .filter_map(|game| game.slug().map(ToOwned::to_owned))
             .collect::<Vec<_>>();
 
         let find_cached = ::smol::unblock(move || {
@@ -375,11 +382,11 @@ impl State {
                 Down | Right => self.displayed().next(),
                 SelDir::None => Option::None,
             }
-            .map(|game| game.id);
+            .map(|game| game.id());
             return;
         };
 
-        let m = |game: &WithThumb| game.id == selected;
+        let m = |game: &WithThumb| game.id() == selected;
 
         let idx = match sel_dir {
             Up | Left => self.displayed().rev().position(m),
@@ -400,7 +407,7 @@ impl State {
             Right => self.displayed().cycle().nth(idx + 1),
             SelDir::None => Option::None,
         }
-        .map(|game| game.id);
+        .map(|game| game.id());
     }
 
     /// Render elements.
@@ -408,11 +415,11 @@ impl State {
         fn card<'a>(
             game: &'a WithThumb,
             width: f32,
-            selected: Option<i64>,
+            selected: Option<GameId>,
         ) -> Element<'a, OrRequest<Message, Request>> {
             let handle = game.thumb.as_ref();
-            let name = game.name.as_str();
-            let id = game.id;
+            let name = game.name();
+            let id = game.id();
 
             fn base(theme: &::iced_core::Theme) -> container::Style {
                 let style = container::bordered_box(theme);
@@ -441,8 +448,8 @@ impl State {
 
             let style: fn(&::iced_core::Theme) -> container::Style =
                 match (selected, game.batch_selected) {
-                    (Some(id), false) if game.id == id => select,
-                    (Some(id), true) if game.id == id => batch_and_select,
+                    (Some(id), false) if game.id() == id => select,
+                    (Some(id), true) if game.id() == id => batch_and_select,
                     (_, true) => batch,
                     (_, false) => not_selected,
                 };

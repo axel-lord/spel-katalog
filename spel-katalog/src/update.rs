@@ -16,10 +16,14 @@ use crate::{App, Message, QuickMessage, Safety, app::WindowType};
 pub fn gather<'a>(
     yml_dir: &str,
     config_dir: &str,
-    games: impl IntoIterator<Item = &'a ::spel_katalog_formats::LutrisGame>,
+    games: impl IntoIterator<Item = &'a ::spel_katalog_formats::Game>,
 ) -> Vec<BatchInfo> {
     games
         .into_iter()
+        .filter_map(|game| match game {
+            ::spel_katalog_formats::Game::Lutris(lutris_game) => Some(lutris_game),
+            ::spel_katalog_formats::Game::Native { .. } => None,
+        })
         .map(|game| BatchInfo {
             id: game.id,
             slug: game.slug.clone(),

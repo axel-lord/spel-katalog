@@ -33,3 +33,4 @@ spel-katalog-widget.workspace = true
 strsim.workspace = true
 tap.workspace = true
 thiserror.workspace = true
+uuid.workspace = true

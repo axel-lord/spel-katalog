@@ -3,6 +3,7 @@
 pub use self::{
     addititional_config::AdditionalConfig,
     bind::{Bind, Symlink},
+    game::{Game, GameId},
     image::Image,
     lutris_game::{LutrisGame, LutrisRunner},
     native_game::{NativeGame, NativeRunner},
@@ -11,6 +12,7 @@ pub use self::{
 
 mod addititional_config;
 mod bind;
+mod game;
 mod image;
 mod lutris_game;
 mod native_game;

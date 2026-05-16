@@ -5,7 +5,7 @@ use ::std::{
 
 use ::iced_runtime::Task;
 use ::spel_katalog_common::status;
-use ::spel_katalog_formats::{AdditionalConfig, lutris_config};
+use ::spel_katalog_formats::{AdditionalConfig, Game, GameId, lutris_config};
 use ::spel_katalog_run::{
     Callback,
     run_umu::{CommonUmuCtx, LutrisUmuCtx},
@@ -64,9 +64,19 @@ async fn parse_extra_config(extra_config_path: &Path) -> Result<AdditionalConfig
 }
 
 impl App {
-    pub fn run_game(&mut self, id: i64, safety: Safety, no_game: bool) -> Task<Message> {
+    pub fn run_game(&mut self, id: GameId, safety: Safety, no_game: bool) -> Task<Message> {
         let Some(game) = self.games.by_id(id) else {
             status!(&self.sender, "could not run game with id {id}");
+            return Task::none();
+        };
+
+        let GameId::Lutris(id) = id else {
+            status!(&self.sender, "native id not yet supported");
+            return Task::none();
+        };
+
+        let Game::Lutris(game) = &game.game else {
+            status!(&self.sender, "native games not yet supported");
             return Task::none();
         };
 

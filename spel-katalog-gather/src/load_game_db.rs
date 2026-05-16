@@ -4,7 +4,7 @@ use ::std::path::Path;
 
 use ::rusqlite::{Connection, OpenFlags};
 use ::rustc_hash::{FxHashMap, FxHashSet};
-use ::spel_katalog_formats::LutrisGame;
+use ::spel_katalog_formats::{Game, LutrisGame};
 
 use crate::LoadDbError;
 
@@ -12,7 +12,7 @@ use crate::LoadDbError;
 ///
 /// # Errors
 /// If games cannot be loaded from database.
-pub fn load_games_from_database(db_path: &Path) -> Result<Vec<LutrisGame>, LoadDbError> {
+pub fn load_games_from_database(db_path: &Path) -> Result<Vec<Game>, LoadDbError> {
     let db = Connection::open_with_flags(
         db_path,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -104,9 +104,9 @@ pub fn load_games_from_database(db_path: &Path) -> Result<Vec<LutrisGame>, LoadD
             game.hidden = true;
         }
 
-        games.push(game);
+        games.push(Game::Lutris(game));
     }
 
-    games.sort_by_key(|game| -game.id);
+    games.sort_by_key(|game| -game.installed_at());
     Ok(games)
 }

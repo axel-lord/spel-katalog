@@ -5,7 +5,6 @@ members = [
 	"spel-katalog-build",
 	"spel-katalog-cli",
 	"spel-katalog-common",
-	"spel-katalog-db",
 	"spel-katalog-formats",
 	"spel-katalog-games",
 	"spel-katalog-gather",

@@ -4,6 +4,7 @@ use ::color_eyre::eyre::eyre;
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog_batch::Batcher;
 use ::spel_katalog_cli::{Batch, Run};
+use ::spel_katalog_gather::load_games_from_database;
 use ::spel_katalog_settings::{CacheDir, ConfigDir, LutrisDb, YmlDir};
 use ::spel_katalog_sink::SinkBuilder;
 
@@ -149,14 +150,12 @@ pub fn batch_run(batch: Batch) -> ::color_eyre::Result<()> {
         config,
     } = batch;
     let settings = get_settings(&config, settings);
-    let games =
-        ::spel_katalog_gather::load_games_from_database(settings.get::<LutrisDb>().as_path())?;
+    let games = load_games_from_database(settings.get::<LutrisDb>().as_path())?;
     let batch_infos = crate::update::gather(
         settings.get::<YmlDir>(),
         settings.get::<ConfigDir>(),
-        &games,
+        &games.into_iter().collect::<Vec<_>>(),
     );
-    drop(games);
 
     let vt = Vt { settings };
 
