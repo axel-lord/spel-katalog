@@ -1,4 +1,3 @@
-use ::core::iter;
 use ::std::{
     collections::BTreeSet,
     ffi::OsString,
@@ -7,8 +6,11 @@ use ::std::{
     process::Stdio,
 };
 
+use ::rustc_hash::FxHashMap;
 use ::smol::process::Command;
-use ::spel_katalog_formats::{AdditionalConfig, LutrisRunner, NativeGame};
+use ::spel_katalog_formats::{
+    AdditionalConfig, Bind, LutrisRunner, NativeGame, NativeRunner, Timestamp,
+};
 use ::spel_katalog_info::formats::Config;
 
 use crate::{
@@ -39,6 +41,28 @@ pub struct NativeUmuCtx<'a> {
     pub config: NativeGame,
 }
 
+/// If possible bind user in wine prefix to steamuser in umu prefix.
+fn bind_user(wine_prefix: &Path, umu_prefix: &Path) -> Option<Bind> {
+    const USERS: &str = "drive_c/users";
+    let username = ::users::get_current_username()?;
+
+    let wine_home = wine_prefix.join(USERS).join(&username);
+    if !wine_home.exists() {
+        ::log::info!("user {username:?} not found in wine prefix {wine_prefix:?}");
+        return None;
+    }
+
+    let umu_home = umu_prefix.join(USERS).join("steamuser");
+
+    ::log::info!("binding {wine_home:?} to {umu_home:?}");
+
+    Some(Bind::AsymNamed {
+        src: wine_home,
+        dest: umu_home,
+    })
+}
+
+/// Initialize umu prefix.
 async fn init_umu_prefix(
     umu: &Path,
     umu_prefix: &Path,
@@ -127,7 +151,14 @@ fn term_path(term: &str) -> Result<(PathBuf, Vec<PathBuf>), StrError> {
 }
 
 impl NativeUmuCtx<'_> {
-    #[expect(dead_code)]
+    /// Run shell in prefix.
+    pub async fn run_shell(self) -> Result<String, StrError> {
+        self.run_(true).await
+    }
+    /// Run game.
+    pub async fn run(self) -> Result<String, StrError> {
+        self.run_(false).await
+    }
     async fn run_(self, run_shell: bool) -> Result<String, StrError> {
         let NativeUmuCtx {
             common:
@@ -143,25 +174,26 @@ impl NativeUmuCtx<'_> {
                     sandbox_ro_dirs: global_ro_bind,
                     send_open,
                 },
-            config:
-                NativeGame {
-                    name,
-                    exe,
-                    runner,
-                    prefix,
-                    hidden: _,
-                    timestamp: _,
-                    net,
-                    anchor: _,
-                    env,
-                    attrs: _,
-                    dll_override,
-                    wt_verb,
-                    bind,
-                    ro_bind,
-                    drives,
-                },
+            config,
         } = self;
+        ::log::info!("using game config\n{config:#?}");
+        let NativeGame {
+            name,
+            timestamp: _,
+            exe,
+            runner,
+            prefix,
+            hidden: _,
+            net,
+            env,
+            attrs: _,
+            drives,
+            dll_override,
+            wt_verb,
+            bind,
+            ro_bind,
+        } = config;
+
         let home = ::std::env::home_dir().ok_or_else(|| {
             ::log::error!("could not find user home directory");
             StrError("could not find user home directory".to_owned())
@@ -255,12 +287,14 @@ impl NativeUmuCtx<'_> {
         if run_shell {
             args.extend(args![shell]);
         } else {
+            if runner.is_wine() {
+                args.extend(args![umu]);
+            }
             args.extend(args![exe]);
         }
 
-        ::log::info!("running with config {args:#?}");
-
         let process_path = term_path.unwrap_or_else(|| bwrap.to_path_buf());
+        ::log::info!("running {process_path:?} with args\n{args:#?}");
         let cmd = Command::new(process_path)
             .args(args)
             .kill_on_drop(true)
@@ -287,200 +321,86 @@ pub struct LutrisUmuCtx<'a> {
     pub extra_config: Option<&'a AdditionalConfig>,
     pub name: &'a str,
     pub runner: LutrisRunner,
-    pub slug: &'a str,
     pub wine_prefix: Option<&'a Path>,
+    pub hidden: bool,
+    pub installed_at: i64,
 }
 
-impl LutrisUmuCtx<'_> {
-    pub async fn run_terminal(self) -> Result<String, StrError> {
-        self.run_(true).await
-    }
-    pub async fn run(self) -> Result<String, StrError> {
-        self.run_(false).await
-    }
-
-    async fn run_(self, run_shell: bool) -> Result<String, StrError> {
+impl<'a> LutrisUmuCtx<'a> {
+    /// Convert into a native game run context.
+    pub fn into_native(self) -> Result<NativeUmuCtx<'a>, StrError> {
         let LutrisUmuCtx {
-            common:
-                CommonUmuCtx {
-                    bwrap,
-                    umu,
-                    shell,
-                    term,
-                    net_disabled,
-                    stderr,
-                    stdout,
-                    dll_overrides,
-                    sandbox_ro_dirs,
-                    send_open,
-                },
+            common,
             config,
             exe,
             extra_config,
             name,
             runner,
-            slug,
             wine_prefix,
+            hidden,
+            installed_at,
         } = self;
-        let home = ::std::env::home_dir().ok_or_else(|| {
-            ::log::error!("could not find user home directory");
-            StrError("could not find user home directory".to_owned())
-        })?;
-        let directory = wine_prefix.unwrap_or(exe).parent().ok_or_else(|| {
-            ::log::error!("executable {exe:?} has no parent");
-            StrError("missing executable parent".to_owned())
-        })?;
-        let xauthority = home.join(".Xauthority");
-        let umu_dir = home.join(".local/share/umu");
-        let umu_prefix = directory.join(".umu_pfx");
 
-        let mut args = Vec::<OsString>::new();
-
-        let term_path = if run_shell {
-            let (term, term_args) = term_path(term)?;
-            args.extend(term_args.into_iter().map(OsString::from));
-            args.extend(args![bwrap]);
-            Some(term)
-        } else {
-            None
-        };
-
-        if runner.is_wine() && !umu_prefix.exists() {
-            init_umu_prefix(
-                umu,
-                &umu_prefix,
-                &[],
-                &mut dll_overrides.iter().map(String::as_str),
-                &mut iter::once(('g', Path::new("../.."))),
-            )
-            .await?;
+        let mut bind = Vec::new();
+        let additional_roots = extra_config
+            .map(|extra| extra.sandbox_root.as_slice())
+            .unwrap_or_default();
+        if !additional_roots.is_empty() {
+            bind.extend(additional_roots.iter().map(|root| Bind::MirrorNamed {
+                src: PathBuf::from(root),
+            }));
+        } else if runner.is_wine() {
+            bind.push(Bind::MirrorNamed {
+                src: config.game.common_parent(),
+            });
+        } else if let Some(parent) = exe.parent() {
+            bind.push(Bind::MirrorNamed {
+                src: parent.to_path_buf(),
+            });
         }
 
-        #[rustfmt::skip]
-        args.extend(args![
-            "--dev", "/dev",
-            "--proc", "/proc",
-            "--ro-bind", "/usr", "/usr",
-            "--ro-bind", "/etc", "/etc",
-            "--ro-bind", "/var", "/var",
-            "--ro-bind", "/run", "/run",
-            "--ro-bind", "/sys", "/sys",
-            "--ro-bind-try", "/opt/rocm", "/opt/rocm",
-            "--symlink", "/usr/lib", "/lib",
-            "--symlink", "/usr/lib64", "/lib64",
-            "--symlink", "/usr/lib32", "/lib32",
-            "--symlink", "/usr/bin", "/bin",
-            "--symlink", "/usr/bin", "/sbin",
-            "--tmpfs", "/home",
-            "--tmpfs", "/tmp",
-            "--ro-bind", "/tmp/.X11-unix/X0", "/tmp/.X11-unix/X0",
-            "--ro-bind", &xauthority, xauthority,
-            "--dev-bind", "/dev/dri", "/dev/dri",
-            "--bind", &umu_dir, umu_dir,
-            "--setenv", "PATH", "/usr/bin",
-            "--hostname", "games",
-            "--die-with-parent",
-            "--new-session",
-            "--unshare-all",
-        ]);
+        let prefix = runner
+            .is_wine()
+            .then(|| {
+                wine_prefix
+                    .and_then(|prefix| prefix.parent().or_else(|| exe.parent()))
+                    .map(|dir| dir.join(".umu_pfx"))
+            })
+            .flatten();
 
-        for root in sandbox_ro_dirs.iter().filter(|p| p.exists()) {
-            args.extend(args!["--ro-bind", root, root]);
+        if let Some(wine_prefix) = wine_prefix
+            && let Some(umu_prefix) = prefix.as_deref()
+            && let Some(home_bind) = bind_user(wine_prefix, umu_prefix)
+        {
+            bind.push(home_bind);
         }
 
-        let additional_roots = extra_config.map_or(&[][..], |extra| extra.sandbox_root.as_slice());
-
-        let mut directory_bound = false;
-        if additional_roots.is_empty() {
-            let common_parent = config.game.common_parent();
-            if common_parent == directory {
-                directory_bound = true;
-            }
-            args.extend(args!["--bind", &common_parent, common_parent]);
-        } else {
-            for root in additional_roots {
-                if root == directory {
-                    directory_bound = true;
-                }
-                args.extend(args!["--bind", root, root]);
-            }
-        }
-        let directory_bound = directory_bound;
-
-        if !net_disabled {
-            args.extend(args!["--share-net"]);
-        }
-
-        if !directory_bound {
-            args.extend(args!["--bind", &directory, directory,]);
-        }
-
-        args.extend(
-            wine_prefix
-                .and_then(|pfx| bind_user(pfx, &umu_prefix))
-                .into_iter()
-                .flatten(),
-        );
-
-        args.extend(
-            config
-                .system
-                .env
-                .iter()
-                .flat_map(|(key, value)| args!["--setenv", key, value]),
-        );
-
-        args.extend(args!["--chdir", directory]);
-
-        if let Some(_prefix) = &config.game.prefix {
-            args.extend(args!["--setenv", "WINEPREFIX", umu_prefix]);
-        }
-
-        if runner.is_wine() && !run_shell {
-            args.extend(args![umu]);
-        }
-
-        if run_shell {
-            args.extend(args![shell]);
-        } else {
-            args.extend(args![exe]);
-        }
-
-        ::log::info!("running with config {args:#?}");
-
-        let process_path = term_path.unwrap_or_else(|| bwrap.to_path_buf());
-        let cmd = Command::new(process_path)
-            .args(args)
-            .kill_on_drop(true)
-            .stdout(stdout)
-            .stderr(stderr)
-            .status();
-
-        send_open.send(());
-
-        let status = cmd.await.map_err(|err| {
-            ::log::error!("could not run {slug}\n{err}");
-            strerror!("could not run {slug}")
-        })?;
-
-        Ok(format!("{name} exited with {status}"))
+        Ok(NativeUmuCtx {
+            common,
+            config: NativeGame {
+                name: name.to_owned(),
+                timestamp: Timestamp::try_from(installed_at)?,
+                exe: exe.to_path_buf(),
+                runner: match runner {
+                    LutrisRunner::Wine => NativeRunner::Wine,
+                    LutrisRunner::Linux => NativeRunner::Linux,
+                    LutrisRunner::Other(runner) => {
+                        return Err(strerror!("unknown runner {runner} for {name}"));
+                    }
+                },
+                prefix,
+                hidden,
+                net: None,
+                env: config.system.env.clone(),
+                attrs: extra_config
+                    .map(|extra| extra.attrs.clone())
+                    .unwrap_or_default(),
+                drives: FxHashMap::from_iter([('g', PathBuf::from("../.."))]),
+                dll_override: Vec::new(),
+                wt_verb: Vec::new(),
+                bind,
+                ro_bind: Vec::new(),
+            },
+        })
     }
-}
-
-/// If possible bind user in wine prefix to steamuser in umu prefix.
-fn bind_user(wine_prefix: &Path, umu_prefix: &Path) -> Option<[OsString; 3]> {
-    const USERS: &str = "drive_c/users";
-    let username = ::users::get_current_username()?;
-
-    let wine_home = wine_prefix.join(USERS).join(&username);
-    if !wine_home.exists() {
-        ::log::info!("user {username:?} not found in wine prefix {wine_prefix:?}");
-        return None;
-    }
-
-    let umu_home = umu_prefix.join(USERS).join("steamuser");
-
-    ::log::info!("binding {wine_home:?} to {umu_home:?}");
-
-    Some(args!["--bind", wine_home, umu_home])
 }

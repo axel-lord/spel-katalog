@@ -1,6 +1,5 @@
 //! [NativeGame] and [NativeRunner] impls.
 
-use ::core::num::NonZero;
 use ::std::path::PathBuf;
 
 use ::derive_more::{Display, IsVariant};
@@ -36,10 +35,6 @@ pub struct NativeGame {
     /// Should net always be enabled/disabled.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub net: Option<bool>,
-
-    /// Where to place the game relative to lutris games.
-    #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub anchor: Option<NonZero<i64>>,
 
     /// Environment variabnles of game.
     #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
