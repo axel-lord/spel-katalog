@@ -37,6 +37,17 @@ help = "How to filter games"
 variants = ["Filter", "Search", "Regex"]
 default = "Search"
 
+[UseGamescope]
+title = "Use Gamescope"
+help = "Should gamescope be used"
+variants = ["Yes", "No"]
+default = "No"
+
+[GamescopeExe]
+title = "Gamescope Executable"
+help = "Path to gamescope executable"
+path = "/usr/bin/gamescope"
+
 [SandboxMode]
 title = "Sandbox Tool"
 help = "How to sandbox games"

@@ -419,7 +419,8 @@ impl State {
                     }
 
                     let Some(slug) = game.slug().map(str::to_owned) else {
-                        todo!()
+                        ::log::warn!("slug not available for native games");
+                        return Task::none();
                     };
                     let dest = settings.get::<CoverartDir>().as_path().join(&slug);
 
@@ -487,7 +488,8 @@ impl State {
                 };
 
                 let Some(slug) = game.slug().map(str::to_owned) else {
-                    todo!()
+                    ::log::warn!("slug not available for native games");
+                    return Task::none();
                 };
                 let dest = settings.get::<CoverartDir>().as_path().join(&slug);
                 let tx = tx.clone();
@@ -596,7 +598,10 @@ impl State {
                         return Task::none();
                     };
 
-                    let Game::Lutris(game) = game else { todo!() };
+                    let Game::Lutris(game) = game else {
+                        ::log::warn!("open dir not available for native games");
+                        return Task::none();
+                    };
 
                     let config_path = settings
                         .get::<YmlDir>()

@@ -42,6 +42,10 @@ pub struct CommonUmuCtx<'a> {
     pub dll_overrides: Vec<String>,
     /// Global sandbox read only additions.
     pub sandbox_ro_dirs: Vec<PathBuf>,
+    /// Should gamescope be used.
+    pub use_gamescope: bool,
+    /// Path to gamescope executable.
+    pub gamescope: &'a Path,
     /// Callback used to signal game was started.
     pub callback: Callback,
 }
@@ -198,6 +202,8 @@ impl NativeUmuCtx<'_> {
                     dll_overrides: global_dll_override,
                     sandbox_ro_dirs: global_ro_bind,
                     callback: send_open,
+                    use_gamescope: global_use_gamescope,
+                    gamescope,
                 },
             config,
         } = self;
@@ -209,7 +215,7 @@ impl NativeUmuCtx<'_> {
             runner,
             prefix,
             hidden: _,
-            net,
+            use_net,
             env,
             attrs: _,
             drives,
@@ -217,12 +223,20 @@ impl NativeUmuCtx<'_> {
             wt_verb,
             bind,
             ro_bind,
+            use_gamescope,
         } = config;
 
+        let use_gamescope = use_gamescope.unwrap_or(global_use_gamescope);
         let home = ::std::env::home_dir().ok_or_else(|| {
             ::log::error!("could not find user home directory");
             StrError("could not find user home directory".to_owned())
         })?;
+        let xdg_runtime_dir = ::std::env::var_os("XDG_RUNTIME_DIR")
+            .ok_or_else(|| {
+                ::log::error!("could not find XDG_RUNTIME_DIR");
+                StrError("could not find XDG_RUNTIME_DIR".to_owned())
+            })
+            .map(PathBuf::from)?;
         let umu_dir = home.join(".local/share/umu");
         let xauthority = home.join(".Xauthority");
 
@@ -238,7 +252,7 @@ impl NativeUmuCtx<'_> {
 
         if runner.is_wine()
             && let Some(prefix) = prefix.as_deref()
-            && prefix.exists()
+            && !prefix.exists()
         {
             init_umu_prefix(
                 umu,
@@ -255,14 +269,16 @@ impl NativeUmuCtx<'_> {
             .await?;
         }
 
+        let wayland = xdg_runtime_dir.join("wayland-1");
+        let pulse = xdg_runtime_dir.join("pulse");
+        let bus = xdg_runtime_dir.join("bus");
+
         #[rustfmt::skip]
         args.extend(args![
             "--dev", "/dev",
             "--proc", "/proc",
             "--ro-bind", "/usr", "/usr",
             "--ro-bind", "/etc", "/etc",
-            "--ro-bind", "/var", "/var",
-            "--ro-bind", "/run", "/run",
             "--ro-bind", "/sys", "/sys",
             "--ro-bind-try", "/opt/rocm", "/opt/rocm",
             "--symlink", "/usr/lib", "/lib",
@@ -270,18 +286,30 @@ impl NativeUmuCtx<'_> {
             "--symlink", "/usr/lib32", "/lib32",
             "--symlink", "/usr/bin", "/bin",
             "--symlink", "/usr/bin", "/sbin",
+            "--tmpfs", "/var",
+            "--tmpfs", "/run",
             "--tmpfs", "/home",
             "--tmpfs", "/tmp",
-            "--ro-bind", "/tmp/.X11-unix/X0", "/tmp/.X11-unix/X0",
+            "--ro-bind-try", &bus, bus,
+            "--bind-try", &pulse, pulse,
+            "--bind-try", &wayland, wayland,
             "--ro-bind", &xauthority, xauthority,
             "--dev-bind", "/dev/dri", "/dev/dri",
             "--bind", &umu_dir, umu_dir,
             "--setenv", "PATH", "/usr/bin",
-            "--hostname", "games",
+            "--hostname", "spel-katalog",
             "--die-with-parent",
             "--new-session",
             "--unshare-all",
         ]);
+
+        if !use_gamescope {
+            args.extend(args![
+                "--ro-bind-try",
+                "/tmp/.X11-unix/X0",
+                "/tmp/.X11-unix/X0"
+            ]);
+        }
 
         for root in &global_ro_bind {
             args.extend(args!["--ro-bind-try", root, root]);
@@ -297,7 +325,7 @@ impl NativeUmuCtx<'_> {
             args.extend(args!["--bind", src, dest]);
         }
 
-        if net.unwrap_or(!net_disabled) {
+        if use_net.unwrap_or(!net_disabled) {
             args.extend(args!["--share-net"]);
         }
 
@@ -309,9 +337,16 @@ impl NativeUmuCtx<'_> {
             args.extend(args!["--setenv", "WINEPREFIX", prefix]);
         }
 
+        if let Some(parent) = exe.parent() {
+            args.extend(args!["--chdir", parent]);
+        }
+
         if run_shell {
             args.extend(args![shell]);
         } else {
+            if use_gamescope {
+                args.extend(args![gamescope, "--"]);
+            }
             if runner.is_wine() {
                 args.extend(args![umu]);
             }
@@ -446,7 +481,7 @@ impl<'a> LutrisUmuCtx<'a> {
                 },
                 prefix,
                 hidden,
-                net: None,
+                use_net: None,
                 env: config.system.env.clone(),
                 attrs: extra_config
                     .map(|extra| extra.attrs.clone())
@@ -456,6 +491,7 @@ impl<'a> LutrisUmuCtx<'a> {
                 wt_verb: Vec::new(),
                 bind,
                 ro_bind: Vec::new(),
+                use_gamescope: None,
             },
         })
     }

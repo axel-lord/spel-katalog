@@ -34,7 +34,11 @@ pub struct NativeGame {
 
     /// Should net always be enabled/disabled.
     #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub net: Option<bool>,
+    pub use_net: Option<bool>,
+
+    /// Should gamescope be used.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub use_gamescope: Option<bool>,
 
     /// Environment variabnles of game.
     #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]

@@ -11,8 +11,8 @@ use ::spel_katalog_run::{
     run_umu::{CommonUmuCtx, LutrisUmuCtx},
 };
 use ::spel_katalog_settings::{
-    BubblewrapExe, ConfigDir, DllOverrides, FirejailExe, LutrisExe, Network, OnRun, SandboxExtras,
-    SandboxMode, ShellExe, TermCommand, UmuRunExe, YmlDir,
+    BubblewrapExe, ConfigDir, DllOverrides, FirejailExe, GamescopeExe, LutrisExe, Network, OnRun,
+    SandboxExtras, SandboxMode, ShellExe, TermCommand, UmuRunExe, UseGamescope, YmlDir,
 };
 use ::spel_katalog_sink::SinkIdentity;
 
@@ -86,6 +86,8 @@ impl App {
         let bwrap = self.settings.get::<BubblewrapExe>().clone();
         let umu = self.settings.get::<UmuRunExe>().clone();
         let shell = self.settings.get::<ShellExe>().clone();
+        let gamescope = self.settings.get::<GamescopeExe>().clone();
+        let use_gamescope = self.settings.get::<UseGamescope>().is_yes();
         let sandbox_mode = *self.settings.get::<SandboxMode>();
         let sandbox_ro_dirs = self
             .settings
@@ -247,6 +249,8 @@ impl App {
                             callback: Callback::new(|| send_open.send(())),
                             shell: shell.as_path(),
                             dll_overrides,
+                            gamescope: gamescope.as_path(),
+                            use_gamescope,
                         },
                         config: &config,
                         exe: &config.game.exe,
@@ -274,6 +278,8 @@ impl App {
                             term: &term,
                             umu: umu.as_path(),
                             dll_overrides,
+                            gamescope: gamescope.as_path(),
+                            use_gamescope,
                         },
                         config: &config,
                         exe: &config.game.exe,
