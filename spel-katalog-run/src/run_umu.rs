@@ -109,9 +109,10 @@ async fn init_umu_prefix(
     }
 
     let dll_overrides = dll_override.collect::<BTreeSet<_>>();
+    let reg_exe = umu_prefix.join("drive_c/windows/system32/reg.exe");
 
     for dll_override in dll_overrides {
-        add_dll_override(dll_override, umu_prefix).await;
+        add_dll_override(dll_override, umu_prefix, umu, &reg_exe).await;
     }
 
     for (letter, link) in drives {
@@ -127,11 +128,11 @@ async fn init_umu_prefix(
 }
 
 /// Add a dell override to prefix.
-async fn add_dll_override(dll_override: &str, umu_prefix: &Path) {
+async fn add_dll_override(dll_override: &str, umu_prefix: &Path, umu: &Path, reg_exe: &Path) {
     ::log::info!("adding dll override {dll_override:?}");
-    let status = Command::new("wine")
+    let status = Command::new(umu)
         .args(args![
-            "reg",
+            reg_exe,
             "add",
             r"HKCU\Software\Wine\DllOverrides",
             "/f",
