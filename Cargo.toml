@@ -144,3 +144,6 @@ chrono = { version = "0.4.44", default-features = false }
 spel-katalog-run = { path = "spel-katalog-run" }
 r2d2 = "0.8.10"
 r2d2_sqlite = "0.34.0"
+bon = "3.9.1"
+bytemuck = "1.25.0"
+flate2 = "1.1.9"

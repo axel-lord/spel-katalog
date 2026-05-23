@@ -1,6 +1,6 @@
 //! [Games] impl.
 
-use ::core::iter::{self, FusedIterator};
+use ::core::{iter::FusedIterator, mem};
 
 use ::derive_more::{Deref, DerefMut, IsVariant};
 use ::itertools::izip;
@@ -14,15 +14,15 @@ use ::uuid::Uuid;
 /// Result of trying to add a game.
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord, IsVariant)]
 pub enum GameAddDelta {
-    /// Game existed and was updated.
-    Updated,
     /// Game existed and was updated, refresh of games required.
-    Refresh,
-    /// Game is shadowed and thus not added.
-    Skipped,
+    Refresh = 4,
     /// Game was not present and thus added.
     /// It may have shadowed another game.
-    Added,
+    Added = 3,
+    /// Game existed and was updated.
+    Updated = 2,
+    /// Game is shadowed and thus not added.
+    Skipped = 1,
 }
 
 /// Cached game identity.
@@ -64,6 +64,52 @@ impl From<WithThumb> for Game {
     }
 }
 
+/// Iterator removing games matching filter.
+#[derive(Debug)]
+pub struct RemoveGames<'g, F> {
+    /// Condition for removing game.
+    cond: F,
+    /// Reference to games.
+    games: &'g mut Games,
+    /// Current index.
+    idx: usize,
+    /// Settings reference.
+    settings: &'g Settings,
+    /// Filter to use when sorting.
+    filter: &'g str,
+}
+
+impl<F> Iterator for RemoveGames<'_, F>
+where
+    F: for<'a> FnMut(&'a WithThumb) -> bool,
+{
+    type Item = WithThumb;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let Self {
+            cond, games, idx, ..
+        } = self;
+        loop {
+            // Get current value and increment by one.
+            let idx = mem::replace(idx, *idx + 1);
+            if cond(games.games.get(idx)?) {
+                let mut replacement = games.games.pop()?;
+                if let Some(elem) = games.games.get_mut(idx) {
+                    mem::swap(&mut replacement, elem);
+                }
+                return Some(replacement);
+            }
+        }
+    }
+}
+impl<F> FusedIterator for RemoveGames<'_, F> where F: for<'a> FnMut(&'a WithThumb) -> bool {}
+
+impl<F> Drop for RemoveGames<'_, F> {
+    fn drop(&mut self) {
+        self.games.refresh(self.settings, self.filter);
+    }
+}
+
 /// Collection of games.
 #[derive(Debug, Default)]
 pub struct Games {
@@ -82,6 +128,24 @@ pub struct Games {
 }
 
 impl Games {
+    /// Clear all state in use.
+    pub fn clear(&mut self) {
+        let Self {
+            cache,
+            games,
+            displayed,
+            slug_lookup,
+            id_lookup,
+            uuid_lookup,
+        } = self;
+        cache.clear();
+        games.clear();
+        displayed.clear();
+        id_lookup.clear();
+        uuid_lookup.clear();
+        slug_lookup.clear();
+    }
+
     /// Games that are currently to be displayed.
     pub fn displayed(
         &self,
@@ -114,6 +178,45 @@ impl Games {
     /// Amount of displayed games.
     pub const fn displayed_count(&self) -> usize {
         self.displayed.len()
+    }
+
+    /// Remove all games matching condition.
+    ///
+    /// Games are only removed from current session.
+    pub const fn remove_games<'g, F>(
+        &'g mut self,
+        cond: F,
+        settings: &'g Settings,
+        filter: &'g str,
+    ) -> RemoveGames<'g, F>
+    where
+        F: for<'a> FnMut(&'a WithThumb) -> bool,
+    {
+        RemoveGames {
+            cond,
+            games: self,
+            idx: 0,
+            settings,
+            filter,
+        }
+    }
+
+    /// Remove a single game.
+    ///
+    /// Game is only removed for current session.
+    pub fn remove_game(
+        &mut self,
+        id: GameId,
+        settings: &Settings,
+        filter: &str,
+    ) -> Option<WithThumb> {
+        let idx = self.id_lookup(id)?;
+        let mut replacement = self.games.pop()?;
+        if let Some(game) = self.games.get_mut(idx) {
+            mem::swap(&mut replacement, game);
+        }
+        self.refresh(settings, filter);
+        Some(replacement)
     }
 
     /// Sort displayed games.
@@ -329,12 +432,21 @@ impl Games {
             && let Some(shadowed_cache) = self.cache.get_mut(shadowed_idx)
             && let Some(shadowed_game) = self.games.get_mut(shadowed_idx)
         {
+            if let Some(shadowed_slug) = shadowed_game.slug() {
+                self.slug_lookup.remove(shadowed_slug);
+            }
+            if let Some(slug) = game.slug() {
+                self.slug_lookup.insert(slug.to_owned(), shadowed_idx);
+            }
             *shadowed_cache = Some(GameCache::from(&*game));
             *shadowed_game = game;
             self.id_add_replace(game_id, shadowed_idx);
         } else {
             let idx = self.games.len();
             let shadows = game.shadows;
+            if let Some(slug) = game.slug() {
+                self.slug_lookup.insert(slug.to_owned(), idx);
+            }
             self.cache.push(Some(GameCache::from(&*game)));
             self.games.push(game);
             self.id_add_replace(game_id, idx);
@@ -376,33 +488,39 @@ impl Games {
         }
     }
 
-    /// Set current games to the ones provided, then update lookups and display.
-    pub fn set(&mut self, games: Vec<WithThumb>, settings: &Settings, filter: &str) {
-        let mut slug_lookup = FxHashMap::default();
-        let mut id_lookup = FxHashMap::default();
-        let mut uuid_lookup = FxHashMap::default();
-        for (idx, game) in games.iter().enumerate() {
-            match &game.game {
-                Game::Lutris(lutris_game) => {
-                    slug_lookup.insert(lutris_game.slug.clone(), idx);
-                    id_lookup.insert(lutris_game.id, idx);
-                }
-                Game::Native { uuid, .. } => {
-                    uuid_lookup.insert(*uuid, idx);
-                }
+    /// Add multiple games, refreshing if needed.
+    pub fn add_games(
+        &mut self,
+        games: impl IntoIterator<Item = WithThumb>,
+        settings: &Settings,
+        filter: &str,
+    ) {
+        let mut delta = GameAddDelta::Skipped;
+        for game in games {
+            delta = self.add_game(game).max(delta);
+        }
+
+        if delta.is_refresh() {
+            self.refresh(settings, filter);
+        } else {
+            self.sort(settings, filter);
+        }
+    }
+
+    /// Refresh games state.
+    pub fn refresh(&mut self, settings: &Settings, filter: &str) {
+        let games = mem::take(&mut self.games);
+        for game in games {
+            if self.add_game(game).is_refresh() {
+                ::log::warn!("possible refresh cycle shadowed games, refresh required on refresh")
             }
         }
-        let displayed = Vec::new();
-        let cache = iter::repeat_with(|| None).take(games.len()).collect();
-
-        *self = Self {
-            games,
-            slug_lookup,
-            id_lookup,
-            uuid_lookup,
-            displayed,
-            cache,
-        };
         self.sort(settings, filter);
+    }
+
+    /// Set current games to the ones provided, then update lookups and display.
+    pub fn set(&mut self, games: Vec<WithThumb>, settings: &Settings, filter: &str) {
+        self.clear();
+        self.add_games(games, settings, filter);
     }
 }
