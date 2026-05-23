@@ -66,6 +66,7 @@ impl App {
                     "l" => QuickMessage::ToggleLuaApi,
                     "p" => QuickMessage::ToggleProcessInfo,
                     "g" => QuickMessage::ToggleGameInfo,
+                    "d" => QuickMessage::Debug,
                     _ => return None,
                 }
             } else if modifiers == Modifiers::SHIFT {

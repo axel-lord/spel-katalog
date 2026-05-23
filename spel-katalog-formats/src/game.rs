@@ -1,12 +1,16 @@
 //! Any game format.
 
 use ::derive_more::{Display, IsVariant};
+use ::serde::{Deserialize, Serialize};
 use ::uuid::Uuid;
 
 use crate::LutrisGame;
 
 /// Id of a game.
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug, Display, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
+#[serde(untagged)]
 pub enum GameId {
     /// Lutris id.
     Lutris(i64),

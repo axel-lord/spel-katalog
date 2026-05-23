@@ -14,7 +14,7 @@ rustc-hash.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_bytes.workspace = true
 thiserror.workspace = true
-uuid.workspace = true
+uuid = { workspace = true, features = ["serde"] }
 yaml-rust2.workspace = true
 
 [lints]

@@ -42,6 +42,7 @@ pub enum QuickMessage {
     ToggleNetwork,
     ToggleProcessInfo,
     ToggleSettings,
+    Debug,
 }
 
 #[derive(Debug, IsVariant, From)]

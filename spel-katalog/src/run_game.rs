@@ -8,7 +8,7 @@ use ::spel_katalog_common::status;
 use ::spel_katalog_formats::{AdditionalConfig, Game, GameId, lutris_config};
 use ::spel_katalog_run::{
     Callback,
-    run_umu::{CommonUmuCtx, LutrisUmuCtx},
+    run_umu::{CommonUmuCtx, LutrisCtx, LutrisUmuCtx},
 };
 use ::spel_katalog_settings::{
     BubblewrapExe, ConfigDir, DllOverrides, FirejailExe, GamescopeExe, LutrisExe, Network, OnRun,
@@ -70,7 +70,7 @@ impl App {
             return Task::none();
         };
 
-        let GameId::Lutris(id) = id else {
+        let GameId::Lutris(lutris_id) = id else {
             status!(&self.sender, "native id not yet supported");
             return Task::none();
         };
@@ -119,7 +119,7 @@ impl App {
             .get::<ConfigDir>()
             .as_path()
             .join("games")
-            .join(format!("{id}.toml"));
+            .join(format!("{lutris_id}.toml"));
         let script_dir = self.settings.get::<ConfigDir>().as_path().join("scripts");
 
         let (send_open, recv_open) = oneshot_broadcast();
@@ -151,7 +151,7 @@ impl App {
             };
 
             let view = BatchView {
-                id,
+                id: lutris_id,
                 slug: &slug,
                 name: &name,
                 runner: &runner,
@@ -170,7 +170,7 @@ impl App {
             let rungame = if no_game {
                 None
             } else {
-                Some(format!("lutris:rungameid/{id}"))
+                Some(format!("lutris:rungameid/{lutris_id}"))
             };
 
             fn wl(p: impl AsRef<OsStr>) -> OsString {
@@ -180,13 +180,14 @@ impl App {
                 s
             }
 
-            let (stdout, stderr) = match sink_builder.build_double(|| SinkIdentity::GameId(id)) {
-                Ok([stdout, stderr]) => (stdout, stderr),
-                Err(err) => {
-                    ::log::error!("could not create process output sinks\n{err}");
-                    return "could not create output sinks".to_owned().into();
-                }
-            };
+            let (stdout, stderr) =
+                match sink_builder.build_double(|| SinkIdentity::GameId(lutris_id)) {
+                    Ok([stdout, stderr]) => (stdout, stderr),
+                    Err(err) => {
+                        ::log::error!("could not create process output sinks\n{err}");
+                        return "could not create output sinks".to_owned().into();
+                    }
+                };
 
             let cmd = match (safety, sandbox_mode) {
                 (Safety::None, _) => {
@@ -252,14 +253,17 @@ impl App {
                             gamescope: gamescope.as_path(),
                             use_gamescope,
                         },
-                        config: &config,
-                        exe: &config.game.exe,
-                        extra_config: extra_config.as_ref(),
-                        name: &name,
-                        runner,
-                        wine_prefix: config.game.prefix.as_deref(),
-                        hidden,
-                        installed_at,
+                        lutris: LutrisCtx {
+                            config: &config,
+                            exe: &config.game.exe,
+                            extra_config: extra_config.as_ref(),
+                            name: &name,
+                            runner,
+                            wine_prefix: config.game.prefix.as_deref(),
+                            hidden,
+                            installed_at,
+                            id,
+                        },
                     }
                     .run()
                     .await
@@ -281,14 +285,17 @@ impl App {
                             gamescope: gamescope.as_path(),
                             use_gamescope,
                         },
-                        config: &config,
-                        exe: &config.game.exe,
-                        extra_config: extra_config.as_ref(),
-                        name: &name,
-                        runner,
-                        wine_prefix: config.game.prefix.as_deref(),
-                        hidden,
-                        installed_at,
+                        lutris: LutrisCtx {
+                            config: &config,
+                            exe: &config.game.exe,
+                            extra_config: extra_config.as_ref(),
+                            name: &name,
+                            runner,
+                            wine_prefix: config.game.prefix.as_deref(),
+                            hidden,
+                            installed_at,
+                            id,
+                        },
                     }
                     .run_shell()
                     .await

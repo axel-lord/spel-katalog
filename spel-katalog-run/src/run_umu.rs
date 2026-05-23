@@ -11,7 +11,8 @@ use ::std::{
 use ::rustc_hash::FxHashMap;
 use ::smol::process::Command;
 use ::spel_katalog_formats::{
-    AdditionalConfig, Bind, LutrisRunner, NativeGame, NativeRunner, Timestamp, lutris_config,
+    AdditionalConfig, Bind, GameId, LutrisRunner, NativeGame, NativeRunner, Timestamp,
+    lutris_config,
 };
 
 use crate::{
@@ -225,6 +226,7 @@ impl NativeUmuCtx<'_> {
             bind,
             ro_bind,
             use_gamescope,
+            shadow: _,
         } = config;
 
         let use_gamescope = use_gamescope.unwrap_or(global_use_gamescope);
@@ -379,6 +381,13 @@ impl NativeUmuCtx<'_> {
 pub struct LutrisUmuCtx<'a> {
     /// Common context.
     pub common: CommonUmuCtx<'a>,
+    /// Lutris specific context.
+    pub lutris: LutrisCtx<'a>,
+}
+
+/// Lutris specific context for running games.
+#[derive(Debug)]
+pub struct LutrisCtx<'a> {
     /// Lutris yml config of game.
     pub config: &'a lutris_config::Config,
     /// Path to game executable.
@@ -395,32 +404,17 @@ pub struct LutrisUmuCtx<'a> {
     pub hidden: bool,
     /// When was the game installed.
     pub installed_at: i64,
+    /// Id of game.
+    pub id: GameId,
 }
 
-impl<'a> LutrisUmuCtx<'a> {
-    /// Run shell in prefix.
+impl<'a> LutrisCtx<'a> {
+    /// Convert lutris context into a [NativeGame].
     ///
     /// # Errors
-    /// If context cannot run shell.
-    pub async fn run_shell(self) -> Result<String, StrError> {
-        self.into_native()?.run_shell().await
-    }
-
-    /// Run game.
-    ///
-    /// # Errors
-    /// If context cannot run.
-    pub async fn run(self) -> Result<String, StrError> {
-        self.into_native()?.run().await
-    }
-
-    /// Convert into a native game run context.
-    ///
-    /// # Errors
-    /// If the lutris context cannot produce a native context.
-    pub fn into_native(self) -> Result<NativeUmuCtx<'a>, StrError> {
-        let LutrisUmuCtx {
-            common,
+    /// If lutris context is malformed in some way.
+    pub fn into_native(self) -> Result<NativeGame, StrError> {
+        let Self {
             config,
             exe,
             extra_config,
@@ -429,8 +423,8 @@ impl<'a> LutrisUmuCtx<'a> {
             wine_prefix,
             hidden,
             installed_at,
+            id,
         } = self;
-
         let mut bind = Vec::new();
         let additional_roots = extra_config
             .map(|extra| extra.sandbox_root.as_slice())
@@ -467,33 +461,61 @@ impl<'a> LutrisUmuCtx<'a> {
             bind.push(home_bind);
         }
 
+        Ok(NativeGame {
+            name: name.to_owned(),
+            timestamp: Timestamp::try_from(installed_at)?,
+            exe: exe.to_path_buf(),
+            runner: match runner {
+                LutrisRunner::Wine => NativeRunner::Wine,
+                LutrisRunner::Linux => NativeRunner::Linux,
+                LutrisRunner::Other(runner) => {
+                    return Err(strerror!("unknown runner {runner} for {name}"));
+                }
+            },
+            prefix,
+            hidden,
+            use_net: None,
+            env: config.system.env.clone(),
+            attrs: extra_config
+                .map(|extra| extra.attrs.clone())
+                .unwrap_or_default(),
+            drives: FxHashMap::from_iter([('g', PathBuf::from("../.."))]),
+            dll_override: Vec::new(),
+            wt_verb: Vec::new(),
+            bind,
+            ro_bind: Vec::new(),
+            use_gamescope: None,
+            shadow: Some(id),
+        })
+    }
+}
+
+impl<'a> LutrisUmuCtx<'a> {
+    /// Run shell in prefix.
+    ///
+    /// # Errors
+    /// If context cannot run shell.
+    pub async fn run_shell(self) -> Result<String, StrError> {
+        self.into_native()?.run_shell().await
+    }
+
+    /// Run game.
+    ///
+    /// # Errors
+    /// If context cannot run.
+    pub async fn run(self) -> Result<String, StrError> {
+        self.into_native()?.run().await
+    }
+
+    /// Convert into a native game run context.
+    ///
+    /// # Errors
+    /// If the lutris context cannot produce a native context.
+    pub fn into_native(self) -> Result<NativeUmuCtx<'a>, StrError> {
+        let Self { common, lutris } = self;
         Ok(NativeUmuCtx {
             common,
-            config: NativeGame {
-                name: name.to_owned(),
-                timestamp: Timestamp::try_from(installed_at)?,
-                exe: exe.to_path_buf(),
-                runner: match runner {
-                    LutrisRunner::Wine => NativeRunner::Wine,
-                    LutrisRunner::Linux => NativeRunner::Linux,
-                    LutrisRunner::Other(runner) => {
-                        return Err(strerror!("unknown runner {runner} for {name}"));
-                    }
-                },
-                prefix,
-                hidden,
-                use_net: None,
-                env: config.system.env.clone(),
-                attrs: extra_config
-                    .map(|extra| extra.attrs.clone())
-                    .unwrap_or_default(),
-                drives: FxHashMap::from_iter([('g', PathBuf::from("../.."))]),
-                dll_override: Vec::new(),
-                wt_verb: Vec::new(),
-                bind,
-                ro_bind: Vec::new(),
-                use_gamescope: None,
-            },
+            config: lutris.into_native()?,
         })
     }
 }

@@ -15,14 +15,16 @@ use ::uuid::Uuid;
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord, IsVariant)]
 pub enum GameAddDelta {
     /// Game existed and was updated, refresh of games required.
-    Refresh = 4,
+    Refresh = 5,
     /// Game was not present and thus added.
     /// It may have shadowed another game.
-    Added = 3,
+    Added = 4,
     /// Game existed and was updated.
-    Updated = 2,
+    Updated = 3,
     /// Game is shadowed and thus not added.
-    Skipped = 1,
+    Skipped = 2,
+    /// Game is a ghost and thus not added.
+    Ghost = 1,
 }
 
 /// Cached game identity.
@@ -56,6 +58,8 @@ pub struct WithThumb {
     pub batch_selected: bool,
     /// This game shadows another game with given id.
     pub shadows: Option<GameId>,
+    /// This game will be removed on the next refresh.
+    pub ghost: bool,
 }
 
 impl From<WithThumb> for Game {
@@ -90,14 +94,15 @@ where
             cond, games, idx, ..
         } = self;
         loop {
-            // Get current value and increment by one.
-            let idx = mem::replace(idx, *idx + 1);
-            if cond(games.games.get(idx)?) {
+            if cond(games.games.get(*idx)?) {
                 let mut replacement = games.games.pop()?;
-                if let Some(elem) = games.games.get_mut(idx) {
+                if let Some(elem) = games.games.get_mut(*idx) {
                     mem::swap(&mut replacement, elem);
                 }
                 return Some(replacement);
+            } else {
+                // Move forward only if game was not removed.
+                *idx += 1;
             }
         }
     }
@@ -459,7 +464,10 @@ impl Games {
     /// Add game to games state.
     pub fn add_game(&mut self, game: WithThumb) -> GameAddDelta {
         let game_id = game.id();
-        if let Some(occupied_idx) = self.id_lookup(game_id)
+        if game.ghost {
+            // Game should not be added.
+            GameAddDelta::Ghost
+        } else if let Some(occupied_idx) = self.id_lookup(game_id)
             && let Some(occupied_game) = self.games.get_mut(occupied_idx)
             && let Some(occupied_cache) = self.cache.get_mut(occupied_idx)
         {

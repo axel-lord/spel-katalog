@@ -102,6 +102,14 @@ impl App {
 
     fn quick_update(&mut self, msg: QuickMessage) -> Task<Message> {
         match msg {
+            QuickMessage::Debug => {
+                ::log::info!("debug action activated");
+                let count = self
+                    .games
+                    .remove_games(|game| game.name().len() > 10, &self.settings, &self.filter)
+                    .count();
+                ::log::info!("removed {count} games");
+            }
             QuickMessage::CloseAll => {
                 self.view.hide_info();
                 self.games.select(SelDir::None);

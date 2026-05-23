@@ -175,6 +175,11 @@ impl State {
         self.selected
     }
 
+    /// Deselect game.
+    pub const fn deselect(&mut self) {
+        self.selected = None;
+    }
+
     /// Subscription used by games state.
     pub fn subscription(&self) -> Subscription<Message> {
         if !self.cache_queue.0.is_empty() {
@@ -222,6 +227,7 @@ impl State {
                             thumb: None,
                             batch_selected: false,
                             shadows: None,
+                            ghost: false,
                         })
                         .collect(),
                     settings,

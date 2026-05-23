@@ -6,7 +6,7 @@ use ::derive_more::{Display, IsVariant};
 use ::rustc_hash::FxHashMap;
 use ::serde::{Deserialize, Serialize};
 
-use crate::{Bind, Timestamp};
+use crate::{Bind, GameId, Timestamp};
 
 /// Loaded game data.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -23,6 +23,10 @@ pub struct NativeGame {
 
     /// Runner used for game.
     pub runner: NativeRunner,
+
+    /// This game shadows the given game.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub shadow: Option<GameId>,
 
     /// Prefix of game.
     #[serde(skip_serializing_if = "Option::is_none", default)]
