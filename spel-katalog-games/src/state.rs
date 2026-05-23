@@ -221,6 +221,7 @@ impl State {
                             game,
                             thumb: None,
                             batch_selected: false,
+                            shadows: None,
                         })
                         .collect(),
                     settings,

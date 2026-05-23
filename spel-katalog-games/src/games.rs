@@ -2,7 +2,7 @@
 
 use ::core::iter::{self, FusedIterator};
 
-use ::derive_more::{Deref, DerefMut};
+use ::derive_more::{Deref, DerefMut, IsVariant};
 use ::itertools::izip;
 use ::regex::RegexBuilder;
 use ::rustc_hash::FxHashMap;
@@ -10,6 +10,20 @@ use ::spel_katalog_formats::{Game, GameId};
 use ::spel_katalog_settings::{AsIndex, FilterMode, Settings, Show, SortBy, SortDir};
 use ::tap::TapFallible;
 use ::uuid::Uuid;
+
+/// Result of trying to add a game.
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord, IsVariant)]
+pub enum GameAddDelta {
+    /// Game existed and was updated.
+    Updated,
+    /// Game existed and was updated, refresh of games required.
+    Refresh,
+    /// Game is shadowed and thus not added.
+    Skipped,
+    /// Game was not present and thus added.
+    /// It may have shadowed another game.
+    Added,
+}
 
 /// Cached game identity.
 #[derive(Debug)]
@@ -40,6 +54,8 @@ pub struct WithThumb {
     pub thumb: Option<::iced_widget::image::Handle>,
     /// Is the game batch selected.
     pub batch_selected: bool,
+    /// This game shadows another game with given id.
+    pub shadows: Option<GameId>,
 }
 
 impl From<WithThumb> for Game {
@@ -52,9 +68,9 @@ impl From<WithThumb> for Game {
 #[derive(Debug, Default)]
 pub struct Games {
     /// Cached game identities.
-    cache: Box<[Option<GameCache>]>,
+    cache: Vec<Option<GameCache>>,
     /// Collection of game data and thumbnails.
-    games: Box<[WithThumb]>,
+    games: Vec<WithThumb>,
     /// Indices of displayed games.
     displayed: Vec<usize>,
     /// Index lookup table by slug.
@@ -91,7 +107,7 @@ impl Games {
     }
 
     /// Amount of games.
-    pub fn all_count(&self) -> usize {
+    pub const fn all_count(&self) -> usize {
         self.games.len()
     }
 
@@ -267,6 +283,14 @@ impl Games {
         .copied()
     }
 
+    /// Add id or replace it, pointing to idx.
+    fn id_add_replace(&mut self, id: GameId, idx: usize) {
+        match id {
+            GameId::Lutris(id) => self.id_lookup.insert(id, idx),
+            GameId::Native(uuid) => self.uuid_lookup.insert(uuid, idx),
+        };
+    }
+
     /// Get a game by it's id.
     pub fn by_id(&self, id: GameId) -> Option<&WithThumb> {
         let idx = self.id_lookup(id)?;
@@ -297,8 +321,63 @@ impl Games {
         }
     }
 
+    /// Add a new game.
+    fn add_game_new(&mut self, game: WithThumb) {
+        let game_id = game.id();
+        if let Some(shadows) = game.shadows
+            && let Some(shadowed_idx) = self.id_lookup(shadows)
+            && let Some(shadowed_cache) = self.cache.get_mut(shadowed_idx)
+            && let Some(shadowed_game) = self.games.get_mut(shadowed_idx)
+        {
+            *shadowed_cache = Some(GameCache::from(&*game));
+            *shadowed_game = game;
+            self.id_add_replace(game_id, shadowed_idx);
+        } else {
+            let idx = self.games.len();
+            let shadows = game.shadows;
+            self.cache.push(Some(GameCache::from(&*game)));
+            self.games.push(game);
+            self.id_add_replace(game_id, idx);
+            if let Some(shadows) = shadows {
+                self.id_add_replace(shadows, idx);
+            }
+        }
+    }
+
+    /// Add game to games state.
+    pub fn add_game(&mut self, game: WithThumb) -> GameAddDelta {
+        let game_id = game.id();
+        if let Some(occupied_idx) = self.id_lookup(game_id)
+            && let Some(occupied_game) = self.games.get_mut(occupied_idx)
+            && let Some(occupied_cache) = self.cache.get_mut(occupied_idx)
+        {
+            if game_id == occupied_game.id() {
+                let refresh = game.shadows.is_some() && game.shadows != occupied_game.shadows;
+                *occupied_cache = Some(GameCache::from(&*game));
+                *occupied_game = game;
+                // This game existed and was updated.
+                if refresh {
+                    GameAddDelta::Refresh
+                } else {
+                    GameAddDelta::Updated
+                }
+            } else if occupied_game.shadows == Some(game_id) {
+                // This game is shadowed.
+                GameAddDelta::Skipped
+            } else {
+                self.add_game_new(game);
+                // Added game as new, will correct wrong lookups, and deal with shadowing.
+                GameAddDelta::Added
+            }
+        } else {
+            self.add_game_new(game);
+            // Added game as new, will deal with shadowing.
+            GameAddDelta::Added
+        }
+    }
+
     /// Set current games to the ones provided, then update lookups and display.
-    pub fn set(&mut self, games: Box<[WithThumb]>, settings: &Settings, filter: &str) {
+    pub fn set(&mut self, games: Vec<WithThumb>, settings: &Settings, filter: &str) {
         let mut slug_lookup = FxHashMap::default();
         let mut id_lookup = FxHashMap::default();
         let mut uuid_lookup = FxHashMap::default();

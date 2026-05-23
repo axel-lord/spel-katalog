@@ -3,7 +3,7 @@
 mod games;
 mod state;
 
-pub use games::Games;
+pub use games::{Games, WithThumb as GameWithThumb, GameAddDelta};
 pub use state::{Message, Request, SelDir, State};
 
 /// Element alias.

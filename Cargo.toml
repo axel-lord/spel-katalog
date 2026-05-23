@@ -10,7 +10,7 @@ members = [
 	"spel-katalog-gather",
 	"spel-katalog-info",
 	"spel-katalog-lua",
-	"spel-katalog-lua-docs",
+	"spel-katalog-lua-docs", "spel-katalog-native",
 	"spel-katalog-reflect",
 	"spel-katalog-reflect/derive",
 	"spel-katalog-reflect/derive-lib", "spel-katalog-run",
@@ -142,3 +142,5 @@ dashmap = "6.1.0"
 uuid = "1.23.1"
 chrono = { version = "0.4.44", default-features = false }
 spel-katalog-run = { path = "spel-katalog-run" }
+r2d2 = "0.8.10"
+r2d2_sqlite = "0.34.0"
