@@ -104,11 +104,27 @@ impl App {
         match msg {
             QuickMessage::Debug => {
                 ::log::info!("debug action activated");
-                let count = self
-                    .games
-                    .remove_games(|game| game.name().len() > 10, &self.settings, &self.filter)
-                    .count();
-                ::log::info!("removed {count} games");
+                if let Some(game) = self.games.selected() {
+                    return self.game_as_native(game).then(|game| {
+                        Task::future(::smol::unblock(move || -> ::color_eyre::Result<()> {
+                            let serialized = ::toml::to_string_pretty(&game)?;
+                            ::log::info!("serialized game:\n{serialized}");
+                            Ok(())
+                        }))
+                        .then(|result| {
+                            if let Err(err) = result {
+                                ::log::error!("could not print game\n{err}");
+                            }
+                            Task::none()
+                        })
+                    });
+                } else {
+                    let count = self
+                        .games
+                        .remove_games(|game| game.name().len() > 10, &self.settings, &self.filter)
+                        .count();
+                    ::log::info!("removed {count} games");
+                }
             }
             QuickMessage::CloseAll => {
                 self.view.hide_info();

@@ -1,10 +1,32 @@
 //! Error type wrapping strings.
 
-use ::core::fmt::{Arguments, Display};
+use ::core::{
+    error::Error,
+    fmt::{Arguments, Debug, Display},
+};
 
 /// Error type converting error to a string.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct StrError(pub String);
+
+impl StrError {
+    /// Convert into a type implementing [Error].
+    pub fn into_error(self) -> impl Error {
+        struct Wrap(StrError);
+        impl Debug for Wrap {
+            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                Debug::fmt(&self.0, f)
+            }
+        }
+        impl Display for Wrap {
+            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                Display::fmt(&self.0, f)
+            }
+        }
+        impl Error for Wrap {}
+        Wrap(self)
+    }
+}
 
 impl StrError {
     /// Create formatted string errror.
@@ -13,7 +35,7 @@ impl StrError {
     }
 }
 
-impl<E: ::core::error::Error> From<E> for StrError {
+impl<E: Error> From<E> for StrError {
     fn from(value: E) -> Self {
         Self(value.to_string())
     }

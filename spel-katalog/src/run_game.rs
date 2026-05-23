@@ -3,12 +3,14 @@ use ::std::{
     path::{Path, PathBuf},
 };
 
+use ::color_eyre::eyre::eyre;
 use ::iced_runtime::Task;
 use ::spel_katalog_common::status;
-use ::spel_katalog_formats::{AdditionalConfig, Game, GameId, lutris_config};
+use ::spel_katalog_formats::{AdditionalConfig, Game, GameId, NativeGame, lutris_config};
 use ::spel_katalog_run::{
     Callback,
     run_umu::{CommonUmuCtx, LutrisCtx, LutrisUmuCtx},
+    strerror::StrError,
 };
 use ::spel_katalog_settings::{
     BubblewrapExe, ConfigDir, DllOverrides, FirejailExe, GamescopeExe, LutrisExe, Network, OnRun,
@@ -64,6 +66,75 @@ async fn parse_extra_config(extra_config_path: &Path) -> Result<AdditionalConfig
 }
 
 impl App {
+    pub fn game_as_native(&self, game_id: GameId) -> Task<NativeGame> {
+        let Some(game) = self.games.by_id(game_id) else {
+            ::log::warn!("could not find game with id {game_id}");
+            return Task::none();
+        };
+
+        match &game.game {
+            Game::Lutris(game) => {
+                let GameId::Lutris(lutris_id) = game_id else {
+                    ::log::error!(
+                        "cannot convert lutris game without lutris id to native game, id: {game_id}"
+                    );
+                    return Task::none();
+                };
+                let name = game.name.clone();
+                let runner = game.runner.clone();
+                let hidden = game.hidden;
+                let installed_at = game.installed_at;
+                let yml_dir = self.settings.get::<YmlDir>();
+                let configpath = format!("{yml_dir}/{}.yml", game.configpath);
+                let extra_config_path = self
+                    .settings
+                    .get::<ConfigDir>()
+                    .as_path()
+                    .join("games")
+                    .join(format!("{lutris_id}.toml"));
+
+                Task::future(async move {
+                    let config = ::smol::fs::read_to_string(&configpath).await?;
+                    let config = lutris_config::Config::parse(&config)?;
+                    let extra_config = if extra_config_path.exists() {
+                        Some(
+                            parse_extra_config(&extra_config_path)
+                                .await
+                                .map_err(|err| eyre!(err))?,
+                        )
+                    } else {
+                        None
+                    };
+                    let game = LutrisCtx {
+                        config: &config,
+                        exe: &config.game.exe,
+                        extra_config: extra_config.as_ref(),
+                        name: &name,
+                        runner,
+                        wine_prefix: config.game.prefix.as_deref(),
+                        hidden,
+                        installed_at,
+                        id: game_id,
+                    }
+                    .into_native()
+                    .map_err(StrError::into_error)?;
+                    Ok(game)
+                })
+                .then(move |result: ::color_eyre::Result<NativeGame>| {
+                    result
+                        .map_err(|err| {
+                            ::log::error!(
+                                "could not convert lutris game {game_id} to native game\n{err}"
+                            )
+                        })
+                        .ok()
+                        .map_or_else(Task::none, Task::done)
+                })
+            }
+            Game::Native { .. } => Task::none(),
+        }
+    }
+
     pub fn run_game(&mut self, id: GameId, safety: Safety, no_game: bool) -> Task<Message> {
         let Some(game) = self.games.by_id(id) else {
             status!(&self.sender, "could not run game with id {id}");
