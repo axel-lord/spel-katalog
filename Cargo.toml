@@ -120,6 +120,7 @@ spel-katalog-gather = { path = "spel-katalog-gather" }
 spel-katalog-info = { path = "spel-katalog-info" }
 spel-katalog-lua = { path = "spel-katalog-lua" }
 spel-katalog-lua-docs = { path = "spel-katalog-lua-docs" }
+spel-katalog-native = { path = "spel-katalog-native" }
 spel-katalog-reflect = { path = "spel-katalog-reflect" }
 spel-katalog-reflect-derive = { path = "spel-katalog-reflect/derive" }
 spel-katalog-reflect-derive-lib = { path = "spel-katalog-reflect/derive-lib" }

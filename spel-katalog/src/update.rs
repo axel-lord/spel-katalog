@@ -1,7 +1,8 @@
 use ::std::path::Path;
 
-use ::iced_core::{Size, window};
+use ::iced_core::{Size, image::Handle, window};
 use ::iced_runtime::Task;
+use ::image::DynamicImage;
 use ::rustc_hash::FxHashMap;
 use ::rustix::process::{Pid, RawPid};
 use ::spel_katalog_batch::BatchInfo;
@@ -10,6 +11,7 @@ use ::spel_katalog_formats::AdditionalConfig;
 use ::spel_katalog_games::SelDir;
 use ::spel_katalog_settings::{ConfigDir, FilterMode, Network, Show, Variants, YmlDir};
 use ::tap::Pipe;
+use ::uuid::Uuid;
 
 use crate::{App, Message, QuickMessage, Safety, app::WindowType};
 
@@ -104,16 +106,51 @@ impl App {
         match msg {
             QuickMessage::Debug => {
                 ::log::info!("debug action activated");
-                if let Some(game) = self.games.selected() {
-                    return self.game_as_native(game).then(|game| {
+                if let Some(game_id) = self.games.selected() {
+                    let thumb = self
+                        .games
+                        .by_id(game_id)
+                        .and_then(|game| game.thumb.clone());
+                    let db = self.games_db.clone();
+                    return self.game_as_native(game_id).then(move |game| {
+                        let thumb = thumb.clone();
+                        let db = db.clone();
                         Task::future(::smol::unblock(move || -> ::color_eyre::Result<()> {
                             let serialized = ::toml::to_string_pretty(&game)?;
                             ::log::info!("serialized game:\n{serialized}");
+
+                            let thumb = thumb.clone().and_then(|thumb| match thumb {
+                                Handle::Path(_id, path_buf) => ::image::open(&path_buf)
+                                    .map_err(|err| {
+                                        ::log::error!("could not decode {path_buf:?}\n{err}")
+                                    })
+                                    .ok(),
+                                Handle::Bytes(_id, bytes) => ::image::load_from_memory(&bytes)
+                                    .map_err(|err| {
+                                        ::log::error!(
+                                            "could not decode thumbnail for {game_id}\n{err}"
+                                        )
+                                    })
+                                    .ok(),
+                                Handle::Rgba {
+                                    id: _,
+                                    width,
+                                    height,
+                                    pixels,
+                                } => ::image::RgbaImage::from_raw(width, height, pixels.to_vec())
+                                    .map(DynamicImage::from),
+                            });
+
+                            let uuid = Uuid::new_v4();
+                            db.insert_game(uuid).maybe_thumb(thumb).insert(&game)?;
+
                             Ok(())
                         }))
-                        .then(|result| {
+                        .then(move |result| {
                             if let Err(err) = result {
-                                ::log::error!("could not print game\n{err}");
+                                ::log::error!(
+                                    "could not add game {game_id} to games database\n{err}"
+                                );
                             }
                             Task::none()
                         })

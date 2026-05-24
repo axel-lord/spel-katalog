@@ -46,12 +46,14 @@ spel-katalog-settings.workspace = true
 spel-katalog-sink.workspace = true
 spel-katalog-terminal.workspace = true
 spel-katalog-widget.workspace = true
+spel-katalog-native.workspace = true
 strsim.workspace = true
 tap.workspace = true
 thiserror.workspace = true
 toml.workspace = true
 users.workspace = true
 yaml-rust2.workspace = true
+uuid = { workspace = true, features = ["v4"] }
 
 [build-dependencies]
 spel-katalog-build.workspace = true

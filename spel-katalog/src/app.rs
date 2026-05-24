@@ -49,6 +49,7 @@ pub(crate) struct App {
     pub terminal: ::spel_katalog_terminal::Terminal,
     pub docs_viewer: ::spel_katalog_lua_docs::DocsViewer,
     pub process_view_semaphore: Arc<::smol::lock::Semaphore>,
+    pub games_db: ::spel_katalog_native::Pool,
 }
 
 /// Virtual table passed to lua.
@@ -137,6 +138,9 @@ impl Initial {
         let terminal = ::spel_katalog_terminal::Terminal::default().with_limit(256);
         let docs_viewer = Default::default();
         let process_view_semaphore = Arc::new(::smol::lock::Semaphore::new(1));
+        let games_db = ::spel_katalog_native::Pool::new(
+            &settings.get::<ConfigDir>().as_path().join("games.db"),
+        )?;
 
         let (sink_builder, terminal_rx) = if show_terminal {
             let (terminal_tx, terminal_rx) = ::flume::unbounded();
@@ -161,6 +165,7 @@ impl Initial {
             windows,
             docs_viewer,
             process_view_semaphore,
+            games_db,
         };
 
         Ok(Self {

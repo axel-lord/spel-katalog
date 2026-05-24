@@ -106,15 +106,13 @@ mod builder {
             /// Uuid of game to insert.
             #[builder(start_fn)]
             uuid: Uuid,
-            /// Thumbnail to insert for game.
-            #[builder(field)]
-            thumb: Option<DynamicImage>,
-            /// Reuse buffer.
-            #[builder(field)]
-            buf: Option<&mut Vec<u8>>,
             /// Game config to insert.
             #[builder(finish_fn)]
             config: &NativeGame,
+            /// Thumbnail to insert for game.
+            thumb: Option<DynamicImage>,
+            /// Reuse buffer.
+            buf: Option<&mut Vec<u8>>,
         ) -> Result<(), InsertGameError> {
             let conn = self.get().map_err(InsertGameError::GetConn)?;
             let mut backing;
@@ -137,12 +135,11 @@ mod builder {
             /// Uuid of game to insert thumbnail for.
             #[builder(start_fn)]
             uuid: Uuid,
-            /// Reuse buffer.
-            #[builder(field)]
-            buf: Option<&mut Vec<u8>>,
             /// Thumbnail to insert for game.
             #[builder(finish_fn)]
             thumb: DynamicImage,
+            /// Reuse buffer.
+            buf: Option<&mut Vec<u8>>,
         ) -> Result<(), InsertThumbError> {
             let conn = self.get().map_err(InsertThumbError::GetConn)?;
             let mut backing;
@@ -167,7 +164,7 @@ impl Pool {
             PRAGMA foreign_keys = ON;
             CREATE TABLE IF NOT EXISTS games (
                 uuid BLOB NOT NULL PRIMARY KEY,
-                config BLOB NOT NULL,
+                config BLOB NOT NULL
             );
             CREATE TABLE IF NOT EXISTS thumbs (
                 uuid BLOB NOT NULL PRIMARY KEY,
@@ -178,8 +175,10 @@ impl Pool {
                         ON DELETE CASCADE
             );
         ";
-        let manager = ::r2d2_sqlite::SqliteConnectionManager::file(database)
-            .with_init(|c| c.execute_batch(INIT_DB));
+        let manager = ::r2d2_sqlite::SqliteConnectionManager::file(database).with_init(|c| {
+            c.execute_batch(INIT_DB)
+                .inspect_err(|err| ::log::error!("db init failed, {err}"))
+        });
         let inner = ::r2d2::Pool::builder()
             .max_size(1)
             .min_idle(Some(0))

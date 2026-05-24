@@ -4490,6 +4490,7 @@ dependencies = [
  "spel-katalog-info",
  "spel-katalog-lua",
  "spel-katalog-lua-docs",
+ "spel-katalog-native",
  "spel-katalog-run",
  "spel-katalog-settings",
  "spel-katalog-sink",
@@ -4500,6 +4501,7 @@ dependencies = [
  "thiserror 2.0.18",
  "toml 1.1.2+spec-1.1.0",
  "users",
+ "uuid",
  "yaml-rust2",
 ]
 
