@@ -7,9 +7,13 @@ use ::std::{
 };
 
 use ::bytemuck::TransparentWrapper;
-use ::derive_more::{AsMut, AsRef, Deref, DerefMut, From, Into};
-use ::flate2::Compression;
+use ::derive_more::{AsMut, AsRef, Deref, DerefMut, From, Into, IsVariant};
+use ::flate2::{
+    Compression,
+    bufread::{GzDecoder, GzEncoder},
+};
 use ::image::{DynamicImage, EncodableLayout, ImageFormat};
+use ::r2d2_sqlite::SqliteConnectionManager;
 use ::spel_katalog_formats::NativeGame;
 use ::uuid::Uuid;
 
@@ -18,7 +22,7 @@ use ::uuid::Uuid;
 #[repr(transparent)]
 pub struct Pool {
     /// Wrapped r2d2 pool.
-    inner: ::r2d2::Pool<::r2d2_sqlite::SqliteConnectionManager>,
+    inner: ::r2d2::Pool<SqliteConnectionManager>,
 }
 
 /// Error returned when [Pool::new] fails.
@@ -31,7 +35,7 @@ pub struct PoolCreationError {
 }
 
 /// Error returned when [Pool::collect] fails
-#[derive(Debug, ::thiserror::Error)]
+#[derive(Debug, ::thiserror::Error, IsVariant)]
 pub enum GameCollectionError {
     /// Database connection could not be grabbed.
     #[error("could not grab database connection, {0}")]
@@ -48,13 +52,13 @@ pub enum GameCollectionError {
 }
 
 /// Error returned when [Pool::insert_game] fails to insert game config.
-#[derive(Debug, ::thiserror::Error)]
+#[derive(Debug, ::thiserror::Error, IsVariant)]
 pub enum InsertGameError {
     /// Database connection could not be grabbed.
     #[error("could not grab database connection, {0}")]
     GetConn(::r2d2::Error),
     /// Replace statement could not be prepared.
-    #[error("could not prepare select statement, {0}")]
+    #[error("could not prepare replace statement, {0}")]
     PrepStmt(::rusqlite::Error),
     /// Replace statement failed.
     #[error("could not replace game using statement, {0}")]
@@ -68,13 +72,13 @@ pub enum InsertGameError {
 }
 
 /// Error returned when [Pool::insert_thumb] fails to insert game config.
-#[derive(Debug, ::thiserror::Error)]
+#[derive(Debug, ::thiserror::Error, IsVariant)]
 pub enum InsertThumbError {
     /// Database connection could not be grabbed.
     #[error("could not grab database connection, {0}")]
     GetConn(::r2d2::Error),
     /// Replace statement could not be prepared.
-    #[error("could not prepare select statement, {0}")]
+    #[error("could not prepare replace statement, {0}")]
     PrepStmt(::rusqlite::Error),
     /// Replace statement failed.
     #[error("could not replace game using statement, {0}")]
@@ -82,6 +86,29 @@ pub enum InsertThumbError {
     /// Thumbnail could not be encoded.
     #[error("could not encode thumbnail, {0}")]
     EncodeImage(::image::ImageError),
+}
+
+/// Error returned when [Pool::get_game] fails to grab game.
+#[derive(Debug, ::thiserror::Error, IsVariant)]
+pub enum GetError {
+    /// Database connection could not be grabbed.
+    #[error("could not grab database connection, {0}")]
+    GetConn(::r2d2::Error),
+    /// Select statement could not be prepared.
+    #[error("could not prepare select statement, {0}")]
+    PrepStmt(::rusqlite::Error),
+    /// No games found matching the uuid.
+    #[error("query failed, {0}")]
+    NoResults(::rusqlite::Error),
+    /// Data could not be decompressed.
+    #[error("could not decompress data")]
+    Decompress(::std::io::Error),
+    /// Could not deserialize game data.
+    #[error("could not deserialize game data, {0}")]
+    Parse(::toml::de::Error),
+    /// Could not decode image.
+    #[error("could not decode image, {0}")]
+    DecodeImg(::image::ImageError),
 }
 
 mod builder {
@@ -175,7 +202,7 @@ impl Pool {
                         ON DELETE CASCADE
             );
         ";
-        let manager = ::r2d2_sqlite::SqliteConnectionManager::file(database).with_init(|c| {
+        let manager = SqliteConnectionManager::file(database).with_init(|c| {
             c.execute_batch(INIT_DB)
                 .inspect_err(|err| ::log::error!("db init failed, {err}"))
         });
@@ -186,6 +213,58 @@ impl Pool {
             .build(manager)?;
 
         Ok(Self { inner })
+    }
+
+    /// Get a game from database.
+    ///
+    /// # Errors
+    /// If the game cannot be retrieved.
+    pub fn get_game(&self, game_id: Uuid) -> Result<NativeGame, GetError> {
+        const SELECT_GAME: &str = r"
+            SELECT config FROM games
+            WHERE uuid = $1
+        ";
+        let conn = self.get().map_err(GetError::GetConn)?;
+        let mut stmt = conn
+            .prepare_cached(SELECT_GAME)
+            .map_err(GetError::PrepStmt)?;
+
+        let decoded = stmt
+            .query_one((game_id,), |row| {
+                let bytes = row.get_ref(0)?.as_bytes()?;
+                let mut buf = Vec::new();
+                let mut config_reader = GzDecoder::new(bytes);
+                let result = config_reader.read_to_end(&mut buf);
+                Ok(result.map(move |_| buf))
+            })
+            .map_err(GetError::NoResults)?
+            .map_err(GetError::Decompress)?;
+        ::toml::from_slice::<NativeGame>(&decoded).map_err(GetError::Parse)
+    }
+
+    /// Get a thumbnail from database.
+    ///
+    /// # Errors
+    /// If the thumbnail cannot be retrieved.
+    pub fn get_thumb(&self, game_id: Uuid) -> Result<DynamicImage, GetError> {
+        const SELECT_GAME: &str = r"
+            SELECT image FROM thumbs
+            WHERE uuid = $1
+        ";
+        let conn = self.get().map_err(GetError::GetConn)?;
+        let mut stmt = conn
+            .prepare_cached(SELECT_GAME)
+            .map_err(GetError::PrepStmt)?;
+
+        stmt.query_one((game_id,), |row| {
+            let bytes = row.get_ref(0)?.as_bytes()?;
+            Ok(::image::load_from_memory_with_format(
+                bytes,
+                ImageFormat::Png,
+            ))
+        })
+        .map_err(GetError::NoResults)?
+        .map_err(GetError::DecodeImg)
     }
 
     /// Insert a thumbnail or replace it.
@@ -242,8 +321,7 @@ impl Pool {
             .map_err(InsertGameError::PrepStmt)?;
 
         let config_string = ::toml::to_string(config).map_err(InsertGameError::WriteToml)?;
-        let mut config_writer =
-            ::flate2::bufread::GzEncoder::new(config_string.as_bytes(), Compression::best());
+        let mut config_writer = GzEncoder::new(config_string.as_bytes(), Compression::best());
 
         config_writer
             .read_to_end(buf)
@@ -323,7 +401,7 @@ impl Pool {
             };
 
             buf.clear();
-            let mut config_reader = ::flate2::bufread::GzDecoder::new(config);
+            let mut config_reader = GzDecoder::new(config);
 
             if let Err(err) = config_reader.read_to_end(&mut buf) {
                 ::log::error!("could not decompress config for {uuid}\n{err}");
@@ -351,7 +429,7 @@ impl Pool {
     }
 
     /// Convert an r2d2 pool reference.
-    pub fn from_ref(pool: &::r2d2::Pool<::r2d2_sqlite::SqliteConnectionManager>) -> &Self {
+    pub fn from_ref(pool: &::r2d2::Pool<SqliteConnectionManager>) -> &Self {
         TransparentWrapper::wrap_ref(pool)
     }
 }
