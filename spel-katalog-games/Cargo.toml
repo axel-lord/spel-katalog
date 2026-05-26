@@ -9,6 +9,7 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+bytes.workspace = true
 derive_more = { workspace = true, features = ["is_variant", "display", "deref", "deref_mut"] }
 iced_core.workspace = true
 iced_futures.workspace = true

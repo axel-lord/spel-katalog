@@ -54,6 +54,12 @@ help = "How to sandbox games"
 variants = ["Firejail", "Bubblewrap"]
 default = "Firejail"
 
+[Load]
+title = "Which Games to Load"
+help = "Should lutris and/or native games be loaded"
+variants = ["Lutris", "Native", "Both", "None"]
+default = "Both"
+
 [OnRun]
 title = "On Run"
 help = "Should any information be opened when running game"

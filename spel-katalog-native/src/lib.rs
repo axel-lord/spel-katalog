@@ -12,11 +12,37 @@ use ::flate2::{
     Compression,
     bufread::{GzDecoder, GzEncoder},
 };
-use ::flume::r#async::RecvStream;
 use ::image::{DynamicImage, EncodableLayout, ImageFormat};
 use ::r2d2_sqlite::SqliteConnectionManager;
 use ::spel_katalog_formats::NativeGame;
 use ::uuid::Uuid;
+
+/// Log error and return/execute statement if value is an error.
+macro_rules! log_err {
+    ($value:expr, $err:ident, $fmt:literal $(, $arg:expr)* $(,)?) => {
+        log_err!($value, ::log::Level::Error, $err, $fmt $(, $arg)*)
+    };
+    ($value:expr, $level:expr, $err:ident, $fmt:literal $(, $arg:expr)* $(,)?) => {
+        log_err!($value, $level, $err, ($fmt $(, $arg)*))
+
+    };
+    ($value:expr, $err:ident, ($fmt:literal $(, $arg:expr)* $(,)?) $(, $stmt:stmt)?) => {
+        log_err!($value, ::log::Level::Error, $err, ($fmt $(, $arg)*) $(, $stmt)*)
+    };
+    ($value:expr, $level:expr, $err:ident, ($fmt:literal $(, $arg:expr)* $(,)?) $(, $stmt:stmt)?) => {
+        match $value {
+            Ok(v) => v,
+            Err($err) => {
+                {
+                    #![allow(unused, reason = "some macro invocations may leave return unused")]
+                    ::log::log!($level, $fmt $(, $arg)*);
+                    $($stmt)*
+                    return;
+                }
+            }
+        }
+    };
+}
 
 /// Connection pool used to read games.
 #[derive(Debug, Clone, TransparentWrapper, Deref, DerefMut, AsMut, AsRef, From, Into)]
@@ -33,20 +59,6 @@ pub struct PoolCreationError {
     /// Wrapped error.
     #[from]
     inner: ::r2d2::Error,
-}
-
-/// Error returned when [Pool::collect] fails
-#[derive(Debug, ::thiserror::Error, IsVariant)]
-pub enum GameCollectionError {
-    /// Database connection could not be grabbed.
-    #[error("could not grab database connection, {0}")]
-    GetConn(::r2d2::Error),
-    /// Collection statement could not be prepared.
-    #[error("could not prepare select statement, {0}")]
-    PrepStmt(::rusqlite::Error),
-    /// Games could not be queried with statement.
-    #[error("could query games, {0}")]
-    QueryGames(::rusqlite::Error),
 }
 
 /// Error returned when [Pool::insert_game] fails to insert game config.
@@ -341,10 +353,7 @@ impl Pool {
     }
 
     /// Collect native games from database.
-    ///
-    /// # Errors
-    /// If database cannot be properly communicated with.
-    pub fn gather(&self) -> RecvStream<'static, (Uuid, NativeGame, Option<DynamicImage>)> {
+    pub fn gather(self, for_each: &mut dyn FnMut(Uuid, NativeGame, Option<DynamicImage>)) {
         const SELECT_GAMES: &str = r"
             SELECT 
                 games.uuid, config, image 
@@ -375,80 +384,55 @@ impl Pool {
             }
         }
 
-        let pool = self.clone();
-        let (tx, rx) = ::flume::unbounded();
-        ::smol::unblock(move || {
-            let conn = match pool.get() {
-                Ok(conn) => conn,
-                Err(err) => {
-                    ::log::error!("could not grab database connection\n{err}");
-                    return;
-                }
+        let conn = log_err!(self.get(), err, "could not grab database connection\n{err}");
+        let mut stmt = log_err!(
+            conn.prepare_cached(SELECT_GAMES),
+            err,
+            "failed to prepare query statement\n{err}"
+        );
+        let mut rows = log_err!(stmt.query([]), err, "could not query games\n{err}");
+
+        let mut buf = Vec::<u8>::new();
+        while let Some(row) = rows
+            .next()
+            .map_err(|err| ::log::error!("failed to get next row of query\n{err}"))
+            .ok()
+            .flatten()
+        {
+            let uuid = log_err!(
+                row.get::<_, Uuid>(0),
+                err,
+                ("could not get uuid of\nrow: {row:#?}\n{err}"),
+                continue
+            );
+
+            let Some(config) = get_column_blob(row, 1, "config", &uuid) else {
+                continue;
             };
-            let mut stmt = match conn.prepare_cached(SELECT_GAMES) {
-                Ok(stmt) => stmt,
-                Err(err) => {
-                    ::log::error!("failed to prepare query statement\n{err}");
-                    return;
-                }
-            };
 
-            let mut rows = match stmt.query([]) {
-                Ok(rows) => rows,
-                Err(err) => {
-                    ::log::error!("could not query games\n{err}");
-                    return;
-                }
-            };
-            let mut buf = Vec::<u8>::new();
-            while let Some(row) = rows
-                .next()
-                .map_err(|err| ::log::error!("failed to get next row of query\n{err}"))
-                .ok()
-                .flatten()
-            {
-                let uuid = match row.get::<_, Uuid>(0) {
-                    Ok(uuid) => uuid,
-                    Err(err) => {
-                        ::log::error!("could not get uuid of\nrow: {row:#?}\n{err}");
-                        continue;
-                    }
-                };
+            buf.clear();
+            let mut config_reader = GzDecoder::new(config);
 
-                let Some(config) = get_column_blob(row, 1, "config", &uuid) else {
-                    continue;
-                };
-
-                buf.clear();
-                let mut config_reader = GzDecoder::new(config);
-
-                if let Err(err) = config_reader.read_to_end(&mut buf) {
-                    ::log::error!("could not decompress config for {uuid}\n{err}");
-                    continue;
-                }
-
-                let config = match ::toml::from_slice::<NativeGame>(&buf) {
-                    Ok(config) => config,
-                    Err(err) => {
-                        ::log::error!("could not parse game config of {uuid}\n{err}");
-                        continue;
-                    }
-                };
-
-                let image = get_column_blob(row, 2, "image", &uuid).and_then(|image| {
-                    ::image::load_from_memory_with_format(image, ImageFormat::Png)
-                        .map_err(|err| ::log::error!("could not load thumbnail for {uuid}\n{err}"))
-                        .ok()
-                });
-
-                if let Err(err) = tx.send((uuid, config, image)) {
-                    ::log::warn!("could not send gathered game\n{err}");
-                    break;
-                };
+            if let Err(err) = config_reader.read_to_end(&mut buf) {
+                ::log::error!("could not decompress config for {uuid}\n{err}");
+                continue;
             }
-        })
-        .detach();
-        rx.into_stream()
+
+            let config = log_err!(
+                ::toml::from_slice::<NativeGame>(&buf),
+                err,
+                ("could not parse game config of {uuid}\n{err}"),
+                continue
+            );
+
+            let image = get_column_blob(row, 2, "image", &uuid).and_then(|image| {
+                ::image::load_from_memory_with_format(image, ImageFormat::Png)
+                    .map_err(|err| ::log::error!("could not load thumbnail for {uuid}\n{err}"))
+                    .ok()
+            });
+
+            for_each(uuid, config, image);
+        }
     }
 
     /// Convert an r2d2 pool reference.

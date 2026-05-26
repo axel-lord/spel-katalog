@@ -22,12 +22,15 @@ use ::iced_widget::{
 use ::image::ImageError;
 use ::open::that;
 use ::spel_katalog_common::{OrRequest, PushMaybe, StatusSender, async_status, status, styling, w};
-use ::spel_katalog_formats::{AdditionalConfig, Game, GameId, lutris_config};
+use ::spel_katalog_formats::{AdditionalConfig, Game, GameId, NativeGame, lutris_config};
+use ::spel_katalog_native::Pool;
 use ::spel_katalog_settings::{ConfigDir, CoverartDir, Settings, YmlDir};
 use ::tap::Pipe;
+use ::uuid::Uuid;
 use ::yaml_rust2::Yaml;
 
 mod attrs;
+mod native_info;
 
 /// Element alias.
 type Element<'a, M> = ::iced_core::Element<'a, M, ::iced_core::Theme, ::iced_renderer::Renderer>;
@@ -49,7 +52,6 @@ fn set_content(w: &mut widget::text_editor::Content, content: String) {
 
 /// State of info display.
 #[derive(Debug, Default)]
-#[expect(clippy::large_enum_variant)]
 pub enum State {
     /// A lutris game is displayed.
     Lutris {
@@ -70,8 +72,8 @@ pub enum State {
     },
     /// A native game is displayed.
     Native {
-        /// Id of current game.
-        id: GameId,
+        /// Native view state.
+        state: native_info::State,
     },
     /// No game is displayed.
     #[default]
@@ -95,7 +97,9 @@ pub enum GameContent {
     /// Content is for a native game.
     Native {
         /// Id of game to verify match.
-        id: GameId,
+        uuid: Uuid,
+        /// Loaded game data.
+        config: Box<NativeGame>,
     },
 }
 
@@ -108,6 +112,9 @@ pub enum Message {
     /// Update config editor content.
     #[from]
     UpdateContent(widget::text_editor::Action),
+    /// Forward inner message.
+    #[from]
+    NativeInfo(native_info::Message),
     /// Update additional roots editor content.
     UpdateAdditionalRoots(widget::text_editor::Action),
     /// Update attribute editor.
@@ -177,7 +184,8 @@ impl State {
     /// Get id of currently viewed game.
     pub const fn id(&self) -> Option<GameId> {
         match self {
-            State::Lutris { id, .. } | State::Native { id } => Some(*id),
+            State::Lutris { id, .. } => Some(*id),
+            State::Native { state } => Some(GameId::Native(state.uuid)),
             State::None => None,
         }
     }
@@ -194,6 +202,7 @@ impl State {
         tx: &StatusSender,
         settings: &Settings,
         game: &::spel_katalog_formats::Game,
+        games_db: &Pool,
     ) -> Task<Message> {
         let id = game.id();
 
@@ -261,11 +270,28 @@ impl State {
             Game::Native {
                 name: _,
                 installed_at: _,
-                uuid: _,
+                uuid,
                 hidden: _,
             } => {
-                *self = Self::Native { id };
-                Task::none()
+                *self = Self::Native {
+                    state: native_info::State::new(*uuid),
+                };
+
+                let games_db = games_db.clone();
+                let uuid = *uuid;
+                Task::future(::smol::unblock(move || {
+                    games_db
+                        .get_game(uuid)
+                        .map_err(|err| ::log::error!("could not get game with uuid {uuid}\n{err}"))
+                        .ok()
+                }))
+                .and_then(move |config| {
+                    ::log::info!("db entry loaded for {uuid}");
+                    Task::done(Message::SetContent(GameContent::Native {
+                        uuid,
+                        config: Box::new(config),
+                    }))
+                })
             }
         }
     }
@@ -333,13 +359,21 @@ impl State {
                             .game
                             .common_parent(|| ::spel_katalog_settings::HOME.as_path());
                     }
-                    GameContent::Native { id } => {
-                        let Self::Native { id: current_id } = self else {
+                    GameContent::Native { uuid, config } => {
+                        let Self::Native { state } = self else {
+                            ::log::warn!(
+                                "cannot set info state content to native whithout already being native"
+                            );
                             return Task::none();
                         };
-                        if &id == current_id {
+                        if uuid != state.uuid {
+                            ::log::warn!(
+                                "SetContent uuid and current uuid mismatch\n{uuid}\n{}",
+                                state.uuid
+                            );
                             return Task::none();
                         }
+                        state.set_config(*config);
                     }
                 }
 
@@ -661,6 +695,13 @@ impl State {
                     Task::none()
                 }
             }
+            Message::NativeInfo(message) => {
+                if let Self::Native { state } = self {
+                    state.update(message)
+                } else {
+                    Task::none()
+                }
+            }
         }
     }
 
@@ -965,7 +1006,7 @@ impl State {
                     ))
                     .into()
             }
-            State::Native { id } => widget::text(format!("Game with id {id} selected")).into(),
+            State::Native { state } => state.view().map(|msg| msg.map_message(Message::NativeInfo)),
             State::None => widget::text("No game selected").into(),
         }
     }

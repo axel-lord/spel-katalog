@@ -17,20 +17,21 @@ use ::iced_core::{
 use ::iced_futures::Subscription;
 use ::iced_runtime::Task;
 use ::iced_widget::{self as widget, container, stack};
-use ::image::ImageFormat;
+use ::image::{DynamicImage, ImageFormat};
 use ::itertools::Itertools;
 use ::parking_lot::Mutex;
 use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use ::rusqlite::{Connection, Statement, named_params};
 use ::rustc_hash::FxHashSet;
 use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, w};
-use ::spel_katalog_formats::{Game, GameId};
+use ::spel_katalog_formats::{Game, GameId, NativeGame};
 use ::spel_katalog_gather::{
     CoverGatherer, CoverGathererOptions, LoadDbError, load_games_from_database,
     load_thumbnail_database,
 };
 use ::spel_katalog_settings::{CacheDir, CoverartDir, Settings};
 use ::tap::Pipe;
+use ::uuid::Uuid;
 
 use crate::{Element, Games, games::WithThumb};
 
@@ -75,10 +76,15 @@ pub enum Message {
         /// Path to database to load.
         db_path: PathBuf,
     },
-    /// Set loaded games.
-    SetGames {
-        /// Games to set content to.
+    /// Add games.
+    AddGames {
+        /// Games to add.
         games: Vec<Game>,
+    },
+    /// Add a single game.
+    AddNativeGames {
+        /// Games to add.
+        games: Vec<(Uuid, NativeGame, Option<DynamicImage>)>,
     },
     /// Set thumbnails.
     SetImages {
@@ -204,7 +210,7 @@ impl State {
                 Task::future(async move {
                     match ::smol::unblock(move || load_games_from_database(&db_path)).await {
                         Ok(games) => games
-                            .pipe(|games| Message::SetGames { games })
+                            .pipe(|games| Message::AddGames { games })
                             .pipe(OrRequest::Message)
                             .pipe(Task::done),
                         Err(err) => match err {
@@ -218,18 +224,15 @@ impl State {
                 })
                 .then(identity)
             }
-            Message::SetGames { games } => {
-                self.set(
-                    games
-                        .into_iter()
-                        .map(|game| WithThumb {
-                            game,
-                            thumb: None,
-                            batch_selected: false,
-                            shadows: None,
-                            ghost: false,
-                        })
-                        .collect(),
+            Message::AddGames { games } => {
+                self.add_games(
+                    games.into_iter().map(|game| WithThumb {
+                        game,
+                        thumb: None,
+                        batch_selected: false,
+                        shadows: None,
+                        ghost: false,
+                    }),
                     settings,
                     filter,
                 );
@@ -237,6 +240,22 @@ impl State {
                 status!(tx, "read games from database");
 
                 self.find_cached(settings)
+            }
+            Message::AddNativeGames { games } => {
+                self.add_games(
+                    games.into_iter().map(|(uuid, game, thumb)| WithThumb {
+                        thumb: thumb.map(|thumb| {
+                            let width = thumb.width();
+                            let height = thumb.height();
+                            let pixels = ::bytes::Bytes::from_owner(thumb.into_rgba8().into_raw());
+                            ::iced_core::image::Handle::from_rgba(width, height, pixels)
+                        }),
+                        ..WithThumb::from((uuid, game))
+                    }),
+                    settings,
+                    filter,
+                );
+                Task::none()
             }
             Message::SetImages {
                 slugs,

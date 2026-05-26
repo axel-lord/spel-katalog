@@ -7,7 +7,7 @@ use ::iced_widget::{self as widget, Row, text, text_input, toggler, value};
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog_cli::Run;
 use ::spel_katalog_common::{OrRequest, StatusSender, w};
-use ::spel_katalog_settings::{CacheDir, ConfigDir, FilterMode, LutrisDb, Network, Theme};
+use ::spel_katalog_settings::{CacheDir, ConfigDir, FilterMode, Load, LutrisDb, Network, Theme};
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::tap::Pipe;
 
@@ -56,7 +56,7 @@ pub(crate) struct App {
 #[derive(Debug)]
 pub struct LuaVt {
     pub sender: ::flume::Sender<DialogBuilder>,
-    pub settings: ::spel_katalog_settings::Settings,
+    pub settings: Arc<::spel_katalog_settings::Settings>,
 }
 
 impl ::spel_katalog_lua::Virtual for LuaVt {
@@ -127,7 +127,10 @@ impl Initial {
         let filter = String::new();
         let status = String::new();
         let view = view::State::new();
-        let settings = ::spel_katalog_settings::State { settings, config };
+        let settings = ::spel_katalog_settings::State {
+            settings: Arc::new(settings),
+            config,
+        };
         let games = ::spel_katalog_games::State::default();
         let info = ::spel_katalog_info::State::default();
         let sender = status_tx.into();
@@ -178,58 +181,6 @@ impl Initial {
     }
 }
 
-/*
-impl ::iced_winit::Program for App {
-    type Message = Message;
-
-    type Theme = ::iced_core::Theme;
-
-    type Executor = ::iced_futures::backend::default::Executor;
-
-    type Renderer = ::iced_renderer::Renderer;
-
-    type Flags = Flags;
-
-    fn new(
-        Flags {
-            initial:
-                Initial {
-                    app,
-                    status_rx,
-                    dialog_rx,
-                    terminal_rx,
-                    show_settings,
-                },
-            exit_recv,
-        }: Self::Flags,
-    ) -> (Self, Task<Self::Message>) {
-    }
-
-    fn title(&self, _window: window::Id) -> String {
-        "Lutris Games".to_owned()
-    }
-
-    fn update(&mut self, message: Self::Message) -> Task<Self::Message> {
-        self.update(message)
-    }
-
-    fn view(
-        &self,
-        window: window::Id,
-    ) -> iced_core::Element<'_, Self::Message, Self::Theme, Self::Renderer> {
-        self.view(window)
-    }
-
-    fn subscription(&self) -> iced_futures::Subscription<Self::Message> {
-        self.subscription()
-    }
-
-    fn theme(&self, _window: window::Id) -> Self::Theme {
-        ::iced_core::Theme::from(*self.settings.get::<Theme>())
-    }
-}
-*/
-
 impl App {
     fn new(
         Flags {
@@ -246,14 +197,37 @@ impl App {
     ) -> (Self, Task<Message>) {
         let (_, open_main) = ::iced_runtime::window::open(::iced_core::window::Settings::default());
         let main = open_main.map(|id| Message::OpenWindow(id, WindowType::Main));
-        let load_db = app
-            .settings
-            .get::<LutrisDb>()
-            .to_path_buf()
-            .pipe(move |db_path| spel_katalog_games::Message::LoadDb { db_path })
-            .pipe(OrRequest::Message)
-            .pipe(Message::Games)
-            .pipe(Task::done);
+
+        let load_lutris = || {
+            app.settings
+                .get::<LutrisDb>()
+                .to_path_buf()
+                .pipe(move |db_path| spel_katalog_games::Message::LoadDb { db_path })
+                .pipe(OrRequest::Message)
+                .pipe(Message::Games)
+                .pipe(Task::done)
+        };
+
+        let load_native = || {
+            let games_db = app.games_db.clone();
+            Task::future(::smol::unblock(move || {
+                let mut games = Vec::new();
+                games_db.gather(&mut |uuid, game, thumb| {
+                    games.push((uuid, game, thumb));
+                });
+                Message::Games(OrRequest::Message(
+                    ::spel_katalog_games::Message::AddNativeGames { games },
+                ))
+            }))
+        };
+
+        let load_db = match app.settings.get::<Load>() {
+            Load::Lutris => load_lutris(),
+            Load::Native => load_native(),
+            Load::Both => load_native().chain(load_lutris()),
+            Load::None => Task::none(),
+        };
+
         let receive_status = Task::stream(status_rx.into_stream()).map(Message::Status);
         let receive_dialog = Task::stream(dialog_rx.into_stream()).map(Message::BuildDialog);
         let exit_recv = exit_recv
@@ -315,7 +289,7 @@ impl App {
     pub fn lua_vt(&self) -> Arc<LuaVt> {
         Arc::new(LuaVt {
             sender: self.dialog_tx.clone(),
-            settings: self.settings.settings.clone(),
+            settings: self.settings.snapshot(),
         })
     }
 

@@ -4454,6 +4454,7 @@ dependencies = [
 name = "spel-katalog"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "color-eyre",
  "derive_more",
  "env_logger",
@@ -4590,6 +4591,7 @@ dependencies = [
 name = "spel-katalog-games"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "derive_more",
  "iced_core",
  "iced_futures",
@@ -4655,11 +4657,13 @@ dependencies = [
  "spel-katalog-common",
  "spel-katalog-formats",
  "spel-katalog-gather",
+ "spel-katalog-native",
  "spel-katalog-settings",
  "spel-katalog-widget",
  "tap",
  "thiserror 2.0.18",
  "toml 1.1.2+spec-1.1.0",
+ "uuid",
  "yaml-rust2",
 ]
 

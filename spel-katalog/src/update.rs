@@ -286,8 +286,9 @@ impl App {
                 if view.info_shown() && view.displayed.is_game_info() && info.id() == Some(id) {
                     view.hide_info();
                 } else if let Some(game) = games.by_id(id) {
+                    ::log::info!("showing info for {id}");
                     return info
-                        .set_game(sender, settings, game)
+                        .set_game(sender, settings, game, &self.games_db)
                         .map(OrRequest::Message)
                         .map(Message::Info)
                         .then(|message| {
