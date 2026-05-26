@@ -7,6 +7,7 @@ use ::std::{
 };
 
 use ::bytemuck::TransparentWrapper;
+use ::bytes::{BufMut, BytesMut};
 use ::derive_more::{AsMut, AsRef, Deref, DerefMut, From, Into, IsVariant};
 use ::flate2::{
     Compression,
@@ -242,14 +243,16 @@ impl Pool {
         let decoded = stmt
             .query_one((game_id,), |row| {
                 let bytes = row.get_ref(0)?.as_bytes()?;
-                let mut buf = Vec::new();
+                let mut buf = BytesMut::with_capacity(bytes.len()).writer();
                 let mut config_reader = GzDecoder::new(bytes);
-                let result = config_reader.read_to_end(&mut buf);
+                let result = ::std::io::copy(&mut config_reader, &mut buf);
+                let buf = buf.into_inner();
                 Ok(result.map(move |_| buf))
             })
             .map_err(GetError::NoResults)?
             .map_err(GetError::Decompress)?;
-        ::toml::from_slice::<NativeGame>(&decoded).map_err(GetError::Parse)
+        let parsed = ::toml::from_slice::<NativeGame>(&decoded).map_err(GetError::Parse)?;
+        Ok(parsed)
     }
 
     /// Get a thumbnail from database.

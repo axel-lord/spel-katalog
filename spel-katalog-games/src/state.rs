@@ -69,7 +69,7 @@ pub enum SelDir {
 }
 
 /// Internal message used for games element.
-#[derive(Debug, IsVariant)]
+#[derive(Debug, IsVariant, Clone)]
 pub enum Message {
     /// Load games from local lutris database.
     LoadDb {
@@ -120,7 +120,7 @@ pub enum Message {
 }
 
 /// Requests for other widgets.
-#[derive(Debug, IsVariant)]
+#[derive(Debug, IsVariant, Clone)]
 pub enum Request {
     /// Set currently chosen game.
     ShowGame {

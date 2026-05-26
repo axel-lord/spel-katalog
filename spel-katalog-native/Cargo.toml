@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 bon.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
+bytes.workspace = true
 derive_more = { workspace = true, features = ["deref", "deref_mut", "as_ref", "from", "into"] }
 flate2.workspace = true
 flume.workspace = true

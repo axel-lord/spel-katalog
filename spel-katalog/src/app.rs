@@ -18,7 +18,7 @@ use crate::{
 };
 
 /// Specific kind of window.
-#[derive(Debug, IsVariant)]
+#[derive(Debug, IsVariant, Clone)]
 pub enum WindowType {
     /// Window is the main window.
     Main,

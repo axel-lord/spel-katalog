@@ -19,7 +19,7 @@ pub enum GameId {
 }
 
 /// Game which may be native or lutris.
-#[derive(Debug, IsVariant)]
+#[derive(Debug, IsVariant, Clone)]
 pub enum Game {
     /// Game is a lutris game.
     Lutris(LutrisGame),

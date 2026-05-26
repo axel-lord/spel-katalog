@@ -802,8 +802,22 @@ impl State {
         Some(())
     }
 
+    /// Draw titlebar section of info view.
+    pub fn titlebar<'a, M: 'a + From<Message> + Clone>(
+        &'a self,
+        game: &'a ::spel_katalog_formats::Game,
+        thumb: Option<&'a widget::image::Handle>,
+        id: GameId,
+        buttons: Element<'a, M>,
+    ) -> Element<'a, M> {
+        match self {
+            State::Native { state } => state.titlebar(game, thumb, id, buttons),
+            _ => self.titlebar_(game, thumb, id, buttons),
+        }
+    }
+
     /// View game info.
-    pub fn titlebar<'a, M: 'a>(
+    fn titlebar_<'a, M: 'a>(
         &'a self,
         game: &'a ::spel_katalog_formats::Game,
         thumb: Option<&'a widget::image::Handle>,

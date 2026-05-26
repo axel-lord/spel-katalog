@@ -75,10 +75,7 @@ fn bind_user(wine_prefix: &Path, umu_prefix: &Path) -> Option<Bind> {
 
     ::log::info!("binding {wine_home:?} to {umu_home:?}");
 
-    Some(Bind::AsymNamed {
-        src: wine_home,
-        dest: umu_home,
-    })
+    Some(Bind::asymmetric(wine_home, umu_home))
 }
 
 /// Initialize umu prefix.
@@ -430,19 +427,19 @@ impl<'a> LutrisCtx<'a> {
             .map(|extra| extra.sandbox_root.as_slice())
             .unwrap_or_default();
         if !additional_roots.is_empty() {
-            bind.extend(additional_roots.iter().map(|root| Bind::MirrorNamed {
-                src: PathBuf::from(root),
-            }));
+            bind.extend(
+                additional_roots
+                    .iter()
+                    .map(|root| Bind::mirrored(root.into())),
+            );
         } else if runner.is_wine() {
-            bind.push(Bind::MirrorNamed {
-                src: config
+            bind.push(Bind::mirrored(
+                config
                     .game
                     .common_parent(|| ::spel_katalog_settings::HOME.as_path()),
-            });
+            ));
         } else if let Some(parent) = exe.parent() {
-            bind.push(Bind::MirrorNamed {
-                src: parent.to_path_buf(),
-            });
+            bind.push(Bind::mirrored(parent.to_path_buf()));
         }
 
         let prefix = runner

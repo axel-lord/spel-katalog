@@ -1,10 +1,18 @@
 //! Library for terminal widget.
 
-use ::core::{convert, fmt::Display, mem, num::NonZero};
+use ::core::{
+    cell::Cell,
+    convert,
+    fmt::{Debug, Display},
+    mem,
+    num::NonZero,
+};
 use ::std::{
     borrow::Cow,
     collections::VecDeque,
     io::{ErrorKind, PipeReader, Read},
+    rc::Rc,
+    sync::{Arc, Mutex},
 };
 
 use ::iced_core::{Alignment::Center, Length::Fill};
@@ -58,14 +66,14 @@ fn extend_lossy(buf: &mut String, bytes: &[u8]) {
 }
 
 /// Messages used by terminal.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Message {
     /// Add a new pipe to terminal.
     AddPipe {
         /// Identity of pipe.
         identity: SinkIdentity,
         /// Pipe to add.
-        reader: PipeReader,
+        reader: ClonePkgLock<PipeReader>,
     },
     /// Close a pipe.
     ClosePipe {
@@ -109,15 +117,82 @@ impl Message {
             };
 
             let next = Self::sink_receiver(recv);
-            let value = Task::done(Message::AddPipe { identity, reader });
+            let value = Task::done(Message::AddPipe {
+                identity,
+                reader: ClonePkgLock::new(reader),
+            });
             Task::batch([value, next])
         })
     }
 }
 
 #[doc(hidden)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Private<T>(pub(crate) T);
+
+/// Utility to implement clone for values that should not.
+pub struct ClonePkg<T>(Rc<Cell<Option<T>>>);
+
+impl<T> ClonePkg<T> {
+    /// Wrap a value in a package.
+    pub fn new(wrapped: T) -> Self {
+        Self(Rc::new(Cell::new(Some(wrapped))))
+    }
+
+    /// Open the package and get the wrapped value
+    /// if available.
+    pub fn unpack(self) -> Option<T> {
+        self.0.take()
+    }
+}
+
+impl<T> Debug for ClonePkg<T> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        write!(f, "ClonePkgLock<{}>", ::core::any::type_name::<T>())
+    }
+}
+
+impl<T> Clone for ClonePkg<T> {
+    fn clone(&self) -> Self {
+        Self(Rc::clone(&self.0))
+    }
+}
+
+/// Utility to implement clone for values that should not.
+/// Uses a mutex to be send and sync.
+pub struct ClonePkgLock<T>(Arc<Mutex<Option<T>>>);
+
+impl<T> ClonePkgLock<T> {
+    /// Wrap a value in a package.
+    pub fn new(wrapped: T) -> Self {
+        Self(Arc::new(Mutex::new(Some(wrapped))))
+    }
+
+    /// Open the package and get the wrapped value
+    /// if available.
+    pub fn unpack(self) -> Option<T> {
+        let mut inner = Mutex::try_lock(&self.0)
+            .map_err(|err| {
+                if let ::std::sync::TryLockError::Poisoned(err) = err {
+                    ::log::error!("encountered poisoned mutex with ClonePkg\n{err}")
+                }
+            })
+            .ok()?;
+        Option::take(&mut *inner)
+    }
+}
+
+impl<T> Debug for ClonePkgLock<T> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        write!(f, "ClonePkgLock<{}>", ::core::any::type_name::<T>())
+    }
+}
+
+impl<T> Clone for ClonePkgLock<T> {
+    fn clone(&self) -> Self {
+        Self(Arc::clone(&self.0))
+    }
+}
 
 /// Storage for data received from pipe.
 #[derive(Debug)]
@@ -248,10 +323,10 @@ impl Terminal {
     /// Update state of terminal.
     pub fn update(&mut self, msg: Message) -> Task<Message> {
         match msg {
-            Message::AddPipe {
-                identity,
-                mut reader,
-            } => {
+            Message::AddPipe { identity, reader } => {
+                let Some(mut reader) = reader.unpack() else {
+                    return Task::none();
+                };
                 let (tx, rx) = ::flume::bounded(64);
 
                 let pipe = Pipe {

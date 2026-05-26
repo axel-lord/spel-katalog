@@ -3,61 +3,53 @@
 
 use ::std::path::{Path, PathBuf};
 
-use ::derive_more::IsVariant;
 use ::serde::{Deserialize, Serialize};
 
 /// A Single bind.
-#[derive(Debug, Clone, IsVariant, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum Bind {
-    /// Path is mirrored in sandbox.
-    MirrorNamed {
-        /// Source to bind.
-        src: PathBuf,
-    },
-    /// Path is mirrored in sandbox. As a (src) tuple.
-    MirrorTuple(PathBuf),
-    /// Src is bound to dest in sandbox.
-    AsymNamed {
-        /// Source to bind.
-        src: PathBuf,
-        /// Where to bind src.
-        dest: PathBuf,
-    },
-    /// Src is bound to dest in sandbox. As a (src, dest) tuple.
-    AsymTuple(PathBuf, PathBuf),
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct Bind {
+    /// Source to bind.
+    pub src: PathBuf,
+    /// Where to bind src.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dest: Option<PathBuf>,
 }
 
 impl Bind {
     /// Get source and destination as `[src, dest]`,
     /// If mirrored `src` is used for both.
     pub fn normalize(&self) -> [&Path; 2] {
-        match self {
-            Bind::MirrorNamed { src } | Bind::MirrorTuple(src) => [src, src],
-            Bind::AsymNamed { src, dest } | Bind::AsymTuple(src, dest) => [src, dest],
+        let Self { src, dest } = self;
+        [src.as_path(), dest.as_ref().unwrap_or(src)]
+    }
+
+    /// Shorthand to create a mirrored bind.
+    pub const fn mirrored(src: PathBuf) -> Self {
+        Self { src, dest: None }
+    }
+
+    /// Shorthand to create an asymmetric bind.
+    pub const fn asymmetric(src: PathBuf, dest: PathBuf) -> Self {
+        Self {
+            src,
+            dest: Some(dest),
         }
     }
 }
 
 /// Representation of a symlink.
-#[derive(Debug, Clone, IsVariant, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum Symlink {
-    /// Source and destination of symlink.
-    Named {
-        /// Source to link to.
-        src: PathBuf,
-        /// Where to place link.
-        dest: PathBuf,
-    },
-    /// Source and destination of symlink. As a (src, dest) tuple.
-    Tuple(PathBuf, PathBuf),
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct Symlink {
+    /// Source to link to.
+    pub src: PathBuf,
+    /// Where to place link.
+    pub dest: PathBuf,
 }
 
 impl Symlink {
     /// Get source and destination as `[src, dest]`,
     pub fn normalize(&self) -> [&Path; 2] {
-        let (Self::Named { src, dest } | Self::Tuple(src, dest)) = self;
+        let Self { src, dest } = self;
         [src, dest]
     }
 }

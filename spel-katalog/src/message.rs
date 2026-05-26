@@ -45,7 +45,7 @@ pub enum QuickMessage {
     Debug,
 }
 
-#[derive(Debug, IsVariant, From)]
+#[derive(Debug, IsVariant, From, Clone)]
 pub enum Message {
     #[from]
     Status(String),
@@ -94,5 +94,11 @@ where
 impl From<StrError> for Message {
     fn from(value: StrError) -> Self {
         value.0.into()
+    }
+}
+
+impl From<::spel_katalog_info::Message> for Message {
+    fn from(message: ::spel_katalog_info::Message) -> Self {
+        Self::Info(OrRequest::Message(message))
     }
 }
