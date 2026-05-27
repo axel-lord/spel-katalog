@@ -303,6 +303,7 @@ impl State {
         tx: &'a StatusSender,
         settings: &'a Settings,
         game_by_id: &dyn Fn(GameId) -> Option<&'a ::spel_katalog_formats::Game>,
+        games_db: &Pool,
     ) -> Task<OrRequest<Message, Request>> {
         match message {
             Message::Clear => {
@@ -697,7 +698,7 @@ impl State {
             }
             Message::NativeInfo(message) => {
                 if let Self::Native { state } = self {
-                    state.update(message)
+                    state.update(message, games_db)
                 } else {
                     Task::none()
                 }

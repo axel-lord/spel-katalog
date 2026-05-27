@@ -4,13 +4,14 @@ use ::iced_core::{
     Alignment::{self, Center},
     Font,
     Length::Fill,
-    Point,
-    mouse::Button,
+    alignment::Vertical,
 };
 use ::iced_runtime::Task;
 use ::iced_widget::{self as widget, text_editor};
 use ::spel_katalog_common::{OrRequest, PushMaybe, w};
 use ::spel_katalog_formats::{GameId, NativeGame};
+use ::spel_katalog_native::Pool;
+use ::spel_katalog_widget::rule;
 use ::tap::Pipe;
 use ::uuid::Uuid;
 use widget::text_editor::Content;
@@ -22,10 +23,10 @@ use crate::Element;
 pub enum Message {
     /// Update conf_view.
     ConfAction(widget::text_editor::Action),
-    /// Mouse moved in thumbnail.
-    ThumbMouseMove(Point),
-    /// Thumbnail was clicked.
-    ThumbClicked(Button),
+    /// Remove thumbnail of game.
+    RemoveThumb,
+    /// Add thumbnail to game.
+    AddThumb,
 }
 
 /// State of native game display.
@@ -37,10 +38,6 @@ pub struct State {
     game: Option<NativeGame>,
     /// Config view.
     conf_view: Content,
-    /// Mouse position in thumbnail.
-    thumb_mouse_pos: Option<Point>,
-    /// Displa thumbnail context menu.
-    display_thumb_menu: bool,
 }
 
 impl State {
@@ -50,8 +47,6 @@ impl State {
             uuid,
             game: None,
             conf_view: Content::new(),
-            thumb_mouse_pos: None,
-            display_thumb_menu: false,
         }
     }
 
@@ -70,26 +65,18 @@ impl State {
     }
 
     /// Update state using message.
-    pub fn update(&mut self, message: Message) -> Task<OrRequest<crate::Message, crate::Request>> {
+    pub fn update(
+        &mut self,
+        message: Message,
+        game_db: &Pool,
+    ) -> Task<OrRequest<crate::Message, crate::Request>> {
         match message {
             Message::ConfAction(action) => {
                 self.conf_view.perform(action);
                 Task::none()
             }
-            Message::ThumbMouseMove(point) => {
-                self.thumb_mouse_pos = Some(point);
-                Task::none()
-            }
-            Message::ThumbClicked(button) => match button {
-                Button::Right => {
-                    self.display_thumb_menu = !self.display_thumb_menu;
-                    Task::none()
-                }
-                _ => {
-                    self.display_thumb_menu = false;
-                    Task::none()
-                }
-            },
+            Message::RemoveThumb => todo!(),
+            Message::AddThumb => todo!(),
         }
     }
 
@@ -107,28 +94,71 @@ impl State {
         w::row()
             .align_y(Alignment::Start)
             .height(150)
-            .push_maybe(thumb.map(|thumb| {
-                let thumb = widget::image(thumb)
-                    .width(150)
-                    .height(150)
-                    .pipe(widget::mouse_area)
-                    .on_press(Message::ThumbClicked(Button::Left))
-                    .on_right_press(Message::ThumbClicked(Button::Right))
-                    .on_middle_press(Message::ThumbClicked(Button::Middle))
-                    .pipe(Element::from)
-                    .map(|message| crate::Message::NativeInfo(message).into());
-
-                ::iced_aw::widget::ContextMenu::new(thumb, || {
-                    widget::column(vec![widget::text("a").into(), widget::text("b").into()]).into()
-                })
-            }))
+            .push(
+                thumb
+                    .map_or_else(
+                        || {
+                            widget::button("Add Thumbnail")
+                                .style(widget::button::success)
+                                .padding(3)
+                                .pipe(widget::container)
+                                .center_x(150)
+                                .center_y(150)
+                                .style(widget::container::dark)
+                                .pipe(Element::from)
+                        },
+                        |thumb| {
+                            ::iced_aw::widget::ContextMenu::new(
+                                widget::image(thumb).width(150).height(150),
+                                || {
+                                    w::col()
+                                        .push(widget::text("Thumbnail"))
+                                        .push(rule::horizontal())
+                                        .push(
+                                            widget::text("Replace")
+                                                .width(Fill)
+                                                .align_x(Center)
+                                                .pipe(widget::button)
+                                                .padding(3)
+                                                .style(widget::button::text)
+                                                .on_press(Message::AddThumb),
+                                        )
+                                        .push(
+                                            widget::text("Remove")
+                                                .width(Fill)
+                                                .align_x(Center)
+                                                .pipe(widget::button)
+                                                .padding(3)
+                                                .style(widget::button::text)
+                                                .on_press(Message::RemoveThumb),
+                                        )
+                                        .spacing(0)
+                                        .padding(0)
+                                        .width(120)
+                                        .align_x(Center)
+                                        .pipe(widget::container)
+                                        .style(widget::container::bordered_box)
+                                        .into()
+                                },
+                            )
+                            .pipe(Element::from)
+                        },
+                    )
+                    .map(|message| crate::Message::NativeInfo(message).into()),
+            )
             .push_maybe(thumb.is_some().then(spel_katalog_widget::rule::vertical))
             .push(
                 w::col()
                     .push(
                         w::row()
-                            .push(widget::text(game.name()).width(Fill).align_x(Center))
-                            .push(buttons),
+                            .push(
+                                widget::text(game.name())
+                                    .wrapping(widget::text::Wrapping::WordOrGlyph)
+                                    .width(Fill)
+                                    .align_x(Center),
+                            )
+                            .push(buttons)
+                            .align_y(Vertical::Top),
                     )
                     .push(spel_katalog_widget::rule::horizontal())
                     .push(

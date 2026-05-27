@@ -442,9 +442,13 @@ impl App {
                 OrRequest::Message(message) => {
                     return self
                         .info
-                        .update(message, &self.sender, &self.settings, &|id| {
-                            self.games.by_id(id).map(|g| &g.game)
-                        })
+                        .update(
+                            message,
+                            &self.sender,
+                            &self.settings,
+                            &|id| self.games.by_id(id).map(|g| &g.game),
+                            &self.games_db,
+                        )
                         .map(Message::Info);
                 }
                 OrRequest::Request(request) => return self.info_request(request),
