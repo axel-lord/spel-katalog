@@ -62,38 +62,43 @@ pub struct PoolCreationError {
     inner: ::r2d2::Error,
 }
 
+/// Database errors common between interactions.
+#[derive(Debug, ::thiserror::Error, IsVariant)]
+pub enum DbError {
+    /// Database connection could not be grabbed.
+    #[error("could not grab database connection, {0}")]
+    GetConnection(::r2d2::Error),
+    /// Replace statement could not be prepared.
+    #[error("could not prepare statement, {0}")]
+    PrepareStatement(::rusqlite::Error),
+}
+
 /// Error returned when [Pool::insert_game] fails to insert game config.
 #[derive(Debug, ::thiserror::Error, IsVariant)]
 pub enum InsertGameError {
-    /// Database connection could not be grabbed.
-    #[error("could not grab database connection, {0}")]
-    GetConn(::r2d2::Error),
-    /// Replace statement could not be prepared.
-    #[error("could not prepare replace statement, {0}")]
-    PrepStmt(::rusqlite::Error),
+    /// Statement preparation or database connection failed.
+    #[error(transparent)]
+    Database(#[from] DbError),
     /// Replace statement failed.
     #[error("could not replace game using statement, {0}")]
     ReplaceGame(::rusqlite::Error),
-    /// Game config could not be serialized.
+    /// Game config could not be serialized as toml.
     #[error("could not serialize game config, {0}")]
-    WriteToml(::toml::ser::Error),
+    SerializeConfig(::toml::ser::Error),
     /// Game config could not be compressed.
     #[error("could not compress game config, {0}")]
-    CompressConf(::std::io::Error),
+    CompressConfig(::std::io::Error),
 }
 
 /// Error returned when [Pool::insert_thumb] fails to insert game config.
 #[derive(Debug, ::thiserror::Error, IsVariant)]
 pub enum InsertThumbError {
-    /// Database connection could not be grabbed.
-    #[error("could not grab database connection, {0}")]
-    GetConn(::r2d2::Error),
-    /// Replace statement could not be prepared.
-    #[error("could not prepare replace statement, {0}")]
-    PrepStmt(::rusqlite::Error),
+    /// Statement preparation or database connection failed.
+    #[error(transparent)]
+    Database(#[from] DbError),
     /// Replace statement failed.
-    #[error("could not replace game using statement, {0}")]
-    ReplaceThumb(::rusqlite::Error),
+    #[error("could not replace thumbnail using statement, {0}")]
+    ReplaceThumbnail(::rusqlite::Error),
     /// Thumbnail could not be encoded.
     #[error("could not encode thumbnail, {0}")]
     EncodeImage(::image::ImageError),
@@ -102,24 +107,32 @@ pub enum InsertThumbError {
 /// Error returned when [Pool::get_game] fails to grab game.
 #[derive(Debug, ::thiserror::Error, IsVariant)]
 pub enum GetError {
-    /// Database connection could not be grabbed.
-    #[error("could not grab database connection, {0}")]
-    GetConn(::r2d2::Error),
-    /// Select statement could not be prepared.
-    #[error("could not prepare select statement, {0}")]
-    PrepStmt(::rusqlite::Error),
+    /// Statement preparation or database connection failed.
+    #[error(transparent)]
+    Database(#[from] DbError),
     /// No games found matching the uuid.
     #[error("query failed, {0}")]
     NoResults(::rusqlite::Error),
-    /// Data could not be decompressed.
-    #[error("could not decompress data")]
-    Decompress(::std::io::Error),
+    /// Config could not be decompressed.
+    #[error("could not decompress config")]
+    DecompressConfig(::std::io::Error),
     /// Could not deserialize game data.
     #[error("could not deserialize game data, {0}")]
-    Parse(::toml::de::Error),
+    DeserializeConfig(::toml::de::Error),
     /// Could not decode image.
     #[error("could not decode image, {0}")]
-    DecodeImg(::image::ImageError),
+    DecodeImage(::image::ImageError),
+}
+
+/// Error returned when [Pool::remove_thumb] fails to remove a thumbnail.
+#[derive(Debug, ::thiserror::Error, IsVariant)]
+pub enum RemoveThumbError {
+    /// Statement preparation or database connection failed.
+    #[error(transparent)]
+    Database(#[from] DbError),
+    /// Thumbnail could not be removed.
+    #[error("could not remove thumbnail\n{0}")]
+    RemoveThumbnail(::rusqlite::Error),
 }
 
 mod builder {
@@ -129,7 +142,7 @@ mod builder {
     use ::spel_katalog_formats::NativeGame;
     use ::uuid::Uuid;
 
-    use crate::{InsertGameError, InsertThumbError, Pool};
+    use crate::{DbError, InsertGameError, InsertThumbError, Pool};
 
     #[bon::bon]
     impl Pool {
@@ -152,7 +165,7 @@ mod builder {
             /// Reuse buffer.
             buf: Option<&mut Vec<u8>>,
         ) -> Result<(), InsertGameError> {
-            let conn = self.get().map_err(InsertGameError::GetConn)?;
+            let conn = self.get().map_err(DbError::GetConnection)?;
             let mut backing;
             let buf = if let Some(buf) = buf {
                 buf
@@ -179,7 +192,7 @@ mod builder {
             /// Reuse buffer.
             buf: Option<&mut Vec<u8>>,
         ) -> Result<(), InsertThumbError> {
-            let conn = self.get().map_err(InsertThumbError::GetConn)?;
+            let conn = self.get().map_err(DbError::GetConnection)?;
             let mut backing;
             let buf = if let Some(buf) = buf {
                 buf
@@ -235,10 +248,10 @@ impl Pool {
             SELECT config FROM games
             WHERE uuid = $1
         ";
-        let conn = self.get().map_err(GetError::GetConn)?;
+        let conn = self.get().map_err(DbError::GetConnection)?;
         let mut stmt = conn
             .prepare_cached(SELECT_GAME)
-            .map_err(GetError::PrepStmt)?;
+            .map_err(DbError::PrepareStatement)?;
 
         let decoded = stmt
             .query_one((game_id,), |row| {
@@ -250,8 +263,9 @@ impl Pool {
                 Ok(result.map(move |_| buf))
             })
             .map_err(GetError::NoResults)?
-            .map_err(GetError::Decompress)?;
-        let parsed = ::toml::from_slice::<NativeGame>(&decoded).map_err(GetError::Parse)?;
+            .map_err(GetError::DecompressConfig)?;
+        let parsed =
+            ::toml::from_slice::<NativeGame>(&decoded).map_err(GetError::DeserializeConfig)?;
         Ok(parsed)
     }
 
@@ -264,10 +278,11 @@ impl Pool {
             SELECT image FROM thumbs
             WHERE uuid = $1
         ";
-        let conn = self.get().map_err(GetError::GetConn)?;
+        let conn = self.get().map_err(DbError::GetConnection)?;
+
         let mut stmt = conn
             .prepare_cached(SELECT_GAME)
-            .map_err(GetError::PrepStmt)?;
+            .map_err(DbError::PrepareStatement)?;
 
         stmt.query_one((game_id,), |row| {
             let bytes = row.get_ref(0)?.as_bytes()?;
@@ -277,7 +292,7 @@ impl Pool {
             ))
         })
         .map_err(GetError::NoResults)?
-        .map_err(GetError::DecodeImg)
+        .map_err(GetError::DecodeImage)
     }
 
     /// Insert a thumbnail or replace it.
@@ -297,7 +312,7 @@ impl Pool {
         buf.clear();
         let mut stmt = conn
             .prepare_cached(INSERT_THUMB)
-            .map_err(InsertThumbError::PrepStmt)?;
+            .map_err(DbError::PrepareStatement)?;
 
         {
             thumb
@@ -306,7 +321,7 @@ impl Pool {
         }
 
         stmt.execute((uuid, buf.as_bytes()))
-            .map_err(InsertThumbError::ReplaceThumb)?;
+            .map_err(InsertThumbError::ReplaceThumbnail)?;
 
         Ok(())
     }
@@ -331,14 +346,14 @@ impl Pool {
         buf.clear();
         let mut stmt = conn
             .prepare_cached(INSERT_GAME)
-            .map_err(InsertGameError::PrepStmt)?;
+            .map_err(DbError::PrepareStatement)?;
 
-        let config_string = ::toml::to_string(config).map_err(InsertGameError::WriteToml)?;
+        let config_string = ::toml::to_string(config).map_err(InsertGameError::SerializeConfig)?;
         let mut config_writer = GzEncoder::new(config_string.as_bytes(), Compression::best());
 
         config_writer
             .read_to_end(buf)
-            .map_err(InsertGameError::CompressConf)?;
+            .map_err(InsertGameError::CompressConfig)?;
 
         stmt.execute((uuid, buf.as_bytes()))
             .map_err(InsertGameError::ReplaceGame)?;
