@@ -1,5 +1,7 @@
 //! Info view for native game.
 
+use ::core::iter;
+
 use ::iced_core::{
     Alignment::{self, Center},
     Font,
@@ -7,11 +9,13 @@ use ::iced_core::{
     alignment::Vertical,
 };
 use ::iced_runtime::Task;
-use ::iced_widget::{self as widget, text_editor};
+use ::iced_widget::{
+    self as widget,
+    text_editor::{self, Binding},
+};
 use ::spel_katalog_common::{OrRequest, PushMaybe, w};
 use ::spel_katalog_formats::{GameId, NativeGame};
 use ::spel_katalog_native::Pool;
-use ::spel_katalog_widget::rule;
 use ::tap::Pipe;
 use ::uuid::Uuid;
 use widget::text_editor::Content;
@@ -68,7 +72,7 @@ impl State {
     pub fn update(
         &mut self,
         message: Message,
-        game_db: &Pool,
+        _game_db: &Pool,
     ) -> Task<OrRequest<crate::Message, crate::Request>> {
         match message {
             Message::ConfAction(action) => {
@@ -111,33 +115,11 @@ impl State {
                             ::iced_aw::widget::ContextMenu::new(
                                 widget::image(thumb).width(150).height(150),
                                 || {
-                                    w::col()
+                                    ::spel_katalog_widget::ListMenu::new()
                                         .push(widget::text("Thumbnail"))
-                                        .push(rule::horizontal())
-                                        .push(
-                                            widget::text("Replace")
-                                                .width(Fill)
-                                                .align_x(Center)
-                                                .pipe(widget::button)
-                                                .padding(3)
-                                                .style(widget::button::text)
-                                                .on_press(Message::AddThumb),
-                                        )
-                                        .push(
-                                            widget::text("Remove")
-                                                .width(Fill)
-                                                .align_x(Center)
-                                                .pipe(widget::button)
-                                                .padding(3)
-                                                .style(widget::button::text)
-                                                .on_press(Message::RemoveThumb),
-                                        )
-                                        .spacing(0)
-                                        .padding(0)
-                                        .width(120)
-                                        .align_x(Center)
-                                        .pipe(widget::container)
-                                        .style(widget::container::bordered_box)
+                                        .separator()
+                                        .button("Replace", || Message::AddThumb)
+                                        .button("Remove", || Message::RemoveThumb)
                                         .into()
                                 },
                             )
@@ -193,6 +175,20 @@ impl State {
         ::spel_katalog_widget::scrollable(widget::themer(
             Some(::iced_core::Theme::SolarizedDark),
             text_editor::TextEditor::new(&self.conf_view)
+                .key_binding(|key_press| {
+                    if let ::iced_core::keyboard::Key::Named(
+                        ::iced_core::keyboard::key::Named::Tab,
+                    ) = key_press.modified_key
+                    {
+                        Some(::iced_widget::text_editor::Binding::Sequence(
+                            iter::repeat_with(|| ::iced_widget::text_editor::Binding::Insert(' '))
+                                .take(4)
+                                .collect(),
+                        ))
+                    } else {
+                        Binding::from_key_press(key_press)
+                    }
+                })
                 .highlight_with::<::iced_highlighter::Highlighter>(
                     ::iced_highlighter::Settings {
                         theme: ::iced_highlighter::Theme::SolarizedDark,

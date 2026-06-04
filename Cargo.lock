@@ -4876,6 +4876,7 @@ dependencies = [
 name = "spel-katalog-widget"
 version = "0.1.0"
 dependencies = [
+ "derive_more",
  "iced_core",
  "iced_widget",
  "tap",
