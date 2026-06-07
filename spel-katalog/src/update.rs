@@ -344,6 +344,12 @@ impl App {
                     }
                     Task::none()
                 }
+                ::spel_katalog_info::NativeRequest::RunGame { game } => {
+                    self.run_native_game(*game, false)
+                }
+                ::spel_katalog_info::NativeRequest::RunShell { game } => {
+                    self.run_native_game(*game, true)
+                }
             },
             ::spel_katalog_info::Request::RemoveImage { slug } => self
                 .games
@@ -570,6 +576,12 @@ impl App {
             Message::ShowInfo(displayed) => {
                 self.view.displayed = displayed;
                 self.view.show_info();
+            }
+            Message::RunGameNative(game) => {
+                return self.run_native_game(*game, false);
+            }
+            Message::RunShellNative(game) => {
+                return self.run_native_game(*game, true);
             }
         }
         Task::none()

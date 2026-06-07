@@ -5,7 +5,6 @@ use ::std::{
     ffi::OsString,
     io::ErrorKind,
     path::{Path, PathBuf},
-    process::Stdio,
 };
 
 use ::rustc_hash::FxHashMap;
@@ -14,6 +13,7 @@ use ::spel_katalog_formats::{
     AdditionalConfig, Bind, GameId, LutrisRunner, NativeGame, NativeRunner, Timestamp,
     lutris_config,
 };
+use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 
 use crate::{
     Callback,
@@ -35,10 +35,6 @@ pub struct CommonUmuCtx<'a> {
     pub term: &'a str,
     /// Is net disabled.
     pub net_disabled: bool,
-    /// Where to redirect errors.
-    pub stderr: Stdio,
-    /// Where to redirect output.
-    pub stdout: Stdio,
     /// Global dll overrides.
     pub dll_overrides: Vec<String>,
     /// Global sandbox read only additions.
@@ -49,6 +45,8 @@ pub struct CommonUmuCtx<'a> {
     pub gamescope: &'a Path,
     /// Callback used to signal game was started.
     pub callback: Callback,
+    /// Builder to create output sinks using.
+    pub sink_builder: SinkBuilder,
 }
 
 /// Context needed to run native games.
@@ -85,8 +83,17 @@ async fn init_umu_prefix(
     verbs: &[String],
     dll_override: &mut (dyn '_ + Send + Sync + Iterator<Item = &str>),
     drives: &mut (dyn '_ + Send + Sync + Iterator<Item = (char, &Path)>),
+    sink_builder: &SinkBuilder,
 ) -> Result<(), StrError> {
+    let sink_builder = sink_builder
+        .with_locked_channel(|| SinkIdentity::StaticName("prefix preparation"))
+        .map_err(|err| strerror!("could lock sink builder, {err}"))?;
+    let [stdout, stderr] = sink_builder
+        .build_double(|| SinkIdentity::StaticName("winetricks"))
+        .map_err(|err| strerror!("could not build sinks for winetricks, {err}"))?;
     let status = Command::new(umu)
+        .stdout(stdout)
+        .stderr(stderr)
         .args(
             ["winetricks", "fontsmooth=rgb"]
                 .into_iter()
@@ -110,7 +117,7 @@ async fn init_umu_prefix(
     let reg_exe = umu_prefix.join("drive_c/windows/system32/reg.exe");
 
     for dll_override in dll_overrides {
-        add_dll_override(dll_override, umu_prefix, umu, &reg_exe).await;
+        add_dll_override(dll_override, umu_prefix, umu, &reg_exe, &sink_builder).await;
     }
 
     for (letter, link) in drives {
@@ -126,9 +133,25 @@ async fn init_umu_prefix(
 }
 
 /// Add a dell override to prefix.
-async fn add_dll_override(dll_override: &str, umu_prefix: &Path, umu: &Path, reg_exe: &Path) {
+async fn add_dll_override(
+    dll_override: &str,
+    umu_prefix: &Path,
+    umu: &Path,
+    reg_exe: &Path,
+    sink_builder: &SinkBuilder,
+) {
     ::log::info!("adding dll override {dll_override:?}");
+    let (stdout, stderr) =
+        match sink_builder.build_double(|| SinkIdentity::Name(format!("add {dll_override}"))) {
+            Ok([stdout, stderr]) => (stdout, stderr),
+            Err(err) => {
+                ::log::error!("could not create dll override {dll_override}\n{err}");
+                return;
+            }
+        };
     let status = Command::new(umu)
+        .stdout(stdout)
+        .stderr(stderr)
         .args(args![
             reg_exe,
             "add",
@@ -196,13 +219,12 @@ impl NativeUmuCtx<'_> {
                     shell,
                     term,
                     net_disabled,
-                    stderr,
-                    stdout,
                     dll_overrides: global_dll_override,
                     sandbox_ro_dirs: global_ro_bind,
                     callback: send_open,
                     use_gamescope: global_use_gamescope,
                     gamescope,
+                    sink_builder,
                 },
             config,
         } = self;
@@ -265,6 +287,7 @@ impl NativeUmuCtx<'_> {
                 &mut drives
                     .iter()
                     .map(|(letter, link)| (*letter, link.as_path())),
+                &sink_builder,
             )
             .await?;
         }
@@ -353,6 +376,9 @@ impl NativeUmuCtx<'_> {
             args.extend(args![exe]);
         }
 
+        let [stdout, stderr] = sink_builder
+            .build_double(|| SinkIdentity::Name(name.clone()))
+            .map_err(|err| strerror!("failed to build sinks for {name}\n{err}"))?;
         let process_path = term_path.unwrap_or_else(|| bwrap.to_path_buf());
         ::log::info!("running {process_path:?} with args\n{args:#?}");
         let cmd = Command::new(process_path)

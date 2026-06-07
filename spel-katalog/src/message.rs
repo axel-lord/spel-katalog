@@ -1,6 +1,7 @@
 use ::derive_more::{From, IsVariant};
 use ::iced_core::window;
 use ::spel_katalog_common::OrRequest;
+use ::spel_katalog_formats::NativeGame;
 use ::spel_katalog_run::strerror::StrError;
 
 use crate::{
@@ -76,6 +77,8 @@ pub enum Message {
     LuaDocs(::spel_katalog_lua_docs::Message),
     #[from]
     ShowInfo(crate::view::Displayed),
+    RunGameNative(Box<NativeGame>),
+    RunShellNative(Box<NativeGame>),
 }
 
 impl<T, E> From<Result<T, E>> for Message

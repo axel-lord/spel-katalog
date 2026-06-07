@@ -4806,6 +4806,7 @@ dependencies = [
  "smol",
  "spel-katalog-formats",
  "spel-katalog-settings",
+ "spel-katalog-sink",
  "users",
 ]
 

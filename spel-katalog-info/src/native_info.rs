@@ -30,12 +30,24 @@ use crate::Element;
 pub enum Message {
     /// Update conf_view.
     ConfAction(widget::text_editor::Action),
+    /// Set content of text editor.
+    SetConfig(Box<NativeGame>),
     /// Remove thumbnail of game.
     RemoveThumb,
     /// Add thumbnail to game.
     AddThumb,
     /// Save thumbnail of game.
     SaveThumb,
+    /// Run game.
+    Run,
+    /// Run shell for game.
+    Shell,
+    /// Open game directory.
+    Open,
+    /// Discard changes.
+    Discard,
+    /// Save changes.
+    Save,
 }
 
 /// Request in use by native info view.
@@ -52,6 +64,16 @@ pub enum Request {
         id: GameId,
         /// Thumbnail image.
         img: ::spel_katalog_formats::Image,
+    },
+    /// Run a game.
+    RunGame {
+        /// Config of game to run.
+        game: Box<NativeGame>,
+    },
+    /// Run shell for a game.
+    RunShell {
+        /// Config of game to run.
+        game: Box<NativeGame>,
     },
 }
 
@@ -97,6 +119,49 @@ impl State {
         game_db: &Pool,
     ) -> Task<OrRequest<Message, Request>> {
         match message {
+            Message::Run => todo!(),
+            Message::Shell => todo!(),
+            Message::Open => todo!(),
+            Message::Save => {
+                let game_db = game_db.clone();
+                let uuid = self.uuid;
+                let content = self.conf_view.text();
+
+                Task::<Option<_>>::future(::smol::unblock(move || {
+                    let game = ::toml::from_str::<NativeGame>(&content)
+                        .map_err(|err| ::log::warn!("content is not formatted correctly\n{err}"))
+                        .ok()?;
+
+                    game_db
+                        .insert_game(uuid)
+                        .insert(&game)
+                        .map_err(|err| {
+                            ::log::error!("could not insert game {uuid} into database\n{err}")
+                        })
+                        .ok()?;
+
+                    None
+                }))
+                .and_then(Task::done)
+            }
+            Message::Discard => {
+                let game_db = game_db.clone();
+                let uuid = self.uuid;
+                Task::<Option<Message>>::future(::smol::unblock(move || {
+                    game_db
+                        .get_game(uuid)
+                        .map_err(|err| ::log::error!("could not get game with uuid {uuid}\n{err}"))
+                        .ok()
+                        .map(Box::new)
+                        .map(Message::SetConfig)
+                }))
+                .and_then(Task::done)
+                .map(OrRequest::Message)
+            }
+            Message::SetConfig(config) => {
+                self.set_config(*config);
+                Task::none()
+            }
             Message::ConfAction(action) => {
                 self.conf_view.perform(action);
                 Task::none()
@@ -213,80 +278,84 @@ impl State {
         id: GameId,
         buttons: Element<'a, M>,
     ) -> Element<'a, M> {
+        const DIM: u32 = 200;
         let Self {
             game: game_info, ..
         } = self;
-        w::row()
-            .align_y(Alignment::Start)
-            .height(150)
+        w::col()
             .push(
-                thumb
-                    .map_or_else(
-                        || {
-                            widget::button("Add Thumbnail")
-                                .on_press_with(|| Message::AddThumb)
-                                .style(widget::button::success)
-                                .padding(3)
-                                .pipe(widget::container)
-                                .center_x(150)
-                                .center_y(150)
-                                .style(widget::container::dark)
-                                .pipe(Element::from)
-                        },
-                        |thumb| {
-                            ::iced_aw::widget::ContextMenu::new(
-                                widget::image(thumb).width(150).height(150),
+                w::row()
+                    .push(
+                        widget::text(game.name())
+                            .wrapping(widget::text::Wrapping::WordOrGlyph)
+                            .width(Fill)
+                            .align_x(Center),
+                    )
+                    .push(buttons)
+                    .align_y(Vertical::Center),
+            )
+            .push(spel_katalog_widget::rule::horizontal())
+            .push(
+                w::row()
+                    .align_y(Alignment::Start)
+                    .height(DIM)
+                    .push(
+                        thumb
+                            .map_or_else(
                                 || {
-                                    ::spel_katalog_widget::ListMenu::new()
-                                        .push(widget::text("Thumbnail"))
-                                        .separator()
-                                        .button("Replace", || Message::AddThumb)
-                                        .button("Remove", || Message::RemoveThumb)
-                                        .button("Save As", || Message::SaveThumb)
-                                        .into()
+                                    widget::button("Add Thumbnail")
+                                        .on_press_with(|| Message::AddThumb)
+                                        .style(widget::button::success)
+                                        .padding(3)
+                                        .pipe(widget::container)
+                                        .center_x(DIM)
+                                        .center_y(DIM)
+                                        .style(widget::container::dark)
+                                        .pipe(Element::from)
+                                },
+                                |thumb| {
+                                    ::iced_aw::widget::ContextMenu::new(
+                                        widget::image(thumb).width(DIM).height(DIM),
+                                        || {
+                                            ::spel_katalog_widget::ListMenu::new()
+                                                .push(widget::text("Thumbnail"))
+                                                .separator()
+                                                .button("Replace", || Message::AddThumb)
+                                                .button("Remove", || Message::RemoveThumb)
+                                                .button("Save As", || Message::SaveThumb)
+                                                .into()
+                                        },
+                                    )
+                                    .pipe(Element::from)
                                 },
                             )
-                            .pipe(Element::from)
-                        },
+                            .map(|message| crate::Message::NativeInfo(message).into()),
                     )
-                    .map(|message| crate::Message::NativeInfo(message).into()),
-            )
-            .push_maybe(thumb.is_some().then(spel_katalog_widget::rule::vertical))
-            .push(
-                w::col()
+                    .push_maybe(thumb.is_some().then(spel_katalog_widget::rule::vertical))
                     .push(
-                        w::row()
+                        w::col()
                             .push(
-                                widget::text(game.name())
-                                    .wrapping(widget::text::Wrapping::WordOrGlyph)
-                                    .width(Fill)
-                                    .align_x(Center),
+                                w::row()
+                                    .push(widget::text("Runner").font(Font::MONOSPACE))
+                                    .push(spel_katalog_widget::rule::vertical())
+                                    .push_maybe(game_info.as_ref().map(|game_info| {
+                                        widget::value(&game_info.runner)
+                                            .font(Font::MONOSPACE)
+                                            .align_x(Alignment::Start)
+                                            .width(Fill)
+                                    })),
                             )
-                            .push(buttons)
-                            .align_y(Vertical::Top),
-                    )
-                    .push(spel_katalog_widget::rule::horizontal())
-                    .push(
-                        w::row()
-                            .push(widget::text("Runner").font(Font::MONOSPACE))
-                            .push(spel_katalog_widget::rule::vertical())
-                            .push_maybe(game_info.as_ref().map(|game_info| {
-                                widget::value(&game_info.runner)
-                                    .font(Font::MONOSPACE)
-                                    .align_x(Alignment::Start)
-                                    .width(Fill)
-                            })),
-                    )
-                    .push(spel_katalog_widget::rule::horizontal())
-                    .push(
-                        w::row()
-                            .push(widget::text("Uuid  ").font(Font::MONOSPACE))
-                            .push(spel_katalog_widget::rule::vertical())
+                            .push(spel_katalog_widget::rule::horizontal())
                             .push(
-                                widget::value(id)
-                                    .font(Font::MONOSPACE)
-                                    .align_x(Alignment::Start)
-                                    .width(Fill),
+                                w::row()
+                                    .push(widget::text("Uuid  ").font(Font::MONOSPACE))
+                                    .push(spel_katalog_widget::rule::vertical())
+                                    .push(
+                                        widget::value(id)
+                                            .font(Font::MONOSPACE)
+                                            .align_x(Alignment::Start)
+                                            .width(Fill),
+                                    ),
                             ),
                     ),
             )
@@ -302,22 +371,35 @@ impl State {
                     .spacing(3)
                     .push(
                         widget::button("Run")
+                            .on_press_with(|| Message::Run)
                             .padding(3)
                             .style(widget::button::success),
                     )
-                    .push(widget::button("Shell").padding(3))
+                    .push(
+                        widget::button("Shell")
+                            .on_press_with(|| Message::Shell)
+                            .padding(3),
+                    )
                     .push(widget::space().width(Length::Fill))
-                    .push(widget::button("Open").padding(3))
+                    .push(
+                        widget::button("Open")
+                            .on_press_with(|| Message::Open)
+                            .padding(3),
+                    )
                     .push(
                         widget::button("Discard")
+                            .on_press_with(|| Message::Discard)
                             .padding(3)
                             .style(widget::button::danger),
                     )
                     .push(
                         widget::button("Save")
+                            .on_press_with(|| Message::Save)
                             .padding(3)
                             .style(widget::button::success),
-                    ),
+                    )
+                    .pipe(Element::from)
+                    .map(OrRequest::Message),
             )
             .push(::spel_katalog_widget::scrollable(widget::themer(
                 Some(::iced_core::Theme::SolarizedDark),

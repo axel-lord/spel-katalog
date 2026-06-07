@@ -6,13 +6,14 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+log.workspace = true
+rustc-hash.workspace = true
+shell-words.workspace = true
+smol.workspace = true
 spel-katalog-formats.workspace = true
 spel-katalog-settings.workspace = true
-smol.workspace = true
-rustc-hash.workspace = true
-log.workspace = true
+spel-katalog-sink.workspace = true
 users.workspace = true
-shell-words.workspace = true
 
 [lints]
 workspace = true

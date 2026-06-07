@@ -9,14 +9,15 @@ use ::spel_katalog_common::status;
 use ::spel_katalog_formats::{AdditionalConfig, Game, GameId, NativeGame, lutris_config};
 use ::spel_katalog_run::{
     Callback,
-    run_umu::{CommonUmuCtx, LutrisCtx, LutrisUmuCtx},
+    run_umu::{CommonUmuCtx, LutrisCtx, LutrisUmuCtx, NativeUmuCtx},
     strerror::StrError,
 };
 use ::spel_katalog_settings::{
     BubblewrapExe, ConfigDir, DllOverrides, FirejailExe, GamescopeExe, LutrisExe, Network, OnRun,
-    SandboxExtras, SandboxMode, ShellExe, TermCommand, UmuRunExe, UseGamescope, YmlDir,
+    SandboxExtras, SandboxMode, Settings, ShellExe, TermCommand, UmuRunExe, UseGamescope, YmlDir,
 };
 use ::spel_katalog_sink::SinkIdentity;
+use ::tap::Pipe;
 
 use crate::{
     App, Message, QuickMessage, Safety, oneshot_broadcast::oneshot_broadcast,
@@ -135,20 +136,118 @@ impl App {
         }
     }
 
+    /// Get sandbox extra read-only dirs.
+    fn sandbox_ro_dirs(settings: &Settings) -> Vec<PathBuf> {
+        settings
+            .get::<SandboxExtras>()
+            .split(';')
+            .map(|sb| sb.trim())
+            .filter(|sb| !sb.is_empty())
+            .map(PathBuf::from)
+            .collect()
+    }
+
+    /// Get global dll overrides.
+    fn dll_overrides(settings: &Settings) -> Vec<String> {
+        settings
+            .get::<DllOverrides>()
+            .split(';')
+            .map(|ovr| ovr.trim())
+            .filter(|ovr| !ovr.is_empty())
+            .map(String::from)
+            .collect()
+    }
+
+    /// Run a native game.
+    pub fn run_native_game(&mut self, game: NativeGame, run_shell: bool) -> Task<Message> {
+        let bwrap = self.settings.get::<BubblewrapExe>().clone();
+        let umu = self.settings.get::<UmuRunExe>().clone();
+        let shell = self.settings.get::<ShellExe>().clone();
+        let term = self.settings.get::<TermCommand>().clone();
+        let net_disabled = self.settings.get::<Network>().is_disabled();
+        let use_gamescope = self.settings.get::<UseGamescope>().is_yes();
+        let gamescope = self.settings.get::<GamescopeExe>().clone();
+        let sink_builder = self.sink_builder.clone();
+        let sandbox_ro_dirs = Self::sandbox_ro_dirs(&self.settings);
+        let dll_overrides = Self::dll_overrides(&self.settings);
+
+        Task::<Option<Message>>::future(async move {
+            let name = game.name.clone();
+            let sink_builder = sink_builder
+                .with_locked_channel(|| SinkIdentity::Name(name.clone()))
+                .map_err(|err| {
+                    ::log::error!("could not create locked sink builder for {name}\n{err}")
+                })
+                .ok()?;
+            let ctx = NativeUmuCtx {
+                common: CommonUmuCtx {
+                    bwrap: bwrap.as_path(),
+                    umu: umu.as_path(),
+                    shell: shell.as_path(),
+                    term: &term,
+                    net_disabled,
+                    sink_builder,
+                    dll_overrides,
+                    sandbox_ro_dirs,
+                    use_gamescope,
+                    gamescope: gamescope.as_path(),
+                    callback: Callback::default(),
+                },
+                config: game,
+            };
+
+            let status = if run_shell {
+                ctx.run_shell().await
+            } else {
+                ctx.run().await
+            };
+
+            status
+                .map_err(|err| ::log::error!("could not run game {name}\n{err}"))
+                .map(Message::from)
+                .ok()
+        })
+        .and_then(Task::done)
+    }
+
     pub fn run_game(&mut self, id: GameId, safety: Safety, no_game: bool) -> Task<Message> {
         let Some(game) = self.games.by_id(id) else {
             status!(&self.sender, "could not run game with id {id}");
             return Task::none();
         };
 
-        let GameId::Lutris(lutris_id) = id else {
-            status!(&self.sender, "native id not yet supported");
-            return Task::none();
+        let game = match &game.game {
+            Game::Lutris(lutris_game) => lutris_game,
+            Game::Native { uuid, .. } => {
+                let uuid = *uuid;
+                let games_db = self.games_db.clone();
+                let run_shell = match safety {
+                    Safety::None | Safety::Sandbox => false,
+                    Safety::SandboxShell => true,
+                };
+                return Task::<Option<Message>>::future(async move {
+                    let game = ::smol::unblock(move || games_db.get_game(uuid))
+                        .await
+                        .map_err(|err| ::log::error!("could not game with id {uuid}\n{err}"))
+                        .ok()?
+                        .pipe(Box::new);
+
+                    Some(if run_shell {
+                        Message::RunShellNative(game)
+                    } else {
+                        Message::RunGameNative(game)
+                    })
+                })
+                .and_then(Task::done);
+            }
         };
 
-        let Game::Lutris(game) = &game.game else {
-            status!(&self.sender, "native games not yet supported");
-            return Task::none();
+        let lutris_id = match id {
+            GameId::Lutris(lutris_id) => lutris_id,
+            GameId::Native(uuid) => {
+                ::log::error!("lutris game somehow gotten for uuid {uuid}");
+                return Task::none();
+            }
         };
 
         let lutris = self.settings.get::<LutrisExe>().clone();
@@ -160,22 +259,8 @@ impl App {
         let gamescope = self.settings.get::<GamescopeExe>().clone();
         let use_gamescope = self.settings.get::<UseGamescope>().is_yes();
         let sandbox_mode = *self.settings.get::<SandboxMode>();
-        let sandbox_ro_dirs = self
-            .settings
-            .get::<SandboxExtras>()
-            .split(';')
-            .map(|sb| sb.trim())
-            .filter(|sb| !sb.is_empty())
-            .map(PathBuf::from)
-            .collect();
-        let dll_overrides = self
-            .settings
-            .get::<DllOverrides>()
-            .split(';')
-            .map(|ovr| ovr.trim())
-            .filter(|ovr| !ovr.is_empty())
-            .map(String::from)
-            .collect();
+        let sandbox_ro_dirs = Self::sandbox_ro_dirs(&self.settings);
+        let dll_overrides = Self::dll_overrides(&self.settings);
         let slug = game.slug.clone();
         let name = game.name.clone();
         let runner = game.runner.clone();
@@ -312,8 +397,7 @@ impl App {
                     return LutrisUmuCtx {
                         common: CommonUmuCtx {
                             bwrap: bwrap.as_path(),
-                            stderr,
-                            stdout,
+                            sink_builder,
                             term: &term,
                             umu: umu.as_path(),
                             net_disabled,
@@ -348,8 +432,7 @@ impl App {
                             sandbox_ro_dirs,
                             callback: Callback::new(|| send_open.send(())),
                             shell: shell.as_path(),
-                            stderr,
-                            stdout,
+                            sink_builder,
                             term: &term,
                             umu: umu.as_path(),
                             dll_overrides,
