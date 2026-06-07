@@ -224,6 +224,7 @@ impl State {
                     .map_or_else(
                         || {
                             widget::button("Add Thumbnail")
+                                .on_press_with(|| Message::AddThumb)
                                 .style(widget::button::success)
                                 .padding(3)
                                 .pipe(widget::container)
