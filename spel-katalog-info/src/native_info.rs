@@ -6,7 +6,7 @@ use ::std::io::Cursor;
 use ::iced_core::{
     Alignment::{self, Center},
     Font,
-    Length::Fill,
+    Length::{self, Fill},
     alignment::Vertical,
 };
 use ::iced_runtime::Task;
@@ -295,33 +295,59 @@ impl State {
 
     /// View native info.
     pub fn view(&self) -> Element<'_, OrRequest<Message, crate::Request>> {
-        ::spel_katalog_widget::scrollable(widget::themer(
-            Some(::iced_core::Theme::SolarizedDark),
-            text_editor::TextEditor::new(&self.conf_view)
-                .key_binding(|key_press| {
-                    if let ::iced_core::keyboard::Key::Named(
-                        ::iced_core::keyboard::key::Named::Tab,
-                    ) = key_press.modified_key
-                    {
-                        Some(::iced_widget::text_editor::Binding::Sequence(
-                            iter::repeat_with(|| ::iced_widget::text_editor::Binding::Insert(' '))
+        widget::Column::new()
+            .spacing(3)
+            .push(
+                widget::Row::new()
+                    .spacing(3)
+                    .push(
+                        widget::button("Run")
+                            .padding(3)
+                            .style(widget::button::success),
+                    )
+                    .push(widget::button("Shell").padding(3))
+                    .push(widget::space().width(Length::Fill))
+                    .push(widget::button("Open").padding(3))
+                    .push(
+                        widget::button("Discard")
+                            .padding(3)
+                            .style(widget::button::danger),
+                    )
+                    .push(
+                        widget::button("Save")
+                            .padding(3)
+                            .style(widget::button::success),
+                    ),
+            )
+            .push(::spel_katalog_widget::scrollable(widget::themer(
+                Some(::iced_core::Theme::SolarizedDark),
+                text_editor::TextEditor::new(&self.conf_view)
+                    .key_binding(|key_press| {
+                        if let ::iced_core::keyboard::Key::Named(
+                            ::iced_core::keyboard::key::Named::Tab,
+                        ) = key_press.modified_key
+                        {
+                            Some(::iced_widget::text_editor::Binding::Sequence(
+                                iter::repeat_with(|| {
+                                    ::iced_widget::text_editor::Binding::Insert(' ')
+                                })
                                 .take(4)
                                 .collect(),
-                        ))
-                    } else {
-                        Binding::from_key_press(key_press)
-                    }
-                })
-                .highlight_with::<::iced_highlighter::Highlighter>(
-                    ::iced_highlighter::Settings {
-                        theme: ::iced_highlighter::Theme::SolarizedDark,
-                        token: "toml".to_owned(),
-                    },
-                    |h, _| h.to_format(),
-                )
-                .on_action(|action| action.pipe(Message::ConfAction).pipe(OrRequest::Message))
-                .padding(6),
-        ))
-        .into()
+                            ))
+                        } else {
+                            Binding::from_key_press(key_press)
+                        }
+                    })
+                    .highlight_with::<::iced_highlighter::Highlighter>(
+                        ::iced_highlighter::Settings {
+                            theme: ::iced_highlighter::Theme::SolarizedDark,
+                            token: "toml".to_owned(),
+                        },
+                        |h, _| h.to_format(),
+                    )
+                    .on_action(|action| action.pipe(Message::ConfAction).pipe(OrRequest::Message))
+                    .padding(6),
+            )))
+            .into()
     }
 }
