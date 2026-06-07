@@ -213,7 +213,7 @@ impl App {
             Task::future(::smol::unblock(move || {
                 let mut games = Vec::new();
                 games_db.gather(&mut |uuid, game, thumb| {
-                    games.push((uuid, game, thumb));
+                    games.push((uuid, game, thumb.map(::spel_katalog_native::thumbnail)));
                 });
                 Message::Games(OrRequest::Message(
                     ::spel_katalog_games::Message::AddNativeGames { games },

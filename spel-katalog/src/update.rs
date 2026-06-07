@@ -142,7 +142,9 @@ impl App {
                             });
 
                             let uuid = Uuid::new_v4();
-                            db.insert_game(uuid).maybe_thumb(thumb).insert(&game)?;
+                            db.insert_game(uuid)
+                                .maybe_thumb(thumb.as_ref())
+                                .insert(&game)?;
 
                             Ok(())
                         }))
@@ -323,6 +325,26 @@ impl App {
 
     fn info_request(&mut self, request: ::spel_katalog_info::Request) -> Task<Message> {
         match request {
+            ::spel_katalog_info::Request::NativeInfo(request) => match request {
+                ::spel_katalog_info::NativeRequest::UndisplayThumbnail { id } => {
+                    if let Some(game) = self.games.by_id_mut(id) {
+                        game.thumb = None;
+                    }
+                    Task::none()
+                }
+                ::spel_katalog_info::NativeRequest::DisplayThumbnail { id, img } => {
+                    if let Some(game) = self.games.by_id_mut(id) {
+                        let ::spel_katalog_formats::Image {
+                            width,
+                            height,
+                            bytes,
+                        } = img;
+                        let img = ::iced_core::image::Handle::from_rgba(width, height, bytes);
+                        game.thumb = Some(img);
+                    }
+                    Task::none()
+                }
+            },
             ::spel_katalog_info::Request::RemoveImage { slug } => self
                 .games
                 .update(

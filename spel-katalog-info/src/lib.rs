@@ -29,6 +29,8 @@ use ::tap::Pipe;
 use ::uuid::Uuid;
 use ::yaml_rust2::Yaml;
 
+pub use self::native_info::{Message as NativeMessage, Request as NativeRequest};
+
 mod attrs;
 mod native_info;
 
@@ -178,6 +180,8 @@ pub enum Request {
         /// Id of game to run lutris in sandbox of.
         id: GameId,
     },
+    /// Native info request.
+    NativeInfo(native_info::Request),
 }
 
 impl State {
@@ -698,7 +702,10 @@ impl State {
             }
             Message::NativeInfo(message) => {
                 if let Self::Native { state } = self {
-                    state.update(message, games_db)
+                    state.update(message, games_db).map(|msg| {
+                        msg.map_request(Request::NativeInfo)
+                            .map_message(Message::NativeInfo)
+                    })
                 } else {
                     Task::none()
                 }

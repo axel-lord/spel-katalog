@@ -17,7 +17,7 @@ use ::iced_core::{
 use ::iced_futures::Subscription;
 use ::iced_runtime::Task;
 use ::iced_widget::{self as widget, container, stack};
-use ::image::{DynamicImage, ImageFormat};
+use ::image::ImageFormat;
 use ::itertools::Itertools;
 use ::parking_lot::Mutex;
 use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
@@ -84,7 +84,7 @@ pub enum Message {
     /// Add a single game.
     AddNativeGames {
         /// Games to add.
-        games: Vec<(Uuid, NativeGame, Option<DynamicImage>)>,
+        games: Vec<(Uuid, NativeGame, Option<::spel_katalog_formats::Image>)>,
     },
     /// Set thumbnails.
     SetImages {
@@ -244,12 +244,15 @@ impl State {
             Message::AddNativeGames { games } => {
                 self.add_games(
                     games.into_iter().map(|(uuid, game, thumb)| WithThumb {
-                        thumb: thumb.map(|thumb| {
-                            let width = thumb.width();
-                            let height = thumb.height();
-                            let pixels = ::bytes::Bytes::from_owner(thumb.into_rgba8().into_raw());
-                            ::iced_core::image::Handle::from_rgba(width, height, pixels)
-                        }),
+                        thumb: thumb.map(
+                            |::spel_katalog_formats::Image {
+                                 width,
+                                 height,
+                                 bytes,
+                             }| {
+                                ::iced_core::image::Handle::from_rgba(width, height, bytes)
+                            },
+                        ),
                         ..WithThumb::from((uuid, game))
                     }),
                     settings,

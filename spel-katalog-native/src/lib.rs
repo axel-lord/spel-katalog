@@ -13,8 +13,10 @@ use ::flate2::{
     Compression,
     bufread::{GzDecoder, GzEncoder},
 };
-use ::image::{DynamicImage, EncodableLayout, ImageFormat};
+use ::image::{DynamicImage, EncodableLayout, ImageFormat, imageops::FilterType::Lanczos3};
+use ::r2d2::PooledConnection;
 use ::r2d2_sqlite::SqliteConnectionManager;
+use ::rusqlite::CachedStatement;
 use ::spel_katalog_formats::NativeGame;
 use ::uuid::Uuid;
 
@@ -43,6 +45,25 @@ macro_rules! log_err {
             }
         }
     };
+}
+
+/// Size of thumbnails.
+pub const THUMBNAIL_SIZE: u32 = 200;
+
+/// Generate a thumbnail for the given image.
+pub fn thumbnail(image: DynamicImage) -> ::spel_katalog_formats::Image {
+    let thumb = if image.height() > THUMBNAIL_SIZE || image.width() > THUMBNAIL_SIZE {
+        image.resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, Lanczos3)
+    } else {
+        image
+    }
+    .into_rgba8();
+
+    ::spel_katalog_formats::Image {
+        width: thumb.width(),
+        height: thumb.height(),
+        bytes: thumb.into_raw().into(),
+    }
 }
 
 /// Connection pool used to read games.
@@ -161,7 +182,7 @@ mod builder {
             #[builder(finish_fn)]
             config: &NativeGame,
             /// Thumbnail to insert for game.
-            thumb: Option<DynamicImage>,
+            thumb: Option<&DynamicImage>,
             /// Reuse buffer.
             buf: Option<&mut Vec<u8>>,
         ) -> Result<(), InsertGameError> {
@@ -188,7 +209,7 @@ mod builder {
             uuid: Uuid,
             /// Thumbnail to insert for game.
             #[builder(finish_fn)]
-            thumb: DynamicImage,
+            thumb: &DynamicImage,
             /// Reuse buffer.
             buf: Option<&mut Vec<u8>>,
         ) -> Result<(), InsertThumbError> {
@@ -206,6 +227,19 @@ mod builder {
 }
 
 impl Pool {
+    /// Get a connection to the database.
+    fn get_conn(&self) -> Result<PooledConnection<SqliteConnectionManager>, DbError> {
+        self.get().map_err(DbError::GetConnection)
+    }
+
+    /// Prepare a statement on connectio.
+    fn prep_stmt<'a>(
+        conn: &'a ::rusqlite::Connection,
+        sql: &str,
+    ) -> Result<CachedStatement<'a>, DbError> {
+        conn.prepare_cached(sql).map_err(DbError::PrepareStatement)
+    }
+
     /// Construct a new connection pool.
     ///
     /// # Errors
@@ -248,10 +282,8 @@ impl Pool {
             SELECT config FROM games
             WHERE uuid = $1
         ";
-        let conn = self.get().map_err(DbError::GetConnection)?;
-        let mut stmt = conn
-            .prepare_cached(SELECT_GAME)
-            .map_err(DbError::PrepareStatement)?;
+        let conn = self.get_conn()?;
+        let mut stmt = Self::prep_stmt(&conn, SELECT_GAME)?;
 
         let decoded = stmt
             .query_one((game_id,), |row| {
@@ -278,11 +310,9 @@ impl Pool {
             SELECT image FROM thumbs
             WHERE uuid = $1
         ";
-        let conn = self.get().map_err(DbError::GetConnection)?;
+        let conn = self.get_conn()?;
 
-        let mut stmt = conn
-            .prepare_cached(SELECT_GAME)
-            .map_err(DbError::PrepareStatement)?;
+        let mut stmt = Self::prep_stmt(&conn, SELECT_GAME)?;
 
         stmt.query_one((game_id,), |row| {
             let bytes = row.get_ref(0)?.as_bytes()?;
@@ -295,6 +325,37 @@ impl Pool {
         .map_err(GetError::DecodeImage)
     }
 
+    /// Remove a thumbnail from database.
+    ///
+    /// # Errors
+    /// If the statement cannot be prepared,
+    /// or if no database connectetion is established.
+    ///
+    /// Will not error if the thumbnail does not exist. Result will
+    /// however be logged.
+    pub fn remove_thumb(&self, game_id: Uuid) -> Result<(), DbError> {
+        const DELETE_THUMB: &str = r"
+            DELETE FROM thumbs
+            WHERE uuid = $1
+        ";
+        let conn = self.get_conn()?;
+        let mut stmt = Self::prep_stmt(&conn, DELETE_THUMB)?;
+
+        match stmt.execute((game_id,)) {
+            Ok(0) => {
+                ::log::warn!("no thumbnails for games with uuid {game_id} deleted");
+            }
+            Ok(n) => {
+                ::log::info!("deleted {n} thumbnails for {game_id}");
+            }
+            Err(err) => {
+                ::log::error!("failed to delete thumbnails for {game_id}\n{err}");
+            }
+        }
+
+        Ok(())
+    }
+
     /// Insert a thumbnail or replace it.
     ///
     /// # Errors
@@ -302,7 +363,7 @@ impl Pool {
     fn insert_thumb_(
         conn: &::rusqlite::Connection,
         uuid: Uuid,
-        thumb: DynamicImage,
+        thumb: &DynamicImage,
         buf: &mut Vec<u8>,
     ) -> Result<(), InsertThumbError> {
         const INSERT_THUMB: &str = r"
@@ -310,9 +371,7 @@ impl Pool {
             VALUES ($1, $2)
         ";
         buf.clear();
-        let mut stmt = conn
-            .prepare_cached(INSERT_THUMB)
-            .map_err(DbError::PrepareStatement)?;
+        let mut stmt = Self::prep_stmt(conn, INSERT_THUMB)?;
 
         {
             thumb
@@ -335,7 +394,7 @@ impl Pool {
         conn: &::rusqlite::Connection,
         uuid: Uuid,
         config: &NativeGame,
-        thumb: Option<DynamicImage>,
+        thumb: Option<&DynamicImage>,
         buf: &mut Vec<u8>,
     ) -> Result<(), InsertGameError> {
         const INSERT_GAME: &str = r"
@@ -344,9 +403,7 @@ impl Pool {
         ";
 
         buf.clear();
-        let mut stmt = conn
-            .prepare_cached(INSERT_GAME)
-            .map_err(DbError::PrepareStatement)?;
+        let mut stmt = Self::prep_stmt(conn, INSERT_GAME)?;
 
         let config_string = ::toml::to_string(config).map_err(InsertGameError::SerializeConfig)?;
         let mut config_writer = GzEncoder::new(config_string.as_bytes(), Compression::best());

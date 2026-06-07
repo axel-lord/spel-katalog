@@ -1,6 +1,7 @@
 //! Info view for native game.
 
 use ::core::iter;
+use ::std::io::Cursor;
 
 use ::iced_core::{
     Alignment::{self, Center},
@@ -11,14 +12,16 @@ use ::iced_core::{
 use ::iced_runtime::Task;
 use ::iced_widget::{
     self as widget,
-    text_editor::{self, Binding},
+    text_editor::{self, Binding, Content},
 };
+use ::image::ImageFormat;
+use ::rfd::AsyncFileDialog;
+use ::smol::unblock;
 use ::spel_katalog_common::{OrRequest, PushMaybe, w};
 use ::spel_katalog_formats::{GameId, NativeGame};
 use ::spel_katalog_native::Pool;
 use ::tap::Pipe;
 use ::uuid::Uuid;
-use widget::text_editor::Content;
 
 use crate::Element;
 
@@ -31,6 +34,25 @@ pub enum Message {
     RemoveThumb,
     /// Add thumbnail to game.
     AddThumb,
+    /// Save thumbnail of game.
+    SaveThumb,
+}
+
+/// Request in use by native info view.
+#[derive(Debug, Clone)]
+pub enum Request {
+    /// Remove thumbnail from games view.
+    UndisplayThumbnail {
+        /// Id of game to undisplay thumbnail for.
+        id: GameId,
+    },
+    /// Add thumbnail to games view.
+    DisplayThumbnail {
+        /// Id of game to display thumbnail for.
+        id: GameId,
+        /// Thumbnail image.
+        img: ::spel_katalog_formats::Image,
+    },
 }
 
 /// State of native game display.
@@ -72,15 +94,114 @@ impl State {
     pub fn update(
         &mut self,
         message: Message,
-        _game_db: &Pool,
-    ) -> Task<OrRequest<crate::Message, crate::Request>> {
+        game_db: &Pool,
+    ) -> Task<OrRequest<Message, Request>> {
         match message {
             Message::ConfAction(action) => {
                 self.conf_view.perform(action);
                 Task::none()
             }
-            Message::RemoveThumb => todo!(),
-            Message::AddThumb => todo!(),
+            Message::RemoveThumb => {
+                let uuid = self.uuid;
+                let game_db = game_db.clone();
+                Task::future(async move {
+                    if let Err(err) = unblock(move || game_db.remove_thumb(uuid)).await {
+                        ::log::warn!("failed to remove thumbnail for {uuid} in database\n{err}");
+                    }
+                    GameId::Native(uuid)
+                        .pipe(|id| Request::UndisplayThumbnail { id })
+                        .pipe(OrRequest::Request)
+                })
+            }
+            Message::SaveThumb => {
+                let uuid = self.uuid;
+                let game_db = game_db.clone();
+
+                Task::future(async move {
+                    let thumb = game_db
+                        .get_thumb(uuid)
+                        .map_err(|err| ::log::error!("could not get thumbnail for {uuid}\n{err}"))
+                        .ok()?;
+
+                    let mut buf = Vec::<u8>::new();
+                    thumb
+                        .write_to(Cursor::new(&mut buf), ImageFormat::Png)
+                        .map_err(|err| {
+                            ::log::error!("failed to encode thumbnail for {uuid}\n{err}")
+                        })
+                        .ok()?;
+
+                    let dialog = AsyncFileDialog::new()
+                        .add_filter("png", &["png"])
+                        .save_file();
+
+                    let Some(file) = dialog.await else {
+                        ::log::warn!("no path chosen to save thumbnail of {uuid} to");
+                        return None;
+                    };
+
+                    ::smol::fs::write(file.path(), &buf)
+                        .await
+                        .map_err(|err| {
+                            ::log::error!(
+                                "failed to write thumbnail of {uuid} to {path:?}\n{err}",
+                                path = file.path()
+                            )
+                        })
+                        .ok()?;
+
+                    Some(())
+                })
+                .and_then(|_| Task::none())
+            }
+            Message::AddThumb => {
+                let uuid = self.uuid;
+                let game_db = game_db.clone();
+
+                Task::future(async move {
+                    let dialog = AsyncFileDialog::new()
+                        .set_title("Set Thumbnail")
+                        .add_filter("png", &["png"])
+                        .pick_file();
+
+                    let Some(file) = dialog.await else {
+                        ::log::info!("no thumbnail chosen for {uuid}");
+                        return None;
+                    };
+
+                    let content = ::smol::fs::read(file.path())
+                        .await
+                        .map_err(|err| {
+                            ::log::error!("could not read {path:?}\n{err}", path = file.path())
+                        })
+                        .ok()?;
+
+                    let image = ::image::load_from_memory(&content)
+                        .map_err(|err| {
+                            ::log::error!("could not load {path:?}\n{err}", path = file.path())
+                        })
+                        .ok()?;
+
+                    game_db
+                        .insert_thumb(uuid)
+                        .insert(&image)
+                        .map_err(|err| {
+                            ::log::error!(
+                                "could not insert thumbnail {path:?} into database\n{err}",
+                                path = file.path()
+                            )
+                        })
+                        .ok()?;
+
+                    Request::DisplayThumbnail {
+                        id: GameId::Native(uuid),
+                        img: ::spel_katalog_native::thumbnail(image),
+                    }
+                    .pipe(OrRequest::Request)
+                    .pipe(Some)
+                })
+                .and_then(Task::done)
+            }
         }
     }
 
@@ -120,6 +241,7 @@ impl State {
                                         .separator()
                                         .button("Replace", || Message::AddThumb)
                                         .button("Remove", || Message::RemoveThumb)
+                                        .button("Save As", || Message::SaveThumb)
                                         .into()
                                 },
                             )
