@@ -1,6 +1,6 @@
 //! Info view for native game.
 
-use ::std::io::Cursor;
+use ::std::{io::Cursor, sync::Arc};
 
 use ::iced_core::{
     Alignment::{self, Center},
@@ -52,6 +52,10 @@ pub enum Message {
     Discard,
     /// Save changes.
     Save,
+    /// Copy selected text.
+    Copy,
+    /// Paste clipboard into text editor.
+    Paste,
 }
 
 /// Request in use by native info view.
@@ -313,6 +317,19 @@ impl State {
                 })
                 .and_then(Task::done)
             }
+            Message::Paste => ::iced_runtime::clipboard::read().and_then(|content| {
+                Arc::new(content)
+                    .pipe(Edit::Paste)
+                    .pipe(Action::Edit)
+                    .pipe(Message::ConfAction)
+                    .pipe(OrRequest::Message)
+                    .pipe(Task::done)
+            }),
+            Message::Copy => self
+                .conf_view
+                .selection()
+                .map(::iced_runtime::clipboard::write)
+                .unwrap_or_else(Task::none),
         }
     }
 
@@ -451,38 +468,52 @@ impl State {
                     .pipe(Element::from)
                     .map(OrRequest::Message),
             )
-            .push(::spel_katalog_widget::scrollable(widget::themer(
-                Some(::iced_core::Theme::SolarizedDark),
-                text_editor::TextEditor::new(&self.conf_view)
-                    .key_binding(|event| {
-                        if let Key::Named(key::Named::Tab) = event.modified_key {
-                            if event.modifiers == Modifiers::empty() {
-                                Message::Indent
-                                    .pipe(OrRequest::Message)
-                                    .pipe(Binding::Custom)
-                                    .pipe(Some)
-                            } else if event.modifiers == Modifiers::SHIFT {
-                                Message::Unindent
-                                    .pipe(OrRequest::Message)
-                                    .pipe(Binding::Custom)
-                                    .pipe(Some)
-                            } else {
-                                Binding::from_key_press(event)
-                            }
-                        } else {
-                            Binding::from_key_press(event)
-                        }
-                    })
-                    .highlight_with::<::iced_highlighter::Highlighter>(
-                        ::iced_highlighter::Settings {
-                            theme: ::iced_highlighter::Theme::SolarizedDark,
-                            token: "toml".to_owned(),
-                        },
-                        |h, _| h.to_format(),
-                    )
-                    .on_action(|action| action.pipe(Message::ConfAction).pipe(OrRequest::Message))
-                    .padding(6),
-            )))
+            .push(::spel_katalog_widget::scrollable(
+                ::iced_aw::widget::ContextMenu::new(
+                    widget::themer(
+                        Some(::iced_core::Theme::SolarizedDark),
+                        text_editor::TextEditor::new(&self.conf_view)
+                            .key_binding(|event| {
+                                if let Key::Named(key::Named::Tab) = event.modified_key {
+                                    if event.modifiers == Modifiers::empty() {
+                                        Message::Indent
+                                            .pipe(OrRequest::Message)
+                                            .pipe(Binding::Custom)
+                                            .pipe(Some)
+                                    } else if event.modifiers == Modifiers::SHIFT {
+                                        Message::Unindent
+                                            .pipe(OrRequest::Message)
+                                            .pipe(Binding::Custom)
+                                            .pipe(Some)
+                                    } else {
+                                        Binding::from_key_press(event)
+                                    }
+                                } else {
+                                    Binding::from_key_press(event)
+                                }
+                            })
+                            .highlight_with::<::iced_highlighter::Highlighter>(
+                                ::iced_highlighter::Settings {
+                                    theme: ::iced_highlighter::Theme::SolarizedDark,
+                                    token: "toml".to_owned(),
+                                },
+                                |h, _| h.to_format(),
+                            )
+                            .on_action(|action| {
+                                action.pipe(Message::ConfAction).pipe(OrRequest::Message)
+                            })
+                            .padding(6),
+                    ),
+                    || {
+                        ::spel_katalog_widget::ListMenu::new()
+                            .push(widget::text("Config"))
+                            .separator()
+                            .button("Copy", || OrRequest::Message(Message::Copy))
+                            .button("Paste", || OrRequest::Message(Message::Paste))
+                            .into()
+                    },
+                ),
+            ))
             .into()
     }
 }
