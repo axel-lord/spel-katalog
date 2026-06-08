@@ -1,5 +1,6 @@
 //! Info view for native game.
 
+use ::core::ops::Not;
 use ::std::{io::Cursor, sync::Arc};
 
 use ::iced_core::{
@@ -56,6 +57,10 @@ pub enum Message {
     Copy,
     /// Paste clipboard into text editor.
     Paste,
+    /// Undo last edit action.
+    Undo,
+    /// Redo last edit action.
+    Redo,
 }
 
 /// Request in use by native info view.
@@ -88,8 +93,10 @@ pub struct State {
     game: Option<NativeGame>,
     /// Config view.
     conf_view: Content,
-    /// Have any edits been made.
-    has_edits: bool,
+    /// Old config versions.
+    history: Vec<String>,
+    /// Future config versions.
+    future: Vec<String>,
 }
 
 impl State {
@@ -99,7 +106,8 @@ impl State {
             uuid,
             game: None,
             conf_view: Content::new(),
-            has_edits: false,
+            history: Vec::new(),
+            future: Vec::new(),
         }
     }
 
@@ -107,7 +115,7 @@ impl State {
     pub fn set_config(&mut self, config: NativeGame) {
         match ::toml::to_string_pretty(&config) {
             Ok(text) => {
-                crate::set_content(&mut self.conf_view, text);
+                self.set_content(text);
             }
             Err(err) => ::log::warn!(
                 "could not serialize game config for {uuid}\n{err}",
@@ -115,7 +123,13 @@ impl State {
             ),
         }
         self.game = Some(config);
-        self.has_edits = false;
+        self.future.clear();
+        self.history.clear();
+    }
+
+    /// Set text content of config editor.
+    pub fn set_content(&mut self, content: String) {
+        crate::set_content(&mut self.conf_view, content);
     }
 
     /// Create a function that is ran with the parsed
@@ -203,7 +217,8 @@ impl State {
             }
             Message::ConfAction(action) => {
                 if action.is_edit() {
-                    self.has_edits = true;
+                    self.history.push(self.conf_view.text());
+                    self.future.clear();
                 }
                 self.conf_view.perform(action);
                 Task::none()
@@ -330,6 +345,20 @@ impl State {
                 .selection()
                 .map(::iced_runtime::clipboard::write)
                 .unwrap_or_else(Task::none),
+            Message::Undo => {
+                if let Some(content) = self.history.pop() {
+                    self.future.push(self.conf_view.text());
+                    self.set_content(content.clone());
+                }
+                Task::none()
+            }
+            Message::Redo => {
+                if let Some(content) = self.future.pop() {
+                    self.history.push(self.conf_view.text());
+                    self.set_content(content.clone());
+                }
+                Task::none()
+            }
         }
     }
 
@@ -455,13 +484,15 @@ impl State {
                     )
                     .push(
                         widget::button("Discard")
-                            .on_press_maybe(self.has_edits.then_some(Message::Discard))
+                            .on_press_maybe(
+                                self.history.is_empty().not().then_some(Message::Discard),
+                            )
                             .padding(3)
                             .style(widget::button::danger),
                     )
                     .push(
                         widget::button("Save")
-                            .on_press_maybe(self.has_edits.then_some(Message::Save))
+                            .on_press_maybe(self.history.is_empty().not().then_some(Message::Save))
                             .padding(3)
                             .style(widget::button::success),
                     )
@@ -474,19 +505,36 @@ impl State {
                         Some(::iced_core::Theme::SolarizedDark),
                         text_editor::TextEditor::new(&self.conf_view)
                             .key_binding(|event| {
-                                if let Key::Named(key::Named::Tab) = event.modified_key {
-                                    if event.modifiers == Modifiers::empty() {
-                                        Message::Indent
+                                if let Key::Named(named) = event.modified_key {
+                                    match named {
+                                        key::Named::Tab
+                                            if event.modifiers == Modifiers::empty() =>
+                                        {
+                                            Message::Indent
+                                                .pipe(OrRequest::Message)
+                                                .pipe(Binding::Custom)
+                                                .pipe(Some)
+                                        }
+
+                                        key::Named::Tab if event.modifiers == Modifiers::SHIFT => {
+                                            Message::Unindent
+                                                .pipe(OrRequest::Message)
+                                                .pipe(Binding::Custom)
+                                                .pipe(Some)
+                                        }
+                                        _ => Binding::from_key_press(event),
+                                    }
+                                } else if let Key::Character(chr) = event.modified_key.as_ref() {
+                                    match chr {
+                                        "z" if event.modifiers == Modifiers::CTRL => Message::Undo
                                             .pipe(OrRequest::Message)
                                             .pipe(Binding::Custom)
-                                            .pipe(Some)
-                                    } else if event.modifiers == Modifiers::SHIFT {
-                                        Message::Unindent
+                                            .pipe(Some),
+                                        "y" if event.modifiers == Modifiers::CTRL => Message::Redo
                                             .pipe(OrRequest::Message)
                                             .pipe(Binding::Custom)
-                                            .pipe(Some)
-                                    } else {
-                                        Binding::from_key_press(event)
+                                            .pipe(Some),
+                                        _ => Binding::from_key_press(event),
                                     }
                                 } else {
                                     Binding::from_key_press(event)
@@ -508,9 +556,15 @@ impl State {
                         ::spel_katalog_widget::ListMenu::new()
                             .push(widget::text("Config"))
                             .separator()
-                            .button("Copy", || OrRequest::Message(Message::Copy))
-                            .button("Paste", || OrRequest::Message(Message::Paste))
-                            .into()
+                            .button_if(self.conf_view.selection().is_some(), "Copy", || {
+                                Message::Copy
+                            })
+                            .button("Paste", || Message::Paste)
+                            .separator()
+                            .button_if(!self.history.is_empty(), "Undo", || Message::Undo)
+                            .button_if(!self.future.is_empty(), "Redo", || Message::Redo)
+                            .pipe(Element::from)
+                            .map(OrRequest::Message)
                     },
                 ),
             ))

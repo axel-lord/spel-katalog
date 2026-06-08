@@ -82,37 +82,51 @@ where
         content: impl IntoFragment<'a>,
         on_press: impl 'a + Fn() -> Message,
     ) -> Self {
-        self.push(
-            ::iced_widget::button(::iced_widget::text(content))
-                .on_press_with(on_press)
-                .width(::iced_core::Length::Fill)
-                .padding(3)
-                .style(|theme, status| {
-                    let ::iced_widget::button::Style {
-                        background,
-                        text_color,
-                        border,
-                        shadow,
-                        snap,
-                    } = ::iced_widget::button::text(theme, status);
+        self.button_if(true, content, on_press)
+    }
+    /// Insert a button. If the condition holds true  it is enabled.
+    pub fn button_if(
+        self,
+        condition: bool,
+        content: impl IntoFragment<'a>,
+        on_press: impl 'a + Fn() -> Message,
+    ) -> Self {
+        let button = ::iced_widget::button(::iced_widget::text(content))
+            .width(::iced_core::Length::Fill)
+            .padding(3)
+            .style(|theme, status| {
+                let ::iced_widget::button::Style {
+                    background,
+                    text_color,
+                    border,
+                    shadow,
+                    snap,
+                } = ::iced_widget::button::text(theme, status);
 
-                    let background = match status {
-                        ::iced_widget::button::Status::Hovered
-                        | ::iced_widget::button::Status::Pressed => {
-                            Some(Background::Color(theme.palette().background))
-                        }
-                        _ => background,
-                    };
-
-                    ::iced_widget::button::Style {
-                        background,
-                        text_color,
-                        border,
-                        shadow,
-                        snap,
+                let background = match status {
+                    ::iced_widget::button::Status::Hovered
+                    | ::iced_widget::button::Status::Pressed => {
+                        Some(Background::Color(theme.palette().background))
                     }
-                }),
-        )
+                    _ => background,
+                };
+
+                ::iced_widget::button::Style {
+                    background,
+                    text_color,
+                    border,
+                    shadow,
+                    snap,
+                }
+            });
+
+        let button = if condition {
+            button.on_press_with(on_press)
+        } else {
+            button
+        };
+
+        self.push(button)
     }
 }
 
