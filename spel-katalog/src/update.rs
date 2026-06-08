@@ -344,10 +344,10 @@ impl App {
                     }
                     Task::none()
                 }
-                ::spel_katalog_info::NativeRequest::RunGame { game } => {
+                ::spel_katalog_info::NativeRequest::RunGame(game) => {
                     self.run_native_game(*game, false)
                 }
-                ::spel_katalog_info::NativeRequest::RunShell { game } => {
+                ::spel_katalog_info::NativeRequest::RunShell(game) => {
                     self.run_native_game(*game, true)
                 }
             },

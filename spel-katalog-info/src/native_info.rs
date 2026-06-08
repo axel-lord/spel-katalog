@@ -1,6 +1,5 @@
 //! Info view for native game.
 
-use ::core::iter;
 use ::std::io::Cursor;
 
 use ::iced_core::{
@@ -8,11 +7,12 @@ use ::iced_core::{
     Font,
     Length::{self, Fill},
     alignment::Vertical,
+    keyboard::{Key, Modifiers, key},
 };
 use ::iced_runtime::Task;
 use ::iced_widget::{
     self as widget,
-    text_editor::{self, Binding, Content},
+    text_editor::{self, Action, Binding, Content, Edit},
 };
 use ::image::ImageFormat;
 use ::rfd::AsyncFileDialog;
@@ -32,6 +32,10 @@ pub enum Message {
     ConfAction(widget::text_editor::Action),
     /// Set content of text editor.
     SetConfig(Box<NativeGame>),
+    /// Indent current line.
+    Indent,
+    /// Unindent current line.
+    Unindent,
     /// Remove thumbnail of game.
     RemoveThumb,
     /// Add thumbnail to game.
@@ -66,15 +70,9 @@ pub enum Request {
         img: ::spel_katalog_formats::Image,
     },
     /// Run a game.
-    RunGame {
-        /// Config of game to run.
-        game: Box<NativeGame>,
-    },
+    RunGame(Box<NativeGame>),
     /// Run shell for a game.
-    RunShell {
-        /// Config of game to run.
-        game: Box<NativeGame>,
-    },
+    RunShell(Box<NativeGame>),
 }
 
 /// State of native game display.
@@ -86,6 +84,8 @@ pub struct State {
     game: Option<NativeGame>,
     /// Config view.
     conf_view: Content,
+    /// Have any edits been made.
+    has_edits: bool,
 }
 
 impl State {
@@ -95,6 +95,7 @@ impl State {
             uuid,
             game: None,
             conf_view: Content::new(),
+            has_edits: false,
         }
     }
 
@@ -110,6 +111,23 @@ impl State {
             ),
         }
         self.game = Some(config);
+        self.has_edits = false;
+    }
+
+    /// Create a function that is ran with the parsed
+    /// content of text editot if valid.
+    pub fn with_content<T: 'static + Send>(
+        &self,
+        with: impl 'static + Send + FnOnce(NativeGame) -> Option<T>,
+    ) -> Task<T> {
+        let content = self.conf_view.text();
+        Task::<Option<_>>::future(::smol::unblock(move || {
+            let game = ::toml::from_str::<NativeGame>(&content)
+                .map_err(|err| ::log::error!("content is not formatted correctly\n{err}"))
+                .ok()?;
+            with(game)
+        }))
+        .and_then(Task::done)
     }
 
     /// Update state using message.
@@ -119,19 +137,34 @@ impl State {
         game_db: &Pool,
     ) -> Task<OrRequest<Message, Request>> {
         match message {
-            Message::Run => todo!(),
-            Message::Shell => todo!(),
-            Message::Open => todo!(),
+            Message::Run => self.with_content(|game| {
+                Box::new(game)
+                    .pipe(Request::RunGame)
+                    .pipe(OrRequest::Request)
+                    .pipe(Some)
+            }),
+            Message::Shell => self.with_content(|game| {
+                Box::new(game)
+                    .pipe(Request::RunShell)
+                    .pipe(OrRequest::Request)
+                    .pipe(Some)
+            }),
+            Message::Open => self.with_content(|game| {
+                let Some(parent) = game.exe.parent() else {
+                    ::log::error!("game executable {exe:?} has not parent", exe = game.exe);
+                    return None;
+                };
+
+                if let Err(err) = ::open::that_detached(parent) {
+                    ::log::error!("failed to open {parent:?}\n{err}");
+                }
+
+                None
+            }),
             Message::Save => {
                 let game_db = game_db.clone();
                 let uuid = self.uuid;
-                let content = self.conf_view.text();
-
-                Task::<Option<_>>::future(::smol::unblock(move || {
-                    let game = ::toml::from_str::<NativeGame>(&content)
-                        .map_err(|err| ::log::warn!("content is not formatted correctly\n{err}"))
-                        .ok()?;
-
+                self.with_content(move |game| {
                     game_db
                         .insert_game(uuid)
                         .insert(&game)
@@ -140,9 +173,11 @@ impl State {
                         })
                         .ok()?;
 
-                    None
-                }))
-                .and_then(Task::done)
+                    Box::new(game)
+                        .pipe(Message::SetConfig)
+                        .pipe(OrRequest::Message)
+                        .pipe(Some)
+                })
             }
             Message::Discard => {
                 let game_db = game_db.clone();
@@ -163,7 +198,18 @@ impl State {
                 Task::none()
             }
             Message::ConfAction(action) => {
+                if action.is_edit() {
+                    self.has_edits = true;
+                }
                 self.conf_view.perform(action);
+                Task::none()
+            }
+            Message::Indent => {
+                self.conf_view.perform(Action::Edit(Edit::Indent));
+                Task::none()
+            }
+            Message::Unindent => {
+                self.conf_view.perform(Action::Edit(Edit::Unindent));
                 Task::none()
             }
             Message::RemoveThumb => {
@@ -282,11 +328,15 @@ impl State {
         let Self {
             game: game_info, ..
         } = self;
+        let name = game_info
+            .as_ref()
+            .map(|game| game.name.as_str())
+            .unwrap_or(game.name());
         w::col()
             .push(
                 w::row()
                     .push(
-                        widget::text(game.name())
+                        widget::text(name)
                             .wrapping(widget::text::Wrapping::WordOrGlyph)
                             .width(Fill)
                             .align_x(Center),
@@ -388,13 +438,13 @@ impl State {
                     )
                     .push(
                         widget::button("Discard")
-                            .on_press_with(|| Message::Discard)
+                            .on_press_maybe(self.has_edits.then_some(Message::Discard))
                             .padding(3)
                             .style(widget::button::danger),
                     )
                     .push(
                         widget::button("Save")
-                            .on_press_with(|| Message::Save)
+                            .on_press_maybe(self.has_edits.then_some(Message::Save))
                             .padding(3)
                             .style(widget::button::success),
                     )
@@ -404,20 +454,23 @@ impl State {
             .push(::spel_katalog_widget::scrollable(widget::themer(
                 Some(::iced_core::Theme::SolarizedDark),
                 text_editor::TextEditor::new(&self.conf_view)
-                    .key_binding(|key_press| {
-                        if let ::iced_core::keyboard::Key::Named(
-                            ::iced_core::keyboard::key::Named::Tab,
-                        ) = key_press.modified_key
-                        {
-                            Some(::iced_widget::text_editor::Binding::Sequence(
-                                iter::repeat_with(|| {
-                                    ::iced_widget::text_editor::Binding::Insert(' ')
-                                })
-                                .take(4)
-                                .collect(),
-                            ))
+                    .key_binding(|event| {
+                        if let Key::Named(key::Named::Tab) = event.modified_key {
+                            if event.modifiers == Modifiers::empty() {
+                                Message::Indent
+                                    .pipe(OrRequest::Message)
+                                    .pipe(Binding::Custom)
+                                    .pipe(Some)
+                            } else if event.modifiers == Modifiers::SHIFT {
+                                Message::Unindent
+                                    .pipe(OrRequest::Message)
+                                    .pipe(Binding::Custom)
+                                    .pipe(Some)
+                            } else {
+                                Binding::from_key_press(event)
+                            }
                         } else {
-                            Binding::from_key_press(key_press)
+                            Binding::from_key_press(event)
                         }
                     })
                     .highlight_with::<::iced_highlighter::Highlighter>(

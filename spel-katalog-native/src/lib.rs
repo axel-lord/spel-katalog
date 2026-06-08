@@ -367,8 +367,10 @@ impl Pool {
         buf: &mut Vec<u8>,
     ) -> Result<(), InsertThumbError> {
         const INSERT_THUMB: &str = r"
-            REPLACE INTO thumbs (uuid, image)
-            VALUES ($1, $2)
+            INSERT INTO thumbs (uuid, image)
+                VALUES ($1, $2)
+                ON CONFLICT(uuid)
+                    DO UPDATE SET image=excluded.image
         ";
         buf.clear();
         let mut stmt = Self::prep_stmt(conn, INSERT_THUMB)?;
@@ -398,8 +400,10 @@ impl Pool {
         buf: &mut Vec<u8>,
     ) -> Result<(), InsertGameError> {
         const INSERT_GAME: &str = r"
-            REPLACE INTO games (uuid, config)
-            VALUES ($1, $2)
+            INSERT INTO games (uuid, config)
+                VALUES ($1, $2)
+                ON CONFLICT(uuid)
+                    DO UPDATE SET config=excluded.config
         ";
 
         buf.clear();
