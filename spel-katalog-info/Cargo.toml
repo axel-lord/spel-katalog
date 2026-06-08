@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 derive_more = { workspace = true, features = ["from", "is_variant"] }
-iced_aw = { workspace = true, features = ["context_menu", "menu"] }
+iced_aw = { workspace = true, features = ["context_menu"] }
 iced_core.workspace = true
 iced_highlighter.workspace = true
 iced_renderer.workspace = true

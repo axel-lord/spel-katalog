@@ -29,7 +29,7 @@ use ::tap::Pipe;
 use ::uuid::Uuid;
 use ::yaml_rust2::Yaml;
 
-pub use self::native_info::{Message as NativeMessage, Request as NativeRequest};
+pub use self::native_info::{QuickMessage as NativeMessage, Request as NativeRequest};
 
 mod attrs;
 mod native_info;
@@ -378,7 +378,7 @@ impl State {
                             );
                             return Task::none();
                         }
-                        state.set_config(*config);
+                        state.set_config(*config, true);
                     }
                 }
 

@@ -1,6 +1,10 @@
 //! Widgets with application defaults.
 
-pub use self::{list_menu::ListMenu, scrollable::scrollable, vertical_list_menu::VerticalListMenu};
+pub use self::{
+    list_menu::{ListMenu, menu_button},
+    scrollable::scrollable,
+    vertical_list_menu::VerticalListMenu,
+};
 
 pub mod rule;
 

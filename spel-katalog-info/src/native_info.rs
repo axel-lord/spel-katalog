@@ -3,6 +3,7 @@
 use ::core::ops::Not;
 use ::std::{io::Cursor, sync::Arc};
 
+use ::derive_more::From;
 use ::iced_core::{
     Alignment::{self, Center},
     Font,
@@ -26,13 +27,9 @@ use ::uuid::Uuid;
 
 use crate::Element;
 
-/// Message in use by native info view.
-#[derive(Debug, Clone)]
-pub enum Message {
-    /// Update conf_view.
-    ConfAction(widget::text_editor::Action),
-    /// Set content of text editor.
-    SetConfig(Box<NativeGame>),
+/// Short message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum QuickMessage {
     /// Indent current line.
     Indent,
     /// Unindent current line.
@@ -61,6 +58,22 @@ pub enum Message {
     Undo,
     /// Redo last edit action.
     Redo,
+    /// Add a bind to game config.
+    AddBind,
+}
+
+/// Message in use by native info view.
+#[derive(Debug, Clone, From)]
+pub enum Message {
+    /// Update conf_view.
+    ConfAction(widget::text_editor::Action),
+    /// Set content of text editor.
+    SetConfig(Box<NativeGame>),
+    /// Update content of text editor.
+    UpdateConfig(Box<NativeGame>),
+    /// Quick message.
+    #[from]
+    Quick(QuickMessage),
 }
 
 /// Request in use by native info view.
@@ -89,8 +102,6 @@ pub enum Request {
 pub struct State {
     /// Game uuid.
     pub uuid: Uuid,
-    /// Game config.
-    game: Option<NativeGame>,
     /// Config view.
     conf_view: Content,
     /// Old config versions.
@@ -104,7 +115,6 @@ impl State {
     pub fn new(uuid: Uuid) -> Self {
         Self {
             uuid,
-            game: None,
             conf_view: Content::new(),
             history: Vec::new(),
             future: Vec::new(),
@@ -112,19 +122,25 @@ impl State {
     }
 
     /// Set game config in use.
-    pub fn set_config(&mut self, config: NativeGame) {
+    pub fn set_config(&mut self, config: NativeGame, flush_history: bool) {
         match ::toml::to_string_pretty(&config) {
             Ok(text) => {
+                self.future.clear();
+                if !flush_history {
+                    self.history.push(self.conf_view.text());
+                }
+
                 self.set_content(text);
+
+                if flush_history {
+                    self.history.clear();
+                }
             }
             Err(err) => ::log::warn!(
                 "could not serialize game config for {uuid}\n{err}",
                 uuid = self.uuid
             ),
         }
-        self.game = Some(config);
-        self.future.clear();
-        self.history.clear();
     }
 
     /// Set text content of config editor.
@@ -148,6 +164,11 @@ impl State {
         .and_then(Task::done)
     }
 
+    /// I content can be parsed create create a task with it.
+    pub fn get_content(&self) -> Task<NativeGame> {
+        self.with_content(Some)
+    }
+
     /// Update state using message.
     pub fn update(
         &mut self,
@@ -155,64 +176,12 @@ impl State {
         game_db: &Pool,
     ) -> Task<OrRequest<Message, Request>> {
         match message {
-            Message::Run => self.with_content(|game| {
-                Box::new(game)
-                    .pipe(Request::RunGame)
-                    .pipe(OrRequest::Request)
-                    .pipe(Some)
-            }),
-            Message::Shell => self.with_content(|game| {
-                Box::new(game)
-                    .pipe(Request::RunShell)
-                    .pipe(OrRequest::Request)
-                    .pipe(Some)
-            }),
-            Message::Open => self.with_content(|game| {
-                let Some(parent) = game.exe.parent() else {
-                    ::log::error!("game executable {exe:?} has not parent", exe = game.exe);
-                    return None;
-                };
-
-                if let Err(err) = ::open::that_detached(parent) {
-                    ::log::error!("failed to open {parent:?}\n{err}");
-                }
-
-                None
-            }),
-            Message::Save => {
-                let game_db = game_db.clone();
-                let uuid = self.uuid;
-                self.with_content(move |game| {
-                    game_db
-                        .insert_game(uuid)
-                        .insert(&game)
-                        .map_err(|err| {
-                            ::log::error!("could not insert game {uuid} into database\n{err}")
-                        })
-                        .ok()?;
-
-                    Box::new(game)
-                        .pipe(Message::SetConfig)
-                        .pipe(OrRequest::Message)
-                        .pipe(Some)
-                })
-            }
-            Message::Discard => {
-                let game_db = game_db.clone();
-                let uuid = self.uuid;
-                Task::<Option<Message>>::future(::smol::unblock(move || {
-                    game_db
-                        .get_game(uuid)
-                        .map_err(|err| ::log::error!("could not get game with uuid {uuid}\n{err}"))
-                        .ok()
-                        .map(Box::new)
-                        .map(Message::SetConfig)
-                }))
-                .and_then(Task::done)
-                .map(OrRequest::Message)
-            }
             Message::SetConfig(config) => {
-                self.set_config(*config);
+                self.set_config(*config, true);
+                Task::none()
+            }
+            Message::UpdateConfig(config) => {
+                self.set_config(*config, false);
                 Task::none()
             }
             Message::ConfAction(action) => {
@@ -223,142 +192,232 @@ impl State {
                 self.conf_view.perform(action);
                 Task::none()
             }
-            Message::Indent => {
-                self.conf_view.perform(Action::Edit(Edit::Indent));
-                Task::none()
-            }
-            Message::Unindent => {
-                self.conf_view.perform(Action::Edit(Edit::Unindent));
-                Task::none()
-            }
-            Message::RemoveThumb => {
-                let uuid = self.uuid;
-                let game_db = game_db.clone();
-                Task::future(async move {
-                    if let Err(err) = unblock(move || game_db.remove_thumb(uuid)).await {
-                        ::log::warn!("failed to remove thumbnail for {uuid} in database\n{err}");
-                    }
-                    GameId::Native(uuid)
-                        .pipe(|id| Request::UndisplayThumbnail { id })
+            Message::Quick(message) => match message {
+                QuickMessage::AddBind => self
+                    .get_content()
+                    .then(|mut game| {
+                        Task::<Option<_>>::future(async move {
+                            let dialog = if let Some(parent) = game.exe.parent() {
+                                AsyncFileDialog::new().set_directory(parent).pick_folder()
+                            } else {
+                                AsyncFileDialog::new().pick_folder()
+                            };
+
+                            let Some(src) = dialog.await else {
+                                ::log::warn!("no folder chosen");
+                                return None;
+                            };
+
+                            game.bind.push(::spel_katalog_formats::Bind::mirrored(
+                                src.path().to_path_buf(),
+                            ));
+
+                            Box::new(game)
+                                .pipe(Message::UpdateConfig)
+                                .pipe(OrRequest::Message)
+                                .pipe(Some)
+                        })
+                    })
+                    .and_then(Task::done),
+                QuickMessage::Run => self.with_content(|game| {
+                    Box::new(game)
+                        .pipe(Request::RunGame)
                         .pipe(OrRequest::Request)
-                })
-            }
-            Message::SaveThumb => {
-                let uuid = self.uuid;
-                let game_db = game_db.clone();
-
-                Task::future(async move {
-                    let thumb = game_db
-                        .get_thumb(uuid)
-                        .map_err(|err| ::log::error!("could not get thumbnail for {uuid}\n{err}"))
-                        .ok()?;
-
-                    let mut buf = Vec::<u8>::new();
-                    thumb
-                        .write_to(Cursor::new(&mut buf), ImageFormat::Png)
-                        .map_err(|err| {
-                            ::log::error!("failed to encode thumbnail for {uuid}\n{err}")
-                        })
-                        .ok()?;
-
-                    let dialog = AsyncFileDialog::new()
-                        .add_filter("png", &["png"])
-                        .save_file();
-
-                    let Some(file) = dialog.await else {
-                        ::log::warn!("no path chosen to save thumbnail of {uuid} to");
+                        .pipe(Some)
+                }),
+                QuickMessage::Shell => self.with_content(|game| {
+                    Box::new(game)
+                        .pipe(Request::RunShell)
+                        .pipe(OrRequest::Request)
+                        .pipe(Some)
+                }),
+                QuickMessage::Open => self.with_content(|game| {
+                    let Some(parent) = game.exe.parent() else {
+                        ::log::error!("game executable {exe:?} has not parent", exe = game.exe);
                         return None;
                     };
 
-                    ::smol::fs::write(file.path(), &buf)
-                        .await
-                        .map_err(|err| {
-                            ::log::error!(
-                                "failed to write thumbnail of {uuid} to {path:?}\n{err}",
-                                path = file.path()
-                            )
-                        })
-                        .ok()?;
-
-                    Some(())
-                })
-                .and_then(|_| Task::none())
-            }
-            Message::AddThumb => {
-                let uuid = self.uuid;
-                let game_db = game_db.clone();
-
-                Task::future(async move {
-                    let dialog = AsyncFileDialog::new()
-                        .set_title("Set Thumbnail")
-                        .add_filter("png", &["png"])
-                        .pick_file();
-
-                    let Some(file) = dialog.await else {
-                        ::log::info!("no thumbnail chosen for {uuid}");
-                        return None;
-                    };
-
-                    let content = ::smol::fs::read(file.path())
-                        .await
-                        .map_err(|err| {
-                            ::log::error!("could not read {path:?}\n{err}", path = file.path())
-                        })
-                        .ok()?;
-
-                    let image = ::image::load_from_memory(&content)
-                        .map_err(|err| {
-                            ::log::error!("could not load {path:?}\n{err}", path = file.path())
-                        })
-                        .ok()?;
-
-                    game_db
-                        .insert_thumb(uuid)
-                        .insert(&image)
-                        .map_err(|err| {
-                            ::log::error!(
-                                "could not insert thumbnail {path:?} into database\n{err}",
-                                path = file.path()
-                            )
-                        })
-                        .ok()?;
-
-                    Request::DisplayThumbnail {
-                        id: GameId::Native(uuid),
-                        img: ::spel_katalog_native::thumbnail(image),
+                    if let Err(err) = ::open::that_detached(parent) {
+                        ::log::error!("failed to open {parent:?}\n{err}");
                     }
-                    .pipe(OrRequest::Request)
-                    .pipe(Some)
-                })
-                .and_then(Task::done)
-            }
-            Message::Paste => ::iced_runtime::clipboard::read().and_then(|content| {
-                Arc::new(content)
-                    .pipe(Edit::Paste)
-                    .pipe(Action::Edit)
-                    .pipe(Message::ConfAction)
-                    .pipe(OrRequest::Message)
-                    .pipe(Task::done)
-            }),
-            Message::Copy => self
-                .conf_view
-                .selection()
-                .map(::iced_runtime::clipboard::write)
-                .unwrap_or_else(Task::none),
-            Message::Undo => {
-                if let Some(content) = self.history.pop() {
-                    self.future.push(self.conf_view.text());
-                    self.set_content(content.clone());
+
+                    None
+                }),
+                QuickMessage::Save => {
+                    let game_db = game_db.clone();
+                    let uuid = self.uuid;
+                    self.with_content(move |game| {
+                        game_db
+                            .insert_game(uuid)
+                            .insert(&game)
+                            .map_err(|err| {
+                                ::log::error!("could not insert game {uuid} into database\n{err}")
+                            })
+                            .ok()?;
+
+                        Box::new(game)
+                            .pipe(Message::SetConfig)
+                            .pipe(OrRequest::Message)
+                            .pipe(Some)
+                    })
                 }
-                Task::none()
-            }
-            Message::Redo => {
-                if let Some(content) = self.future.pop() {
-                    self.history.push(self.conf_view.text());
-                    self.set_content(content.clone());
+                QuickMessage::Discard => {
+                    let game_db = game_db.clone();
+                    let uuid = self.uuid;
+                    Task::<Option<Message>>::future(::smol::unblock(move || {
+                        game_db
+                            .get_game(uuid)
+                            .map_err(|err| {
+                                ::log::error!("could not get game with uuid {uuid}\n{err}")
+                            })
+                            .ok()
+                            .map(Box::new)
+                            .map(Message::SetConfig)
+                    }))
+                    .and_then(Task::done)
+                    .map(OrRequest::Message)
                 }
-                Task::none()
-            }
+                QuickMessage::Indent => {
+                    self.conf_view.perform(Action::Edit(Edit::Indent));
+                    Task::none()
+                }
+                QuickMessage::Unindent => {
+                    self.conf_view.perform(Action::Edit(Edit::Unindent));
+                    Task::none()
+                }
+                QuickMessage::RemoveThumb => {
+                    let uuid = self.uuid;
+                    let game_db = game_db.clone();
+                    Task::future(async move {
+                        if let Err(err) = unblock(move || game_db.remove_thumb(uuid)).await {
+                            ::log::warn!(
+                                "failed to remove thumbnail for {uuid} in database\n{err}"
+                            );
+                        }
+                        GameId::Native(uuid)
+                            .pipe(|id| Request::UndisplayThumbnail { id })
+                            .pipe(OrRequest::Request)
+                    })
+                }
+                QuickMessage::SaveThumb => {
+                    let uuid = self.uuid;
+                    let game_db = game_db.clone();
+
+                    Task::future(async move {
+                        let thumb = game_db
+                            .get_thumb(uuid)
+                            .map_err(|err| {
+                                ::log::error!("could not get thumbnail for {uuid}\n{err}")
+                            })
+                            .ok()?;
+
+                        let mut buf = Vec::<u8>::new();
+                        thumb
+                            .write_to(Cursor::new(&mut buf), ImageFormat::Png)
+                            .map_err(|err| {
+                                ::log::error!("failed to encode thumbnail for {uuid}\n{err}")
+                            })
+                            .ok()?;
+
+                        let dialog = AsyncFileDialog::new()
+                            .add_filter("png", &["png"])
+                            .save_file();
+
+                        let Some(file) = dialog.await else {
+                            ::log::warn!("no path chosen to save thumbnail of {uuid} to");
+                            return None;
+                        };
+
+                        ::smol::fs::write(file.path(), &buf)
+                            .await
+                            .map_err(|err| {
+                                ::log::error!(
+                                    "failed to write thumbnail of {uuid} to {path:?}\n{err}",
+                                    path = file.path()
+                                )
+                            })
+                            .ok()?;
+
+                        Some(())
+                    })
+                    .and_then(|_| Task::none())
+                }
+                QuickMessage::AddThumb => {
+                    let uuid = self.uuid;
+                    let game_db = game_db.clone();
+
+                    Task::future(async move {
+                        let dialog = AsyncFileDialog::new()
+                            .set_title("Set Thumbnail")
+                            .add_filter("png", &["png"])
+                            .pick_file();
+
+                        let Some(file) = dialog.await else {
+                            ::log::info!("no thumbnail chosen for {uuid}");
+                            return None;
+                        };
+
+                        let content = ::smol::fs::read(file.path())
+                            .await
+                            .map_err(|err| {
+                                ::log::error!("could not read {path:?}\n{err}", path = file.path())
+                            })
+                            .ok()?;
+
+                        let image = ::image::load_from_memory(&content)
+                            .map_err(|err| {
+                                ::log::error!("could not load {path:?}\n{err}", path = file.path())
+                            })
+                            .ok()?;
+
+                        game_db
+                            .insert_thumb(uuid)
+                            .insert(&image)
+                            .map_err(|err| {
+                                ::log::error!(
+                                    "could not insert thumbnail {path:?} into database\n{err}",
+                                    path = file.path()
+                                )
+                            })
+                            .ok()?;
+
+                        Request::DisplayThumbnail {
+                            id: GameId::Native(uuid),
+                            img: ::spel_katalog_native::thumbnail(image),
+                        }
+                        .pipe(OrRequest::Request)
+                        .pipe(Some)
+                    })
+                    .and_then(Task::done)
+                }
+                QuickMessage::Paste => ::iced_runtime::clipboard::read().and_then(|content| {
+                    Arc::new(content)
+                        .pipe(Edit::Paste)
+                        .pipe(Action::Edit)
+                        .pipe(Message::ConfAction)
+                        .pipe(OrRequest::Message)
+                        .pipe(Task::done)
+                }),
+                QuickMessage::Copy => self
+                    .conf_view
+                    .selection()
+                    .map(::iced_runtime::clipboard::write)
+                    .unwrap_or_else(Task::none),
+                QuickMessage::Undo => {
+                    if let Some(content) = self.history.pop() {
+                        self.future.push(self.conf_view.text());
+                        self.set_content(content.clone());
+                    }
+                    Task::none()
+                }
+                QuickMessage::Redo => {
+                    if let Some(content) = self.future.pop() {
+                        self.history.push(self.conf_view.text());
+                        self.set_content(content.clone());
+                    }
+                    Task::none()
+                }
+            },
         }
     }
 
@@ -371,13 +430,7 @@ impl State {
         buttons: Element<'a, M>,
     ) -> Element<'a, M> {
         const DIM: u32 = 200;
-        let Self {
-            game: game_info, ..
-        } = self;
-        let name = game_info
-            .as_ref()
-            .map(|game| game.name.as_str())
-            .unwrap_or(game.name());
+        let name = game.name();
         w::col()
             .push(
                 w::row()
@@ -400,7 +453,7 @@ impl State {
                             .map_or_else(
                                 || {
                                     widget::button("Add Thumbnail")
-                                        .on_press_with(|| Message::AddThumb)
+                                        .on_press_with(|| QuickMessage::AddThumb)
                                         .style(widget::button::success)
                                         .padding(3)
                                         .pipe(widget::container)
@@ -416,44 +469,21 @@ impl State {
                                             ::spel_katalog_widget::ListMenu::new()
                                                 .push(widget::text("Thumbnail"))
                                                 .separator()
-                                                .button("Replace", || Message::AddThumb)
-                                                .button("Remove", || Message::RemoveThumb)
-                                                .button("Save As", || Message::SaveThumb)
+                                                .button("Replace", || QuickMessage::AddThumb)
+                                                .button("Remove", || QuickMessage::RemoveThumb)
+                                                .button("Save As", || QuickMessage::SaveThumb)
                                                 .into()
                                         },
                                     )
                                     .pipe(Element::from)
                                 },
                             )
-                            .map(|message| crate::Message::NativeInfo(message).into()),
+                            .map(|message| {
+                                crate::Message::NativeInfo(Message::Quick(message)).into()
+                            }),
                     )
                     .push_maybe(thumb.is_some().then(spel_katalog_widget::rule::vertical))
-                    .push(
-                        w::col()
-                            .push(
-                                w::row()
-                                    .push(widget::text("Runner").font(Font::MONOSPACE))
-                                    .push(spel_katalog_widget::rule::vertical())
-                                    .push_maybe(game_info.as_ref().map(|game_info| {
-                                        widget::value(&game_info.runner)
-                                            .font(Font::MONOSPACE)
-                                            .align_x(Alignment::Start)
-                                            .width(Fill)
-                                    })),
-                            )
-                            .push(spel_katalog_widget::rule::horizontal())
-                            .push(
-                                w::row()
-                                    .push(widget::text("Uuid  ").font(Font::MONOSPACE))
-                                    .push(spel_katalog_widget::rule::vertical())
-                                    .push(
-                                        widget::value(id)
-                                            .font(Font::MONOSPACE)
-                                            .align_x(Alignment::Start)
-                                            .width(Fill),
-                                    ),
-                            ),
-                    ),
+                    .push(widget::text(format!("Uuid: {id}")).font(Font::MONOSPACE)),
             )
             .into()
     }
@@ -467,36 +497,42 @@ impl State {
                     .spacing(3)
                     .push(
                         widget::button("Run")
-                            .on_press_with(|| Message::Run)
+                            .on_press_with(|| QuickMessage::Run)
                             .padding(3)
                             .style(widget::button::success),
                     )
                     .push(
                         widget::button("Shell")
-                            .on_press_with(|| Message::Shell)
+                            .on_press_with(|| QuickMessage::Shell)
                             .padding(3),
                     )
                     .push(widget::space().width(Length::Fill))
                     .push(
                         widget::button("Open")
-                            .on_press_with(|| Message::Open)
+                            .on_press_with(|| QuickMessage::Open)
                             .padding(3),
                     )
                     .push(
                         widget::button("Discard")
                             .on_press_maybe(
-                                self.history.is_empty().not().then_some(Message::Discard),
+                                self.history
+                                    .is_empty()
+                                    .not()
+                                    .then_some(QuickMessage::Discard),
                             )
                             .padding(3)
                             .style(widget::button::danger),
                     )
                     .push(
                         widget::button("Save")
-                            .on_press_maybe(self.history.is_empty().not().then_some(Message::Save))
+                            .on_press_maybe(
+                                self.history.is_empty().not().then_some(QuickMessage::Save),
+                            )
                             .padding(3)
                             .style(widget::button::success),
                     )
                     .pipe(Element::from)
+                    .map(Message::Quick)
                     .map(OrRequest::Message),
             )
             .push(::spel_katalog_widget::scrollable(
@@ -510,14 +546,16 @@ impl State {
                                         key::Named::Tab
                                             if event.modifiers == Modifiers::empty() =>
                                         {
-                                            Message::Indent
+                                            QuickMessage::Indent
+                                                .pipe(Message::Quick)
                                                 .pipe(OrRequest::Message)
                                                 .pipe(Binding::Custom)
                                                 .pipe(Some)
                                         }
 
                                         key::Named::Tab if event.modifiers == Modifiers::SHIFT => {
-                                            Message::Unindent
+                                            QuickMessage::Unindent
+                                                .pipe(Message::Quick)
                                                 .pipe(OrRequest::Message)
                                                 .pipe(Binding::Custom)
                                                 .pipe(Some)
@@ -526,14 +564,20 @@ impl State {
                                     }
                                 } else if let Key::Character(chr) = event.modified_key.as_ref() {
                                     match chr {
-                                        "z" if event.modifiers == Modifiers::CTRL => Message::Undo
-                                            .pipe(OrRequest::Message)
-                                            .pipe(Binding::Custom)
-                                            .pipe(Some),
-                                        "y" if event.modifiers == Modifiers::CTRL => Message::Redo
-                                            .pipe(OrRequest::Message)
-                                            .pipe(Binding::Custom)
-                                            .pipe(Some),
+                                        "z" if event.modifiers == Modifiers::CTRL => {
+                                            QuickMessage::Undo
+                                                .pipe(Message::Quick)
+                                                .pipe(OrRequest::Message)
+                                                .pipe(Binding::Custom)
+                                                .pipe(Some)
+                                        }
+                                        "y" if event.modifiers == Modifiers::CTRL => {
+                                            QuickMessage::Redo
+                                                .pipe(Message::Quick)
+                                                .pipe(OrRequest::Message)
+                                                .pipe(Binding::Custom)
+                                                .pipe(Some)
+                                        }
                                         _ => Binding::from_key_press(event),
                                     }
                                 } else {
@@ -557,13 +601,16 @@ impl State {
                             .push(widget::text("Config"))
                             .separator()
                             .button_if(self.conf_view.selection().is_some(), "Copy", || {
-                                Message::Copy
+                                QuickMessage::Copy
                             })
-                            .button("Paste", || Message::Paste)
+                            .button("Paste", || QuickMessage::Paste)
                             .separator()
-                            .button_if(!self.history.is_empty(), "Undo", || Message::Undo)
-                            .button_if(!self.future.is_empty(), "Redo", || Message::Redo)
+                            .button_if(!self.history.is_empty(), "Undo", || QuickMessage::Undo)
+                            .button_if(!self.future.is_empty(), "Redo", || QuickMessage::Redo)
+                            .separator()
+                            .button("Add Bind", || QuickMessage::AddBind)
                             .pipe(Element::from)
+                            .map(Message::Quick)
                             .map(OrRequest::Message)
                     },
                 ),
