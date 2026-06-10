@@ -9,6 +9,7 @@ license.workspace = true
 bytes = { workspace = true, features = ["serde"] }
 chrono = { workspace = true, features = ["clock", "std"] }
 derive_more = { workspace = true, features = ["is_variant", "display", "from", "into", "deref", "deref_mut", "as_ref"] }
+image.workspace = true
 indexmap.workspace = true
 rustc-hash.workspace = true
 serde = { workspace = true, features = ["derive"] }

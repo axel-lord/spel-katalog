@@ -2,7 +2,6 @@ use ::derive_more::{From, IsVariant};
 use ::iced_core::window;
 use ::spel_katalog_common::OrRequest;
 use ::spel_katalog_formats::NativeGame;
-use ::spel_katalog_run::strerror::StrError;
 
 use crate::{
     app::WindowType,
@@ -98,9 +97,9 @@ where
     }
 }
 
-impl From<StrError> for Message {
-    fn from(value: StrError) -> Self {
-        value.0.into()
+impl From<::color_eyre::Report> for Message {
+    fn from(value: ::color_eyre::Report) -> Self {
+        value.to_string().into()
     }
 }
 

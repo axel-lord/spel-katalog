@@ -4,7 +4,6 @@ use ::core::fmt::Debug;
 
 mod macros;
 pub mod run_umu;
-pub mod strerror;
 
 /// Wrapper for functor called when and if a game is ran.
 #[derive(Default)]

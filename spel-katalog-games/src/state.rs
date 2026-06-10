@@ -1,6 +1,6 @@
 //! [State], [Message] and [Request] impls.
 
-use ::core::{cell::Cell, convert::identity, mem, ops::ControlFlow, time::Duration};
+use ::core::{cell::Cell, convert::identity, iter, mem, ops::ControlFlow, time::Duration};
 use ::std::{
     io::Cursor,
     path::{Path, PathBuf},
@@ -85,6 +85,15 @@ pub enum Message {
     AddNativeGames {
         /// Games to add.
         games: Vec<(Uuid, NativeGame, Option<::spel_katalog_formats::Image>)>,
+    },
+    /// Add a single game.
+    AddNativeGame {
+        /// Uuid of game to add.
+        uuid: Uuid,
+        /// Config of game.
+        config: Box<NativeGame>,
+        /// Thumbnail of game.
+        thumb: Option<::spel_katalog_formats::Image>,
     },
     /// Set thumbnails.
     SetImages {
@@ -262,6 +271,29 @@ impl State {
                             },
                         ),
                         ..WithThumb::from((uuid, game))
+                    }),
+                    settings,
+                    filter,
+                );
+                Task::none()
+            }
+            Message::AddNativeGame {
+                uuid,
+                config,
+                thumb,
+            } => {
+                self.add_games(
+                    iter::once(WithThumb {
+                        thumb: thumb.map(
+                            |::spel_katalog_formats::Image {
+                                 width,
+                                 height,
+                                 bytes,
+                             }| {
+                                ::iced_core::image::Handle::from_rgba(width, height, bytes)
+                            },
+                        ),
+                        ..WithThumb::from((uuid, *config))
                     }),
                     settings,
                     filter,

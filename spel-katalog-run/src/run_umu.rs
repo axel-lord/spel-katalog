@@ -7,6 +7,7 @@ use ::std::{
     path::{Path, PathBuf},
 };
 
+use ::color_eyre::{Section, eyre::eyre};
 use ::derive_more::IsVariant;
 use ::rustc_hash::FxHashMap;
 use ::smol::process::Command;
@@ -16,11 +17,7 @@ use ::spel_katalog_formats::{
 };
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 
-use crate::{
-    Callback,
-    macros::{args, strerror},
-    strerror::StrError,
-};
+use crate::{Callback, macros::args};
 
 /// Context needed to run game with bubblewrap and umu.
 #[derive(Debug)]
@@ -66,13 +63,10 @@ fn bind_user(wine_prefix: &Path, umu_prefix: &Path) -> Option<Bind> {
 
     let wine_home = wine_prefix.join(USERS).join(&username);
     if !wine_home.exists() {
-        ::log::info!("user {username:?} not found in wine prefix {wine_prefix:?}");
         return None;
     }
 
     let umu_home = umu_prefix.join(USERS).join("steamuser");
-
-    ::log::info!("binding {wine_home:?} to {umu_home:?}");
 
     Some(Bind::asymmetric(wine_home, umu_home))
 }
@@ -86,13 +80,13 @@ async fn init_umu_prefix(
     drives: &mut (dyn '_ + Send + Sync + Iterator<Item = (char, &Path)>),
     sink_builder: &SinkBuilder,
     envs: &FxHashMap<String, String>,
-) -> Result<(), StrError> {
+) -> ::color_eyre::Result<()> {
     let sink_builder = sink_builder
         .with_locked_channel(|| SinkIdentity::StaticName("prefix preparation"))
-        .map_err(|err| strerror!("could lock sink builder, {err}"))?;
+        .map_err(|err| eyre!(err).note("could not lock sink builder, {err}"))?;
     let [stdout, stderr] = sink_builder
         .build_double(|| SinkIdentity::StaticName("winetricks"))
-        .map_err(|err| strerror!("could not build sinks for winetricks, {err}"))?;
+        .map_err(|err| eyre!(err).note("could not build sinks for winetricks"))?;
     let status = Command::new(umu)
         .stdout(stdout)
         .stderr(stderr)
@@ -108,12 +102,12 @@ async fn init_umu_prefix(
         .await
         .map_err(|err| {
             ::log::error!("could not run command to create umu prefix {umu_prefix:?}, {err}");
-            strerror!("could not create umu prefix")
+            eyre!(err).note("could not create umu prefix")
         })?;
 
     if !status.success() {
         ::log::error!("failed to create umu prefix {status:?}");
-        return Err(strerror!("could not create umu prefix"));
+        return Err(eyre!("could not create umu prefix"));
     }
 
     let dll_overrides = dll_override.collect::<BTreeSet<_>>();
@@ -185,11 +179,11 @@ async fn add_dll_override(
 }
 
 /// Split terminal command line into executable and arguments.
-fn term_path(term: &str) -> Result<(PathBuf, Vec<PathBuf>), StrError> {
-    let term_command =
-        ::shell_words::split(term).map_err(|err| strerror!("could not split {term}, {err}"))?;
+fn term_path(term: &str) -> ::color_eyre::Result<(PathBuf, Vec<PathBuf>)> {
+    let term_command = ::shell_words::split(term)
+        .map_err(|err| eyre!(err).note(format!("could not split {term}")))?;
     let [term, term_args @ ..] = term_command.as_slice() else {
-        return Err(strerror!("cannot get command from {term:?}"));
+        return Err(eyre!("cannot get command from {term:?}"));
     };
 
     Ok((
@@ -214,7 +208,7 @@ impl NativeUmuCtx<'_> {
     ///
     /// # Errors
     /// If context cannot run shell.
-    pub async fn run_shell(self) -> Result<String, StrError> {
+    pub async fn run_shell(self) -> ::color_eyre::Result<String> {
         self.run(RunMode::Shell).await
     }
 
@@ -222,7 +216,7 @@ impl NativeUmuCtx<'_> {
     ///
     /// # Errors
     /// If context cannot run.
-    pub async fn run_game(self) -> Result<String, StrError> {
+    pub async fn run_game(self) -> ::color_eyre::Result<String> {
         self.run(RunMode::Exe).await
     }
 
@@ -230,7 +224,7 @@ impl NativeUmuCtx<'_> {
     ///
     /// # Errors
     /// If context cannot initialize prefix.
-    pub async fn run_init(self) -> Result<String, StrError> {
+    pub async fn run_init(self) -> ::color_eyre::Result<String> {
         self.run(RunMode::Init).await
     }
 
@@ -238,7 +232,7 @@ impl NativeUmuCtx<'_> {
     ///
     /// # Errors
     /// If context cannot run given mode.
-    pub async fn run(self, run_mode: RunMode) -> Result<String, StrError> {
+    pub async fn run(self, run_mode: RunMode) -> ::color_eyre::Result<String> {
         let NativeUmuCtx {
             common:
                 CommonUmuCtx {
@@ -279,12 +273,12 @@ impl NativeUmuCtx<'_> {
         let use_gamescope = use_gamescope.unwrap_or(global_use_gamescope);
         let home = ::std::env::home_dir().ok_or_else(|| {
             ::log::error!("could not find user home directory");
-            StrError("could not find user home directory".to_owned())
+            eyre!("could not find user home directory")
         })?;
         let xdg_runtime_dir = ::std::env::var_os("XDG_RUNTIME_DIR")
             .ok_or_else(|| {
                 ::log::error!("could not find XDG_RUNTIME_DIR");
-                StrError("could not find XDG_RUNTIME_DIR".to_owned())
+                eyre!("could not find XDG_RUNTIME_DIR")
             })
             .map(PathBuf::from)?;
         let umu_dir = home.join(".local/share/umu");
@@ -411,7 +405,7 @@ impl NativeUmuCtx<'_> {
 
         let [stdout, stderr] = sink_builder
             .build_double(|| SinkIdentity::Name(name.clone()))
-            .map_err(|err| strerror!("failed to build sinks for {name}\n{err}"))?;
+            .map_err(|err| eyre!("failed to build sinks for {name}").error(err))?;
         let process_path = term_path.unwrap_or_else(|| bwrap.to_path_buf());
         ::log::info!("running {process_path:?} with args\n{args:#?}");
         let cmd = Command::new(process_path)
@@ -425,7 +419,7 @@ impl NativeUmuCtx<'_> {
 
         let status = cmd.await.map_err(|err| {
             ::log::error!("could not run {name}\n{err}");
-            strerror!("could not run {name}")
+            eyre!("could not run {name}")
         })?;
 
         Ok(format!("{name} exited with {status}"))
@@ -469,7 +463,7 @@ impl<'a> LutrisCtx<'a> {
     ///
     /// # Errors
     /// If lutris context is malformed in some way.
-    pub fn into_native(self) -> Result<NativeGame, StrError> {
+    pub fn into_native(self) -> ::color_eyre::Result<NativeGame> {
         let Self {
             config,
             exe,
@@ -525,7 +519,7 @@ impl<'a> LutrisCtx<'a> {
                 LutrisRunner::Wine => NativeRunner::Wine,
                 LutrisRunner::Linux => NativeRunner::Linux,
                 LutrisRunner::Other(runner) => {
-                    return Err(strerror!("unknown runner {runner} for {name}"));
+                    return Err(eyre!("unknown runner {runner} for {name}"));
                 }
             },
             prefix,
@@ -551,7 +545,7 @@ impl<'a> LutrisUmuCtx<'a> {
     ///
     /// # Errors
     /// If context cannot run shell.
-    pub async fn run_shell(self) -> Result<String, StrError> {
+    pub async fn run_shell(self) -> ::color_eyre::Result<String> {
         self.into_native()?.run_shell().await
     }
 
@@ -559,7 +553,7 @@ impl<'a> LutrisUmuCtx<'a> {
     ///
     /// # Errors
     /// If context cannot run.
-    pub async fn run(self) -> Result<String, StrError> {
+    pub async fn run(self) -> ::color_eyre::Result<String> {
         self.into_native()?.run_game().await
     }
 
@@ -567,7 +561,7 @@ impl<'a> LutrisUmuCtx<'a> {
     ///
     /// # Errors
     /// If the lutris context cannot produce a native context.
-    pub fn into_native(self) -> Result<NativeUmuCtx<'a>, StrError> {
+    pub fn into_native(self) -> ::color_eyre::Result<NativeUmuCtx<'a>> {
         let Self { common, lutris } = self;
         Ok(NativeUmuCtx {
             common,

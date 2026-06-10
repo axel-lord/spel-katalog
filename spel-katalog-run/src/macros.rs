@@ -14,15 +14,4 @@ macro_rules! args {
     };
 }
 
-/// Create a formatted string error.
-/// ```
-/// let err = strerror!("Error occured, {}", 15);
-/// ```
-macro_rules! strerror {
-    ($($arg:tt)*) => {
-        $crate::strerror::StrError::fmt(format_args!($($arg)*))
-    };
-}
-
 pub(crate) use args;
-pub(crate) use strerror;

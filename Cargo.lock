@@ -4633,6 +4633,7 @@ dependencies = [
  "bytes",
  "chrono",
  "derive_more",
+ "image",
  "indexmap",
  "rustc-hash 2.1.2",
  "serde",
@@ -4821,6 +4822,7 @@ dependencies = [
 name = "spel-katalog-run"
 version = "0.1.0"
 dependencies = [
+ "color-eyre",
  "derive_more",
  "log",
  "rustc-hash 2.1.2",

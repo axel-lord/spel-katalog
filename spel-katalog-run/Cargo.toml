@@ -6,11 +6,12 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+color-eyre.workspace = true
+derive_more = { workspace = true, features = [ "is_variant" ] }
 log.workspace = true
 rustc-hash.workspace = true
 shell-words.workspace = true
 smol.workspace = true
-derive_more = { workspace = true, features = [ "is_variant" ] }
 spel-katalog-formats.workspace = true
 spel-katalog-settings.workspace = true
 spel-katalog-sink.workspace = true

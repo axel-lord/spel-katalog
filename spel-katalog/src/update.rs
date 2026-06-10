@@ -103,29 +103,37 @@ impl App {
         }
     }
 
-    fn convert_all(&self) -> Task<Message> {
+    fn convert_all(
+        &self,
+    ) -> impl 'static + Future<Output = Vec<(Uuid, NativeGame, Option<::spel_katalog_formats::Image>)>>
+    {
         let game_db = self.games_db.clone();
-        self.games
+        let futures = self
+            .games
             .all()
             .iter()
-            .map(|game| self.game_as_native(game.id()))
-            .pipe(Task::batch)
-            .then(move |(game, thumb)| Self::convert_game(game_db.clone(), game, thumb))
-            .chain(
-                Task::<Option<_>>::future(async {
-                    ::log::info!("all games converted");
-                    None
-                })
-                .and_then(Task::done),
-            )
+            .filter_map(|game| self.game_as_native(game.id()))
+            .collect::<Vec<_>>();
+
+        async move {
+            let mut games = Vec::new();
+            for future in futures {
+                let Some((game, thumb)) = future.await else {
+                    continue;
+                };
+                games.extend(Self::convert_game(game_db.clone(), game, thumb).await);
+            }
+            ::log::info!("all games converted");
+            games
+        }
     }
 
-    fn convert_game(
+    async fn convert_game(
         game_db: ::spel_katalog_native::Pool,
         game: NativeGame,
         thumb: Option<DynamicImage>,
-    ) -> Task<Message> {
-        Task::<Option<_>>::future(::smol::unblock(move || {
+    ) -> Option<(Uuid, NativeGame, Option<::spel_katalog_formats::Image>)> {
+        ::smol::unblock(move || {
             let name = &game.name;
             let uuid = Uuid::now_v7();
             game_db
@@ -135,9 +143,9 @@ impl App {
                 .map_err(|err| ::log::error!("failed to insert {name:?} into database\n{err}"))
                 .ok()?;
 
-            None
-        }))
-        .and_then(Task::done)
+            Some((uuid, game, thumb.map(From::from)))
+        })
+        .await
     }
 
     fn quick_update(&mut self, msg: QuickMessage) -> Task<Message> {
@@ -163,12 +171,14 @@ impl App {
                 ::log::info!("debug action activated");
             }
             QuickMessage::ConvertAll => {
-                return self.convert_all().chain(
-                    ::spel_katalog_games::Message::Sort
-                        .into_message()
-                        .pipe(Message::Games)
-                        .pipe(Task::done),
-                );
+                let future = self.convert_all();
+                return Task::future(async move {
+                    ::spel_katalog_games::Message::AddNativeGames {
+                        games: future.await,
+                    }
+                    .into_message()
+                    .pipe(Message::Games)
+                });
             }
             QuickMessage::CloseAll => {
                 self.view.hide_info();
@@ -325,16 +335,24 @@ impl App {
                 self.games.select(SelDir::None);
             }
             ::spel_katalog_games::Request::Convert(game_id) => {
-                let game_db = self.games_db.clone();
-                return self
-                    .game_as_native(game_id)
-                    .then(move |(game, thumb)| Self::convert_game(game_db.clone(), game, thumb))
-                    .chain(
-                        ::spel_katalog_games::Message::Sort
-                            .into_message()
-                            .pipe(Message::Games)
-                            .pipe(Task::done),
-                    );
+                if let Some(future) = self.game_as_native(game_id) {
+                    let game_db = self.games_db.clone();
+                    return Task::<Option<_>>::future(async move {
+                        let (game, thumb) = future.await?;
+                        let (uuid, config, thumb) =
+                            Self::convert_game(game_db, game, thumb).await?;
+
+                        ::spel_katalog_games::Message::AddNativeGame {
+                            uuid,
+                            config: Box::new(config),
+                            thumb,
+                        }
+                        .into_message()
+                        .pipe(Message::Games)
+                        .pipe(Some)
+                    })
+                    .and_then(Task::done);
+                }
             }
         }
         Task::none()

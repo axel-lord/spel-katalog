@@ -3,7 +3,6 @@ use ::std::{
     path::{Path, PathBuf},
 };
 
-use ::color_eyre::eyre::eyre;
 use ::iced_runtime::Task;
 use ::image::DynamicImage;
 use ::spel_katalog_common::status;
@@ -11,7 +10,6 @@ use ::spel_katalog_formats::{AdditionalConfig, Game, GameId, NativeGame, lutris_
 use ::spel_katalog_run::{
     Callback,
     run_umu::{CommonUmuCtx, LutrisCtx, LutrisUmuCtx, NativeUmuCtx, RunMode},
-    strerror::StrError,
 };
 use ::spel_katalog_settings::{
     BubblewrapExe, ConfigDir, DllOverrides, FirejailExe, GamescopeExe, LutrisExe, Network, OnRun,
@@ -68,10 +66,13 @@ async fn parse_extra_config(extra_config_path: &Path) -> Result<AdditionalConfig
 }
 
 impl App {
-    pub fn game_as_native(&self, game_id: GameId) -> Task<(NativeGame, Option<DynamicImage>)> {
+    pub fn game_as_native(
+        &self,
+        game_id: GameId,
+    ) -> Option<impl 'static + Future<Output = Option<(NativeGame, Option<DynamicImage>)>>> {
         let Some(game) = self.games.by_id(game_id) else {
             ::log::warn!("could not find game with id {game_id}");
-            return Task::none();
+            return None;
         };
         let thumb = game.thumb.clone();
 
@@ -81,7 +82,7 @@ impl App {
                     ::log::error!(
                         "cannot convert lutris game without lutris id to native game, id: {game_id}"
                     );
-                    return Task::none();
+                    return None;
                 };
                 let name = game.name.clone();
                 let runner = game.runner.clone();
@@ -96,15 +97,19 @@ impl App {
                     .join("games")
                     .join(format!("{lutris_id}.toml"));
 
-                Task::future(async move {
-                    let config = ::smol::fs::read_to_string(&configpath).await?;
-                    let config = lutris_config::Config::parse(&config)?;
+                Some(async move {
+                    let config = ::smol::fs::read_to_string(&configpath)
+                        .await
+                        .map_err(|err| ::log::error!("could not read {configpath:?}\n{err}"))
+                        .ok()?;
+                    let config = lutris_config::Config::parse(&config)
+                        .map_err(|err| ::log::error!("could not parse {configpath:?}\n{err}"))
+                        .ok()?;
                     let extra_config = if extra_config_path.exists() {
-                        Some(
-                            parse_extra_config(&extra_config_path)
-                                .await
-                                .map_err(|err| eyre!(err))?,
-                        )
+                        parse_extra_config(&extra_config_path)
+                            .await
+                            .map_err(|err| ::log::error!("could not parse extra config\n{err}"))
+                            .ok()
                     } else {
                         None
                     };
@@ -120,7 +125,8 @@ impl App {
                         id: game_id,
                     }
                     .into_native()
-                    .map_err(StrError::into_error)?;
+                    .map_err(|err| ::log::error!("could not convert game context to native\n{err}"))
+                    .ok()?;
                     let name = &game.name;
                     let thumb = thumb.as_ref().and_then(|thumb| match thumb {
                         ::iced_widget::image::Handle::Path(_, path) => ::image::open(path)
@@ -150,20 +156,10 @@ impl App {
                             })
                             .map(DynamicImage::from),
                     });
-                    Ok((game, thumb))
-                })
-                .then(move |result: ::color_eyre::Result<_>| {
-                    result
-                        .map_err(|err| {
-                            ::log::error!(
-                                "could not convert lutris game {game_id} to native game\n{err}"
-                            )
-                        })
-                        .ok()
-                        .map_or_else(Task::none, Task::done)
+                    Some((game, thumb))
                 })
             }
-            Game::Native { .. } => Task::none(),
+            Game::Native { .. } => None,
         }
     }
 
