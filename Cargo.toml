@@ -149,3 +149,4 @@ bon = "3.9.1"
 bytemuck = "1.25.0"
 flate2 = "1.1.9"
 iced_aw = { version = "0.14.1", default-features = false }
+tabled = { version = "0.21.0", default-features = false }

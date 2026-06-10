@@ -181,7 +181,13 @@ impl State {
             Displayed::GameInfo => {
                 if let Some((id, game)) = info.id().and_then(|id| Some((id, games.by_id(id)?))) {
                     widget::Column::new()
-                        .push(info.titlebar(game, game.thumb.as_ref(), id, self.buttons()))
+                        .push(info.titlebar(
+                            game,
+                            game.thumb.as_ref(),
+                            id,
+                            game.shadows,
+                            self.buttons(),
+                        ))
                         .push(spel_katalog_widget::rule::horizontal())
                         .push(info.view(game.thumb.is_some()).map(crate::Message::from))
                         .spacing(3)

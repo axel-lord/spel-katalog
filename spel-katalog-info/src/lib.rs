@@ -33,6 +33,7 @@ pub use self::native_info::{QuickMessage as NativeMessage, Request as NativeRequ
 
 mod attrs;
 mod native_info;
+mod native_table;
 
 /// Element alias.
 type Element<'a, M> = ::iced_core::Element<'a, M, ::iced_core::Theme, ::iced_renderer::Renderer>;
@@ -816,10 +817,11 @@ impl State {
         game: &'a ::spel_katalog_formats::Game,
         thumb: Option<&'a widget::image::Handle>,
         id: GameId,
+        shadows: Option<GameId>,
         buttons: Element<'a, M>,
     ) -> Element<'a, M> {
         match self {
-            State::Native { state } => state.titlebar(game, thumb, id, buttons),
+            State::Native { state } => state.titlebar(game, thumb, id, shadows, buttons),
             _ => self.titlebar_(game, thumb, id, buttons),
         }
     }

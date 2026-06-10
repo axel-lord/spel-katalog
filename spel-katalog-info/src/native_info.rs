@@ -6,7 +6,6 @@ use ::std::{io::Cursor, sync::Arc};
 use ::derive_more::From;
 use ::iced_core::{
     Alignment::{self, Center},
-    Font,
     Length::{self, Fill},
     alignment::Vertical,
     keyboard::{Key, Modifiers, key},
@@ -22,10 +21,11 @@ use ::smol::unblock;
 use ::spel_katalog_common::{OrRequest, PushMaybe, w};
 use ::spel_katalog_formats::{GameId, NativeGame};
 use ::spel_katalog_native::Pool;
-use ::tap::Pipe;
+use ::spel_katalog_widget::monospace;
+use ::tap::{Pipe, TapOptional};
 use ::uuid::Uuid;
 
-use crate::Element;
+use crate::{Element, native_table::InfoTable};
 
 /// Short message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -197,20 +197,19 @@ impl State {
                     .get_content()
                     .then(|mut game| {
                         Task::<Option<_>>::future(async move {
-                            let dialog = if let Some(parent) = game.exe.parent() {
-                                AsyncFileDialog::new().set_directory(parent).pick_folder()
-                            } else {
-                                AsyncFileDialog::new().pick_folder()
-                            };
-
-                            let Some(src) = dialog.await else {
-                                ::log::warn!("no folder chosen");
-                                return None;
-                            };
-
-                            game.bind.push(::spel_katalog_formats::Bind::mirrored(
-                                src.path().to_path_buf(),
-                            ));
+                            game.bind.push(
+                                game.exe
+                                    .parent()
+                                    .map_or_else(AsyncFileDialog::new, |parent| {
+                                        AsyncFileDialog::new().set_directory(parent)
+                                    })
+                                    .pick_folder()
+                                    .await
+                                    .tap_none(|| ::log::warn!("no folder chosen"))?
+                                    .path()
+                                    .to_path_buf()
+                                    .pipe(::spel_katalog_formats::Bind::mirrored),
+                            );
 
                             Box::new(game)
                                 .pipe(Message::UpdateConfig)
@@ -232,10 +231,9 @@ impl State {
                         .pipe(Some)
                 }),
                 QuickMessage::Open => self.with_content(|game| {
-                    let Some(parent) = game.exe.parent() else {
-                        ::log::error!("game executable {exe:?} has not parent", exe = game.exe);
-                        return None;
-                    };
+                    let parent = game.exe.parent().tap_none(|| {
+                        ::log::error!("game executable {exe:?} has not parent", exe = game.exe)
+                    })?;
 
                     if let Err(err) = ::open::that_detached(parent) {
                         ::log::error!("failed to open {parent:?}\n{err}");
@@ -304,29 +302,26 @@ impl State {
                     let game_db = game_db.clone();
 
                     Task::future(async move {
-                        let thumb = game_db
+                        let mut buf = Vec::<u8>::new();
+                        game_db
                             .get_thumb(uuid)
                             .map_err(|err| {
                                 ::log::error!("could not get thumbnail for {uuid}\n{err}")
                             })
-                            .ok()?;
-
-                        let mut buf = Vec::<u8>::new();
-                        thumb
+                            .ok()?
                             .write_to(Cursor::new(&mut buf), ImageFormat::Png)
                             .map_err(|err| {
                                 ::log::error!("failed to encode thumbnail for {uuid}\n{err}")
                             })
                             .ok()?;
 
-                        let dialog = AsyncFileDialog::new()
+                        let file = AsyncFileDialog::new()
                             .add_filter("png", &["png"])
-                            .save_file();
-
-                        let Some(file) = dialog.await else {
-                            ::log::warn!("no path chosen to save thumbnail of {uuid} to");
-                            return None;
-                        };
+                            .save_file()
+                            .await
+                            .tap_none(|| {
+                                ::log::warn!("no path chosen to save thumbnail of {uuid} to")
+                            })?;
 
                         ::smol::fs::write(file.path(), &buf)
                             .await
@@ -347,15 +342,12 @@ impl State {
                     let game_db = game_db.clone();
 
                     Task::future(async move {
-                        let dialog = AsyncFileDialog::new()
+                        let file = AsyncFileDialog::new()
                             .set_title("Set Thumbnail")
                             .add_filter("png", &["png"])
-                            .pick_file();
-
-                        let Some(file) = dialog.await else {
-                            ::log::info!("no thumbnail chosen for {uuid}");
-                            return None;
-                        };
+                            .pick_file()
+                            .await
+                            .tap_none(|| ::log::info!("no thumbnail chosen for {uuid}"))?;
 
                         let content = ::smol::fs::read(file.path())
                             .await
@@ -427,6 +419,7 @@ impl State {
         game: &'a ::spel_katalog_formats::Game,
         thumb: Option<&'a widget::image::Handle>,
         id: GameId,
+        shadows: Option<GameId>,
         buttons: Element<'a, M>,
     ) -> Element<'a, M> {
         const DIM: u32 = 200;
@@ -483,7 +476,7 @@ impl State {
                             }),
                     )
                     .push_maybe(thumb.is_some().then(spel_katalog_widget::rule::vertical))
-                    .push(widget::text(format!("Uuid: {id}")).font(Font::MONOSPACE)),
+                    .push(monospace(InfoTable { id, shadows }.get_table().to_string())),
             )
             .into()
     }
