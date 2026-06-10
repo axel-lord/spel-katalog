@@ -7,6 +7,7 @@ use ::std::{
     path::{Path, PathBuf},
 };
 
+use ::derive_more::IsVariant;
 use ::rustc_hash::FxHashMap;
 use ::smol::process::Command;
 use ::spel_katalog_formats::{
@@ -84,6 +85,7 @@ async fn init_umu_prefix(
     dll_override: &mut (dyn '_ + Send + Sync + Iterator<Item = &str>),
     drives: &mut (dyn '_ + Send + Sync + Iterator<Item = (char, &Path)>),
     sink_builder: &SinkBuilder,
+    envs: &FxHashMap<String, String>,
 ) -> Result<(), StrError> {
     let sink_builder = sink_builder
         .with_locked_channel(|| SinkIdentity::StaticName("prefix preparation"))
@@ -99,6 +101,7 @@ async fn init_umu_prefix(
                 .into_iter()
                 .chain(verbs.iter().map(String::as_str)),
         )
+        .envs(envs)
         .env("WINEPREFIX", umu_prefix)
         .kill_on_drop(true)
         .status()
@@ -117,7 +120,7 @@ async fn init_umu_prefix(
     let reg_exe = umu_prefix.join("drive_c/windows/system32/reg.exe");
 
     for dll_override in dll_overrides {
-        add_dll_override(dll_override, umu_prefix, umu, &reg_exe, &sink_builder).await;
+        add_dll_override(dll_override, umu_prefix, umu, &reg_exe, &sink_builder, envs).await;
     }
 
     for (letter, link) in drives {
@@ -139,6 +142,7 @@ async fn add_dll_override(
     umu: &Path,
     reg_exe: &Path,
     sink_builder: &SinkBuilder,
+    envs: &FxHashMap<String, String>,
 ) {
     ::log::info!("adding dll override {dll_override:?}");
     let (stdout, stderr) =
@@ -162,8 +166,10 @@ async fn add_dll_override(
             "/d",
             "native,builtin"
         ])
+        .envs(envs)
         .env("WINEPREFIX", umu_prefix)
         .env("WINEDEBUG", "-all")
+        .env("UMU_LOG", "0")
         .kill_on_drop(true)
         .status()
         .await
@@ -192,25 +198,47 @@ fn term_path(term: &str) -> Result<(PathBuf, Vec<PathBuf>), StrError> {
     ))
 }
 
+/// How to run game.
+#[derive(Debug, Clone, Copy, IsVariant)]
+pub enum RunMode {
+    /// Run executable.
+    Exe,
+    /// Run shell.
+    Shell,
+    /// Stop after init.
+    Init,
+}
+
 impl NativeUmuCtx<'_> {
     /// Run shell in prefix.
     ///
     /// # Errors
     /// If context cannot run shell.
     pub async fn run_shell(self) -> Result<String, StrError> {
-        self.run_(true).await
+        self.run(RunMode::Shell).await
     }
 
     /// Run game.
     ///
     /// # Errors
     /// If context cannot run.
-    pub async fn run(self) -> Result<String, StrError> {
-        self.run_(false).await
+    pub async fn run_game(self) -> Result<String, StrError> {
+        self.run(RunMode::Exe).await
+    }
+
+    /// Initizlize prefix.
+    ///
+    /// # Errors
+    /// If context cannot initialize prefix.
+    pub async fn run_init(self) -> Result<String, StrError> {
+        self.run(RunMode::Init).await
     }
 
     /// Run context.
-    async fn run_(self, run_shell: bool) -> Result<String, StrError> {
+    ///
+    /// # Errors
+    /// If context cannot run given mode.
+    pub async fn run(self, run_mode: RunMode) -> Result<String, StrError> {
         let NativeUmuCtx {
             common:
                 CommonUmuCtx {
@@ -263,7 +291,7 @@ impl NativeUmuCtx<'_> {
         let xauthority = home.join(".Xauthority");
 
         let mut args = Vec::<OsString>::new();
-        let term_path = if run_shell {
+        let term_path = if run_mode.is_shell() {
             let (term, term_args) = term_path(term)?;
             args.extend(term_args.into_iter().map(OsString::from));
             args.extend(args![bwrap]);
@@ -274,7 +302,7 @@ impl NativeUmuCtx<'_> {
 
         if runner.is_wine()
             && let Some(prefix) = prefix.as_deref()
-            && !prefix.exists()
+            && (run_mode.is_init() || !prefix.exists())
         {
             init_umu_prefix(
                 umu,
@@ -288,8 +316,13 @@ impl NativeUmuCtx<'_> {
                     .iter()
                     .map(|(letter, link)| (*letter, link.as_path())),
                 &sink_builder,
+                &env,
             )
             .await?;
+        }
+
+        if run_mode.is_init() {
+            return Ok("prefix initialized".to_owned());
         }
 
         let wayland = xdg_runtime_dir.join("wayland-1");
@@ -364,7 +397,7 @@ impl NativeUmuCtx<'_> {
             args.extend(args!["--chdir", parent]);
         }
 
-        if run_shell {
+        if run_mode.is_shell() {
             args.extend(args![shell]);
         } else {
             if use_gamescope {
@@ -527,7 +560,7 @@ impl<'a> LutrisUmuCtx<'a> {
     /// # Errors
     /// If context cannot run.
     pub async fn run(self) -> Result<String, StrError> {
-        self.into_native()?.run().await
+        self.into_native()?.run_game().await
     }
 
     /// Convert into a native game run context.

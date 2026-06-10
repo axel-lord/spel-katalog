@@ -18,12 +18,14 @@ use ::iced_widget::{
 use ::image::ImageFormat;
 use ::rfd::AsyncFileDialog;
 use ::smol::unblock;
-use ::spel_katalog_common::{OrRequest, PushMaybe, w};
+use ::spel_katalog_common::{IntoOrRequest, OrRequest, PushMaybe, w};
 use ::spel_katalog_formats::{GameId, NativeGame};
 use ::spel_katalog_native::Pool;
+use ::spel_katalog_settings::CompToolsDir;
 use ::spel_katalog_widget::monospace;
 use ::tap::{Pipe, TapOptional};
 use ::uuid::Uuid;
+use spel_katalog_settings::Settings;
 
 use crate::{Element, native_table::InfoTable};
 
@@ -44,6 +46,8 @@ pub enum QuickMessage {
     Run,
     /// Run shell for game.
     Shell,
+    /// Initialize prefix.
+    Init,
     /// Open game directory.
     Open,
     /// Discard changes.
@@ -60,6 +64,8 @@ pub enum QuickMessage {
     Redo,
     /// Add a bind to game config.
     AddBind,
+    /// Add a specific compatability tool.
+    AddCompTool,
 }
 
 /// Message in use by native info view.
@@ -95,6 +101,8 @@ pub enum Request {
     RunGame(Box<NativeGame>),
     /// Run shell for a game.
     RunShell(Box<NativeGame>),
+    /// Init prefix for a game.
+    RunInit(Box<NativeGame>),
 }
 
 /// State of native game display.
@@ -180,6 +188,7 @@ impl State {
         &mut self,
         message: Message,
         game_db: &Pool,
+        settings: &Settings,
     ) -> Task<OrRequest<Message, Request>> {
         match message {
             Message::SetConfig(config) => {
@@ -199,6 +208,37 @@ impl State {
                 Task::none()
             }
             Message::Quick(message) => match message {
+                QuickMessage::AddCompTool => {
+                    let game_db = game_db.clone();
+                    let uuid = self.uuid;
+                    let comp_tool_dir = settings.get::<CompToolsDir>().to_path_buf();
+
+                    Task::<Option<_>>::future(async move {
+                        let dialog = AsyncFileDialog::new()
+                            .set_directory(&comp_tool_dir)
+                            .pick_folder()
+                            .await
+                            .tap_none(|| ::log::info!("no comp tool chosen"))?;
+
+                        let mut game = game_db
+                            .get_game(uuid)
+                            .inspect_err(|err| {
+                                ::log::error!("failed to get game with uuid {uuid}\n{err}")
+                            })
+                            .ok()?;
+
+                        game.env.insert(
+                            "PROTONPATH".to_owned(),
+                            dialog.path().as_os_str().to_string_lossy().into(),
+                        );
+
+                        Box::new(game)
+                            .pipe(Message::UpdateConfig)
+                            .into_message()
+                            .pipe(Some)
+                    })
+                    .and_then(Task::done)
+                }
                 QuickMessage::AddBind => self
                     .get_content()
                     .then(|mut game| {
@@ -233,6 +273,12 @@ impl State {
                 QuickMessage::Shell => self.with_content(|game| {
                     Box::new(game)
                         .pipe(Request::RunShell)
+                        .pipe(OrRequest::Request)
+                        .pipe(Some)
+                }),
+                QuickMessage::Init => self.with_content(|game| {
+                    Box::new(game)
+                        .pipe(Request::RunInit)
                         .pipe(OrRequest::Request)
                         .pipe(Some)
                 }),
@@ -505,6 +551,11 @@ impl State {
                             .on_press_with(|| QuickMessage::Shell)
                             .padding(3),
                     )
+                    .push(
+                        widget::button("Init")
+                            .on_press_with(|| QuickMessage::Init)
+                            .padding(3),
+                    )
                     .push(widget::space().width(Length::Fill))
                     .push(
                         widget::button("Open")
@@ -609,6 +660,7 @@ impl State {
                             .button_if(!self.future.is_empty(), "Redo", || QuickMessage::Redo)
                             .separator()
                             .button("Add Bind", || QuickMessage::AddBind)
+                            .button("Comp Tool", || QuickMessage::AddCompTool)
                             .pipe(Element::from)
                             .map(Message::Quick)
                             .map(OrRequest::Message)

@@ -10,7 +10,7 @@ use ::spel_katalog_common::status;
 use ::spel_katalog_formats::{AdditionalConfig, Game, GameId, NativeGame, lutris_config};
 use ::spel_katalog_run::{
     Callback,
-    run_umu::{CommonUmuCtx, LutrisCtx, LutrisUmuCtx, NativeUmuCtx},
+    run_umu::{CommonUmuCtx, LutrisCtx, LutrisUmuCtx, NativeUmuCtx, RunMode},
     strerror::StrError,
 };
 use ::spel_katalog_settings::{
@@ -190,7 +190,7 @@ impl App {
     }
 
     /// Run a native game.
-    pub fn run_native_game(&mut self, game: NativeGame, run_shell: bool) -> Task<Message> {
+    pub fn run_native_game(&mut self, game: NativeGame, run_mode: RunMode) -> Task<Message> {
         let bwrap = self.settings.get::<BubblewrapExe>().clone();
         let umu = self.settings.get::<UmuRunExe>().clone();
         let shell = self.settings.get::<ShellExe>().clone();
@@ -227,13 +227,8 @@ impl App {
                 config: game,
             };
 
-            let status = if run_shell {
-                ctx.run_shell().await
-            } else {
-                ctx.run().await
-            };
-
-            status
+            ctx.run(run_mode)
+                .await
                 .map_err(|err| ::log::error!("could not run game {name}\n{err}"))
                 .map(Message::from)
                 .ok()

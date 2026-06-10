@@ -132,6 +132,11 @@ title = "Lutris Database"
 help = "Path to lutris game database"
 path = "{DATA}/lutris/pga.db"
 
+[CompToolsDir]
+title = "Compatability tools"
+help = "Path to default compatability tool directory"
+path = "{DATA}/umu/compatibilitytools"
+
 [YmlDir]
 title = "Game Config Directory"
 help = "Path to lutris game yml config directory"

@@ -9,6 +9,7 @@ use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::{IntoOrRequest, OrRequest};
 use ::spel_katalog_formats::{AdditionalConfig, NativeGame};
 use ::spel_katalog_games::SelDir;
+use ::spel_katalog_run::run_umu::RunMode;
 use ::spel_katalog_settings::{ConfigDir, FilterMode, Network, Show, Variants, YmlDir};
 use ::tap::Pipe;
 use ::uuid::Uuid;
@@ -361,10 +362,13 @@ impl App {
                     Task::none()
                 }
                 ::spel_katalog_info::NativeRequest::RunGame(game) => {
-                    self.run_native_game(*game, false)
+                    self.run_native_game(*game, RunMode::Exe)
                 }
                 ::spel_katalog_info::NativeRequest::RunShell(game) => {
-                    self.run_native_game(*game, true)
+                    self.run_native_game(*game, RunMode::Shell)
+                }
+                ::spel_katalog_info::NativeRequest::RunInit(game) => {
+                    self.run_native_game(*game, RunMode::Init)
                 }
             },
             ::spel_katalog_info::Request::RemoveImage { slug } => self
@@ -594,10 +598,10 @@ impl App {
                 self.view.show_info();
             }
             Message::RunGameNative(game) => {
-                return self.run_native_game(*game, false);
+                return self.run_native_game(*game, RunMode::Exe);
             }
             Message::RunShellNative(game) => {
-                return self.run_native_game(*game, true);
+                return self.run_native_game(*game, RunMode::Shell);
             }
         }
         Task::none()

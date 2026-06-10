@@ -687,7 +687,7 @@ impl State {
             }
             Message::NativeInfo(message) => {
                 if let Self::Native { state } = self {
-                    state.update(message, games_db).map(|msg| {
+                    state.update(message, games_db, settings).map(|msg| {
                         msg.map_request(Request::NativeInfo)
                             .map_message(Message::NativeInfo)
                     })
