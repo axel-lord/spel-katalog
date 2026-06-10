@@ -11,6 +11,7 @@ workspace = true
 [dependencies]
 bytes.workspace = true
 derive_more = { workspace = true, features = ["is_variant", "display", "deref", "deref_mut"] }
+iced_aw = { workspace = true, features = ["context_menu"] }
 iced_core.workspace = true
 iced_futures.workspace = true
 iced_renderer.workspace = true

@@ -9,6 +9,7 @@ use ::spel_katalog_cli::Run;
 use ::spel_katalog_common::{OrRequest, StatusSender, w};
 use ::spel_katalog_settings::{CacheDir, ConfigDir, FilterMode, Load, LutrisDb, Network, Theme};
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
+use ::spel_katalog_widget::ListMenu;
 use ::tap::Pipe;
 
 use crate::{
@@ -340,6 +341,12 @@ impl App {
     }
 
     pub fn view_main(&self) -> Element<'_, Message> {
+        fn with_global_context(menu: ListMenu<'_, Message>) -> ListMenu<'_, Message> {
+            menu.push(widget::text("Spel Katalog"))
+                .separator()
+                .button("Convert All", || Message::Quick(QuickMessage::ConvertAll))
+                .button("Open DB", || Message::Quick(QuickMessage::OpenDatabase))
+        }
         w::col()
             .padding(5)
             .spacing(0)
@@ -356,7 +363,19 @@ impl App {
                 .padding(3)
                 .on_input(identity)
                 .pipe(Element::from)
-                .map(Message::Filter),
+                .map(Message::Filter)
+                .pipe(|element| {
+                    ::iced_aw::ContextMenu::new(element, || {
+                        ListMenu::new()
+                            .push(widget::text("Filter"))
+                            .separator()
+                            .button("Copy", || Message::Quick(QuickMessage::CopyFilter))
+                            .button("Paste", || Message::Quick(QuickMessage::PasteFilter))
+                            .separator()
+                            .pipe(with_global_context)
+                            .into()
+                    })
+                }),
             )
             .push(widget::space::vertical().height(5))
             .push(
@@ -389,7 +408,12 @@ impl App {
                                     }),
                                 ))
                             }),
-                    ),
+                    )
+                    .pipe(|statusbar| {
+                        ::iced_aw::ContextMenu::new(statusbar, || {
+                            ListMenu::new().pipe(with_global_context).into()
+                        })
+                    }),
             )
             .pipe(Element::from)
     }

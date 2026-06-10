@@ -23,7 +23,7 @@ use ::parking_lot::Mutex;
 use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use ::rusqlite::{Connection, Statement, named_params};
 use ::rustc_hash::FxHashSet;
-use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, w};
+use ::spel_katalog_common::{IntoOrRequest, OrRequest, StatusSender, async_status, status, w};
 use ::spel_katalog_formats::{Game, GameId, NativeGame};
 use ::spel_katalog_gather::{
     CoverGatherer, CoverGathererOptions, LoadDbError, load_games_from_database,
@@ -117,6 +117,8 @@ pub enum Message {
     BatchSelect(GameId),
     /// FLush thumbnail cache to database.
     FlushCache,
+    /// Force re-sort of games.
+    Sort,
 }
 
 /// Requests for other widgets.
@@ -136,6 +138,8 @@ pub enum Request {
     },
     /// Close game info
     CloseInfo,
+    /// Convert game to native.
+    Convert(GameId),
 }
 
 /// Messages produced by game areas.
@@ -205,6 +209,10 @@ impl State {
         filter: &str,
     ) -> Task<OrRequest<Message, Request>> {
         match msg {
+            Message::Sort => {
+                self.sort(settings, filter);
+                Task::none()
+            }
             Message::LoadDb { db_path } => {
                 let tx = tx.clone();
                 Task::future(async move {
@@ -341,11 +349,7 @@ impl State {
             let mut game_slugs = FxHashSet::from_iter(game_slugs);
 
             for slug in &slugs {
-                if !game_slugs.remove(slug) {
-                    ::log::warn!(
-                        "thumbnail for game with slug {slug} was present in thumbnail cache but not in game datatbase"
-                    );
-                }
+                game_slugs.remove(slug);
             }
 
             let game_slugs = Vec::from_iter(game_slugs);
@@ -496,7 +500,7 @@ impl State {
                 .align_x(Alignment::Center)
                 .align_y(Alignment::End);
 
-            match handle {
+            let element = match handle {
                 Some(handle) => {
                     let image = widget::image(handle)
                         .width(width)
@@ -509,9 +513,24 @@ impl State {
             .interaction(::iced_core::mouse::Interaction::Pointer)
             .on_release(AreaMessage::Select { id })
             .on_middle_release(AreaMessage::Run { id, sandbox: true })
-            .on_right_release(AreaMessage::BatchSelect { id })
+            // .on_right_release(AreaMessage::BatchSelect { id })
             .pipe(Element::from)
-            .map(Into::into)
+            .map(OrRequest::<Message, Request>::from);
+
+            ::iced_aw::ContextMenu::new(element, move || {
+                ::spel_katalog_widget::ListMenu::new()
+                    .push(widget::text("Game"))
+                    .separator()
+                    .button("Run", move || {
+                        Request::Run { id, sandbox: true }.into_request()
+                    })
+                    .button("Batch", move || Message::BatchSelect(id).into_message())
+                    .button("Info", move || Message::SelectId(id).into_message())
+                    .separator()
+                    .button("Convert", move || Request::Convert(id).into_request())
+                    .into()
+            })
+            .into()
         }
 
         widget::responsive(move |size| {

@@ -42,3 +42,26 @@ impl<M, R> From<M> for OrRequest<M, R> {
         Self::Message(value)
     }
 }
+
+/// Trait used to convert any value into [OrRequest::Message] or [OrRequest::Request].
+pub trait IntoOrRequest {
+    /// Convert into the [message][OrRequest::Message] variant of an [OrRequest].
+    #[inline]
+    fn into_message<R>(self) -> OrRequest<Self, R>
+    where
+        Self: Sized,
+    {
+        OrRequest::Message(self)
+    }
+
+    /// Convert into the [request][OrRequest::Request] variant of an [OrRequest].
+    #[inline]
+    fn into_request<M>(self) -> OrRequest<M, Self>
+    where
+        Self: Sized,
+    {
+        OrRequest::Request(self)
+    }
+}
+
+impl<T> IntoOrRequest for T {}

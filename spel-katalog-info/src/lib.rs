@@ -291,7 +291,6 @@ impl State {
                         .ok()
                 }))
                 .and_then(move |config| {
-                    ::log::info!("db entry loaded for {uuid}");
                     Task::done(Message::SetContent(GameContent::Native {
                         uuid,
                         config: Box::new(config),

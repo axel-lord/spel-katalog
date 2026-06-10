@@ -4513,6 +4513,7 @@ dependencies = [
  "env_logger",
  "flume",
  "iced",
+ "iced_aw",
  "iced_core",
  "iced_futures",
  "iced_renderer",
@@ -4524,6 +4525,7 @@ dependencies = [
  "log",
  "mimalloc",
  "mlua",
+ "open",
  "parking_lot",
  "paste",
  "rayon",
@@ -4646,6 +4648,7 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "derive_more",
+ "iced_aw",
  "iced_core",
  "iced_futures",
  "iced_renderer",

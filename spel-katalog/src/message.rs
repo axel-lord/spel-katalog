@@ -44,6 +44,10 @@ pub enum QuickMessage {
     ToggleProcessInfo,
     ToggleSettings,
     Debug,
+    ConvertAll,
+    OpenDatabase,
+    CopyFilter,
+    PasteFilter,
 }
 
 #[derive(Debug, IsVariant, From, Clone)]

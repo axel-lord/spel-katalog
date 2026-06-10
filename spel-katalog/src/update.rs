@@ -1,13 +1,13 @@
 use ::std::path::Path;
 
-use ::iced_core::{Size, image::Handle, window};
+use ::iced_core::{Size, window};
 use ::iced_runtime::Task;
 use ::image::DynamicImage;
 use ::rustc_hash::FxHashMap;
 use ::rustix::process::{Pid, RawPid};
 use ::spel_katalog_batch::BatchInfo;
-use ::spel_katalog_common::OrRequest;
-use ::spel_katalog_formats::AdditionalConfig;
+use ::spel_katalog_common::{IntoOrRequest, OrRequest};
+use ::spel_katalog_formats::{AdditionalConfig, NativeGame};
 use ::spel_katalog_games::SelDir;
 use ::spel_katalog_settings::{ConfigDir, FilterMode, Network, Show, Variants, YmlDir};
 use ::tap::Pipe;
@@ -102,68 +102,72 @@ impl App {
         }
     }
 
+    fn convert_all(&self) -> Task<Message> {
+        let game_db = self.games_db.clone();
+        self.games
+            .all()
+            .iter()
+            .map(|game| self.game_as_native(game.id()))
+            .pipe(Task::batch)
+            .then(move |(game, thumb)| Self::convert_game(game_db.clone(), game, thumb))
+            .chain(
+                Task::<Option<_>>::future(async {
+                    ::log::info!("all games converted");
+                    None
+                })
+                .and_then(Task::done),
+            )
+    }
+
+    fn convert_game(
+        game_db: ::spel_katalog_native::Pool,
+        game: NativeGame,
+        thumb: Option<DynamicImage>,
+    ) -> Task<Message> {
+        Task::<Option<_>>::future(::smol::unblock(move || {
+            let name = &game.name;
+            let uuid = Uuid::now_v7();
+            game_db
+                .insert_game(uuid)
+                .maybe_thumb(thumb.as_ref())
+                .insert(&game)
+                .map_err(|err| ::log::error!("failed to insert {name:?} into database\n{err}"))
+                .ok()?;
+
+            None
+        }))
+        .and_then(Task::done)
+    }
+
     fn quick_update(&mut self, msg: QuickMessage) -> Task<Message> {
         match msg {
+            QuickMessage::CopyFilter => {
+                return ::iced_runtime::clipboard::write(self.filter.clone());
+            }
+            QuickMessage::PasteFilter => {
+                return ::iced_runtime::clipboard::read()
+                    .and_then(|filter| Task::done(Message::Filter(filter)));
+            }
+            QuickMessage::OpenDatabase => {
+                let path = self.settings.get::<ConfigDir>().as_path().join("games.db");
+                return Task::<Option<_>>::future(::smol::unblock(move || {
+                    if let Err(err) = ::open::that_detached(&path) {
+                        ::log::error!("failed to open {path:?}\n{err}");
+                    }
+                    None
+                }))
+                .and_then(Task::done);
+            }
             QuickMessage::Debug => {
                 ::log::info!("debug action activated");
-                if let Some(game_id) = self.games.selected() {
-                    let thumb = self
-                        .games
-                        .by_id(game_id)
-                        .and_then(|game| game.thumb.clone());
-                    let db = self.games_db.clone();
-                    return self.game_as_native(game_id).then(move |game| {
-                        let thumb = thumb.clone();
-                        let db = db.clone();
-                        Task::future(::smol::unblock(move || -> ::color_eyre::Result<()> {
-                            let serialized = ::toml::to_string_pretty(&game)?;
-                            ::log::info!("serialized game:\n{serialized}");
-
-                            let thumb = thumb.clone().and_then(|thumb| match thumb {
-                                Handle::Path(_id, path_buf) => ::image::open(&path_buf)
-                                    .map_err(|err| {
-                                        ::log::error!("could not decode {path_buf:?}\n{err}")
-                                    })
-                                    .ok(),
-                                Handle::Bytes(_id, bytes) => ::image::load_from_memory(&bytes)
-                                    .map_err(|err| {
-                                        ::log::error!(
-                                            "could not decode thumbnail for {game_id}\n{err}"
-                                        )
-                                    })
-                                    .ok(),
-                                Handle::Rgba {
-                                    id: _,
-                                    width,
-                                    height,
-                                    pixels,
-                                } => ::image::RgbaImage::from_raw(width, height, pixels.to_vec())
-                                    .map(DynamicImage::from),
-                            });
-
-                            let uuid = Uuid::new_v4();
-                            db.insert_game(uuid)
-                                .maybe_thumb(thumb.as_ref())
-                                .insert(&game)?;
-
-                            Ok(())
-                        }))
-                        .then(move |result| {
-                            if let Err(err) = result {
-                                ::log::error!(
-                                    "could not add game {game_id} to games database\n{err}"
-                                );
-                            }
-                            Task::none()
-                        })
-                    });
-                } else {
-                    let count = self
-                        .games
-                        .remove_games(|game| game.name().len() > 10, &self.settings, &self.filter)
-                        .count();
-                    ::log::info!("removed {count} games");
-                }
+            }
+            QuickMessage::ConvertAll => {
+                return self.convert_all().chain(
+                    ::spel_katalog_games::Message::Sort
+                        .into_message()
+                        .pipe(Message::Games)
+                        .pipe(Task::done),
+                );
             }
             QuickMessage::CloseAll => {
                 self.view.hide_info();
@@ -318,6 +322,18 @@ impl App {
                     self.view.hide_info();
                 }
                 self.games.select(SelDir::None);
+            }
+            ::spel_katalog_games::Request::Convert(game_id) => {
+                let game_db = self.games_db.clone();
+                return self
+                    .game_as_native(game_id)
+                    .then(move |(game, thumb)| Self::convert_game(game_db.clone(), game, thumb))
+                    .chain(
+                        ::spel_katalog_games::Message::Sort
+                            .into_message()
+                            .pipe(Message::Games)
+                            .pipe(Task::done),
+                    );
             }
         }
         Task::none()

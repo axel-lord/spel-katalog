@@ -5,6 +5,7 @@ use ::std::{
 
 use ::color_eyre::eyre::eyre;
 use ::iced_runtime::Task;
+use ::image::DynamicImage;
 use ::spel_katalog_common::status;
 use ::spel_katalog_formats::{AdditionalConfig, Game, GameId, NativeGame, lutris_config};
 use ::spel_katalog_run::{
@@ -17,7 +18,7 @@ use ::spel_katalog_settings::{
     SandboxExtras, SandboxMode, Settings, ShellExe, TermCommand, UmuRunExe, UseGamescope, YmlDir,
 };
 use ::spel_katalog_sink::SinkIdentity;
-use ::tap::Pipe;
+use ::tap::{Pipe, TapOptional};
 
 use crate::{
     App, Message, QuickMessage, Safety, oneshot_broadcast::oneshot_broadcast,
@@ -67,11 +68,12 @@ async fn parse_extra_config(extra_config_path: &Path) -> Result<AdditionalConfig
 }
 
 impl App {
-    pub fn game_as_native(&self, game_id: GameId) -> Task<NativeGame> {
+    pub fn game_as_native(&self, game_id: GameId) -> Task<(NativeGame, Option<DynamicImage>)> {
         let Some(game) = self.games.by_id(game_id) else {
             ::log::warn!("could not find game with id {game_id}");
             return Task::none();
         };
+        let thumb = game.thumb.clone();
 
         match &game.game {
             Game::Lutris(game) => {
@@ -119,9 +121,38 @@ impl App {
                     }
                     .into_native()
                     .map_err(StrError::into_error)?;
-                    Ok(game)
+                    let name = &game.name;
+                    let thumb = thumb.as_ref().and_then(|thumb| match thumb {
+                        ::iced_widget::image::Handle::Path(_, path) => ::image::open(path)
+                            .map_err(|err| {
+                                ::log::warn!(
+                                    "failed to convert thumbnail to an image for {name:?}\n{err}"
+                                )
+                            })
+                            .ok(),
+                        ::iced_widget::image::Handle::Bytes(_, bytes) => ::image::load_from_memory(
+                            bytes,
+                        )
+                        .map_err(|err| {
+                            ::log::warn!(
+                                "failed to convert thumbnail to an image for {name:?}\n{err}"
+                            )
+                        })
+                        .ok(),
+                        ::iced_widget::image::Handle::Rgba {
+                            width,
+                            height,
+                            pixels,
+                            ..
+                        } => ::image::RgbaImage::from_raw(*width, *height, pixels.to_vec())
+                            .tap_none(|| {
+                                ::log::warn!("failed to convert thumbnail to an image for {name:?}")
+                            })
+                            .map(DynamicImage::from),
+                    });
+                    Ok((game, thumb))
                 })
-                .then(move |result: ::color_eyre::Result<NativeGame>| {
+                .then(move |result: ::color_eyre::Result<_>| {
                     result
                         .map_err(|err| {
                             ::log::error!(
