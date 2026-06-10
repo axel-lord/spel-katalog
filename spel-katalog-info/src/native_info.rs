@@ -112,13 +112,19 @@ pub struct State {
 
 impl State {
     /// Construct new state.
-    pub fn new(uuid: Uuid) -> Self {
-        Self {
+    pub fn new(uuid: Uuid, game: NativeGame) -> Self {
+        let mut state = Self {
             uuid,
             conf_view: Content::new(),
             history: Vec::new(),
             future: Vec::new(),
-        }
+        };
+
+        if let Ok(content) = ::toml::to_string_pretty(&game) {
+            state.set_content(content);
+        };
+
+        state
     }
 
     /// Set game config in use.
@@ -587,6 +593,7 @@ impl State {
                             .on_action(|action| {
                                 action.pipe(Message::ConfAction).pipe(OrRequest::Message)
                             })
+                            .min_height(200)
                             .padding(6),
                     ),
                     || {

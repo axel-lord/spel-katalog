@@ -278,10 +278,6 @@ impl State {
                 uuid,
                 hidden: _,
             } => {
-                *self = Self::Native {
-                    state: native_info::State::new(*uuid),
-                };
-
                 let games_db = games_db.clone();
                 let uuid = *uuid;
                 Task::future(::smol::unblock(move || {
@@ -365,20 +361,9 @@ impl State {
                             .common_parent(|| ::spel_katalog_settings::HOME.as_path());
                     }
                     GameContent::Native { uuid, config } => {
-                        let Self::Native { state } = self else {
-                            ::log::warn!(
-                                "cannot set info state content to native whithout already being native"
-                            );
-                            return Task::none();
-                        };
-                        if uuid != state.uuid {
-                            ::log::warn!(
-                                "SetContent uuid and current uuid mismatch\n{uuid}\n{}",
-                                state.uuid
-                            );
-                            return Task::none();
+                        *self = Self::Native {
+                            state: native_info::State::new(uuid, *config),
                         }
-                        state.set_config(*config, true);
                     }
                 }
 
