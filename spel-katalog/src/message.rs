@@ -47,6 +47,7 @@ pub enum QuickMessage {
     OpenDatabase,
     CopyFilter,
     PasteFilter,
+    ReloadGames,
 }
 
 #[derive(Debug, IsVariant, From, Clone)]

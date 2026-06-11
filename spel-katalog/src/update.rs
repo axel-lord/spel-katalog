@@ -10,7 +10,9 @@ use ::spel_katalog_common::{IntoOrRequest, OrRequest};
 use ::spel_katalog_formats::{AdditionalConfig, NativeGame};
 use ::spel_katalog_games::SelDir;
 use ::spel_katalog_run::run_umu::RunMode;
-use ::spel_katalog_settings::{ConfigDir, FilterMode, Network, Show, Variants, YmlDir};
+use ::spel_katalog_settings::{
+    ConfigDir, FilterMode, Load, LutrisDb, Network, Show, Variants, YmlDir,
+};
 use ::tap::Pipe;
 use ::uuid::Uuid;
 
@@ -150,6 +152,9 @@ impl App {
 
     fn quick_update(&mut self, msg: QuickMessage) -> Task<Message> {
         match msg {
+            QuickMessage::Debug => {
+                ::log::info!("debug action activated");
+            }
             QuickMessage::CopyFilter => {
                 return ::iced_runtime::clipboard::write(self.filter.clone());
             }
@@ -167,8 +172,40 @@ impl App {
                 }))
                 .and_then(Task::done);
             }
-            QuickMessage::Debug => {
-                ::log::info!("debug action activated");
+            QuickMessage::ReloadGames => {
+                ::log::info!("reloading games");
+                self.games.clear();
+                let load_lutris = || {
+                    self.settings
+                        .get::<LutrisDb>()
+                        .to_path_buf()
+                        .pipe(move |db_path| spel_katalog_games::Message::LoadDb { db_path })
+                        .pipe(OrRequest::Message)
+                        .pipe(Message::Games)
+                        .pipe(Task::done)
+                };
+
+                let load_native = || {
+                    let games_db = self.games_db.clone();
+                    Task::future(::smol::unblock(move || {
+                        let mut games = Vec::new();
+                        games_db.gather(&mut |uuid, game, thumb| {
+                            games.push((uuid, game, thumb.map(::spel_katalog_native::thumbnail)));
+                        });
+                        Message::Games(OrRequest::Message(
+                            ::spel_katalog_games::Message::AddNativeGames { games },
+                        ))
+                    }))
+                };
+
+                let load_db = match self.settings.get::<Load>() {
+                    Load::Lutris => load_lutris(),
+                    Load::Native => load_native(),
+                    Load::Both => load_native().chain(load_lutris()),
+                    Load::None => Task::none(),
+                };
+
+                return load_db;
             }
             QuickMessage::ConvertAll => {
                 let future = self.convert_all();

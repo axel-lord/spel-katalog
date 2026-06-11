@@ -7,7 +7,7 @@ use ::iced_widget::{self as widget, Row, text, text_input, toggler, value};
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog_cli::Run;
 use ::spel_katalog_common::{OrRequest, StatusSender, w};
-use ::spel_katalog_settings::{CacheDir, ConfigDir, FilterMode, Load, LutrisDb, Network, Theme};
+use ::spel_katalog_settings::{CacheDir, ConfigDir, FilterMode, Network, Theme};
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::spel_katalog_widget::ListMenu;
 use ::tap::Pipe;
@@ -199,36 +199,6 @@ impl App {
         let (_, open_main) = ::iced_runtime::window::open(::iced_core::window::Settings::default());
         let main = open_main.map(|id| Message::OpenWindow(id, WindowType::Main));
 
-        let load_lutris = || {
-            app.settings
-                .get::<LutrisDb>()
-                .to_path_buf()
-                .pipe(move |db_path| spel_katalog_games::Message::LoadDb { db_path })
-                .pipe(OrRequest::Message)
-                .pipe(Message::Games)
-                .pipe(Task::done)
-        };
-
-        let load_native = || {
-            let games_db = app.games_db.clone();
-            Task::future(::smol::unblock(move || {
-                let mut games = Vec::new();
-                games_db.gather(&mut |uuid, game, thumb| {
-                    games.push((uuid, game, thumb.map(::spel_katalog_native::thumbnail)));
-                });
-                Message::Games(OrRequest::Message(
-                    ::spel_katalog_games::Message::AddNativeGames { games },
-                ))
-            }))
-        };
-
-        let load_db = match app.settings.get::<Load>() {
-            Load::Lutris => load_lutris(),
-            Load::Native => load_native(),
-            Load::Both => load_native().chain(load_lutris()),
-            Load::None => Task::none(),
-        };
-
         let receive_status = Task::stream(status_rx.into_stream()).map(Message::Status);
         let receive_dialog = Task::stream(dialog_rx.into_stream()).map(Message::BuildDialog);
         let exit_recv = exit_recv
@@ -248,6 +218,10 @@ impl App {
         } else {
             Task::none()
         };
+
+        let load_db = QuickMessage::ReloadGames
+            .pipe(Message::Quick)
+            .pipe(Task::done);
 
         let batch = Task::batch([
             receive_status,
@@ -346,6 +320,7 @@ impl App {
                 .separator()
                 .button("Convert All", || Message::Quick(QuickMessage::ConvertAll))
                 .button("Open DB", || Message::Quick(QuickMessage::OpenDatabase))
+                .button("Reload Games", || Message::Quick(QuickMessage::ReloadGames))
         }
         w::col()
             .padding(5)
