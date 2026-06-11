@@ -9,11 +9,14 @@ members = [
 	"spel-katalog-games",
 	"spel-katalog-gather",
 	"spel-katalog-info",
+	"spel-katalog-installer",
 	"spel-katalog-lua",
-	"spel-katalog-lua-docs", "spel-katalog-native",
+	"spel-katalog-lua-docs",
+	"spel-katalog-native",
 	"spel-katalog-reflect",
 	"spel-katalog-reflect/derive",
-	"spel-katalog-reflect/derive-lib", "spel-katalog-run",
+	"spel-katalog-reflect/derive-lib",
+	"spel-katalog-run",
 	"spel-katalog-settings",
 	"spel-katalog-sink",
 	"spel-katalog-terminal",
@@ -150,3 +153,4 @@ bytemuck = "1.25.0"
 flate2 = "1.1.9"
 iced_aw = { version = "0.14.1", default-features = false }
 tabled = { version = "0.21.0", default-features = false }
+spel-katalog-installer = { path = "spel-katalog-installer" }

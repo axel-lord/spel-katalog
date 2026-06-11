@@ -9,6 +9,7 @@ use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::{IntoOrRequest, OrRequest};
 use ::spel_katalog_formats::{AdditionalConfig, NativeGame};
 use ::spel_katalog_games::SelDir;
+use ::spel_katalog_installer::Installer;
 use ::spel_katalog_run::run_umu::RunMode;
 use ::spel_katalog_settings::{
     ConfigDir, FilterMode, Load, LutrisDb, Network, Show, Variants, YmlDir,
@@ -154,6 +155,11 @@ impl App {
         match msg {
             QuickMessage::Debug => {
                 ::log::info!("debug action activated");
+                let (_, task) =
+                    ::iced_runtime::window::open(::iced_core::window::Settings::default());
+                return task.map(|id| {
+                    Message::OpenWindow(id, WindowType::Installer(Installer::default()))
+                });
             }
             QuickMessage::CopyFilter => {
                 return ::iced_runtime::clipboard::write(self.filter.clone());
@@ -630,6 +636,13 @@ impl App {
                     return dialog
                         .update(msg)
                         .map(move |request| Message::Dialog(id, OrRequest::Request(request)));
+                }
+            }
+            Message::Installer(id, msg) => {
+                if let Some(WindowType::Installer(installer)) = self.windows.get_mut(&id) {
+                    return installer
+                        .update(msg)
+                        .map(move |msg| Message::Installer(id, msg));
                 }
             }
             Message::BuildDialog(dialog) => {

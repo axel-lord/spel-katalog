@@ -75,6 +75,7 @@ pub enum Message {
     OpenWindow(window::Id, WindowType),
     CloseWindow(window::Id),
     Dialog(window::Id, OrRequest<dialog::Message, dialog::Request>),
+    Installer(window::Id, ::spel_katalog_installer::Message),
     BuildDialog(DialogBuilder),
     #[from]
     Terminal(::spel_katalog_terminal::Message),

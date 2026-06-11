@@ -4544,6 +4544,7 @@ dependencies = [
  "spel-katalog-games",
  "spel-katalog-gather",
  "spel-katalog-info",
+ "spel-katalog-installer",
  "spel-katalog-lua",
  "spel-katalog-lua-docs",
  "spel-katalog-native",
@@ -4724,6 +4725,28 @@ dependencies = [
  "toml 1.1.2+spec-1.1.0",
  "uuid",
  "yaml-rust2",
+]
+
+[[package]]
+name = "spel-katalog-installer"
+version = "0.1.0"
+dependencies = [
+ "iced_aw",
+ "iced_core",
+ "iced_highlighter",
+ "iced_runtime",
+ "iced_widget",
+ "log",
+ "rfd",
+ "smol",
+ "spel-katalog-common",
+ "spel-katalog-formats",
+ "spel-katalog-native",
+ "spel-katalog-settings",
+ "spel-katalog-widget",
+ "tap",
+ "toml 1.1.2+spec-1.1.0",
+ "uuid",
 ]
 
 [[package]]

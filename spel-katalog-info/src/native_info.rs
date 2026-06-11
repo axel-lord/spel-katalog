@@ -6,6 +6,7 @@ use ::std::{io::Cursor, sync::Arc};
 use ::derive_more::From;
 use ::iced_core::{
     Alignment::{self, Center},
+    Font,
     Length::{self, Fill},
     alignment::Vertical,
     keyboard::{Key, Modifiers, key},
@@ -528,7 +529,10 @@ impl State {
                             }),
                     )
                     .push_maybe(thumb.is_some().then(spel_katalog_widget::rule::vertical))
-                    .push(monospace(InfoTable { id, shadows }.get_table().to_string())),
+                    .push(
+                        monospace(InfoTable { id, shadows }.get_table().to_string())
+                            .wrapping(::iced_core::text::Wrapping::Glyph),
+                    ),
             )
             .into()
     }
@@ -590,6 +594,8 @@ impl State {
                     widget::themer(
                         Some(::iced_core::Theme::SolarizedDark),
                         text_editor::TextEditor::new(&self.conf_view)
+                            .font(Font::MONOSPACE)
+                            .wrapping(::iced_core::text::Wrapping::Glyph)
                             .key_binding(|event| {
                                 if let Key::Named(named) = event.modified_key {
                                     match named {
