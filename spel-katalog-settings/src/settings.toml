@@ -151,3 +151,13 @@ path = "{CONFIG}/spel-katalog/"
 title = "Cache Directory"
 help = "Path to cache directory"
 path = "{CACHE}/spel-katalog/"
+
+[InstallLocation]
+title = "Game Install Location"
+help = "Where to install games to"
+path = "{HOME}/Games"
+
+[InstallSource]
+title = "Game Install Source"
+help = "Where to open install dialog"
+path = ""
