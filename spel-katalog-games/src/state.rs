@@ -1,6 +1,6 @@
 //! [State], [Message] and [Request] impls.
 
-use ::core::{cell::Cell, convert::identity, mem, ops::ControlFlow, time::Duration};
+use ::core::{cell::Cell, convert::identity, iter, mem, ops::ControlFlow, time::Duration};
 use ::std::{
     io::Cursor,
     path::{Path, PathBuf},
@@ -23,14 +23,15 @@ use ::parking_lot::Mutex;
 use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use ::rusqlite::{Connection, Statement, named_params};
 use ::rustc_hash::FxHashSet;
-use ::spel_katalog_common::{OrRequest, StatusSender, async_status, status, w};
-use ::spel_katalog_formats::Game;
+use ::spel_katalog_common::{IntoOrRequest, OrRequest, StatusSender, async_status, status, w};
+use ::spel_katalog_formats::{Game, GameId, NativeGame};
 use ::spel_katalog_gather::{
     CoverGatherer, CoverGathererOptions, LoadDbError, load_games_from_database,
     load_thumbnail_database,
 };
 use ::spel_katalog_settings::{CacheDir, CoverartDir, Settings};
 use ::tap::Pipe;
+use ::uuid::Uuid;
 
 use crate::{Element, Games, games::WithThumb};
 
@@ -47,7 +48,7 @@ pub struct State {
     /// Queue used for batching caching of thumbnails.
     cache_queue: (Vec<String>, Vec<::spel_katalog_formats::Image>),
     /// Indices of currently selected games.
-    selected: Option<i64>,
+    selected: Option<GameId>,
     /// How many columns to display.
     columns: Cell<usize>,
 }
@@ -68,17 +69,31 @@ pub enum SelDir {
 }
 
 /// Internal message used for games element.
-#[derive(Debug, IsVariant)]
+#[derive(Debug, IsVariant, Clone)]
 pub enum Message {
     /// Load games from local lutris database.
     LoadDb {
         /// Path to database to load.
         db_path: PathBuf,
     },
-    /// Set loaded games.
-    SetGames {
-        /// Games to set content to.
+    /// Add games.
+    AddGames {
+        /// Games to add.
         games: Vec<Game>,
+    },
+    /// Add a single game.
+    AddNativeGames {
+        /// Games to add.
+        games: Vec<(Uuid, NativeGame, Option<::spel_katalog_formats::Image>)>,
+    },
+    /// Add a single game.
+    AddNativeGame {
+        /// Uuid of game to add.
+        uuid: Uuid,
+        /// Config of game.
+        config: Box<NativeGame>,
+        /// Thumbnail of game.
+        thumb: Option<::spel_katalog_formats::Image>,
     },
     /// Set thumbnails.
     SetImages {
@@ -106,30 +121,34 @@ pub enum Message {
     /// Move selection.
     Select(SelDir),
     /// Select an id.
-    SelectId(i64),
+    SelectId(GameId),
     /// Batch select game.
-    BatchSelect(i64),
+    BatchSelect(GameId),
     /// FLush thumbnail cache to database.
     FlushCache,
+    /// Force re-sort of games.
+    Sort,
 }
 
 /// Requests for other widgets.
-#[derive(Debug, IsVariant)]
+#[derive(Debug, IsVariant, Clone)]
 pub enum Request {
     /// Set currently chosen game.
     ShowGame {
         /// Id of game
-        id: i64,
+        id: GameId,
     },
     /// Run a game.
     Run {
         /// Id of game.
-        id: i64,
+        id: GameId,
         /// Should the game be sandboxed.
         sandbox: bool,
     },
     /// Close game info
     CloseInfo,
+    /// Convert game to native.
+    Convert(GameId),
 }
 
 /// Messages produced by game areas.
@@ -138,17 +157,17 @@ pub enum AreaMessage {
     /// Select a game.
     Select {
         /// Numeric id of game.
-        id: i64,
+        id: GameId,
     },
     /// Given id was batch selected.
     BatchSelect {
         /// Numeric id game.
-        id: i64,
+        id: GameId,
     },
     /// Run game.
     Run {
         /// Numeric id of game.
-        id: i64,
+        id: GameId,
         /// Should the game be sandboxed.
         sandbox: bool,
     },
@@ -171,8 +190,13 @@ impl State {
     }
 
     /// Get id of currently selected game, if any.
-    pub const fn selected(&self) -> Option<i64> {
+    pub const fn selected(&self) -> Option<GameId> {
         self.selected
+    }
+
+    /// Deselect game.
+    pub const fn deselect(&mut self) {
+        self.selected = None;
     }
 
     /// Subscription used by games state.
@@ -194,12 +218,16 @@ impl State {
         filter: &str,
     ) -> Task<OrRequest<Message, Request>> {
         match msg {
+            Message::Sort => {
+                self.sort(settings, filter);
+                Task::none()
+            }
             Message::LoadDb { db_path } => {
                 let tx = tx.clone();
                 Task::future(async move {
                     match ::smol::unblock(move || load_games_from_database(&db_path)).await {
                         Ok(games) => games
-                            .pipe(|games| Message::SetGames { games })
+                            .pipe(|games| Message::AddGames { games })
                             .pipe(OrRequest::Message)
                             .pipe(Task::done),
                         Err(err) => match err {
@@ -213,9 +241,15 @@ impl State {
                 })
                 .then(identity)
             }
-            Message::SetGames { games } => {
-                self.set(
-                    games.into_iter().map(WithThumb::from).collect(),
+            Message::AddGames { games } => {
+                self.add_games(
+                    games.into_iter().map(|game| WithThumb {
+                        game,
+                        thumb: None,
+                        batch_selected: false,
+                        shadows: None,
+                        ghost: false,
+                    }),
                     settings,
                     filter,
                 );
@@ -223,6 +257,48 @@ impl State {
                 status!(tx, "read games from database");
 
                 self.find_cached(settings)
+            }
+            Message::AddNativeGames { games } => {
+                self.add_games(
+                    games.into_iter().map(|(uuid, game, thumb)| WithThumb {
+                        thumb: thumb.map(
+                            |::spel_katalog_formats::Image {
+                                 width,
+                                 height,
+                                 bytes,
+                             }| {
+                                ::iced_core::image::Handle::from_rgba(width, height, bytes)
+                            },
+                        ),
+                        ..WithThumb::from((uuid, game))
+                    }),
+                    settings,
+                    filter,
+                );
+                Task::none()
+            }
+            Message::AddNativeGame {
+                uuid,
+                config,
+                thumb,
+            } => {
+                self.add_games(
+                    iter::once(WithThumb {
+                        thumb: thumb.map(
+                            |::spel_katalog_formats::Image {
+                                 width,
+                                 height,
+                                 bytes,
+                             }| {
+                                ::iced_core::image::Handle::from_rgba(width, height, bytes)
+                            },
+                        ),
+                        ..WithThumb::from((uuid, *config))
+                    }),
+                    settings,
+                    filter,
+                );
+                Task::none()
             }
             Message::SetImages {
                 slugs,
@@ -292,7 +368,7 @@ impl State {
         let game_slugs = self
             .all()
             .iter()
-            .map(|game| game.slug.clone())
+            .filter_map(|game| game.slug().map(ToOwned::to_owned))
             .collect::<Vec<_>>();
 
         let find_cached = ::smol::unblock(move || {
@@ -305,11 +381,7 @@ impl State {
             let mut game_slugs = FxHashSet::from_iter(game_slugs);
 
             for slug in &slugs {
-                if !game_slugs.remove(slug) {
-                    ::log::warn!(
-                        "thumbnail for game with slug {slug} was present in thumbnail cache but not in game datatbase"
-                    );
-                }
+                game_slugs.remove(slug);
             }
 
             let game_slugs = Vec::from_iter(game_slugs);
@@ -375,11 +447,11 @@ impl State {
                 Down | Right => self.displayed().next(),
                 SelDir::None => Option::None,
             }
-            .map(|game| game.id);
+            .map(|game| game.id());
             return;
         };
 
-        let m = |game: &WithThumb| game.id == selected;
+        let m = |game: &WithThumb| game.id() == selected;
 
         let idx = match sel_dir {
             Up | Left => self.displayed().rev().position(m),
@@ -400,7 +472,7 @@ impl State {
             Right => self.displayed().cycle().nth(idx + 1),
             SelDir::None => Option::None,
         }
-        .map(|game| game.id);
+        .map(|game| game.id());
     }
 
     /// Render elements.
@@ -408,11 +480,11 @@ impl State {
         fn card<'a>(
             game: &'a WithThumb,
             width: f32,
-            selected: Option<i64>,
+            selected: Option<GameId>,
         ) -> Element<'a, OrRequest<Message, Request>> {
             let handle = game.thumb.as_ref();
-            let name = game.name.as_str();
-            let id = game.id;
+            let name = game.name();
+            let id = game.id();
 
             fn base(theme: &::iced_core::Theme) -> container::Style {
                 let style = container::bordered_box(theme);
@@ -441,8 +513,8 @@ impl State {
 
             let style: fn(&::iced_core::Theme) -> container::Style =
                 match (selected, game.batch_selected) {
-                    (Some(id), false) if game.id == id => select,
-                    (Some(id), true) if game.id == id => batch_and_select,
+                    (Some(id), false) if game.id() == id => select,
+                    (Some(id), true) if game.id() == id => batch_and_select,
                     (_, true) => batch,
                     (_, false) => not_selected,
                 };
@@ -460,7 +532,7 @@ impl State {
                 .align_x(Alignment::Center)
                 .align_y(Alignment::End);
 
-            match handle {
+            let element = match handle {
                 Some(handle) => {
                     let image = widget::image(handle)
                         .width(width)
@@ -473,9 +545,24 @@ impl State {
             .interaction(::iced_core::mouse::Interaction::Pointer)
             .on_release(AreaMessage::Select { id })
             .on_middle_release(AreaMessage::Run { id, sandbox: true })
-            .on_right_release(AreaMessage::BatchSelect { id })
+            // .on_right_release(AreaMessage::BatchSelect { id })
             .pipe(Element::from)
-            .map(Into::into)
+            .map(OrRequest::<Message, Request>::from);
+
+            ::iced_aw::ContextMenu::new(element, move || {
+                ::spel_katalog_widget::ListMenu::new()
+                    .push(widget::text("Game"))
+                    .separator()
+                    .button("Run", move || {
+                        Request::Run { id, sandbox: true }.into_request()
+                    })
+                    .button("Batch", move || Message::BatchSelect(id).into_message())
+                    .button("Info", move || Message::SelectId(id).into_message())
+                    .separator()
+                    .button("Convert", move || Request::Convert(id).into_request())
+                    .into()
+            })
+            .into()
         }
 
         widget::responsive(move |size| {

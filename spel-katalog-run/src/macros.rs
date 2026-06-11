@@ -1,3 +1,5 @@
+//! Macros in use to create values.
+
 /// Convert inputs to an array of [OsString]
 ///
 /// ```
@@ -12,15 +14,4 @@ macro_rules! args {
     };
 }
 
-/// Create a formatted string error.
-/// ```
-/// let err = strerror!("Error occured, {}", 15);
-/// ```
-macro_rules! strerror {
-    ($($arg:tt)*) => {
-        $crate::run_game::strerror::StrError::fmt(format_args!($($arg)*))
-    };
-}
-
 pub(crate) use args;
-pub(crate) use strerror;

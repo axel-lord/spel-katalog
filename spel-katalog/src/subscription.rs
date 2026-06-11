@@ -44,7 +44,6 @@ impl App {
 
                         Named::Tab => QuickMessage::Next,
                         Named::Enter | Named::Space => QuickMessage::RunSelected,
-
                         Named::F1 => QuickMessage::ToggleLuaApi,
                         Named::F2 => QuickMessage::ToggleSettings,
                         Named::F3 => QuickMessage::ToggleMain,
@@ -66,6 +65,7 @@ impl App {
                     "l" => QuickMessage::ToggleLuaApi,
                     "p" => QuickMessage::ToggleProcessInfo,
                     "g" => QuickMessage::ToggleGameInfo,
+                    "d" => QuickMessage::Debug,
                     _ => return None,
                 }
             } else if modifiers == Modifiers::SHIFT {

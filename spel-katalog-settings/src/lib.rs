@@ -1,12 +1,13 @@
 //! Settings widgets.
 
-use ::derive_more::{Deref, DerefMut, From, IsVariant};
+use ::derive_more::{From, IsVariant};
 use ::iced_core::{Alignment, Element, Length::Fill};
 use ::iced_runtime::Task;
 use ::iced_widget::{button, space, text};
 
+use ::core::ops::{Deref, DerefMut};
 use ::spel_katalog_common::{StatusSender, async_status, w};
-use ::std::{collections::HashMap, path::PathBuf};
+use ::std::{collections::HashMap, path::PathBuf, sync::Arc};
 use ::tap::Pipe;
 
 mod list;
@@ -281,14 +282,26 @@ pub enum Message {
 }
 
 /// State of settings view.
-#[derive(Debug, Clone, Deref, DerefMut)]
+#[derive(Debug, Clone)]
 pub struct State {
     /// Settings state.
-    #[deref]
-    #[deref_mut]
-    pub settings: Settings,
+    pub settings: Arc<Settings>,
     /// Path to config file.
     pub config: PathBuf,
+}
+
+impl DerefMut for State {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        Arc::make_mut(&mut self.settings)
+    }
+}
+
+impl Deref for State {
+    type Target = Settings;
+
+    fn deref(&self) -> &Self::Target {
+        &self.settings
+    }
 }
 
 /// Save settings to given path.
@@ -320,15 +333,20 @@ impl State {
         Delta::from(t).apply(self);
     }
 
+    /// Get a snapshot of settings at time ov invocation.
+    pub fn snapshot(&self) -> Arc<Settings> {
+        Arc::clone(&self.settings)
+    }
+
     /// Update state by message.
     pub fn update(&mut self, message: Message, tx: &StatusSender) -> Task<Message> {
         match message {
             Message::Delta(delta) => {
-                delta.apply(&mut self.settings);
+                delta.apply(self);
             }
             Message::Save => {
                 let tx = tx.clone();
-                let settings = self.settings.clone();
+                let settings = (*self.settings).clone();
                 let path = self.config.clone();
                 return Task::future(async move {
                     match save(settings, path).await {

@@ -22,58 +22,74 @@ use ::iced_widget::{
 use ::image::ImageError;
 use ::open::that;
 use ::spel_katalog_common::{OrRequest, PushMaybe, StatusSender, async_status, status, styling, w};
-use ::spel_katalog_formats::AdditionalConfig;
+use ::spel_katalog_formats::{AdditionalConfig, Game, GameId, NativeGame, lutris_config};
+use ::spel_katalog_native::Pool;
 use ::spel_katalog_settings::{ConfigDir, CoverartDir, Settings, YmlDir};
 use ::tap::Pipe;
+use ::uuid::Uuid;
 use ::yaml_rust2::Yaml;
 
-pub mod formats;
+pub use self::native_info::{QuickMessage as NativeMessage, Request as NativeRequest};
 
 mod attrs;
+mod native_info;
+mod native_table;
 
 /// Element alias.
 type Element<'a, M> = ::iced_core::Element<'a, M, ::iced_core::Theme, ::iced_renderer::Renderer>;
 
+/// Set config editor content.
+fn set_content(w: &mut widget::text_editor::Content, content: String) {
+    // Probably most correct solution.
+    // self.content = widget::text_editor::Content::with_text(&content);
+
+    // Unless performed as actions, formatting is ignored for some reason
+    [
+        Action::SelectAll,
+        Action::Edit(Edit::Delete),
+        Action::Edit(Edit::Paste(Arc::new(content))),
+    ]
+    .into_iter()
+    .for_each(|action| w.perform(action));
+}
+
 /// State of info display.
-#[derive(Debug)]
-pub struct State {
-    /// Id of current game.
-    id: i64,
-    /// Content of config editor.
-    content: widget::text_editor::Content,
-    /// Path to game config.
-    config_path: Option<PathBuf>,
-    /// Common parent of wine prefix and executable.
-    common_parent: PathBuf,
-    /// Content of additional roots editor.
-    additional_roots_content: widget::text_editor::Content,
-    /// Additional config of game.
-    additional: AdditionalConfig,
-    /// Attribute editor.
-    attrs: attrs::State,
+#[derive(Debug, Default)]
+pub enum State {
+    /// A lutris game is displayed.
+    Lutris {
+        /// Id of current game.
+        id: GameId,
+        /// Content of config editor.
+        content: widget::text_editor::Content,
+        /// Path to game config.
+        config_path: Option<PathBuf>,
+        /// Common parent of wine prefix and executable.
+        common_parent: PathBuf,
+        /// Content of additional roots editor.
+        additional_roots_content: widget::text_editor::Content,
+        /// Additional config of game.
+        additional: AdditionalConfig,
+        /// Attribute editor.
+        attrs: attrs::State,
+    },
+    /// A native game is displayed.
+    Native {
+        /// Native view state.
+        state: native_info::State,
+    },
+    /// No game is displayed.
+    #[default]
+    None,
 }
 
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            id: i64::MAX,
-            content: widget::text_editor::Content::default(),
-            additional_roots_content: Default::default(),
-            config_path: None,
-            common_parent: PathBuf::from("/"),
-            additional: AdditionalConfig::default(),
-            attrs: attrs::State::default(),
-        }
-    }
-}
-
-/// Message used by info display.
-#[derive(Debug, Clone, From, IsVariant)]
-pub enum Message {
-    /// Set content of config editor.
-    SetContent {
+/// Content given to [Message::SetContent].
+#[derive(Debug, Clone)]
+pub enum GameContent {
+    /// Content is for a lutris game.
+    Lutris {
         /// Id of game to verify match.
-        id: i64,
+        id: GameId,
         /// Content to set editor to.
         content: String,
         /// Path to game config.
@@ -81,9 +97,27 @@ pub enum Message {
         /// Additional config.
         additional: AdditionalConfig,
     },
+    /// Content is for a native game.
+    Native {
+        /// Id of game to verify match.
+        uuid: Uuid,
+        /// Loaded game data.
+        config: Box<NativeGame>,
+    },
+}
+
+/// Message used by info display.
+#[derive(Debug, Clone, From, IsVariant)]
+pub enum Message {
+    /// Set content of config editor.
+    #[from]
+    SetContent(GameContent),
     /// Update config editor content.
     #[from]
     UpdateContent(widget::text_editor::Action),
+    /// Forward inner message.
+    #[from]
+    NativeInfo(native_info::Message),
     /// Update additional roots editor content.
     UpdateAdditionalRoots(widget::text_editor::Action),
     /// Update attribute editor.
@@ -95,12 +129,12 @@ pub enum Message {
     /// Add a thumbail.
     AddThumb {
         /// Game id to add thumbnail for
-        id: i64,
+        id: GameId,
     },
     /// Remove a thumbail.
     RemoveThumb {
         /// Game id to removremovee thumbnail for
-        id: i64,
+        id: GameId,
     },
     /// Set executable in game config.
     SetExe {
@@ -133,29 +167,31 @@ pub enum Request {
     /// Run the game with given id.
     RunGame {
         /// Id of game to run.
-        id: i64,
+        id: GameId,
         /// Should game be sandboxed.
         sandbox: bool,
     },
     /// Open shell in game sandbox.
     OpenShell {
         /// id of game to open shell for.
-        id: i64,
+        id: GameId,
     },
     /// Run lutris in sandbox of game.
     RunLutrisInSandbox {
         /// Id of game to run lutris in sandbox of.
-        id: i64,
+        id: GameId,
     },
+    /// Native info request.
+    NativeInfo(native_info::Request),
 }
 
 impl State {
     /// Get id of currently viewed game.
-    pub const fn id(&self) -> Option<i64> {
-        if self.id == i64::MAX {
-            None
-        } else {
-            Some(self.id)
+    pub const fn id(&self) -> Option<GameId> {
+        match self {
+            State::Lutris { id, .. } => Some(*id),
+            State::Native { state } => Some(GameId::Native(state.uuid)),
+            State::None => None,
         }
     }
 
@@ -171,59 +207,93 @@ impl State {
         tx: &StatusSender,
         settings: &Settings,
         game: &::spel_katalog_formats::Game,
+        games_db: &Pool,
     ) -> Task<Message> {
-        let id = game.id;
+        let id = game.id();
 
-        // We leave the rest of the content to avoid being empty.
-        self.id = id;
+        match game {
+            Game::Lutris(game) => {
+                *self = Self::Lutris {
+                    id,
+                    content: Default::default(),
+                    config_path: Default::default(),
+                    common_parent: Default::default(),
+                    additional_roots_content: Default::default(),
+                    additional: Default::default(),
+                    attrs: Default::default(),
+                };
 
-        let path = settings
-            .get::<YmlDir>()
-            .as_path()
-            .join(&game.configpath)
-            .with_extension("yml");
+                let path = settings
+                    .get::<YmlDir>()
+                    .as_path()
+                    .join(&game.configpath)
+                    .with_extension("yml");
 
-        let additional_path = settings
-            .get::<ConfigDir>()
-            .as_path()
-            .join("games")
-            .join(format!("{id}.toml"));
+                let additional_path = settings
+                    .get::<ConfigDir>()
+                    .as_path()
+                    .join("games")
+                    .join(format!("{id}.toml"));
 
-        async fn read_additional(path: &Path) -> Option<AdditionalConfig> {
-            // Usually a bad idea however since we deal with it not existing correctly
-            // anyways this is just some redundancy that prevents log spam.
-            if !path.exists() {
-                return None;
-            };
-            ::smol::fs::read_to_string(path)
-                .await
-                .map_err(|err| ::log::error!("could not read {path:?} to string\n{err}"))
-                .ok()?
-                .pipe_deref(::toml::from_str)
-                .map_err(|err| ::log::error!("could not deserialize {path:?}\n{err}"))
-                .ok()
-        }
-
-        let tx = tx.clone();
-        Task::future(async move {
-            match ::smol::fs::read_to_string(&path).await {
-                Ok(value) => {
-                    let additional = read_additional(&additional_path).await.unwrap_or_default();
-                    Task::done(Message::SetContent {
-                        id,
-                        content: value,
-                        path: path.clone(),
-                        additional,
-                    })
+                async fn read_additional(path: &Path) -> Option<AdditionalConfig> {
+                    // Usually a bad idea however since we deal with it not existing correctly
+                    // anyways this is just some redundancy that prevents log spam.
+                    if !path.exists() {
+                        return None;
+                    };
+                    ::smol::fs::read_to_string(path)
+                        .await
+                        .map_err(|err| ::log::error!("could not read {path:?} to string\n{err}"))
+                        .ok()?
+                        .pipe_deref(::toml::from_str)
+                        .map_err(|err| ::log::error!("could not deserialize {path:?}\n{err}"))
+                        .ok()
                 }
-                Err(err) => {
-                    ::log::error!("failed to read yml {path:?}\n{err}");
-                    async_status!(tx, "could not read {path:?}").await;
-                    Task::done(Message::Clear)
-                }
+
+                let tx = tx.clone();
+                Task::future(async move {
+                    match ::smol::fs::read_to_string(&path).await {
+                        Ok(content) => {
+                            let additional =
+                                read_additional(&additional_path).await.unwrap_or_default();
+                            Task::done(Message::SetContent(GameContent::Lutris {
+                                id,
+                                content,
+                                path,
+                                additional,
+                            }))
+                        }
+                        Err(err) => {
+                            ::log::error!("failed to read yml {path:?}\n{err}");
+                            async_status!(tx, "could not read {path:?}").await;
+                            Task::done(Message::Clear)
+                        }
+                    }
+                })
+                .then(identity)
             }
-        })
-        .then(identity)
+            Game::Native {
+                name: _,
+                installed_at: _,
+                uuid,
+                hidden: _,
+            } => {
+                let games_db = games_db.clone();
+                let uuid = *uuid;
+                Task::future(::smol::unblock(move || {
+                    games_db
+                        .get_game(uuid)
+                        .map_err(|err| ::log::error!("could not get game with uuid {uuid}\n{err}"))
+                        .ok()
+                }))
+                .and_then(move |config| {
+                    Task::done(Message::SetContent(GameContent::Native {
+                        uuid,
+                        config: Box::new(config),
+                    }))
+                })
+            }
+        }
     }
 
     /// Udate state of info display.
@@ -232,60 +302,90 @@ impl State {
         message: Message,
         tx: &'a StatusSender,
         settings: &'a Settings,
-        game_by_id: &dyn Fn(i64) -> Option<&'a ::spel_katalog_formats::Game>,
+        game_by_id: &dyn Fn(GameId) -> Option<&'a ::spel_katalog_formats::Game>,
+        games_db: &Pool,
     ) -> Task<OrRequest<Message, Request>> {
         match message {
             Message::Clear => {
                 self.clear();
                 Task::none()
             }
-            Message::SetContent {
-                id,
-                content,
-                path,
-                additional,
-            } => {
-                // Verify id matches.
-                if id != self.id {
-                    return Task::none();
-                }
+            Message::SetContent(content) => {
+                match content {
+                    GameContent::Lutris {
+                        id,
+                        content,
+                        path,
+                        additional,
+                    } => {
+                        let Self::Lutris {
+                            id: current_id,
+                            config_path,
+                            content: w,
+                            additional_roots_content,
+                            attrs,
+                            additional: w_additional,
+                            common_parent,
+                            ..
+                        } = self
+                        else {
+                            return Task::none();
+                        };
+                        if current_id != &id {
+                            return Task::none();
+                        }
+                        set_content(w, content.clone());
+                        *config_path = Some(path.clone());
+                        *additional_roots_content = widget::text_editor::Content::with_text(
+                            &additional.sandbox_root.join("\n"),
+                        );
+                        *attrs = attrs::State::default();
+                        attrs.attrs = additional
+                            .attrs
+                            .iter()
+                            .map(|(key, value)| (key.clone(), value.clone()))
+                            .collect();
+                        *w_additional = additional;
 
-                self.set_content(content.clone());
-
-                self.config_path = Some(path.clone());
-                self.additional_roots_content =
-                    widget::text_editor::Content::with_text(&additional.sandbox_root.join("\n"));
-                self.attrs = attrs::State::default();
-                self.attrs.attrs = additional
-                    .attrs
-                    .iter()
-                    .map(|(key, value)| (key.clone(), value.clone()))
-                    .collect();
-                self.additional = additional;
-
-                // Move to task?
-                let yml = match formats::Config::parse(&content) {
-                    Ok(yml) => yml,
-                    Err(err) => {
-                        ::log::error!("could not parse yml {path:?}\n{err}");
-                        status!(tx, "could not parse {path:?}");
-                        return Task::none();
+                        // Move to task?
+                        let yml = match lutris_config::Config::parse(&content) {
+                            Ok(yml) => yml,
+                            Err(err) => {
+                                ::log::error!("could not parse yml {path:?}\n{err}");
+                                status!(tx, "could not parse {path:?}");
+                                return Task::none();
+                            }
+                        };
+                        *common_parent = yml
+                            .game
+                            .common_parent(|| ::spel_katalog_settings::HOME.as_path());
                     }
-                };
-
-                self.common_parent = yml.game.common_parent();
+                    GameContent::Native { uuid, config } => {
+                        *self = Self::Native {
+                            state: native_info::State::new(uuid, *config),
+                        }
+                    }
+                }
 
                 Task::none()
             }
             Message::UpdateContent(action) => {
-                self.content.perform(action);
+                if let Self::Lutris { content, .. } = self {
+                    content.perform(action);
+                }
                 Task::none()
             }
             Message::SaveContent => {
-                if let Some(path) = &self.config_path {
+                if let Self::Lutris {
+                    content,
+                    config_path,
+                    ..
+                } = self
+                    && let Some(path) = config_path
+                {
                     let path = path.to_path_buf();
                     let tx = tx.clone();
-                    let text = self.content.text();
+                    let text = content.text();
                     Task::future(async move {
                         match ::smol::fs::write(&path, text).await {
                             Ok(_) => {
@@ -342,8 +442,11 @@ impl State {
                         },
                     }
 
-                    let dest = settings.get::<CoverartDir>().as_path().join(&game.slug);
-                    let slug = game.slug.clone();
+                    let Some(slug) = game.slug().map(str::to_owned) else {
+                        ::log::warn!("slug not available for native games");
+                        return Task::none();
+                    };
+                    let dest = settings.get::<CoverartDir>().as_path().join(&slug);
 
                     let task = async move {
                         let dialog = ::rfd::AsyncFileDialog::new()
@@ -408,8 +511,11 @@ impl State {
                     return Task::none();
                 };
 
-                let dest = settings.get::<CoverartDir>().as_path().join(&game.slug);
-                let slug = game.slug.clone();
+                let Some(slug) = game.slug().map(str::to_owned) else {
+                    ::log::warn!("slug not available for native games");
+                    return Task::none();
+                };
+                let dest = settings.get::<CoverartDir>().as_path().join(&slug);
                 let tx = tx.clone();
 
                 let task = async move {
@@ -429,28 +535,40 @@ impl State {
                 Task::future(task)
             }
             Message::UpdateAdditionalRoots(action) => {
-                self.additional_roots_content.perform(action);
+                if let Self::Lutris {
+                    additional_roots_content,
+                    additional,
+                    ..
+                } = self
+                {
+                    additional_roots_content.perform(action);
 
-                self.additional.sandbox_root = self
-                    .additional_roots_content
-                    .lines()
-                    .filter(|line| !line.text.trim().is_empty())
-                    .map(|s| s.text.trim().to_owned())
-                    .collect();
+                    additional.sandbox_root = additional_roots_content
+                        .lines()
+                        .filter(|line| !line.text.trim().is_empty())
+                        .map(|s| s.text.trim().to_owned())
+                        .collect();
+                }
 
                 Task::none()
             }
             Message::UpdateAttrs(msg) => {
-                let task = self.attrs.update(msg);
+                if let Self::Lutris {
+                    additional, attrs, ..
+                } = self
+                {
+                    let task = attrs.update(msg);
 
-                self.additional.attrs = self
-                    .attrs
-                    .attrs
-                    .iter()
-                    .map(|(key, value)| (key.clone(), value.clone()))
-                    .collect();
+                    additional.attrs = attrs
+                        .attrs
+                        .iter()
+                        .map(|(key, value)| (key.clone(), value.clone()))
+                        .collect();
 
-                task.map(Message::UpdateAttrs).map(OrRequest::Message)
+                    task.map(Message::UpdateAttrs).map(OrRequest::Message)
+                } else {
+                    Task::none()
+                }
             }
             Message::SaveAdditional => {
                 async fn write_additional(path: &Path, additional: AdditionalConfig) -> Option<()> {
@@ -465,26 +583,32 @@ impl State {
                         .ok()
                 }
 
-                let id = self.id;
-                let additional = self.additional.clone();
-                let extra_config_dir = settings.get::<ConfigDir>().as_path().join("games");
+                if let Self::Lutris { id, additional, .. } = self {
+                    let id = *id;
+                    let additional = additional.clone();
+                    let extra_config_dir = settings.get::<ConfigDir>().as_path().join("games");
 
-                let tx = tx.clone();
-                Task::future(async move {
-                    if let Err(err) = ::smol::fs::create_dir_all(&extra_config_dir).await {
-                        async_status!(tx, "could not create {extra_config_dir:?}").await;
-                        ::log::error!(
-                            "could not create extra config dir {extra_config_dir:?}\n{err}"
-                        );
-                        return;
-                    };
-                    let additional_path = extra_config_dir.join(format!("{id}.toml"));
-                    match write_additional(&additional_path, additional).await {
-                        Some(_) => async_status!(tx, "saved additional for game {id}").await,
-                        None => async_status!(tx, "could not save addotional for game {id}").await,
-                    }
-                })
-                .then(|_| Task::none())
+                    let tx = tx.clone();
+                    Task::future(async move {
+                        if let Err(err) = ::smol::fs::create_dir_all(&extra_config_dir).await {
+                            async_status!(tx, "could not create {extra_config_dir:?}").await;
+                            ::log::error!(
+                                "could not create extra config dir {extra_config_dir:?}\n{err}"
+                            );
+                            return;
+                        };
+                        let additional_path = extra_config_dir.join(format!("{id}.toml"));
+                        match write_additional(&additional_path, additional).await {
+                            Some(_) => async_status!(tx, "saved additional for game {id}").await,
+                            None => {
+                                async_status!(tx, "could not save addotional for game {id}").await
+                            }
+                        }
+                    })
+                    .then(|_| Task::none())
+                } else {
+                    Task::none()
+                }
             }
             Message::SetExe { path } => {
                 self.set_exe(path, tx);
@@ -492,87 +616,95 @@ impl State {
             }
             Message::OpenExe => self.open_exe(tx).unwrap_or_else(Task::none),
             Message::OpenDir => {
-                let Some(game) = game_by_id(self.id) else {
-                    status!(tx, "could not get game by id {}", self.id);
-                    return Task::none();
-                };
-
-                let config_path = settings
-                    .get::<YmlDir>()
-                    .as_path()
-                    .join(&game.configpath)
-                    .with_extension("yml");
-
-                let tx = tx.clone();
-
-                Task::future(async move {
-                    let content = match ::smol::fs::read_to_string(&config_path).await {
-                        Ok(content) => content,
-                        Err(err) => {
-                            async_status!(&tx, "could not read {config_path:?}").await;
-                            ::log::error!("while reading {config_path:?}\n{err}");
-                            return;
-                        }
+                if let Self::Lutris { id, .. } = self {
+                    let Some(game) = game_by_id(*id) else {
+                        status!(tx, "could not get game by id {}", id);
+                        return Task::none();
                     };
 
-                    let config = match formats::Config::parse(&content) {
-                        Ok(config) => config,
-                        Err(err) => {
-                            async_status!(&tx, "could not parse {config_path:?}").await;
-                            ::log::error!("while parsing {config_path:?} as yaml\n{err}");
-                            return;
-                        }
+                    let Game::Lutris(game) = game else {
+                        ::log::warn!("open dir not available for native games");
+                        return Task::none();
                     };
 
-                    let parent = match config.game.exe.canonicalize() {
-                        Ok(mut exe_path) => {
-                            if exe_path.pop() {
-                                exe_path
-                            } else {
-                                async_status!(&tx, "could not get parent of {exe_path:?}").await;
-                                ::log::error!("could not get parent of {exe_path:?}");
+                    let config_path = settings
+                        .get::<YmlDir>()
+                        .as_path()
+                        .join(&game.configpath)
+                        .with_extension("yml");
+
+                    let tx = tx.clone();
+
+                    Task::future(async move {
+                        let content = match ::smol::fs::read_to_string(&config_path).await {
+                            Ok(content) => content,
+                            Err(err) => {
+                                async_status!(&tx, "could not read {config_path:?}").await;
+                                ::log::error!("while reading {config_path:?}\n{err}");
                                 return;
                             }
-                        }
-                        Err(err) => {
-                            async_status!(&tx, "could not canonicalize {:?}", config.game.exe)
-                                .await;
-                            ::log::error!("while canonicalizing {:?}\n{err}", config.game.exe);
-                            return;
-                        }
-                    };
+                        };
 
-                    if let Err(err) = that(&parent) {
-                        async_status!(&tx, "failed to open {parent:?}").await;
-                        ::log::error!("failed to open {parent:?}\n{err}");
-                    }
+                        let config = match lutris_config::Config::parse(&content) {
+                            Ok(config) => config,
+                            Err(err) => {
+                                async_status!(&tx, "could not parse {config_path:?}").await;
+                                ::log::error!("while parsing {config_path:?} as yaml\n{err}");
+                                return;
+                            }
+                        };
 
-                    async_status!(&tx, "opened {parent:?}").await;
-                })
-                .then(|_| Task::none())
+                        let parent = match config.game.exe.canonicalize() {
+                            Ok(mut exe_path) => {
+                                if exe_path.pop() {
+                                    exe_path
+                                } else {
+                                    async_status!(&tx, "could not get parent of {exe_path:?}")
+                                        .await;
+                                    ::log::error!("could not get parent of {exe_path:?}");
+                                    return;
+                                }
+                            }
+                            Err(err) => {
+                                async_status!(&tx, "could not canonicalize {:?}", config.game.exe)
+                                    .await;
+                                ::log::error!("while canonicalizing {:?}\n{err}", config.game.exe);
+                                return;
+                            }
+                        };
+
+                        if let Err(err) = that(&parent) {
+                            async_status!(&tx, "failed to open {parent:?}").await;
+                            ::log::error!("failed to open {parent:?}\n{err}");
+                        }
+
+                        async_status!(&tx, "opened {parent:?}").await;
+                    })
+                    .then(|_| Task::none())
+                } else {
+                    Task::none()
+                }
+            }
+            Message::NativeInfo(message) => {
+                if let Self::Native { state } = self {
+                    state.update(message, games_db, settings).map(|msg| {
+                        msg.map_request(Request::NativeInfo)
+                            .map_message(Message::NativeInfo)
+                    })
+                } else {
+                    Task::none()
+                }
             }
         }
     }
 
-    /// Set config editor content.
-    fn set_content(&mut self, content: String) {
-        // Probably most correct solution.
-        // self.content = widget::text_editor::Content::with_text(&content);
-
-        // Unless performed as actions, formatting is ignored for some reason
-        [
-            Action::SelectAll,
-            Action::Edit(Edit::Delete),
-            Action::Edit(Edit::Paste(Arc::new(content))),
-        ]
-        .into_iter()
-        .for_each(|action| self.content.perform(action));
-    }
-
     /// Open dialog to replace exe in config.
     fn open_exe(&mut self, tx: &StatusSender) -> Option<Task<OrRequest<Message, Request>>> {
+        let Self::Lutris { content, .. } = self else {
+            return None;
+        };
         let tx = tx.clone();
-        let exe = formats::Config::parse(&self.content.text())
+        let exe = lutris_config::Config::parse(&content.text())
             .map_err(|err| {
                 ::log::error!("could not load yaml\n{err}");
                 status!(&tx, "could not load yaml");
@@ -582,7 +714,7 @@ impl State {
             .exe
             .to_path_buf();
 
-        let Some(dir) = formats::Config::parse(&self.content.text())
+        let Some(dir) = lutris_config::Config::parse(&content.text())
             .map_err(|err| {
                 ::log::error!("could not load yaml\n{err}");
                 status!(&tx, "could not load yaml");
@@ -619,9 +751,12 @@ impl State {
 
     /// Set exe in config.
     fn set_exe(&mut self, path: PathBuf, tx: &StatusSender) -> Option<()> {
+        let Self::Lutris { content, .. } = self else {
+            return None;
+        };
         let path = path.to_str().map(String::from)?;
 
-        let yml_content = self.content.text();
+        let yml_content = content.text();
         let mut yml = ::yaml_rust2::YamlLoader::load_from_str(&yml_content)
             .map_err(|err| {
                 ::log::error!("could not load yaml\n{err}");
@@ -632,9 +767,9 @@ impl State {
         let exe = yml
             .first_mut()?
             .as_mut_hash()?
-            .get_mut(&formats::GAME)?
+            .get_mut(&lutris_config::GAME)?
             .as_mut_hash()?
-            .get_mut(&formats::EXE)?;
+            .get_mut(&lutris_config::EXE)?;
 
         *exe = Yaml::String(path);
 
@@ -655,17 +790,32 @@ impl State {
             _ = text.drain(..pfx.len());
         }
 
-        self.set_content(text);
+        set_content(content, text);
 
         Some(())
     }
 
-    /// View game info.
-    pub fn titlebar<'a, M: 'a>(
+    /// Draw titlebar section of info view.
+    pub fn titlebar<'a, M: 'a + From<Message> + Clone>(
         &'a self,
         game: &'a ::spel_katalog_formats::Game,
         thumb: Option<&'a widget::image::Handle>,
-        id: i64,
+        id: GameId,
+        shadows: Option<GameId>,
+        buttons: Element<'a, M>,
+    ) -> Element<'a, M> {
+        match self {
+            State::Native { state } => state.titlebar(game, thumb, id, shadows, buttons),
+            _ => self.titlebar_(game, thumb, id, buttons),
+        }
+    }
+
+    /// View game info.
+    fn titlebar_<'a, M: 'a>(
+        &'a self,
+        game: &'a ::spel_katalog_formats::Game,
+        thumb: Option<&'a widget::image::Handle>,
+        id: GameId,
         buttons: Element<'a, M>,
     ) -> Element<'a, M> {
         w::row()
@@ -677,7 +827,7 @@ impl State {
                 w::col()
                     .push(
                         w::row()
-                            .push(widget::text(&game.name).width(Fill).align_x(Center))
+                            .push(widget::text(game.name()).width(Fill).align_x(Center))
                             .push(buttons),
                     )
                     .push(spel_katalog_widget::rule::horizontal())
@@ -685,24 +835,32 @@ impl State {
                         w::row()
                             .push(widget::text("Runner").font(Font::MONOSPACE))
                             .push(spel_katalog_widget::rule::vertical())
-                            .push(
-                                widget::value(&game.runner)
-                                    .font(Font::MONOSPACE)
-                                    .align_x(Alignment::Start)
-                                    .width(Fill),
-                            ),
+                            .push_maybe(if let Game::Lutris(game) = game {
+                                Some(
+                                    widget::value(&game.runner)
+                                        .font(Font::MONOSPACE)
+                                        .align_x(Alignment::Start)
+                                        .width(Fill),
+                                )
+                            } else {
+                                None
+                            }),
                     )
                     .push(spel_katalog_widget::rule::horizontal())
                     .push(
                         w::row()
                             .push(widget::text("Slug  ").font(Font::MONOSPACE))
                             .push(spel_katalog_widget::rule::vertical())
-                            .push(
-                                widget::value(&game.slug)
-                                    .font(Font::MONOSPACE)
-                                    .align_x(Alignment::Start)
-                                    .width(Fill),
-                            ),
+                            .push_maybe(if let Game::Lutris(game) = game {
+                                Some(
+                                    widget::value(&game.slug)
+                                        .font(Font::MONOSPACE)
+                                        .align_x(Alignment::Start)
+                                        .width(Fill),
+                                )
+                            } else {
+                                None
+                            }),
                     )
                     .push(spel_katalog_widget::rule::horizontal())
                     .push(
@@ -722,121 +880,142 @@ impl State {
 
     /// View info.
     pub fn view<'a>(&'a self, has_thumb: bool) -> Element<'a, OrRequest<Message, Request>> {
-        let id = self.id;
-        widget::Column::new()
-            .spacing(3)
-            .push(
-                [
-                    button("Sandbox")
-                        .style(widget::button::success)
-                        .on_press(OrRequest::Request(Request::RunGame { id, sandbox: true })),
-                    button("Run")
-                        .style(widget::button::danger)
-                        .on_press(OrRequest::Request(Request::RunGame { id, sandbox: false })),
-                    button("Shell")
-                        .style(widget::button::secondary)
-                        .on_press(OrRequest::Request(Request::OpenShell { id })),
-                    button("Lutris")
-                        .on_press(OrRequest::Request(Request::RunLutrisInSandbox { id })),
-                    button("+Thumb").padding(3).on_press_maybe(
-                        (!has_thumb).then(|| OrRequest::Message(Message::AddThumb { id })),
-                    ),
-                    button("-Thumb")
-                        .style(widget::button::danger)
-                        .on_press_maybe(
-                            has_thumb.then(|| OrRequest::Message(Message::RemoveThumb { id })),
-                        ),
-                    button("Open").on_press(OrRequest::Message(Message::OpenDir)),
-                ]
-                .into_iter()
-                .fold(w::row(), |row, btn| row.push(btn.padding(3))),
-            )
-            .push(spel_katalog_widget::rule::horizontal())
-            .push(spel_katalog_widget::scrollable(
+        match self {
+            State::Lutris {
+                id,
+                content,
+                config_path,
+                common_parent,
+                additional_roots_content,
+                additional,
+                attrs,
+            } => {
+                let id = *id;
                 widget::Column::new()
                     .spacing(3)
-                    .push("Root Directories")
-                    .push(if self.additional.sandbox_root.is_empty() {
-                        widget::value(self.common_parent.display())
-                            .pipe(widget::container)
-                            .width(Fill)
-                            .padding(3)
-                            .style(|t| styling::box_border(t).background(t.palette().background))
-                            .pipe(Element::from)
-                    } else {
-                        let mut iter = self.additional.sandbox_root.iter().map(widget::text);
-                        w::col()
-                            .push_maybe(iter.next())
-                            .extend(iter.flat_map(|row| {
-                                [spel_katalog_widget::rule::horizontal().into(), row.into()]
-                            }))
-                            .pipe(widget::container)
-                            .width(Fill)
-                            .padding(3)
-                            .style(|t| styling::box_border(t).background(t.palette().background))
-                            .into()
-                    })
                     .push(
-                        w::row()
-                            .push("Additional")
-                            .push(widget::space::horizontal())
-                            .push(
-                                button("Save")
-                                    .padding(3)
-                                    .on_press(OrRequest::Message(Message::SaveAdditional)),
+                        [
+                            button("Sandbox").style(widget::button::success).on_press(
+                                OrRequest::Request(Request::RunGame { id, sandbox: true }),
                             ),
-                    )
-                    .push(spel_katalog_widget::rule::horizontal())
-                    .push("Sandbox Roots")
-                    .push(
-                        widget::text_editor(&self.additional_roots_content)
-                            .on_action(|action| {
-                                action
-                                    .pipe(Message::UpdateAdditionalRoots)
-                                    .pipe(OrRequest::Message)
-                            })
-                            .padding(3),
-                    )
-                    .push("Attributes")
-                    .push(
-                        self.attrs
-                            .view()
-                            .map(Message::UpdateAttrs)
-                            .map(OrRequest::Message),
-                    )
-                    .push(spel_katalog_widget::rule::horizontal())
-                    .push(
-                        w::row()
-                            .push(widget::container("Game Yml").padding(3))
-                            .push(widget::space::horizontal())
-                            .push(
-                                button("Exe")
-                                    .padding(3)
-                                    .on_press_with(|| OrRequest::Message(Message::OpenExe)),
-                            )
-                            .push(
-                                button("Save").padding(3).on_press_maybe(
-                                    self.config_path
-                                        .is_some()
-                                        .then(|| OrRequest::Message(Message::SaveContent)),
+                            button("Run").style(widget::button::danger).on_press(
+                                OrRequest::Request(Request::RunGame { id, sandbox: false }),
+                            ),
+                            button("Shell")
+                                .style(widget::button::secondary)
+                                .on_press(OrRequest::Request(Request::OpenShell { id })),
+                            button("Lutris")
+                                .on_press(OrRequest::Request(Request::RunLutrisInSandbox { id })),
+                            button("+Thumb").padding(3).on_press_maybe(
+                                (!has_thumb).then(|| OrRequest::Message(Message::AddThumb { id })),
+                            ),
+                            button("-Thumb")
+                                .style(widget::button::danger)
+                                .on_press_maybe(
+                                    has_thumb
+                                        .then(|| OrRequest::Message(Message::RemoveThumb { id })),
                                 ),
-                            ),
+                            button("Open").on_press(OrRequest::Message(Message::OpenDir)),
+                        ]
+                        .into_iter()
+                        .fold(w::row(), |row, btn| row.push(btn.padding(3))),
                     )
-                    .push(widget::themer(
-                        Some(::iced_core::Theme::SolarizedDark),
-                        widget::text_editor(&self.content)
-                            .highlight_with::<Highlighter>(
-                                ::iced_highlighter::Settings {
-                                    theme: ::iced_highlighter::Theme::SolarizedDark,
-                                    token: "yml".to_owned(),
-                                },
-                                |h, _| h.to_format(),
+                    .push(spel_katalog_widget::rule::horizontal())
+                    .push(spel_katalog_widget::scrollable(
+                        widget::Column::new()
+                            .spacing(3)
+                            .push("Root Directories")
+                            .push(if additional.sandbox_root.is_empty() {
+                                widget::value(common_parent.display())
+                                    .pipe(widget::container)
+                                    .width(Fill)
+                                    .padding(3)
+                                    .style(|t| {
+                                        styling::box_border(t).background(t.palette().background)
+                                    })
+                                    .pipe(Element::from)
+                            } else {
+                                let mut iter = additional.sandbox_root.iter().map(widget::text);
+                                w::col()
+                                    .push_maybe(iter.next())
+                                    .extend(iter.flat_map(|row| {
+                                        [spel_katalog_widget::rule::horizontal().into(), row.into()]
+                                    }))
+                                    .pipe(widget::container)
+                                    .width(Fill)
+                                    .padding(3)
+                                    .style(|t| {
+                                        styling::box_border(t).background(t.palette().background)
+                                    })
+                                    .into()
+                            })
+                            .push(
+                                w::row()
+                                    .push("Additional")
+                                    .push(widget::space::horizontal())
+                                    .push(
+                                        button("Save")
+                                            .padding(3)
+                                            .on_press(OrRequest::Message(Message::SaveAdditional)),
+                                    ),
                             )
-                            .on_action(|action| action.pipe(Message::from).pipe(OrRequest::Message))
-                            .padding(6),
+                            .push(spel_katalog_widget::rule::horizontal())
+                            .push("Sandbox Roots")
+                            .push(
+                                widget::text_editor(additional_roots_content)
+                                    .on_action(|action| {
+                                        action
+                                            .pipe(Message::UpdateAdditionalRoots)
+                                            .pipe(OrRequest::Message)
+                                    })
+                                    .padding(3),
+                            )
+                            .push("Attributes")
+                            .push(
+                                attrs
+                                    .view()
+                                    .map(Message::UpdateAttrs)
+                                    .map(OrRequest::Message),
+                            )
+                            .push(spel_katalog_widget::rule::horizontal())
+                            .push(
+                                w::row()
+                                    .push(widget::container("Game Yml").padding(3))
+                                    .push(widget::space::horizontal())
+                                    .push(
+                                        button("Exe")
+                                            .padding(3)
+                                            .on_press_with(|| OrRequest::Message(Message::OpenExe)),
+                                    )
+                                    .push(
+                                        button("Save").padding(3).on_press_maybe(
+                                            config_path
+                                                .is_some()
+                                                .then(|| OrRequest::Message(Message::SaveContent)),
+                                        ),
+                                    ),
+                            )
+                            .push(widget::themer(
+                                Some(::iced_core::Theme::SolarizedDark),
+                                widget::text_editor(content)
+                                    .highlight_with::<Highlighter>(
+                                        ::iced_highlighter::Settings {
+                                            theme: ::iced_highlighter::Theme::SolarizedDark,
+                                            token: "yml".to_owned(),
+                                        },
+                                        |h, _| h.to_format(),
+                                    )
+                                    .on_action(|action| {
+                                        action.pipe(Message::from).pipe(OrRequest::Message)
+                                    })
+                                    .padding(6),
+                            ))
+                            .push(widget::space::horizontal().width(0)),
                     ))
-                    .push(widget::space::horizontal().width(0)),
-            ))
-            .into()
+                    .into()
+            }
+            State::Native { state } => state.view().map(|msg| msg.map_message(Message::NativeInfo)),
+            State::None => widget::text("No game selected").into(),
+        }
     }
 }

@@ -11,6 +11,7 @@ futures.workspace = true
 image.workspace = true
 log.workspace = true
 rayon.workspace = true
+uuid.workspace = true
 rusqlite.workspace = true
 rustc-hash.workspace = true
 spel-katalog-formats.workspace = true

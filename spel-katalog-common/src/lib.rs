@@ -5,7 +5,7 @@ mod status_sender;
 
 use ::iced_core::{Element, Renderer};
 use ::iced_widget::{Column, Row};
-pub use or_request::OrRequest;
+pub use or_request::{IntoOrRequest, OrRequest};
 pub use status_sender::StatusSender;
 
 pub mod lazy;

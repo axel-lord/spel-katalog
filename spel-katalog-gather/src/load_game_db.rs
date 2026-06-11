@@ -4,7 +4,7 @@ use ::std::path::Path;
 
 use ::rusqlite::{Connection, OpenFlags};
 use ::rustc_hash::{FxHashMap, FxHashSet};
-use ::spel_katalog_formats::Game;
+use ::spel_katalog_formats::{Game, LutrisGame};
 
 use crate::LoadDbError;
 
@@ -47,12 +47,13 @@ pub fn load_games_from_database(db_path: &Path) -> Result<Vec<Game>, LoadDbError
             },
         );
 
-    let mut stmt = db.prepare_cached("SELECT id,name,slug,runner,configpath FROM games")?;
+    let mut stmt =
+        db.prepare_cached("SELECT id,name,slug,runner,configpath,installed_at FROM games")?;
     let mut rows = stmt.query([])?;
     let mut games = Vec::new();
 
     while let Some(row) = rows.next()? {
-        fn game_from_row(row: &::rusqlite::Row) -> Option<Game> {
+        fn game_from_row(row: &::rusqlite::Row) -> Option<LutrisGame> {
             let slug = row
                 .get("slug")
                 .map_err(|err| ::log::error!("could not read slug of row\n{err}"))
@@ -77,15 +78,19 @@ pub fn load_games_from_database(db_path: &Path) -> Result<Vec<Game>, LoadDbError
                 .get("configpath")
                 .map_err(|err| ::log::error!("could not read configpath of row\n{err}"))
                 .ok()?;
+            let installed_at = row
+                .get("installed_at")
+                .map_err(|err| ::log::error!("could not read installed_at of row\n{err}"))
+                .ok()?;
 
-            Some(Game {
+            Some(LutrisGame {
                 slug,
                 id,
                 name,
                 runner,
                 configpath,
+                installed_at,
                 hidden: false,
-                batch_selected: false,
             })
         }
 
@@ -99,9 +104,9 @@ pub fn load_games_from_database(db_path: &Path) -> Result<Vec<Game>, LoadDbError
             game.hidden = true;
         }
 
-        games.push(game);
+        games.push(Game::Lutris(game));
     }
 
-    games.sort_by_key(|game| -game.id);
+    games.sort_by_key(|game| -game.installed_at());
     Ok(games)
 }

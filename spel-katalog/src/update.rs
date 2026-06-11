@@ -2,14 +2,19 @@ use ::std::path::Path;
 
 use ::iced_core::{Size, window};
 use ::iced_runtime::Task;
+use ::image::DynamicImage;
 use ::rustc_hash::FxHashMap;
 use ::rustix::process::{Pid, RawPid};
 use ::spel_katalog_batch::BatchInfo;
-use ::spel_katalog_common::OrRequest;
-use ::spel_katalog_formats::AdditionalConfig;
+use ::spel_katalog_common::{IntoOrRequest, OrRequest};
+use ::spel_katalog_formats::{AdditionalConfig, NativeGame};
 use ::spel_katalog_games::SelDir;
-use ::spel_katalog_settings::{ConfigDir, FilterMode, Network, Show, Variants, YmlDir};
+use ::spel_katalog_run::run_umu::RunMode;
+use ::spel_katalog_settings::{
+    ConfigDir, FilterMode, Load, LutrisDb, Network, Show, Variants, YmlDir,
+};
 use ::tap::Pipe;
+use ::uuid::Uuid;
 
 use crate::{App, Message, QuickMessage, Safety, app::WindowType};
 
@@ -20,6 +25,10 @@ pub fn gather<'a>(
 ) -> Vec<BatchInfo> {
     games
         .into_iter()
+        .filter_map(|game| match game {
+            ::spel_katalog_formats::Game::Lutris(lutris_game) => Some(lutris_game),
+            ::spel_katalog_formats::Game::Native { .. } => None,
+        })
         .map(|game| BatchInfo {
             id: game.id,
             slug: game.slug.clone(),
@@ -96,8 +105,118 @@ impl App {
         }
     }
 
+    fn convert_all(
+        &self,
+    ) -> impl 'static + Future<Output = Vec<(Uuid, NativeGame, Option<::spel_katalog_formats::Image>)>>
+    {
+        let game_db = self.games_db.clone();
+        let futures = self
+            .games
+            .all()
+            .iter()
+            .filter_map(|game| self.game_as_native(game.id()))
+            .collect::<Vec<_>>();
+
+        async move {
+            let mut games = Vec::new();
+            for future in futures {
+                let Some((game, thumb)) = future.await else {
+                    continue;
+                };
+                games.extend(Self::convert_game(game_db.clone(), game, thumb).await);
+            }
+            ::log::info!("all games converted");
+            games
+        }
+    }
+
+    async fn convert_game(
+        game_db: ::spel_katalog_native::Pool,
+        game: NativeGame,
+        thumb: Option<DynamicImage>,
+    ) -> Option<(Uuid, NativeGame, Option<::spel_katalog_formats::Image>)> {
+        ::smol::unblock(move || {
+            let name = &game.name;
+            let uuid = Uuid::now_v7();
+            game_db
+                .insert_game(uuid)
+                .maybe_thumb(thumb.as_ref())
+                .insert(&game)
+                .map_err(|err| ::log::error!("failed to insert {name:?} into database\n{err}"))
+                .ok()?;
+
+            Some((uuid, game, thumb.map(From::from)))
+        })
+        .await
+    }
+
     fn quick_update(&mut self, msg: QuickMessage) -> Task<Message> {
         match msg {
+            QuickMessage::Debug => {
+                ::log::info!("debug action activated");
+            }
+            QuickMessage::CopyFilter => {
+                return ::iced_runtime::clipboard::write(self.filter.clone());
+            }
+            QuickMessage::PasteFilter => {
+                return ::iced_runtime::clipboard::read()
+                    .and_then(|filter| Task::done(Message::Filter(filter)));
+            }
+            QuickMessage::OpenDatabase => {
+                let path = self.settings.get::<ConfigDir>().as_path().join("games.db");
+                return Task::<Option<_>>::future(::smol::unblock(move || {
+                    if let Err(err) = ::open::that_detached(&path) {
+                        ::log::error!("failed to open {path:?}\n{err}");
+                    }
+                    None
+                }))
+                .and_then(Task::done);
+            }
+            QuickMessage::ReloadGames => {
+                ::log::info!("reloading games");
+                self.games.clear();
+                let load_lutris = || {
+                    self.settings
+                        .get::<LutrisDb>()
+                        .to_path_buf()
+                        .pipe(move |db_path| spel_katalog_games::Message::LoadDb { db_path })
+                        .pipe(OrRequest::Message)
+                        .pipe(Message::Games)
+                        .pipe(Task::done)
+                };
+
+                let load_native = || {
+                    let games_db = self.games_db.clone();
+                    Task::future(::smol::unblock(move || {
+                        let mut games = Vec::new();
+                        games_db.gather(&mut |uuid, game, thumb| {
+                            games.push((uuid, game, thumb.map(::spel_katalog_native::thumbnail)));
+                        });
+                        Message::Games(OrRequest::Message(
+                            ::spel_katalog_games::Message::AddNativeGames { games },
+                        ))
+                    }))
+                };
+
+                let load_db = match self.settings.get::<Load>() {
+                    Load::Lutris => load_lutris(),
+                    Load::Native => load_native(),
+                    Load::Both => load_native().chain(load_lutris()),
+                    Load::None => Task::none(),
+                };
+
+                return load_db;
+            }
+            QuickMessage::ConvertAll => {
+                let future = self.convert_all();
+                return Task::future(async move {
+                    ::spel_katalog_games::Message::AddNativeGames {
+                        games: future.await,
+                    }
+                    .into_message()
+                    .pipe(Message::Games)
+                });
+            }
             QuickMessage::CloseAll => {
                 self.view.hide_info();
                 self.games.select(SelDir::None);
@@ -221,8 +340,9 @@ impl App {
                 if view.info_shown() && view.displayed.is_game_info() && info.id() == Some(id) {
                     view.hide_info();
                 } else if let Some(game) = games.by_id(id) {
+                    ::log::info!("showing info for {id}");
                     return info
-                        .set_game(sender, settings, game)
+                        .set_game(sender, settings, game, &self.games_db)
                         .map(OrRequest::Message)
                         .map(Message::Info)
                         .then(|message| {
@@ -251,12 +371,61 @@ impl App {
                 }
                 self.games.select(SelDir::None);
             }
+            ::spel_katalog_games::Request::Convert(game_id) => {
+                if let Some(future) = self.game_as_native(game_id) {
+                    let game_db = self.games_db.clone();
+                    return Task::<Option<_>>::future(async move {
+                        let (game, thumb) = future.await?;
+                        let (uuid, config, thumb) =
+                            Self::convert_game(game_db, game, thumb).await?;
+
+                        ::spel_katalog_games::Message::AddNativeGame {
+                            uuid,
+                            config: Box::new(config),
+                            thumb,
+                        }
+                        .into_message()
+                        .pipe(Message::Games)
+                        .pipe(Some)
+                    })
+                    .and_then(Task::done);
+                }
+            }
         }
         Task::none()
     }
 
     fn info_request(&mut self, request: ::spel_katalog_info::Request) -> Task<Message> {
         match request {
+            ::spel_katalog_info::Request::NativeInfo(request) => match request {
+                ::spel_katalog_info::NativeRequest::UndisplayThumbnail { id } => {
+                    if let Some(game) = self.games.by_id_mut(id) {
+                        game.thumb = None;
+                    }
+                    Task::none()
+                }
+                ::spel_katalog_info::NativeRequest::DisplayThumbnail { id, img } => {
+                    if let Some(game) = self.games.by_id_mut(id) {
+                        let ::spel_katalog_formats::Image {
+                            width,
+                            height,
+                            bytes,
+                        } = img;
+                        let img = ::iced_core::image::Handle::from_rgba(width, height, bytes);
+                        game.thumb = Some(img);
+                    }
+                    Task::none()
+                }
+                ::spel_katalog_info::NativeRequest::RunGame(game) => {
+                    self.run_native_game(*game, RunMode::Exe)
+                }
+                ::spel_katalog_info::NativeRequest::RunShell(game) => {
+                    self.run_native_game(*game, RunMode::Shell)
+                }
+                ::spel_katalog_info::NativeRequest::RunInit(game) => {
+                    self.run_native_game(*game, RunMode::Init)
+                }
+            },
             ::spel_katalog_info::Request::RemoveImage { slug } => self
                 .games
                 .update(
@@ -376,9 +545,13 @@ impl App {
                 OrRequest::Message(message) => {
                     return self
                         .info
-                        .update(message, &self.sender, &self.settings, &|id| {
-                            self.games.by_id(id).map(|g| &g.game)
-                        })
+                        .update(
+                            message,
+                            &self.sender,
+                            &self.settings,
+                            &|id| self.games.by_id(id).map(|g| &g.game),
+                            &self.games_db,
+                        )
                         .map(Message::Info);
                 }
                 OrRequest::Request(request) => return self.info_request(request),
@@ -478,6 +651,12 @@ impl App {
             Message::ShowInfo(displayed) => {
                 self.view.displayed = displayed;
                 self.view.show_info();
+            }
+            Message::RunGameNative(game) => {
+                return self.run_native_game(*game, RunMode::Exe);
+            }
+            Message::RunShellNative(game) => {
+                return self.run_native_game(*game, RunMode::Shell);
             }
         }
         Task::none()

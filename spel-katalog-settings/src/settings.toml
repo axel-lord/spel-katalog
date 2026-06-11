@@ -37,11 +37,28 @@ help = "How to filter games"
 variants = ["Filter", "Search", "Regex"]
 default = "Search"
 
+[UseGamescope]
+title = "Use Gamescope"
+help = "Should gamescope be used"
+variants = ["Yes", "No"]
+default = "No"
+
+[GamescopeExe]
+title = "Gamescope Executable"
+help = "Path to gamescope executable"
+path = "/usr/bin/gamescope"
+
 [SandboxMode]
 title = "Sandbox Tool"
 help = "How to sandbox games"
 variants = ["Firejail", "Bubblewrap"]
 default = "Firejail"
+
+[Load]
+title = "Which Games to Load"
+help = "Should lutris and/or native games be loaded"
+variants = ["Lutris", "Native", "Both", "None"]
+default = "Both"
 
 [OnRun]
 title = "On Run"
@@ -51,8 +68,8 @@ default = "None"
 
 [SortBy]
 help = "How to sort games"
-variants = ["Id", "Name", "Slug"]
-default = "Id"
+variants = ["Added", "Name"]
+default = "Added"
 
 [SortDir]
 title = "Sort Direction"
@@ -95,6 +112,11 @@ title = "Terminal Command"
 help = "Arguments prepended to command to run in terminal"
 string = "/usr/bin/urxvt -e"
 
+[DllOverrides]
+title = "Wine Dll Overrides"
+help = "Dlls to override with \"native,builtin\", separated by ';'"
+string = ""
+
 [SandboxExtras]
 title = "Sandbox Extras"
 help = "Additional paths which may be read from sandbox, separated by ';'"
@@ -110,6 +132,11 @@ title = "Lutris Database"
 help = "Path to lutris game database"
 path = "{DATA}/lutris/pga.db"
 
+[CompToolsDir]
+title = "Compatability tools"
+help = "Path to default compatability tool directory"
+path = "{DATA}/umu/compatibilitytools"
+
 [YmlDir]
 title = "Game Config Directory"
 help = "Path to lutris game yml config directory"
@@ -124,3 +151,13 @@ path = "{CONFIG}/spel-katalog/"
 title = "Cache Directory"
 help = "Path to cache directory"
 path = "{CACHE}/spel-katalog/"
+
+[InstallLocation]
+title = "Game Install Location"
+help = "Where to install games to"
+path = "{HOME}/Games"
+
+[InstallSource]
+title = "Game Install Source"
+help = "Where to open install dialog"
+path = ""

@@ -1,6 +1,7 @@
 use ::derive_more::{From, IsVariant};
 use ::iced_core::window;
 use ::spel_katalog_common::OrRequest;
+use ::spel_katalog_formats::NativeGame;
 
 use crate::{
     app::WindowType,
@@ -41,9 +42,15 @@ pub enum QuickMessage {
     ToggleNetwork,
     ToggleProcessInfo,
     ToggleSettings,
+    Debug,
+    ConvertAll,
+    OpenDatabase,
+    CopyFilter,
+    PasteFilter,
+    ReloadGames,
 }
 
-#[derive(Debug, IsVariant, From)]
+#[derive(Debug, IsVariant, From, Clone)]
 pub enum Message {
     #[from]
     Status(String),
@@ -74,6 +81,8 @@ pub enum Message {
     LuaDocs(::spel_katalog_lua_docs::Message),
     #[from]
     ShowInfo(crate::view::Displayed),
+    RunGameNative(Box<NativeGame>),
+    RunShellNative(Box<NativeGame>),
 }
 
 impl<T, E> From<Result<T, E>> for Message
@@ -86,5 +95,17 @@ where
             Ok(value) => value.into(),
             Err(value) => value.into(),
         }
+    }
+}
+
+impl From<::color_eyre::Report> for Message {
+    fn from(value: ::color_eyre::Report) -> Self {
+        value.to_string().into()
+    }
+}
+
+impl From<::spel_katalog_info::Message> for Message {
+    fn from(message: ::spel_katalog_info::Message) -> Self {
+        Self::Info(OrRequest::Message(message))
     }
 }

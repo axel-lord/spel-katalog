@@ -114,7 +114,7 @@ impl State {
     }
 
     /// Create an element for titlebar buttons.
-    fn buttons<'a>(&'a self) -> Element<'a, Message> {
+    fn buttons<'a>(&'a self) -> Element<'a, crate::Message> {
         widget::Row::new()
             .spacing(3)
             .push(
@@ -131,7 +131,8 @@ impl State {
                     .style(widget::button::danger)
                     .on_press_with(|| Message::Close),
             )
-            .into()
+            .pipe(Element::from)
+            .map(crate::Message::from)
     }
 
     /// Close if displayed matches current otherwise open to displayed.
@@ -180,10 +181,13 @@ impl State {
             Displayed::GameInfo => {
                 if let Some((id, game)) = info.id().and_then(|id| Some((id, games.by_id(id)?))) {
                     widget::Column::new()
-                        .push(
-                            info.titlebar(game, game.thumb.as_ref(), id, self.buttons())
-                                .map(crate::Message::from),
-                        )
+                        .push(info.titlebar(
+                            game,
+                            game.thumb.as_ref(),
+                            id,
+                            game.shadows,
+                            self.buttons(),
+                        ))
                         .push(spel_katalog_widget::rule::horizontal())
                         .push(info.view(game.thumb.is_some()).map(crate::Message::from))
                         .spacing(3)

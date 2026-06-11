@@ -30,7 +30,7 @@ pub struct Game {
 
 impl Game {
     /// Get the common parent of exe and prefix.
-    pub fn common_parent(&self) -> PathBuf {
+    pub fn common_parent(&self, home: fn() -> &'static Path) -> PathBuf {
         fn common(a: &Path, b: &Path) -> PathBuf {
             a.components()
                 .zip(b.components())
@@ -39,10 +39,7 @@ impl Game {
                 .collect()
         }
 
-        let prefix = self
-            .prefix
-            .as_deref()
-            .unwrap_or_else(|| ::spel_katalog_settings::HOME.as_path());
+        let prefix = self.prefix.as_deref().unwrap_or_else(home);
         let exe = &self.exe;
 
         common(exe, prefix)
