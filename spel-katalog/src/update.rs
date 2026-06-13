@@ -641,7 +641,7 @@ impl App {
             Message::Installer(id, msg) => {
                 if let Some(WindowType::Installer(installer)) = self.windows.get_mut(&id) {
                     return installer
-                        .update(msg)
+                        .update(msg, &self.settings)
                         .map(move |msg| Message::Installer(id, msg));
                 }
             }

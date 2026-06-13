@@ -4,35 +4,41 @@ use ::core::fmt::Debug;
 
 use ::iced_core::{Background, Element, text::IntoFragment};
 
+/// Button style with defined background while hovered.
+pub fn hover_background_text_button(
+    theme: &::iced_core::Theme,
+    status: ::iced_widget::button::Status,
+) -> ::iced_widget::button::Style {
+    let ::iced_widget::button::Style {
+        background,
+        text_color,
+        border,
+        shadow,
+        snap,
+    } = ::iced_widget::button::text(theme, status);
+
+    let background = match status {
+        ::iced_widget::button::Status::Hovered | ::iced_widget::button::Status::Pressed => {
+            Some(Background::Color(theme.palette().background))
+        }
+        _ => background,
+    };
+
+    ::iced_widget::button::Style {
+        background,
+        text_color,
+        border,
+        shadow,
+        snap,
+    }
+}
+
 /// Create a menu button.
 pub fn menu_button<'a, M>(content: impl IntoFragment<'a>) -> ::iced_widget::Button<'a, M> {
     ::iced_widget::button(::iced_widget::text(content))
         .width(::iced_core::Length::Fill)
         .padding(3)
-        .style(|theme, status| {
-            let ::iced_widget::button::Style {
-                background,
-                text_color,
-                border,
-                shadow,
-                snap,
-            } = ::iced_widget::button::text(theme, status);
-
-            let background = match status {
-                ::iced_widget::button::Status::Hovered | ::iced_widget::button::Status::Pressed => {
-                    Some(Background::Color(theme.palette().background))
-                }
-                _ => background,
-            };
-
-            ::iced_widget::button::Style {
-                background,
-                text_color,
-                border,
-                shadow,
-                snap,
-            }
-        })
+        .style(hover_background_text_button)
 }
 
 /// A single menu item.

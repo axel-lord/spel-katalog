@@ -30,6 +30,13 @@ const FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 #[display("{}", _0.format(FORMAT))]
 pub struct Timestamp(DateTime<Local>);
 
+impl Timestamp {
+    /// Construct a new timestamp from current time.
+    pub fn now() -> Self {
+        Self(::chrono::Local::now())
+    }
+}
+
 /// Error representing an error when parsing a timestamp.
 #[derive(Debug, ::thiserror::Error)]
 pub enum TimeStampParseError {

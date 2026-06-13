@@ -6,11 +6,12 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-iced_aw = { workspace = true, features = ["context_menu"] }
+iced_aw = { workspace = true, features = ["context_menu", "drop_down"] }
 iced_core.workspace = true
 iced_highlighter.workspace = true
 iced_runtime.workspace = true
 iced_widget.workspace = true
+derive_more = { workspace = true, features = ["into", "from"] }
 log.workspace = true
 rfd.workspace = true
 smol.workspace = true

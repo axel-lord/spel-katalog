@@ -1,26 +1,228 @@
 //! Utility to install new native games.
 
+use ::std::{borrow::Cow, os::unix::fs::MetadataExt, path::PathBuf};
+
+use ::derive_more::From;
+use ::iced_core::Element;
 use ::iced_runtime::Task;
-use ::iced_widget as widget;
+use ::iced_widget::{self as widget};
+use ::smol::stream::StreamExt;
+use ::spel_katalog_settings::{InstallSource, Settings};
+use ::tap::TapOptional;
+
+use crate::prepare::ExeChoice;
+
+mod editor;
+mod prepare;
 
 /// Message used by installer.
-#[derive(Debug, Clone)]
-pub enum Message {}
+#[derive(Debug, Clone, From)]
+pub enum Message {
+    /// Editor message.
+    #[from]
+    Editor(editor::Message),
+    /// Prepare message.
+    #[from]
+    Prepare(prepare::Message),
+    /// Return to empty state.
+    Reset,
+    /// Open game selection.
+    SelectDir(Option<PathBuf>),
+    /// Open game selection.
+    SelectFile,
+    /// Change state to prepare, and set exe list
+    SetPaths {
+        /// Game directory, parent of executable, or
+        /// where list was found from.
+        parent: String,
+        /// Value of executable.
+        choice: ExeChoice,
+    },
+}
 
-/// Installer window for a game.
+/// Application installer.
 #[derive(Debug, Clone, Default)]
-pub struct Installer {}
+pub enum Installer {
+    /// Empty state.
+    #[default]
+    Empty,
+    /// State is editor.
+    Editor(editor::Editor),
+    /// State is prepare.
+    Prepare(prepare::Prepare),
+}
 
 impl Installer {
-    /// Update application state using message.
-    pub const fn update(&mut self, message: Message) -> Task<Message> {
-        match message {}
+    /// Update state using message.
+    pub fn update(&mut self, message: Message, settings: &Settings) -> Task<Message> {
+        match message {
+            Message::Reset => {
+                *self = Self::Empty;
+                Task::none()
+            }
+            Message::Editor(message) => {
+                if let Self::Editor(editor) = self {
+                    editor.update(message).map(Message::Editor)
+                } else {
+                    Task::none()
+                }
+            }
+            Message::Prepare(message) => {
+                if let Self::Prepare(prepare) = self {
+                    prepare.update(message).map(Message::Prepare)
+                } else {
+                    Task::none()
+                }
+            }
+            Message::SetPaths { parent, choice } => {
+                *self = Self::Prepare(prepare::Prepare::new(parent, choice));
+                Task::none()
+            }
+            Message::SelectDir(start) => {
+                let initial_dir =
+                    start.unwrap_or_else(|| settings.get::<InstallSource>().to_path_buf());
+                Task::<Option<_>>::future(async move {
+                    let mut dialog = ::rfd::AsyncFileDialog::new()
+                        .set_title("Select directory of game to install");
+                    if !initial_dir.as_os_str().is_empty() {
+                        dialog = dialog.set_directory(&initial_dir);
+                    }
+
+                    let directory = dialog
+                        .pick_folder()
+                        .await
+                        .tap_none(|| ::log::warn!("no game directory selected"))?;
+
+                    let mut stack = vec![Cow::Borrowed(directory.path())];
+                    let mut exe = Vec::<String>::new();
+                    let mut push_exe = |entry_path: PathBuf| {
+                        match entry_path.strip_prefix(directory.path()) {
+                            Ok(rel_path) => {
+                                if let Some(as_str) = rel_path.to_str() {
+                                    exe.push(as_str.to_owned());
+                                } else {
+                                    ::log::warn!("ignoring non utf-8 path {entry_path:?}");
+                                }
+                            }
+                            Err(err) => ::log::error!(
+                                "could not remove prefix {:?} from {:?}\n{err}",
+                                directory.path(),
+                                entry_path
+                            ),
+                        };
+                    };
+                    while let Some(directory) = stack.pop() {
+                        let path = &*directory;
+                        let Ok(mut dir) = ::smol::fs::read_dir(path).await.map_err(|err| {
+                            ::log::error!("could not read directory {path:?}\n{err}")
+                        }) else {
+                            continue;
+                        };
+
+                        while let Some(entry) = dir.next().await {
+                            let Ok(entry) = entry.map_err(|err| {
+                                ::log::error!(
+                                    "could not get directory entry for child of {path:?}\n{err}"
+                                )
+                            }) else {
+                                continue;
+                            };
+                            let entry_path = entry.path();
+
+                            let Ok(t) = entry.file_type().await.map_err(|err| {
+                                ::log::error!("could not get file type for {entry_path:?}\n{err}")
+                            }) else {
+                                continue;
+                            };
+
+                            if t.is_symlink() {
+                                ::log::info!("skipping symlink {entry_path:?}");
+                                continue;
+                            } else if t.is_dir() {
+                                if entry_path
+                                    .file_name()
+                                    .and_then(|s| s.as_encoded_bytes().first())
+                                    .is_some_and(|&f| f == b'.')
+                                {
+                                    ::log::info!("skipping hidden directory {entry_path:?}");
+                                } else {
+                                    stack.push(Cow::Owned(entry_path));
+                                }
+                                continue;
+                            } else if !t.is_file() {
+                                ::log::info!("found non file/symlink/directory {entry_path:?}");
+                                continue;
+                            }
+
+                            let meta = entry
+                                .metadata()
+                                .await
+                                .map_err(|err| {
+                                    ::log::error!(
+                                        "could not get metadata for {entry_path:?}\n{err}"
+                                    )
+                                })
+                                .ok();
+
+                            if entry_path
+                                .extension()
+                                .and_then(|ext| ext.to_str())
+                                .is_some_and(|ext| ext.eq_ignore_ascii_case("exe"))
+                            {
+                                push_exe(entry_path);
+                                continue;
+                            }
+
+                            if meta.is_some_and(|m| m.mode() & 0o111 != 0) {
+                                push_exe(entry_path);
+                            }
+                        }
+                    }
+
+                    if exe.is_empty() {
+                        ::log::warn!("no exe candidates found");
+                        None
+                    } else {
+                        ::log::info!("collected exe candidates");
+                        let parent = directory
+                            .path()
+                            .to_path_buf()
+                            .into_os_string()
+                            .into_string()
+                            .map_err(|path| {
+                                ::log::error!("directory path {path:?} contains non utf-8 segments")
+                            })
+                            .ok()?;
+
+                        exe.sort_unstable_by_key(|item| item.len());
+                        Some(Message::SetPaths {
+                            parent,
+                            choice: ExeChoice::List(0, exe),
+                        })
+                    }
+                })
+                .and_then(Task::done)
+            }
+            Message::SelectFile => Task::none(),
+        }
     }
 
-    /// View installer state.
+    /// View application state.
     pub fn view(
         &self,
-    ) -> ::iced_core::Element<'_, Message, ::iced_core::Theme, ::iced_widget::Renderer> {
-        widget::text("Placeholder!").into()
+        settings: &Settings,
+    ) -> Element<'_, Message, ::iced_core::Theme, widget::Renderer> {
+        match self {
+            Installer::Empty => widget::center(
+                widget::Row::new().spacing(3).push(
+                    widget::button("Open")
+                        .on_press(Message::SelectDir(None))
+                        .padding(3),
+                ),
+            )
+            .into(),
+            Installer::Editor(editor) => editor.view(settings),
+            Installer::Prepare(prepare) => prepare.view(),
+        }
     }
 }

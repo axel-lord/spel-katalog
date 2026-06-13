@@ -4639,6 +4639,7 @@ dependencies = [
  "rustc-hash 2.1.2",
  "serde",
  "serde_bytes",
+ "strum",
  "thiserror 2.0.18",
  "uuid",
  "yaml-rust2",
@@ -4731,6 +4732,7 @@ dependencies = [
 name = "spel-katalog-installer"
 version = "0.1.0"
 dependencies = [
+ "derive_more",
  "iced_aw",
  "iced_core",
  "iced_highlighter",

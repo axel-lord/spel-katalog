@@ -5,6 +5,7 @@ use ::std::path::PathBuf;
 use ::derive_more::{Display, IsVariant};
 use ::rustc_hash::FxHashMap;
 use ::serde::{Deserialize, Serialize};
+use ::strum::VariantArray;
 
 use crate::{Bind, GameId, Timestamp};
 
@@ -73,13 +74,56 @@ pub struct NativeGame {
     pub ro_bind: Vec<Bind>,
 }
 
+impl NativeGame {
+    /// Crate a new native game config.
+    pub fn new(name: String, timestamp: Timestamp, exe: PathBuf, runner: NativeRunner) -> Self {
+        Self {
+            name,
+            timestamp,
+            exe,
+            runner,
+            shadow: None,
+            prefix: None,
+            hidden: false,
+            use_net: None,
+            use_gamescope: None,
+            env: Default::default(),
+            attrs: Default::default(),
+            drives: Default::default(),
+            dll_override: Default::default(),
+            wt_verb: Default::default(),
+            bind: Default::default(),
+            ro_bind: Default::default(),
+        }
+    }
+}
+
 /// Runner used for native games.
 #[derive(
-    Debug, Clone, IsVariant, PartialEq, Eq, PartialOrd, Ord, Hash, Display, Serialize, Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    IsVariant,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Display,
+    Serialize,
+    Deserialize,
+    VariantArray,
 )]
 pub enum NativeRunner {
     /// Game is ran using wine.
     Wine,
     /// Game is ran as a native binary.
     Linux,
+}
+
+impl NativeRunner {
+    /// Get an array of all variants.
+    pub const fn variants() -> &'static [NativeRunner] {
+        Self::VARIANTS
+    }
 }

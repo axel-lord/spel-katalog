@@ -3,7 +3,7 @@
 use ::iced_core::{Font, text::IntoFragment};
 
 pub use self::{
-    list_menu::{ListMenu, menu_button},
+    list_menu::{ListMenu, hover_background_text_button, menu_button},
     scrollable::scrollable,
     vertical_list_menu::VerticalListMenu,
 };

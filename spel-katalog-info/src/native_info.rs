@@ -160,7 +160,7 @@ impl State {
 
     /// Set text content of config editor.
     pub fn set_content(&mut self, content: String) {
-        crate::set_content(&mut self.conf_view, content);
+        w::set_text_editor_content(&mut self.conf_view, content);
     }
 
     /// Create a function that is ran with the parsed
@@ -436,7 +436,8 @@ impl State {
                     .and_then(Task::done)
                 }
                 QuickMessage::Paste => ::iced_runtime::clipboard::read().and_then(|content| {
-                    Arc::new(content)
+                    content
+                        .pipe(Arc::new)
                         .pipe(Edit::Paste)
                         .pipe(Action::Edit)
                         .pipe(Message::ConfAction)
@@ -451,14 +452,14 @@ impl State {
                 QuickMessage::Undo => {
                     if let Some(content) = self.history.pop() {
                         self.future.push(self.conf_view.text());
-                        self.set_content(content.clone());
+                        self.set_content(content);
                     }
                     Task::none()
                 }
                 QuickMessage::Redo => {
                     if let Some(content) = self.future.pop() {
                         self.history.push(self.conf_view.text());
-                        self.set_content(content.clone());
+                        self.set_content(content);
                     }
                     Task::none()
                 }

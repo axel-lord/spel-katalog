@@ -319,9 +319,9 @@ impl App {
                 .padding(5)
                 .into(),
             WindowType::Term => self.terminal.view().map(From::from),
-            WindowType::Installer(installer) => {
-                installer.view().map(move |msg| Message::Installer(id, msg))
-            }
+            WindowType::Installer(installer) => installer
+                .view(&self.settings)
+                .map(move |msg| Message::Installer(id, msg)),
         }
     }
 
