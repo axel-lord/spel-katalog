@@ -9,7 +9,8 @@ use ::iced_core::{Element, Length, alignment::Horizontal};
 use ::iced_runtime::Task;
 use ::iced_widget as widget;
 use ::rfd::AsyncFileDialog;
-use ::spel_katalog_formats::NativeRunner;
+use ::spel_katalog_common::{IntoOrRequest, OrRequest};
+use ::spel_katalog_formats::{Bind, NativeGame, NativeRunner, Timestamp};
 use ::tap::{Conv, Pipe, TapOptional};
 
 /// Choice of executable.
@@ -72,6 +73,8 @@ pub enum Message {
     CopyTitle,
     /// Paste title.
     PasteTitle,
+    /// Ok was pressed.
+    Ok,
 }
 
 /// Preparation stage of installer.
@@ -109,7 +112,7 @@ impl Prepare {
     }
 
     /// Update state with message.
-    pub fn update(&mut self, message: Message) -> Task<Message> {
+    pub fn update(&mut self, message: Message) -> Task<super::Message> {
         match message {
             Message::ChooseChoice(value) => {
                 if let ExeChoice::List(idx, list) = &mut self.choice
@@ -150,7 +153,7 @@ impl Prepare {
             }
             Message::CopyTitle => ::iced_runtime::clipboard::write(self.title.clone()),
             Message::PasteTitle => ::iced_runtime::clipboard::read()
-                .and_then(|title| Task::done(Message::EditTitle(title))),
+                .and_then(|title| Task::done(Message::EditTitle(title).conv::<super::Message>())),
             Message::OpenExe => {
                 let location = self.parent.clone().conv::<PathBuf>();
                 Task::<Option<_>>::future(async move {
@@ -176,15 +179,48 @@ impl Prepare {
                         })?
                         .to_owned()
                         .pipe(Message::SetExe)
+                        .conv::<super::Message>()
                         .pipe(Some)
                 })
                 .and_then(Task::done)
+            }
+            Message::Ok => {
+                if let Some(exe) = self.choice.current() {
+                    let parent = PathBuf::from(self.parent.clone());
+                    let exe = parent.join(exe);
+                    NativeGame {
+                        bind: Vec::from([Bind::mirrored(parent)]),
+                        drives: [('g', PathBuf::from("../.."))].into_iter().collect(),
+                        prefix: if self.runner.is_wine() {
+                            self.parent
+                                .as_str()
+                                .pipe(Path::new)
+                                .join(".umu_pfx")
+                                .pipe(Some)
+                        } else {
+                            None
+                        },
+                        ..NativeGame::new(self.title.clone(), Timestamp::now(), exe, self.runner)
+                    }
+                    .pipe(Box::new)
+                    .pipe(super::Message::SetEditor)
+                    .pipe(Task::done)
+                } else {
+                    Task::none()
+                }
             }
         }
     }
 
     /// View state.
-    pub fn view(&self) -> Element<'_, super::Message, ::iced_core::Theme, ::iced_widget::Renderer> {
+    pub fn view(
+        &self,
+    ) -> Element<
+        '_,
+        OrRequest<super::Message, super::Request>,
+        ::iced_core::Theme,
+        ::iced_widget::Renderer,
+    > {
         widget::Column::new()
             .padding(6)
             .align_x(Horizontal::Center)
@@ -196,14 +232,20 @@ impl Prepare {
                         .push(::iced_aw::widget::ContextMenu::new(
                             widget::text_input("title...", &self.title)
                                 .width(self.title_width)
-                                .on_input(|text| Message::EditTitle(text).conv::<super::Message>()),
+                                .on_input(|text| {
+                                    Message::EditTitle(text)
+                                        .conv::<super::Message>()
+                                        .into_message()
+                                }),
                             || {
                                 ::spel_katalog_widget::ListMenu::new()
                                     .push(widget::text("title"))
                                     .separator()
-                                    .button("Copy", || Message::CopyTitle.conv::<super::Message>())
+                                    .button("Copy", || {
+                                        Message::CopyTitle.conv::<super::Message>().into_message()
+                                    })
                                     .button("Paste", || {
-                                        Message::PasteTitle.conv::<super::Message>()
+                                        Message::PasteTitle.conv::<super::Message>().into_message()
                                     })
                                     .into()
                             },
@@ -218,6 +260,7 @@ impl Prepare {
                                             super::Message::SelectDir(Some(PathBuf::from(
                                                 self.parent.as_str(),
                                             )))
+                                            .into_message()
                                         },
                                     ))
                                     .push(
@@ -225,7 +268,9 @@ impl Prepare {
                                             .padding(3)
                                             .style(widget::button::success)
                                             .on_press(
-                                                Message::CopyDirectory.conv::<super::Message>(),
+                                                Message::CopyDirectory
+                                                    .conv::<super::Message>()
+                                                    .into_message(),
                                             ),
                                     )
                                     .push(
@@ -234,25 +279,33 @@ impl Prepare {
                                             .style(widget::container::rounded_box),
                                     ),
                             )
-                            .on_show(|size| Message::SetTitleWidth(size).conv::<super::Message>())
+                            .on_show(|size| {
+                                Message::SetTitleWidth(size)
+                                    .conv::<super::Message>()
+                                    .into_message()
+                            })
                             .on_resize(|size| {
-                                Message::SetTitleWidth(size).conv::<super::Message>()
+                                Message::SetTitleWidth(size)
+                                    .conv::<super::Message>()
+                                    .into_message()
                             }),
                         )
                         .push(widget::text("Executable"))
                         .push(match &self.choice {
                             ExeChoice::Value(value) => widget::Row::new()
                                 .spacing(3)
-                                .push(
-                                    widget::button("Open...")
-                                        .padding(3)
-                                        .on_press(Message::OpenExe.conv::<super::Message>()),
-                                )
+                                .push(widget::button("Open...").padding(3).on_press(
+                                    Message::OpenExe.conv::<super::Message>().into_message(),
+                                ))
                                 .push(
                                     widget::button("Copy")
                                         .padding(3)
                                         .style(widget::button::success)
-                                        .on_press(Message::CopyExe.conv::<super::Message>()),
+                                        .on_press(
+                                            Message::CopyExe
+                                                .conv::<super::Message>()
+                                                .into_message(),
+                                        ),
                                 )
                                 .push(
                                     widget::container(widget::text(value))
@@ -261,22 +314,28 @@ impl Prepare {
                                 ),
                             ExeChoice::List(idx, items) => widget::Row::new()
                                 .spacing(3)
-                                .push(
-                                    widget::button("Open...")
-                                        .padding(3)
-                                        .on_press(Message::OpenExe.conv::<super::Message>()),
-                                )
+                                .push(widget::button("Open...").padding(3).on_press(
+                                    Message::OpenExe.conv::<super::Message>().into_message(),
+                                ))
                                 .push(
                                     widget::button("Copy")
                                         .padding(3)
                                         .style(widget::button::success)
-                                        .on_press(Message::CopyExe.conv::<super::Message>()),
+                                        .on_press(
+                                            Message::CopyExe
+                                                .conv::<super::Message>()
+                                                .into_message(),
+                                        ),
                                 )
                                 .push(
                                     widget::pick_list(
                                         items.as_slice(),
                                         items.get(*idx),
-                                        |i: String| Message::ChooseChoice(i).into(),
+                                        |i: String| {
+                                            Message::ChooseChoice(i)
+                                                .conv::<super::Message>()
+                                                .into_message()
+                                        },
                                     )
                                     .padding(3),
                                 ),
@@ -286,7 +345,11 @@ impl Prepare {
                             widget::pick_list(
                                 NativeRunner::variants(),
                                 Some(self.runner),
-                                |runner| Message::ChooseRunner(runner).conv::<super::Message>(),
+                                |runner| {
+                                    Message::ChooseRunner(runner)
+                                        .conv::<super::Message>()
+                                        .into_message()
+                                },
                             )
                             .padding(3),
                         ),
@@ -303,12 +366,13 @@ impl Prepare {
                         widget::button("Cancel")
                             .padding(3)
                             .style(widget::button::danger)
-                            .on_press(super::Message::Reset),
+                            .on_press(super::Request::Close.into_request()),
                     )
                     .push(
                         widget::button("Ok")
                             .padding(3)
-                            .style(widget::button::success),
+                            .style(widget::button::success)
+                            .on_press(Message::Ok.conv::<super::Message>().into_message()),
                     ),
             )
             .into()

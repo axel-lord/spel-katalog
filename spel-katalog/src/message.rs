@@ -48,6 +48,7 @@ pub enum QuickMessage {
     CopyFilter,
     PasteFilter,
     ReloadGames,
+    OpenInstaller,
 }
 
 #[derive(Debug, IsVariant, From, Clone)]
@@ -75,7 +76,10 @@ pub enum Message {
     OpenWindow(window::Id, WindowType),
     CloseWindow(window::Id),
     Dialog(window::Id, OrRequest<dialog::Message, dialog::Request>),
-    Installer(window::Id, ::spel_katalog_installer::Message),
+    Installer(
+        window::Id,
+        OrRequest<::spel_katalog_installer::Message, ::spel_katalog_installer::Request>,
+    ),
     BuildDialog(DialogBuilder),
     #[from]
     Terminal(::spel_katalog_terminal::Message),

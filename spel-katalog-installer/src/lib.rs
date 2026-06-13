@@ -7,6 +7,8 @@ use ::iced_core::Element;
 use ::iced_runtime::Task;
 use ::iced_widget::{self as widget};
 use ::smol::stream::StreamExt;
+use ::spel_katalog_common::OrRequest;
+use ::spel_katalog_formats::NativeGame;
 use ::spel_katalog_settings::{InstallSource, Settings};
 use ::tap::TapOptional;
 
@@ -24,8 +26,6 @@ pub enum Message {
     /// Prepare message.
     #[from]
     Prepare(prepare::Message),
-    /// Return to empty state.
-    Reset,
     /// Open game selection.
     SelectDir(Option<PathBuf>),
     /// Open game selection.
@@ -38,170 +38,191 @@ pub enum Message {
         /// Value of executable.
         choice: ExeChoice,
     },
+    /// Set state to editor for game.
+    SetEditor(Box<NativeGame>),
+    /// Return to prepare stage.
+    UnsetEditor,
+}
+
+/// Window request.
+#[derive(Debug, Clone)]
+pub enum Request {
+    /// Request the installer be closed.
+    Close,
 }
 
 /// Application installer.
-#[derive(Debug, Clone, Default)]
-pub enum Installer {
-    /// Empty state.
-    #[default]
-    Empty,
-    /// State is editor.
-    Editor(editor::Editor),
-    /// State is prepare.
-    Prepare(prepare::Prepare),
+#[derive(Debug, Clone)]
+pub struct Installer {
+    /// Preparation stage.
+    prepare: prepare::Prepare,
+    /// Editor is shown.
+    editor: Option<editor::Editor>,
 }
 
 impl Installer {
+    /// Construct a new installer.
+    pub fn new(parent: String, choice: ExeChoice) -> Self {
+        Self {
+            prepare: prepare::Prepare::new(parent, choice),
+            editor: None,
+        }
+    }
+
+    /// Show open dialog.
+    pub async fn open(initial_dir: PathBuf) -> Option<(String, ExeChoice)> {
+        let mut dialog =
+            ::rfd::AsyncFileDialog::new().set_title("Select directory of game to install");
+        if !initial_dir.as_os_str().is_empty() {
+            dialog = dialog.set_directory(&initial_dir);
+        }
+
+        let directory = dialog
+            .pick_folder()
+            .await
+            .tap_none(|| ::log::warn!("no game directory selected"))?;
+
+        let mut stack = vec![Cow::Borrowed(directory.path())];
+        let mut exe = Vec::<String>::new();
+        let mut push_exe = |entry_path: PathBuf| {
+            match entry_path.strip_prefix(directory.path()) {
+                Ok(rel_path) => {
+                    if let Some(as_str) = rel_path.to_str() {
+                        exe.push(as_str.to_owned());
+                    } else {
+                        ::log::warn!("ignoring non utf-8 path {entry_path:?}");
+                    }
+                }
+                Err(err) => ::log::error!(
+                    "could not remove prefix {:?} from {:?}\n{err}",
+                    directory.path(),
+                    entry_path
+                ),
+            };
+        };
+        while let Some(directory) = stack.pop() {
+            let path = &*directory;
+            let Ok(mut dir) = ::smol::fs::read_dir(path)
+                .await
+                .map_err(|err| ::log::error!("could not read directory {path:?}\n{err}"))
+            else {
+                continue;
+            };
+
+            while let Some(entry) = dir.next().await {
+                let Ok(entry) = entry.map_err(|err| {
+                    ::log::error!("could not get directory entry for child of {path:?}\n{err}")
+                }) else {
+                    continue;
+                };
+                let entry_path = entry.path();
+
+                let Ok(t) = entry.file_type().await.map_err(|err| {
+                    ::log::error!("could not get file type for {entry_path:?}\n{err}")
+                }) else {
+                    continue;
+                };
+
+                if t.is_symlink() {
+                    ::log::info!("skipping symlink {entry_path:?}");
+                    continue;
+                } else if t.is_dir() {
+                    if entry_path
+                        .file_name()
+                        .and_then(|s| s.as_encoded_bytes().first())
+                        .is_some_and(|&f| f == b'.')
+                    {
+                        ::log::info!("skipping hidden directory {entry_path:?}");
+                    } else {
+                        stack.push(Cow::Owned(entry_path));
+                    }
+                    continue;
+                } else if !t.is_file() {
+                    ::log::info!("found non file/symlink/directory {entry_path:?}");
+                    continue;
+                }
+
+                let meta = entry
+                    .metadata()
+                    .await
+                    .map_err(|err| {
+                        ::log::error!("could not get metadata for {entry_path:?}\n{err}")
+                    })
+                    .ok();
+
+                if entry_path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("exe"))
+                {
+                    push_exe(entry_path);
+                    continue;
+                }
+
+                if meta.is_some_and(|m| m.mode() & 0o111 != 0) {
+                    push_exe(entry_path);
+                }
+            }
+        }
+
+        if exe.is_empty() {
+            ::log::warn!("no exe candidates found");
+            None
+        } else {
+            ::log::info!("collected exe candidates");
+            let parent = directory
+                .path()
+                .to_path_buf()
+                .into_os_string()
+                .into_string()
+                .map_err(|path| {
+                    ::log::error!("directory path {path:?} contains non utf-8 segments")
+                })
+                .ok()?;
+
+            exe.sort_unstable_by_key(|item| item.len());
+            Some((parent, ExeChoice::List(0, exe)))
+        }
+    }
+
     /// Update state using message.
-    pub fn update(&mut self, message: Message, settings: &Settings) -> Task<Message> {
+    pub fn update(
+        &mut self,
+        message: Message,
+        settings: &Settings,
+    ) -> Task<OrRequest<Message, Request>> {
         match message {
-            Message::Reset => {
-                *self = Self::Empty;
+            Message::SetEditor(game) => {
+                self.editor = editor::Editor::new(&game);
+                Task::none()
+            }
+            Message::UnsetEditor => {
+                self.editor = None;
                 Task::none()
             }
             Message::Editor(message) => {
-                if let Self::Editor(editor) = self {
-                    editor.update(message).map(Message::Editor)
+                if let Some(editor) = &mut self.editor {
+                    editor
+                        .update(message)
+                        .map(Message::Editor)
+                        .map(OrRequest::Message)
                 } else {
                     Task::none()
                 }
             }
-            Message::Prepare(message) => {
-                if let Self::Prepare(prepare) = self {
-                    prepare.update(message).map(Message::Prepare)
-                } else {
-                    Task::none()
-                }
-            }
+            Message::Prepare(message) => self.prepare.update(message).map(OrRequest::Message),
             Message::SetPaths { parent, choice } => {
-                *self = Self::Prepare(prepare::Prepare::new(parent, choice));
+                self.prepare = prepare::Prepare::new(parent, choice);
+                self.editor = None;
                 Task::none()
             }
             Message::SelectDir(start) => {
                 let initial_dir =
                     start.unwrap_or_else(|| settings.get::<InstallSource>().to_path_buf());
-                Task::<Option<_>>::future(async move {
-                    let mut dialog = ::rfd::AsyncFileDialog::new()
-                        .set_title("Select directory of game to install");
-                    if !initial_dir.as_os_str().is_empty() {
-                        dialog = dialog.set_directory(&initial_dir);
-                    }
-
-                    let directory = dialog
-                        .pick_folder()
-                        .await
-                        .tap_none(|| ::log::warn!("no game directory selected"))?;
-
-                    let mut stack = vec![Cow::Borrowed(directory.path())];
-                    let mut exe = Vec::<String>::new();
-                    let mut push_exe = |entry_path: PathBuf| {
-                        match entry_path.strip_prefix(directory.path()) {
-                            Ok(rel_path) => {
-                                if let Some(as_str) = rel_path.to_str() {
-                                    exe.push(as_str.to_owned());
-                                } else {
-                                    ::log::warn!("ignoring non utf-8 path {entry_path:?}");
-                                }
-                            }
-                            Err(err) => ::log::error!(
-                                "could not remove prefix {:?} from {:?}\n{err}",
-                                directory.path(),
-                                entry_path
-                            ),
-                        };
-                    };
-                    while let Some(directory) = stack.pop() {
-                        let path = &*directory;
-                        let Ok(mut dir) = ::smol::fs::read_dir(path).await.map_err(|err| {
-                            ::log::error!("could not read directory {path:?}\n{err}")
-                        }) else {
-                            continue;
-                        };
-
-                        while let Some(entry) = dir.next().await {
-                            let Ok(entry) = entry.map_err(|err| {
-                                ::log::error!(
-                                    "could not get directory entry for child of {path:?}\n{err}"
-                                )
-                            }) else {
-                                continue;
-                            };
-                            let entry_path = entry.path();
-
-                            let Ok(t) = entry.file_type().await.map_err(|err| {
-                                ::log::error!("could not get file type for {entry_path:?}\n{err}")
-                            }) else {
-                                continue;
-                            };
-
-                            if t.is_symlink() {
-                                ::log::info!("skipping symlink {entry_path:?}");
-                                continue;
-                            } else if t.is_dir() {
-                                if entry_path
-                                    .file_name()
-                                    .and_then(|s| s.as_encoded_bytes().first())
-                                    .is_some_and(|&f| f == b'.')
-                                {
-                                    ::log::info!("skipping hidden directory {entry_path:?}");
-                                } else {
-                                    stack.push(Cow::Owned(entry_path));
-                                }
-                                continue;
-                            } else if !t.is_file() {
-                                ::log::info!("found non file/symlink/directory {entry_path:?}");
-                                continue;
-                            }
-
-                            let meta = entry
-                                .metadata()
-                                .await
-                                .map_err(|err| {
-                                    ::log::error!(
-                                        "could not get metadata for {entry_path:?}\n{err}"
-                                    )
-                                })
-                                .ok();
-
-                            if entry_path
-                                .extension()
-                                .and_then(|ext| ext.to_str())
-                                .is_some_and(|ext| ext.eq_ignore_ascii_case("exe"))
-                            {
-                                push_exe(entry_path);
-                                continue;
-                            }
-
-                            if meta.is_some_and(|m| m.mode() & 0o111 != 0) {
-                                push_exe(entry_path);
-                            }
-                        }
-                    }
-
-                    if exe.is_empty() {
-                        ::log::warn!("no exe candidates found");
-                        None
-                    } else {
-                        ::log::info!("collected exe candidates");
-                        let parent = directory
-                            .path()
-                            .to_path_buf()
-                            .into_os_string()
-                            .into_string()
-                            .map_err(|path| {
-                                ::log::error!("directory path {path:?} contains non utf-8 segments")
-                            })
-                            .ok()?;
-
-                        exe.sort_unstable_by_key(|item| item.len());
-                        Some(Message::SetPaths {
-                            parent,
-                            choice: ExeChoice::List(0, exe),
-                        })
-                    }
-                })
-                .and_then(Task::done)
+                Task::<Option<_>>::future(Self::open(initial_dir))
+                    .and_then(Task::done)
+                    .map(|(parent, choice)| Message::SetPaths { parent, choice })
+                    .map(OrRequest::Message)
             }
             Message::SelectFile => Task::none(),
         }
@@ -211,18 +232,11 @@ impl Installer {
     pub fn view(
         &self,
         settings: &Settings,
-    ) -> Element<'_, Message, ::iced_core::Theme, widget::Renderer> {
-        match self {
-            Installer::Empty => widget::center(
-                widget::Row::new().spacing(3).push(
-                    widget::button("Open")
-                        .on_press(Message::SelectDir(None))
-                        .padding(3),
-                ),
-            )
-            .into(),
-            Installer::Editor(editor) => editor.view(settings),
-            Installer::Prepare(prepare) => prepare.view(),
+    ) -> Element<'_, OrRequest<Message, Request>, ::iced_core::Theme, widget::Renderer> {
+        if let Some(editor) = &self.editor {
+            editor.view(settings)
+        } else {
+            self.prepare.view()
         }
     }
 }

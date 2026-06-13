@@ -1,6 +1,6 @@
 //! Config editor.
 
-use ::std::{ffi::OsStr, path::Path, sync::Arc};
+use ::std::sync::Arc;
 
 use ::iced_core::{
     Element,
@@ -13,8 +13,8 @@ use ::iced_widget::{
     self as widget,
     text_editor::{self, Binding},
 };
-use ::spel_katalog_common::w;
-use ::spel_katalog_formats::{Bind, NativeGame, NativeRunner, Timestamp};
+use ::spel_katalog_common::{IntoOrRequest, OrRequest, w};
+use ::spel_katalog_formats::NativeGame;
 use ::spel_katalog_settings::Settings;
 use ::tap::Pipe;
 
@@ -34,7 +34,7 @@ pub enum Message {
 }
 
 /// Installer window for a game.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Editor {
     /// Editor content.
     content: text_editor::Content,
@@ -45,61 +45,26 @@ pub struct Editor {
 }
 
 impl Editor {
+    /// Construct a new editor.
+    pub fn new(game: &NativeGame) -> Option<Self> {
+        let content = ::toml::to_string_pretty(game)
+            .map_err(|err| ::log::error!("could not serialize game\n{game:#?}\n{err}"))
+            .ok()?;
+
+        let mut editor = Self {
+            content: text_editor::Content::new(),
+            history: Vec::new(),
+            future: Vec::new(),
+        };
+
+        editor.set_content(content);
+
+        Some(editor)
+    }
+
     /// Set content of text editor.
     fn set_content(&mut self, content: String) {
         w::set_text_editor_content(&mut self.content, content);
-    }
-
-    /// Clear history and future.
-    pub fn clear_history(&mut self) {
-        self.history.clear();
-        self.future.clear();
-    }
-
-    /// Set content by exe and parent.
-    pub fn content_from(&mut self, parent: &Path, exe: &Path) {
-        let runner = if exe
-            .extension()
-            .and_then(OsStr::to_str)
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("exe"))
-        {
-            NativeRunner::Wine
-        } else {
-            NativeRunner::Linux
-        };
-
-        let timestamp = Timestamp::now();
-
-        let config = NativeGame {
-            bind: Vec::from([Bind::mirrored(parent.to_path_buf())]),
-            ..NativeGame::new(
-                exe.file_stem()
-                    .map(|stem| stem.display().to_string())
-                    .unwrap_or_else(|| "<unknown>".to_owned()),
-                timestamp,
-                exe.to_path_buf(),
-                runner,
-            )
-        };
-
-        match ::toml::to_string_pretty(&config) {
-            Ok(content) => {
-                self.set_content(content);
-                self.clear_history();
-            }
-            Err(err) => {
-                ::log::error!(
-                    "could not serialize toml for exe {exe:?} with parent {parent:?}\n{err}"
-                );
-            }
-        }
-    }
-
-    /// Set content by exe.
-    pub fn content_from_exe(&mut self, exe: &Path) {
-        if let Some(parent) = exe.parent() {
-            self.content_from(parent, exe);
-        }
     }
 
     /// Update application state using message.
@@ -235,15 +200,39 @@ impl Editor {
     }
 
     /// View config editor (text editor + button row)
-    fn view_config_editor(&self, settings: &Settings) -> widget::Container<'_, super::Message> {
+    fn view_config_editor(
+        &self,
+        settings: &Settings,
+    ) -> widget::Container<'_, OrRequest<super::Message, super::Request>> {
         widget::container(
             widget::Column::new()
                 .spacing(3)
-                .push(self.view_buttons())
+                .push(
+                    self.view_buttons()
+                        .pipe(Element::from)
+                        .map(OrRequest::Message),
+                )
                 .push(
                     self.view_text_editor(settings)
                         .pipe(Element::from)
-                        .map(super::Message::Editor),
+                        .map(super::Message::Editor)
+                        .map(OrRequest::Message),
+                )
+                .push(
+                    widget::Row::new()
+                        .spacing(3)
+                        .push(widget::space().width(Length::Fill))
+                        .push(
+                            widget::button("Cancel")
+                                .padding(3)
+                                .style(widget::button::danger)
+                                .on_press(super::Message::UnsetEditor.into_message()),
+                        )
+                        .push(
+                            widget::button("Install")
+                                .padding(3)
+                                .style(widget::button::success),
+                        ),
                 ),
         )
         .padding(6)
@@ -253,7 +242,8 @@ impl Editor {
     pub fn view(
         &self,
         settings: &Settings,
-    ) -> Element<'_, super::Message, ::iced_core::Theme, widget::Renderer> {
+    ) -> Element<'_, OrRequest<super::Message, super::Request>, ::iced_core::Theme, widget::Renderer>
+    {
         self.view_config_editor(settings).into()
     }
 }

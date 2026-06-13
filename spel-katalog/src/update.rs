@@ -1,3 +1,4 @@
+use ::core::convert::identity;
 use ::std::path::Path;
 
 use ::iced_core::{Size, window};
@@ -9,7 +10,6 @@ use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::{IntoOrRequest, OrRequest};
 use ::spel_katalog_formats::{AdditionalConfig, NativeGame};
 use ::spel_katalog_games::SelDir;
-use ::spel_katalog_installer::Installer;
 use ::spel_katalog_run::run_umu::RunMode;
 use ::spel_katalog_settings::{
     ConfigDir, FilterMode, Load, LutrisDb, Network, Show, Variants, YmlDir,
@@ -155,11 +155,27 @@ impl App {
         match msg {
             QuickMessage::Debug => {
                 ::log::info!("debug action activated");
-                let (_, task) =
-                    ::iced_runtime::window::open(::iced_core::window::Settings::default());
-                return task.map(|id| {
-                    Message::OpenWindow(id, WindowType::Installer(Installer::default()))
-                });
+                return self.quick_update(QuickMessage::OpenInstaller);
+            }
+            QuickMessage::OpenInstaller => {
+                let source = self
+                    .settings
+                    .get::<::spel_katalog_settings::InstallSource>()
+                    .to_path_buf();
+
+                return Task::<Option<_>>::future(async move {
+                    let (parent, choice) =
+                        ::spel_katalog_installer::Installer::open(source).await?;
+                    let installer = ::spel_katalog_installer::Installer::new(parent, choice);
+
+                    let (id, task) = ::iced_runtime::window::open(Default::default());
+
+                    Some(task.discard().chain(Task::done(Message::OpenWindow(
+                        id,
+                        WindowType::Installer(installer),
+                    ))))
+                })
+                .and_then(identity);
             }
             QuickMessage::CopyFilter => {
                 return ::iced_runtime::clipboard::write(self.filter.clone());
@@ -640,9 +656,16 @@ impl App {
             }
             Message::Installer(id, msg) => {
                 if let Some(WindowType::Installer(installer)) = self.windows.get_mut(&id) {
-                    return installer
-                        .update(msg, &self.settings)
-                        .map(move |msg| Message::Installer(id, msg));
+                    return match msg {
+                        OrRequest::Message(msg) => installer
+                            .update(msg, &self.settings)
+                            .map(move |msg| Message::Installer(id, msg)),
+                        OrRequest::Request(req) => match req {
+                            ::spel_katalog_installer::Request::Close => {
+                                ::iced_runtime::window::close(id)
+                            }
+                        },
+                    };
                 }
             }
             Message::BuildDialog(dialog) => {
