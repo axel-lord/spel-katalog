@@ -31,6 +31,8 @@ pub enum Message {
     Copy,
     /// Paste clipboard.
     Paste,
+    /// Install game.
+    Install,
 }
 
 /// Installer window for a game.
@@ -68,7 +70,7 @@ impl Editor {
     }
 
     /// Update application state using message.
-    pub fn update(&mut self, message: Message) -> Task<Message> {
+    pub fn update(&mut self, message: Message) -> Task<OrRequest<super::Message, super::Request>> {
         match message {
             Message::Action(action) => {
                 if action.is_edit() {
@@ -103,8 +105,23 @@ impl Editor {
                     .pipe(text_editor::Edit::Paste)
                     .pipe(text_editor::Action::Edit)
                     .pipe(Message::Action)
+                    .pipe(super::Message::Editor)
+                    .into_message()
                     .pipe(Task::done)
             }),
+            Message::Install => {
+                let Some(config) = ::toml::from_str::<NativeGame>(&self.content.text())
+                    .map_err(|err| ::log::error!("could not deserialize config\n{err}"))
+                    .ok()
+                else {
+                    return Task::none();
+                };
+
+                Box::new(config)
+                    .pipe(super::Request::InstallGame)
+                    .into_request()
+                    .pipe(Task::done)
+            }
         }
     }
 
@@ -231,7 +248,8 @@ impl Editor {
                         .push(
                             widget::button("Install")
                                 .padding(3)
-                                .style(widget::button::success),
+                                .style(widget::button::success)
+                                .on_press(super::Message::from(Message::Install).into_message()),
                         ),
                 ),
         )

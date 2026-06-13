@@ -530,6 +530,35 @@ impl App {
         )
     }
 
+    pub fn install_game(&mut self, config: Box<NativeGame>, id: window::Id) -> Task<Message> {
+        let game_db = self.games_db.clone();
+        Task::<Option<_>>::future(::smol::unblock(move || {
+            let uuid = Uuid::now_v7();
+            game_db
+                .insert_game(uuid)
+                .insert(&config)
+                .map_err(|err| {
+                    ::log::error!(
+                        "could not insert game {:?} into database\n{err}",
+                        config.name
+                    )
+                })
+                .ok()?;
+
+            ::spel_katalog_games::Message::AddNativeGame {
+                uuid,
+                config,
+                thumb: None,
+            }
+            .into_message()
+            .pipe(Message::Games)
+            .pipe(Task::done)
+            .chain(::iced_runtime::window::close(id))
+            .pipe(Some)
+        }))
+        .and_then(identity)
+    }
+
     pub fn update(&mut self, msg: Message) -> Task<Message> {
         match msg {
             Message::Quick(quick) => return self.quick_update(quick),
@@ -663,6 +692,9 @@ impl App {
                         OrRequest::Request(req) => match req {
                             ::spel_katalog_installer::Request::Close => {
                                 ::iced_runtime::window::close(id)
+                            }
+                            ::spel_katalog_installer::Request::InstallGame(native_game) => {
+                                self.install_game(native_game, id)
                             }
                         },
                     };

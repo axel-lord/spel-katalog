@@ -49,6 +49,8 @@ pub enum Message {
 pub enum Request {
     /// Request the installer be closed.
     Close,
+    /// Request game to be added.
+    InstallGame(Box<NativeGame>),
 }
 
 /// Application installer.
@@ -202,10 +204,7 @@ impl Installer {
             }
             Message::Editor(message) => {
                 if let Some(editor) = &mut self.editor {
-                    editor
-                        .update(message)
-                        .map(Message::Editor)
-                        .map(OrRequest::Message)
+                    editor.update(message)
                 } else {
                     Task::none()
                 }

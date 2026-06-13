@@ -66,7 +66,7 @@ where
             }))
             .spacing(0)
             .padding(3)
-            .width(120)
+            .width(130)
             .align_x(::iced_core::Alignment::Center),
         )
         .style(::iced_widget::container::bordered_box)
