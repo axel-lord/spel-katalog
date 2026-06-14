@@ -5,12 +5,13 @@ use ::std::{
     path::{Path, PathBuf},
 };
 
-use ::iced_core::{Element, Length, alignment::Horizontal};
+use ::iced_core::{Element, Length, alignment::Vertical};
 use ::iced_runtime::Task;
 use ::iced_widget as widget;
 use ::rfd::AsyncFileDialog;
 use ::spel_katalog_common::{IntoOrRequest, OrRequest};
 use ::spel_katalog_formats::{Bind, NativeGame, NativeRunner, Timestamp};
+use ::spel_katalog_widget::rule;
 use ::tap::{Conv, Pipe, TapOptional};
 
 /// Choice of executable.
@@ -69,6 +70,8 @@ pub enum Message {
     CopyExe,
     /// Edit title.
     EditTitle(String),
+    /// Set hidden status.
+    SetHidden(bool),
     /// Copy title to clipboard.
     CopyTitle,
     /// Paste title.
@@ -88,6 +91,8 @@ pub struct Prepare {
     choice: ExeChoice,
     /// Runner in use.
     runner: NativeRunner,
+    /// Is the game hidden.
+    hidden: bool,
     /// Width of title row.
     title_width: f32,
 }
@@ -105,15 +110,43 @@ impl Prepare {
             } else {
                 NativeRunner::Linux
             },
+            hidden: false,
             title_width: 100.0,
             parent,
             choice,
         }
     }
 
+    /// Get game config from current values.
+    pub fn get_config(&self) -> Option<NativeGame> {
+        let exe = self.choice.current()?;
+        let parent = PathBuf::from(self.parent.clone());
+        let exe = parent.join(exe);
+        let config = NativeGame {
+            bind: Vec::from([Bind::mirrored(parent)]),
+            hidden: self.hidden,
+            drives: [('g', PathBuf::from("../.."))].into_iter().collect(),
+            prefix: if self.runner.is_wine() {
+                self.parent
+                    .as_str()
+                    .pipe(Path::new)
+                    .join(".umu_pfx")
+                    .pipe(Some)
+            } else {
+                None
+            },
+            ..NativeGame::new(self.title.clone(), Timestamp::now(), exe, self.runner)
+        };
+        Some(config)
+    }
+
     /// Update state with message.
     pub fn update(&mut self, message: Message) -> Task<super::Message> {
         match message {
+            Message::SetHidden(status) => {
+                self.hidden = status;
+                Task::none()
+            }
             Message::ChooseChoice(value) => {
                 if let ExeChoice::List(idx, list) = &mut self.choice
                     && let Some(pos) = list.iter().position(|e| e == &value)
@@ -184,162 +217,132 @@ impl Prepare {
                 })
                 .and_then(Task::done)
             }
-            Message::Ok => {
-                if let Some(exe) = self.choice.current() {
-                    let parent = PathBuf::from(self.parent.clone());
-                    let exe = parent.join(exe);
-                    NativeGame {
-                        bind: Vec::from([Bind::mirrored(parent)]),
-                        drives: [('g', PathBuf::from("../.."))].into_iter().collect(),
-                        prefix: if self.runner.is_wine() {
-                            self.parent
-                                .as_str()
-                                .pipe(Path::new)
-                                .join(".umu_pfx")
-                                .pipe(Some)
-                        } else {
-                            None
-                        },
-                        ..NativeGame::new(self.title.clone(), Timestamp::now(), exe, self.runner)
-                    }
-                    .pipe(Box::new)
-                    .pipe(super::Message::SetEditor)
-                    .pipe(Task::done)
-                } else {
-                    Task::none()
-                }
-            }
+            Message::Ok => self
+                .get_config()
+                .map(Box::new)
+                .map(super::Message::SetEditor)
+                .map_or_else(Task::none, Task::done),
         }
     }
 
-    /// View state.
-    pub fn view(
+    /// View fields.
+    pub fn view_fields(
         &self,
-    ) -> Element<
-        '_,
-        OrRequest<super::Message, super::Request>,
-        ::iced_core::Theme,
-        ::iced_widget::Renderer,
-    > {
-        widget::Column::new()
-            .padding(6)
-            .align_x(Horizontal::Center)
-            .push(
-                widget::container(
-                    widget::Column::new()
-                        .spacing(3)
-                        .push(widget::text("Title"))
-                        .push(::iced_aw::widget::ContextMenu::new(
-                            widget::text_input("title...", &self.title)
-                                .width(self.title_width)
-                                .on_input(|text| {
-                                    Message::EditTitle(text)
-                                        .conv::<super::Message>()
-                                        .into_message()
-                                }),
-                            || {
-                                ::spel_katalog_widget::ListMenu::new()
-                                    .push(widget::text("title"))
-                                    .separator()
-                                    .button("Copy", || {
-                                        Message::CopyTitle.conv::<super::Message>().into_message()
-                                    })
-                                    .button("Paste", || {
-                                        Message::PasteTitle.conv::<super::Message>().into_message()
-                                    })
-                                    .into()
-                            },
-                        ))
-                        .push(widget::text("Game Directory"))
-                        .push(
-                            ::iced_widget::sensor(
-                                widget::Row::new()
-                                    .spacing(3)
-                                    .push(widget::button("Open...").padding(3).on_press_with(
-                                        || {
-                                            super::Message::SelectDir(Some(PathBuf::from(
-                                                self.parent.as_str(),
-                                            )))
-                                            .into_message()
-                                        },
-                                    ))
-                                    .push(
-                                        widget::button("Copy")
-                                            .padding(3)
-                                            .style(widget::button::success)
-                                            .on_press(
-                                                Message::CopyDirectory
-                                                    .conv::<super::Message>()
-                                                    .into_message(),
-                                            ),
-                                    )
-                                    .push(
-                                        widget::container(widget::text(&self.parent))
-                                            .padding(3)
-                                            .style(widget::container::rounded_box),
+    ) -> ::iced_widget::Container<'_, OrRequest<super::Message, super::Request>> {
+        widget::container(
+            widget::Column::new()
+                .spacing(3)
+                .push(widget::text("Title"))
+                .push(::iced_aw::widget::ContextMenu::new(
+                    widget::text_input("title...", &self.title)
+                        .width(self.title_width)
+                        .on_input(|text| {
+                            Message::EditTitle(text)
+                                .conv::<super::Message>()
+                                .into_message()
+                        }),
+                    || {
+                        ::spel_katalog_widget::ListMenu::new()
+                            .push(widget::text("title"))
+                            .separator()
+                            .button("Copy", || {
+                                Message::CopyTitle.conv::<super::Message>().into_message()
+                            })
+                            .button("Paste", || {
+                                Message::PasteTitle.conv::<super::Message>().into_message()
+                            })
+                            .into()
+                    },
+                ))
+                .push(widget::text("Game Directory"))
+                .push(
+                    ::iced_widget::sensor(
+                        widget::Row::new()
+                            .spacing(3)
+                            .push(widget::button("Open...").padding(3).on_press_with(|| {
+                                super::Message::SelectDir(Some(PathBuf::from(self.parent.as_str())))
+                                    .into_message()
+                            }))
+                            .push(
+                                widget::button("Copy")
+                                    .padding(3)
+                                    .style(widget::button::success)
+                                    .on_press(
+                                        Message::CopyDirectory
+                                            .conv::<super::Message>()
+                                            .into_message(),
                                     ),
                             )
-                            .on_show(|size| {
-                                Message::SetTitleWidth(size)
+                            .push(
+                                widget::container(widget::text(&self.parent))
+                                    .padding(3)
+                                    .style(widget::container::rounded_box),
+                            ),
+                    )
+                    .on_show(|size| {
+                        Message::SetTitleWidth(size)
+                            .conv::<super::Message>()
+                            .into_message()
+                    })
+                    .on_resize(|size| {
+                        Message::SetTitleWidth(size)
+                            .conv::<super::Message>()
+                            .into_message()
+                    }),
+                )
+                .push(widget::text("Executable"))
+                .push(match &self.choice {
+                    ExeChoice::Value(value) => widget::Row::new()
+                        .spacing(3)
+                        .push(
+                            widget::button("Open...")
+                                .padding(3)
+                                .on_press(Message::OpenExe.conv::<super::Message>().into_message()),
+                        )
+                        .push(
+                            widget::button("Copy")
+                                .padding(3)
+                                .style(widget::button::success)
+                                .on_press(Message::CopyExe.conv::<super::Message>().into_message()),
+                        )
+                        .push(
+                            widget::container(widget::text(value))
+                                .style(widget::container::rounded_box)
+                                .padding(3),
+                        ),
+                    ExeChoice::List(idx, items) => widget::Row::new()
+                        .spacing(3)
+                        .push(
+                            widget::button("Open...")
+                                .padding(3)
+                                .on_press(Message::OpenExe.conv::<super::Message>().into_message()),
+                        )
+                        .push(
+                            widget::button("Copy")
+                                .padding(3)
+                                .style(widget::button::success)
+                                .on_press(Message::CopyExe.conv::<super::Message>().into_message()),
+                        )
+                        .push(
+                            widget::pick_list(items.as_slice(), items.get(*idx), |i: String| {
+                                Message::ChooseChoice(i)
                                     .conv::<super::Message>()
                                     .into_message()
                             })
-                            .on_resize(|size| {
-                                Message::SetTitleWidth(size)
-                                    .conv::<super::Message>()
-                                    .into_message()
-                            }),
-                        )
-                        .push(widget::text("Executable"))
-                        .push(match &self.choice {
-                            ExeChoice::Value(value) => widget::Row::new()
-                                .spacing(3)
-                                .push(widget::button("Open...").padding(3).on_press(
-                                    Message::OpenExe.conv::<super::Message>().into_message(),
-                                ))
-                                .push(
-                                    widget::button("Copy")
-                                        .padding(3)
-                                        .style(widget::button::success)
-                                        .on_press(
-                                            Message::CopyExe
-                                                .conv::<super::Message>()
-                                                .into_message(),
-                                        ),
-                                )
-                                .push(
-                                    widget::container(widget::text(value))
-                                        .style(widget::container::rounded_box)
-                                        .padding(3),
-                                ),
-                            ExeChoice::List(idx, items) => widget::Row::new()
-                                .spacing(3)
-                                .push(widget::button("Open...").padding(3).on_press(
-                                    Message::OpenExe.conv::<super::Message>().into_message(),
-                                ))
-                                .push(
-                                    widget::button("Copy")
-                                        .padding(3)
-                                        .style(widget::button::success)
-                                        .on_press(
-                                            Message::CopyExe
-                                                .conv::<super::Message>()
-                                                .into_message(),
-                                        ),
-                                )
-                                .push(
-                                    widget::pick_list(
-                                        items.as_slice(),
-                                        items.get(*idx),
-                                        |i: String| {
-                                            Message::ChooseChoice(i)
-                                                .conv::<super::Message>()
-                                                .into_message()
-                                        },
-                                    )
-                                    .padding(3),
-                                ),
-                        })
+                            .padding(3),
+                        ),
+                })
+                .push(
+                    widget::Row::new()
+                        .spacing(3)
+                        .align_y(Vertical::Center)
+                        .push(widget::text("Hidden"))
+                        .push(widget::checkbox(self.hidden).on_toggle(|status| {
+                            Message::SetHidden(status)
+                                .conv::<super::Message>()
+                                .into_message()
+                        }))
+                        .push(rule::horizontal().pipe(widget::container).width(6))
                         .push(widget::text("Runner"))
                         .push(
                             widget::pick_list(
@@ -354,27 +357,52 @@ impl Prepare {
                             .padding(3),
                         ),
                 )
-                .style(widget::container::bordered_box)
-                .padding(6),
-            )
-            .push(widget::space().height(Length::Fill))
+                .pipe(::spel_katalog_widget::xy_scrollable),
+        )
+        .style(widget::container::bordered_box)
+        .padding(6)
+    }
+
+    /// Display buttons.
+    pub fn buttons(
+        &self,
+    ) -> ::iced_widget::Container<'_, OrRequest<super::Message, super::Request>> {
+        widget::Row::new()
+            .spacing(3)
             .push(
-                widget::Row::new()
-                    .spacing(3)
-                    .push(widget::space().width(Length::Fill))
-                    .push(
-                        widget::button("Cancel")
-                            .padding(3)
-                            .style(widget::button::danger)
-                            .on_press(super::Request::Close.into_request()),
-                    )
-                    .push(
-                        widget::button("Ok")
-                            .padding(3)
-                            .style(widget::button::success)
-                            .on_press(Message::Ok.conv::<super::Message>().into_message()),
-                    ),
+                widget::button("Cancel")
+                    .padding(3)
+                    .style(widget::button::danger)
+                    .on_press(super::Request::Close.into_request()),
             )
-            .into()
+            .push(
+                widget::button("Ok")
+                    .padding(3)
+                    .style(widget::button::success)
+                    .on_press(Message::Ok.conv::<super::Message>().into_message()),
+            )
+            .pipe(widget::container)
+            .style(widget::container::bordered_box)
+            .padding(4)
+    }
+
+    /// View state.
+    pub fn view(
+        &self,
+    ) -> Element<
+        '_,
+        OrRequest<super::Message, super::Request>,
+        ::iced_core::Theme,
+        ::iced_widget::Renderer,
+    > {
+        widget::container(
+            widget::Stack::new()
+                .height(Length::Fill)
+                .width(Length::Fill)
+                .push(self.view_fields().pipe(widget::center_x))
+                .push(self.buttons().pipe(widget::bottom_right)),
+        )
+        .padding(6)
+        .into()
     }
 }

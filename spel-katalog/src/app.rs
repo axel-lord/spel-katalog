@@ -329,6 +329,9 @@ impl App {
         fn with_global_context(menu: ListMenu<'_, Message>) -> ListMenu<'_, Message> {
             menu.push(widget::text("Spel Katalog"))
                 .separator()
+                .button("Install Game", || {
+                    Message::Quick(QuickMessage::OpenInstaller)
+                })
                 .button("Convert All", || Message::Quick(QuickMessage::ConvertAll))
                 .button("Open DB", || Message::Quick(QuickMessage::OpenDatabase))
                 .button("Reload Games", || Message::Quick(QuickMessage::ReloadGames))

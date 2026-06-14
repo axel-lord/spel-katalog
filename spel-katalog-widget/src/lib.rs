@@ -4,7 +4,7 @@ use ::iced_core::{Font, text::IntoFragment};
 
 pub use self::{
     list_menu::{ListMenu, hover_background_text_button, menu_button},
-    scrollable::scrollable,
+    scrollable::{x_scrollable, xy_scrollable, y_scrollable},
     vertical_list_menu::VerticalListMenu,
 };
 
@@ -13,6 +13,8 @@ pub mod rule;
 mod list_menu;
 mod scrollable;
 mod vertical_list_menu;
+
+pub use scrollable::y_scrollable as scrollable;
 
 /// Display monospace text.
 pub fn monospace<'a, Theme, Renderer>(
