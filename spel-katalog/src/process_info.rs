@@ -7,7 +7,7 @@ use ::iced_core::{
 };
 use ::iced_widget::{self as widget, button, container, opaque, text, value};
 use ::smol::stream::StreamExt;
-use ::spel_katalog_common::PushMaybe;
+use ::spel_katalog_common::in_place::PushMaybe as _;
 use ::spel_katalog_common::{styling, w};
 use ::tap::Pipe;
 

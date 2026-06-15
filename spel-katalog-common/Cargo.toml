@@ -7,10 +7,12 @@ license.workspace = true
 
 [dependencies]
 derive_more = { workspace = true, features = ["is_variant", "deref", "from", "into"] }
+either.workspace = true
 flume.workspace = true
 iced_core.workspace = true
 iced_widget.workspace = true
 log.workspace = true
+serde = { workspace = true, features = ["derive"] }
 
 [lints]
 workspace = true

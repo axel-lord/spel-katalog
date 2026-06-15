@@ -6,7 +6,7 @@ use ::std::sync::LazyLock;
 use ::derive_more::IsVariant;
 use ::iced_core::Font;
 use ::iced_widget::{self as widget, rich_text, text::Span};
-use ::spel_katalog_common::PushMaybe;
+use ::spel_katalog_common::in_place::PushMaybe as _;
 use ::tap::Pipe;
 use ::yaml_rust2::Yaml;
 

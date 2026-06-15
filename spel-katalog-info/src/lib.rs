@@ -17,7 +17,9 @@ use ::iced_runtime::Task;
 use ::iced_widget::{self as widget, button};
 use ::image::ImageError;
 use ::open::that;
-use ::spel_katalog_common::{OrRequest, PushMaybe, StatusSender, async_status, status, styling, w};
+use ::spel_katalog_common::{
+    OrRequest, StatusSender, async_status, in_place::PushMaybe as _, status, styling, w,
+};
 use ::spel_katalog_formats::{AdditionalConfig, Game, GameId, NativeGame, lutris_config};
 use ::spel_katalog_native::Pool;
 use ::spel_katalog_settings::{ConfigDir, CoverartDir, Settings, YmlDir};

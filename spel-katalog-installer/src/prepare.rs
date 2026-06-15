@@ -5,11 +5,14 @@ use ::std::{
     path::{Path, PathBuf},
 };
 
-use ::iced_core::{Element, Length, alignment::Vertical};
+use ::iced_core::{Element, Length, Size, alignment::Vertical};
 use ::iced_runtime::Task;
 use ::iced_widget as widget;
 use ::rfd::AsyncFileDialog;
-use ::spel_katalog_common::{IntoOrRequest, OrRequest};
+use ::spel_katalog_common::{
+    IntoOrRequest, OrRequest,
+    in_place::{Convene, MapSelf},
+};
 use ::spel_katalog_formats::{Bind, NativeGame, NativeRunner, Timestamp};
 use ::spel_katalog_widget::rule;
 use ::tap::{Conv, Pipe, TapOptional};
@@ -59,7 +62,7 @@ pub enum Message {
     /// A runner was selected.
     ChooseRunner(NativeRunner),
     /// Width of of dir row was updated.
-    SetTitleWidth(::iced_core::Size),
+    SetWidth(f32),
     /// Set the exe value.
     SetExe(String),
     /// An exe should be selected.
@@ -93,8 +96,8 @@ pub struct Prepare {
     runner: NativeRunner,
     /// Is the game hidden.
     hidden: bool,
-    /// Width of title row.
-    title_width: f32,
+    /// Width of column box.
+    column_width: Option<f32>,
 }
 
 impl Prepare {
@@ -111,7 +114,7 @@ impl Prepare {
                 NativeRunner::Linux
             },
             hidden: false,
-            title_width: 100.0,
+            column_width: None,
             parent,
             choice,
         }
@@ -164,8 +167,8 @@ impl Prepare {
                 self.runner = runner;
                 Task::none()
             }
-            Message::SetTitleWidth(size) => {
-                self.title_width = size.width.max(100.0);
+            Message::SetWidth(w) => {
+                self.column_width = Some(w);
                 Task::none()
             }
             Message::CopyDirectory => ::iced_runtime::clipboard::write(self.parent.clone()),
@@ -231,16 +234,21 @@ impl Prepare {
     ) -> ::iced_widget::Container<'_, OrRequest<super::Message, super::Request>> {
         widget::container(
             widget::Column::new()
+                .pipe_some(self.column_width, |col, width| col.width(width))
+                .convene()
                 .spacing(3)
                 .push(widget::text("Title"))
                 .push(::iced_aw::widget::ContextMenu::new(
                     widget::text_input("title...", &self.title)
-                        .width(self.title_width)
                         .on_input(|text| {
                             Message::EditTitle(text)
                                 .conv::<super::Message>()
                                 .into_message()
-                        }),
+                        })
+                        .width(
+                            self.column_width
+                                .map_or(Length::Fixed(0.0), |_| Length::Fill),
+                        ),
                     || {
                         ::spel_katalog_widget::ListMenu::new()
                             .push(widget::text("title"))
@@ -256,39 +264,31 @@ impl Prepare {
                 ))
                 .push(widget::text("Game Directory"))
                 .push(
-                    ::iced_widget::sensor(
-                        widget::Row::new()
-                            .spacing(3)
-                            .push(widget::button("Open...").padding(3).on_press_with(|| {
-                                super::Message::SelectDir(Some(PathBuf::from(self.parent.as_str())))
-                                    .into_message()
-                            }))
-                            .push(
-                                widget::button("Copy")
-                                    .padding(3)
-                                    .style(widget::button::success)
-                                    .on_press(
-                                        Message::CopyDirectory
-                                            .conv::<super::Message>()
-                                            .into_message(),
-                                    ),
+                    widget::Row::new()
+                        .spacing(3)
+                        .push(widget::button("Open...").padding(3).on_press_with(|| {
+                            super::Message::SelectDir(Some(PathBuf::from(self.parent.as_str())))
+                                .into_message()
+                        }))
+                        .push(
+                            widget::button("Copy")
+                                .padding(3)
+                                .style(widget::button::success)
+                                .on_press(
+                                    Message::CopyDirectory
+                                        .conv::<super::Message>()
+                                        .into_message(),
+                                ),
+                        )
+                        .push(
+                            widget::container(
+                                widget::text(&self.parent)
+                                    .pipe_if(self.column_width.is_some(), |t| t.width(Length::Fill))
+                                    .convene(),
                             )
-                            .push(
-                                widget::container(widget::text(&self.parent))
-                                    .padding(3)
-                                    .style(widget::container::rounded_box),
-                            ),
-                    )
-                    .on_show(|size| {
-                        Message::SetTitleWidth(size)
-                            .conv::<super::Message>()
-                            .into_message()
-                    })
-                    .on_resize(|size| {
-                        Message::SetTitleWidth(size)
-                            .conv::<super::Message>()
-                            .into_message()
-                    }),
+                            .padding(3)
+                            .style(widget::container::rounded_box),
+                        ),
                 )
                 .push(widget::text("Executable"))
                 .push(match &self.choice {
@@ -306,9 +306,13 @@ impl Prepare {
                                 .on_press(Message::CopyExe.conv::<super::Message>().into_message()),
                         )
                         .push(
-                            widget::container(widget::text(value))
-                                .style(widget::container::rounded_box)
-                                .padding(3),
+                            widget::container(
+                                widget::text(value)
+                                    .pipe_if(self.column_width.is_some(), |t| t.width(Length::Fill))
+                                    .convene(),
+                            )
+                            .style(widget::container::rounded_box)
+                            .padding(3),
                         ),
                     ExeChoice::List(idx, items) => widget::Row::new()
                         .spacing(3)
@@ -329,6 +333,8 @@ impl Prepare {
                                     .conv::<super::Message>()
                                     .into_message()
                             })
+                            .pipe_if(self.column_width.is_some(), |l| l.width(Length::Fill))
+                            .convene()
                             .padding(3),
                         ),
                 })
@@ -357,7 +363,17 @@ impl Prepare {
                             .padding(3),
                         ),
                 )
-                .pipe(::spel_katalog_widget::xy_scrollable),
+                .pipe_if(self.column_width.is_none(), widget::sensor)
+                .map(|sensor| {
+                    let read_width = |size: Size| {
+                        Message::SetWidth(size.width)
+                            .pipe(super::Message::Prepare)
+                            .into_message()
+                    };
+                    sensor.on_show(read_width).on_resize(read_width)
+                })
+                .map(::spel_katalog_widget::xy_scrollable)
+                .or_else(::spel_katalog_widget::xy_scrollable),
         )
         .style(widget::container::bordered_box)
         .padding(6)

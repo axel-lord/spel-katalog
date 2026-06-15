@@ -19,7 +19,7 @@ use ::iced_widget::{
 use ::image::ImageFormat;
 use ::rfd::AsyncFileDialog;
 use ::smol::unblock;
-use ::spel_katalog_common::{IntoOrRequest, OrRequest, PushMaybe, w};
+use ::spel_katalog_common::{IntoOrRequest, OrRequest, in_place::PushMaybe as _, w};
 use ::spel_katalog_formats::{GameId, NativeGame};
 use ::spel_katalog_native::Pool;
 use ::spel_katalog_settings::CompToolsDir;

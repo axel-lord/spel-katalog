@@ -4621,10 +4621,12 @@ name = "spel-katalog-common"
 version = "0.1.0"
 dependencies = [
  "derive_more",
+ "either",
  "flume",
  "iced_core",
  "iced_widget",
  "log",
+ "serde",
 ]
 
 [[package]]

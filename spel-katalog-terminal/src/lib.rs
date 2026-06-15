@@ -18,7 +18,7 @@ use ::std::{
 use ::iced_core::{Alignment::Center, Length::Fill};
 use ::iced_runtime::Task;
 use ::iced_widget as widget;
-use ::spel_katalog_common::PushMaybe;
+use ::spel_katalog_common::in_place::PushMaybe as _;
 use ::spel_katalog_sink::SinkIdentity;
 
 /// Element alias.
