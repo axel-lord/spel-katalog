@@ -64,11 +64,15 @@ pub struct Installer {
 
 impl Installer {
     /// Construct a new installer.
-    pub fn new(parent: String, choice: ExeChoice) -> Self {
-        Self {
-            prepare: prepare::Prepare::new(parent, choice),
-            editor: None,
-        }
+    pub fn new(settings: &Settings, parent: String, choice: ExeChoice) -> (Self, Task<Message>) {
+        let (prepare, task) = prepare::Prepare::new(settings, parent, choice);
+        (
+            Self {
+                prepare,
+                editor: None,
+            },
+            task.map(Message::Prepare),
+        )
     }
 
     /// Show open dialog.
@@ -206,14 +210,19 @@ impl Installer {
                 if let Some(editor) = &mut self.editor {
                     editor.update(message)
                 } else {
+                    ::log::warn!("received editor message whitout an editor\n{message:#?}");
                     Task::none()
                 }
             }
-            Message::Prepare(message) => self.prepare.update(message).map(OrRequest::Message),
+            Message::Prepare(message) => self
+                .prepare
+                .update(message, settings)
+                .map(OrRequest::Message),
             Message::SetPaths { parent, choice } => {
-                self.prepare = prepare::Prepare::new(parent, choice);
+                let task;
+                (self.prepare, task) = prepare::Prepare::new(settings, parent, choice);
                 self.editor = None;
-                Task::none()
+                task.map(Message::Prepare).map(OrRequest::Message)
             }
             Message::SelectDir(start) => {
                 let initial_dir =

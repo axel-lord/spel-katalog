@@ -3,6 +3,7 @@
 use ::std::{
     ffi::OsStr,
     path::{Path, PathBuf},
+    process::Stdio,
 };
 
 use ::iced_core::{Element, Length, Size, alignment::Vertical};
@@ -10,10 +11,11 @@ use ::iced_runtime::Task;
 use ::iced_widget as widget;
 use ::rfd::AsyncFileDialog;
 use ::spel_katalog_common::{
-    IntoOrRequest, OrRequest,
+    IntoOrRequest, OrRequest, display_bytes,
     in_place::{Convene, MapSelf},
 };
 use ::spel_katalog_formats::{Bind, NativeGame, NativeRunner, Timestamp};
+use ::spel_katalog_settings::{InstallLocale, Settings, ThmubnailSource};
 use ::spel_katalog_widget::rule;
 use ::tap::{Conv, Pipe, TapOptional};
 
@@ -65,8 +67,16 @@ pub enum Message {
     SetWidth(f32),
     /// Set the exe value.
     SetExe(String),
+    /// Set the thumbnail value.
+    SetThumb(PathBuf),
+    /// Add available locales.
+    AddLocales(Vec<String>),
+    /// Set the current locale.
+    SetLocale(String),
     /// An exe should be selected.
     OpenExe,
+    /// A thumbnail should be selected.
+    OpenThumb,
     /// Copy game directory to clibboard.
     CopyDirectory,
     /// Copy exe to clipboard.
@@ -75,6 +85,8 @@ pub enum Message {
     EditTitle(String),
     /// Set hidden status.
     SetHidden(bool),
+    /// Set the move game status.
+    SetMoveGame(bool),
     /// Copy title to clipboard.
     CopyTitle,
     /// Paste title.
@@ -98,26 +110,85 @@ pub struct Prepare {
     hidden: bool,
     /// Width of column box.
     column_width: Option<f32>,
+    /// Thumbnail to use.
+    thumbnail: Option<PathBuf>,
+    /// Available locales.
+    locales: Vec<String>,
+    /// Current locale.
+    locale: String,
+    /// Should the game be moved.
+    move_game: bool,
 }
 
 impl Prepare {
     /// Construct a new instance.
-    pub fn new(parent: String, choice: ExeChoice) -> Self {
-        Self {
-            title: parent
-                .trim_end_matches('/')
-                .rsplit_once('/')
-                .map_or_else(String::new, |(_, title)| title.to_owned()),
-            runner: if choice.has_ext("exe") {
-                NativeRunner::Wine
-            } else {
-                NativeRunner::Linux
+    pub fn new(settings: &Settings, parent: String, choice: ExeChoice) -> (Self, Task<Message>) {
+        (
+            Self {
+                title: parent
+                    .trim_end_matches('/')
+                    .rsplit_once('/')
+                    .map_or_else(String::new, |(_, title)| title.to_owned()),
+                runner: if choice.has_ext("exe") {
+                    NativeRunner::Wine
+                } else {
+                    NativeRunner::Linux
+                },
+                hidden: false,
+                column_width: None,
+                thumbnail: None,
+                locales: Vec::from([String::new()]),
+                locale: settings.get::<InstallLocale>().as_str().to_owned(),
+                move_game: true,
+                parent,
+                choice,
             },
-            hidden: false,
-            column_width: None,
-            parent,
-            choice,
-        }
+            Task::<Option<_>>::future(async {
+                const FULL: &str = "localectl list-locales";
+                const CMD: &str = "localectl";
+                const ARG: &str = "list-locales";
+                let child = ::smol::process::Command::new(CMD)
+                    .arg(ARG)
+                    .kill_on_drop(true)
+                    .stdin(Stdio::null())
+                    .stderr(Stdio::inherit())
+                    .stdout(Stdio::piped())
+                    .spawn()
+                    .map_err(|err| ::log::warn!("could not spawn locale finder\n{err}"))
+                    .ok()?;
+
+                let output = child
+                    .output()
+                    .await
+                    .map_err(|err| ::log::warn!("{FULL} could not run\n{err}"))
+                    .ok()?;
+
+                if !output.status.success() {
+                    ::log::warn!("{FULL} failed\n{}", output.status);
+                }
+
+                output
+                    .stdout
+                    .split(|&b| b == b'\n')
+                    .filter_map(|s| {
+                        str::from_utf8(s)
+                            .map_err(|err| {
+                                ::log::warn!(
+                                    "could not parse locale {} as utf-8\n{err}",
+                                    display_bytes(s)
+                                )
+                            })
+                            .map(|s| s.trim())
+                            .ok()
+                            .filter(|&s| !matches!(s, "" | "C.UTF-8"))
+                            .map(ToOwned::to_owned)
+                    })
+                    .collect::<Vec<_>>()
+                    .pipe(Message::AddLocales)
+                    .pipe(Some)
+            })
+            .and_then(Task::done),
+        )
     }
 
     /// Get game config from current values.
@@ -138,16 +209,27 @@ impl Prepare {
             } else {
                 None
             },
+            env: if !self.locale.is_empty() {
+                [("LANG".to_owned(), self.locale.clone())]
+                    .into_iter()
+                    .collect()
+            } else {
+                Default::default()
+            },
             ..NativeGame::new(self.title.clone(), Timestamp::now(), exe, self.runner)
         };
         Some(config)
     }
 
     /// Update state with message.
-    pub fn update(&mut self, message: Message) -> Task<super::Message> {
+    pub fn update(&mut self, message: Message, settings: &Settings) -> Task<super::Message> {
         match message {
             Message::SetHidden(status) => {
                 self.hidden = status;
+                Task::none()
+            }
+            Message::SetMoveGame(status) => {
+                self.move_game = status;
                 Task::none()
             }
             Message::ChooseChoice(value) => {
@@ -183,6 +265,15 @@ impl Prepare {
                 self.choice = ExeChoice::Value(exe);
                 Task::none()
             }
+            Message::AddLocales(locales) => {
+                ::log::info!("addding locales\n{locales:#?}");
+                self.locales.extend(locales);
+                Task::none()
+            }
+            Message::SetLocale(locale) => {
+                self.locale = locale;
+                Task::none()
+            }
             Message::EditTitle(title) => {
                 self.title = title;
                 Task::none()
@@ -194,6 +285,7 @@ impl Prepare {
                 let location = self.parent.clone().conv::<PathBuf>();
                 Task::<Option<_>>::future(async move {
                     let file = AsyncFileDialog::new()
+                        .set_title("Select Executable")
                         .set_directory(&location)
                         .pick_file()
                         .await
@@ -219,6 +311,32 @@ impl Prepare {
                         .pipe(Some)
                 })
                 .and_then(Task::done)
+            }
+            Message::OpenThumb => {
+                let location = settings.get::<ThmubnailSource>().to_path_buf();
+                Task::<Option<_>>::future(async move {
+                    AsyncFileDialog::new()
+                        .set_title("Select Thumbnail")
+                        .set_directory(location)
+                        .add_filter(
+                            "image",
+                            &[
+                                "png", "jpg", "jpeg", "avif", "webp", "bmp", "tga", "tiff", "gif",
+                                "ico", "pnm", "ff", "exr",
+                            ],
+                        )
+                        .pick_file()
+                        .await
+                        .tap_none(|| ::log::warn!("not thumbnail chosen"))
+                        .map(|file| file.path().to_path_buf())
+                        .map(Message::SetThumb)
+                        .map(super::Message::Prepare)
+                })
+                .and_then(Task::done)
+            }
+            Message::SetThumb(thumb) => {
+                self.thumbnail = Some(thumb);
+                Task::none()
             }
             Message::Ok => self
                 .get_config()
@@ -342,13 +460,42 @@ impl Prepare {
                     widget::Row::new()
                         .spacing(3)
                         .align_y(Vertical::Center)
+                        .pipe_if(self.column_width.is_some(), |r| r.push(rule::horizontal()))
+                        .convene()
+                        .push(
+                            widget::button("Thumbnail")
+                                .padding(3)
+                                .on_press(
+                                    super::Message::Prepare(Message::OpenThumb).into_message(),
+                                )
+                                .pipe_if(self.thumbnail.is_none(), |b| {
+                                    b.style(widget::button::success)
+                                })
+                                .or_else(|b| b.style(widget::button::secondary)),
+                        )
+                        .push(rule::sized_horizontal(12))
                         .push(widget::text("Hidden"))
                         .push(widget::checkbox(self.hidden).on_toggle(|status| {
                             Message::SetHidden(status)
                                 .conv::<super::Message>()
                                 .into_message()
                         }))
-                        .push(rule::horizontal().pipe(widget::container).width(6))
+                        .push(rule::sized_horizontal(12))
+                        .push(widget::text("Move"))
+                        .push(widget::checkbox(self.move_game).on_toggle(|status| {
+                            Message::SetMoveGame(status)
+                                .conv::<super::Message>()
+                                .into_message()
+                        }))
+                        .pipe_if(self.column_width.is_some(), |r| r.push(rule::horizontal()))
+                        .convene(),
+                )
+                .push(
+                    widget::Row::new()
+                        .spacing(3)
+                        .align_y(Vertical::Center)
+                        .pipe_if(self.column_width.is_some(), |r| r.push(rule::horizontal()))
+                        .convene()
                         .push(widget::text("Runner"))
                         .push(
                             widget::pick_list(
@@ -361,8 +508,32 @@ impl Prepare {
                                 },
                             )
                             .padding(3),
-                        ),
+                        )
+                        .push(rule::sized_horizontal(12))
+                        .push(widget::text("Locale"))
+                        .push(
+                            widget::pick_list(
+                                self.locales.as_slice(),
+                                Some(&self.locale),
+                                |locale| {
+                                    Message::SetLocale(locale)
+                                        .conv::<super::Message>()
+                                        .into_message()
+                                },
+                            )
+                            .padding(3),
+                        )
+                        .pipe_if(self.column_width.is_some(), |r| r.push(rule::horizontal()))
+                        .convene(),
                 )
+                .pipe_some(self.thumbnail.as_deref(), |col, thumb| {
+                    col.push(
+                        widget::container(widget::image(thumb).width(300))
+                            .pipe_if(self.column_width.is_some(), |c| c.center_x(Length::Fill))
+                            .convene(),
+                    )
+                })
+                .convene()
                 .pipe_if(self.column_width.is_none(), widget::sensor)
                 .map(|sensor| {
                     let read_width = |size: Size| {

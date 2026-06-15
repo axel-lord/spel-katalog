@@ -196,26 +196,6 @@ impl Editor {
         .into()
     }
 
-    /// View button row.
-    fn view_buttons(&self) -> widget::Row<'_, super::Message> {
-        widget::Row::new()
-            .spacing(3)
-            .push(::iced_aw::widget::ContextMenu::new(
-                widget::button("Open")
-                    .padding(3)
-                    .on_press(super::Message::SelectDir(None)),
-                || {
-                    ::spel_katalog_widget::ListMenu::new()
-                        .push(widget::text("Open"))
-                        .separator()
-                        .button("File", || super::Message::SelectFile)
-                        .button("Folder", || super::Message::SelectDir(None))
-                        .into()
-                },
-            ))
-            .push(widget::space().width(Length::Fill))
-    }
-
     /// View config editor (text editor + button row)
     fn view_config_editor(
         &self,
@@ -224,11 +204,6 @@ impl Editor {
         widget::container(
             widget::Column::new()
                 .spacing(3)
-                .push(
-                    self.view_buttons()
-                        .pipe(Element::from)
-                        .map(OrRequest::Message),
-                )
                 .push(
                     self.view_text_editor(settings)
                         .pipe(Element::from)

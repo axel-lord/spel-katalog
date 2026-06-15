@@ -158,22 +158,28 @@ impl App {
                 return self.quick_update(QuickMessage::OpenInstaller);
             }
             QuickMessage::OpenInstaller => {
-                let source = self
-                    .settings
-                    .get::<::spel_katalog_settings::InstallSource>()
-                    .to_path_buf();
+                let settings = self.settings.clone();
 
                 return Task::<Option<_>>::future(async move {
+                    let source = settings
+                        .get::<::spel_katalog_settings::InstallSource>()
+                        .to_path_buf();
+
                     let (parent, choice) =
                         ::spel_katalog_installer::Installer::open(source).await?;
-                    let installer = ::spel_katalog_installer::Installer::new(parent, choice);
+                    let (installer, installer_task) =
+                        ::spel_katalog_installer::Installer::new(&settings, parent, choice);
 
-                    let (id, task) = ::iced_runtime::window::open(Default::default());
+                    let (id, open_task) = ::iced_runtime::window::open(Default::default());
 
-                    Some(task.discard().chain(Task::done(Message::OpenWindow(
-                        id,
-                        WindowType::Installer(installer),
-                    ))))
+                    let add_task =
+                        Task::done(Message::OpenWindow(id, WindowType::Installer(installer)));
+
+                    Some(open_task.discard().chain(add_task.chain(
+                        installer_task.map(move |message| {
+                            Message::Installer(id, OrRequest::Message(message))
+                        }),
+                    )))
                 })
                 .and_then(identity);
             }
