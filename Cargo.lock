@@ -5029,6 +5029,7 @@ version = "0.1.0"
 dependencies = [
  "color-eyre",
  "derive_more",
+ "itertools",
  "log",
  "rustc-hash 2.1.2",
  "shell-words",
@@ -5036,6 +5037,7 @@ dependencies = [
  "spel-katalog-formats",
  "spel-katalog-settings",
  "spel-katalog-sink",
+ "tap",
  "users",
 ]
 
