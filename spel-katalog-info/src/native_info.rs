@@ -1,7 +1,7 @@
 //! Info view for native game.
 
 use ::core::ops::Not;
-use ::std::{io::Cursor, sync::Arc};
+use ::std::{borrow::Cow, io::Cursor, sync::Arc};
 
 use ::derive_more::From;
 use ::iced_core::{
@@ -423,7 +423,7 @@ impl State {
                             })
                             .ok()?;
 
-                        let thumb = ::spel_katalog_native::make_square_thumbnail(&image)
+                        let thumb = ::spel_katalog_native::make_square_thumbnail(Cow::Owned(image))
                             .tap_none(|| ::log::warn!("could not make thubmnail square"))?;
 
                         game_db

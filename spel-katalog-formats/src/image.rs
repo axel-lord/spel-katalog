@@ -1,4 +1,6 @@
 //! [Image] impl.
+use ::std::borrow::Cow;
+
 pub use ::bytes::Bytes;
 use ::image::{DynamicImage, RgbaImage};
 pub use ::serde::{Deserialize, Serialize};
@@ -80,5 +82,15 @@ impl From<DynamicImage> for Image {
     #[inline]
     fn from(value: DynamicImage) -> Self {
         Image::from_image(value)
+    }
+}
+
+impl From<Cow<'_, DynamicImage>> for Image {
+    #[inline]
+    fn from(value: Cow<'_, DynamicImage>) -> Self {
+        match value {
+            Cow::Borrowed(i) => Image::from_rgba(i.to_rgba8()),
+            Cow::Owned(i) => Image::from_image(i),
+        }
     }
 }

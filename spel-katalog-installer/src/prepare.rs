@@ -1,17 +1,16 @@
 //! Preparation screen.
 
 use ::std::{
+    borrow::Cow,
     ffi::OsStr,
     path::{Path, PathBuf},
     process::Stdio,
 };
 
-use ::bytes::Bytes;
 use ::iced_aw::ContextMenu;
 use ::iced_core::{Element, Length, Size, alignment::Vertical};
 use ::iced_runtime::Task;
-use ::iced_widget as widget;
-use ::image::{GenericImage, Rgba, RgbaImage};
+use ::iced_widget::{self as widget};
 use ::rfd::AsyncFileDialog;
 use ::spel_katalog_common::{
     IntoOrRequest, OrRequest, display_bytes,
@@ -173,29 +172,9 @@ async fn open_thumb(location: PathBuf) -> Option<::spel_katalog_formats::Image> 
         .map_err(|err| ::log::error!("could not decode {path:?}\n{err}"))
         .ok()?;
 
-    if image.width() != image.height() {
-        let single = image
-            .resize_exact(1, 1, ::image::imageops::FilterType::Lanczos3)
-            .into_rgba8();
-        let [r, g, b, _] = single.get_pixel(0, 0).0;
-        let dim = image.width().max(image.height());
-        let mut canvas = RgbaImage::from_pixel(dim, dim, Rgba([r, g, b, 192]));
-        canvas
-            .copy_from(
-                &image,
-                dim.checked_sub(image.width())? / 2,
-                dim.checked_sub(image.height())? / 2,
-            )
-            .map_err(|err| ::log::error!("failed to format thumbnail\n{err}"))
-            .ok()?;
-        Some(::spel_katalog_formats::Image {
-            width: dim,
-            height: dim,
-            bytes: Bytes::from_owner(canvas.into_raw()),
-        })
-    } else {
-        Some(image.into())
-    }
+    let thumb = ::spel_katalog_native::make_square_thumbnail(Cow::Owned(image))?;
+
+    Some(thumb.into())
 }
 
 impl Prepare {

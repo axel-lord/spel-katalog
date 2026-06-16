@@ -71,7 +71,7 @@ pub fn thumbnail(image: DynamicImage) -> ::spel_katalog_formats::Image {
 }
 
 /// Make a thumbnail square by letterboxing with average color.
-pub fn make_square_thumbnail(image: &DynamicImage) -> Option<Cow<'_, DynamicImage>> {
+pub fn make_square_thumbnail(image: Cow<'_, DynamicImage>) -> Option<Cow<'_, DynamicImage>> {
     if image.width() != image.height() {
         let single = image
             .resize_exact(1, 1, ::image::imageops::FilterType::Lanczos3)
@@ -81,7 +81,7 @@ pub fn make_square_thumbnail(image: &DynamicImage) -> Option<Cow<'_, DynamicImag
         let mut canvas = RgbaImage::from_pixel(dim, dim, Rgba([r, g, b, 192]));
         canvas
             .copy_from(
-                image,
+                &*image,
                 dim.checked_sub(image.width())? / 2,
                 dim.checked_sub(image.height())? / 2,
             )
@@ -89,7 +89,7 @@ pub fn make_square_thumbnail(image: &DynamicImage) -> Option<Cow<'_, DynamicImag
             .ok()?;
         Some(Cow::Owned(canvas.into()))
     } else {
-        Some(Cow::Borrowed(image))
+        Some(image)
     }
 }
 
