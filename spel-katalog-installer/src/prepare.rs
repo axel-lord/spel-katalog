@@ -173,7 +173,16 @@ async fn read_thumb(path: PathBuf) -> Option<::spel_katalog_formats::Image> {
         .map_err(|err| ::log::error!("could not read {path:?}\n{err}"))
         .ok()?;
 
-    let image = ::image::load_from_memory(&content)
+    let format = ::image::ImageFormat::from_path(&path)
+        .map_err(|err| ::log::warn!("could not guess image format from path {path:?}\n{err}"))
+        .or_else(|_| {
+            ::image::guess_format(&content).map_err(|err| {
+                ::log::warn!("could not guess image format from content of {path:?}\n{err}")
+            })
+        })
+        .ok()?;
+
+    let image = ::image::load_from_memory_with_format(&content, format)
         .map_err(|err| ::log::error!("could not decode {path:?}\n{err}"))
         .ok()?;
 
