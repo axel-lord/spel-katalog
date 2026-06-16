@@ -86,7 +86,7 @@ iced_renderer = { version = "0.14.0", features = ["wgpu"] }
 iced_runtime = "0.14.0"
 iced_widget = { version = "0.14.2", features = ["image", "lazy"] }
 iced_winit = { version = "0.14.0", default-features = false, features = ["wayland"] }
-image = { version = "0.25.10", default-features = false, features = ["rayon", "png", "jpeg"] }
+image = { version = "0.25.10", features = ["rayon", "default-formats"] }
 indexmap = "2.14.0"
 itertools = "0.14.0"
 log = "0.4.29"
