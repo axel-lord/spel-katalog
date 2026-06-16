@@ -1,6 +1,6 @@
 //! Config editor.
 
-use ::std::sync::Arc;
+use ::std::{path::PathBuf, sync::Arc};
 
 use ::iced_core::{
     Element,
@@ -70,7 +70,14 @@ impl Editor {
     }
 
     /// Update application state using message.
-    pub fn update(&mut self, message: Message) -> Task<OrRequest<super::Message, super::Request>> {
+    pub fn update(
+        &mut self,
+        message: Message,
+        thumbnail: Option<&::spel_katalog_formats::Image>,
+        move_game: bool,
+        game_parent: &dyn Fn() -> PathBuf,
+        game_directory: &dyn Fn() -> PathBuf,
+    ) -> Task<OrRequest<super::Message, super::Request>> {
         match message {
             Message::Action(action) => {
                 if action.is_edit() {
@@ -118,7 +125,11 @@ impl Editor {
                 };
 
                 Box::new(config)
-                    .pipe(super::Request::InstallGame)
+                    .pipe(|config| super::Request::InstallGame {
+                        config,
+                        thumbnail: thumbnail.cloned(),
+                        move_dir: move_game.then(|| (game_parent(), game_directory())),
+                    })
                     .into_request()
                     .pipe(Task::done)
             }

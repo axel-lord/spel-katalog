@@ -4734,12 +4734,14 @@ dependencies = [
 name = "spel-katalog-installer"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "derive_more",
  "iced_aw",
  "iced_core",
  "iced_highlighter",
  "iced_runtime",
  "iced_widget",
+ "image",
  "log",
  "rfd",
  "smol",

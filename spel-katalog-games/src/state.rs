@@ -8,6 +8,7 @@ use ::std::{
 };
 
 use ::derive_more::{Deref, DerefMut, IsVariant};
+use ::iced_aw::ContextMenu;
 use ::iced_core::{
     Alignment::{self},
     Border,
@@ -149,6 +150,8 @@ pub enum Request {
     CloseInfo,
     /// Convert game to native.
     Convert(GameId),
+    /// Open game install view.
+    InstallGame,
 }
 
 /// Messages produced by game areas.
@@ -549,9 +552,13 @@ impl State {
             .pipe(Element::from)
             .map(OrRequest::<Message, Request>::from);
 
-            ::iced_aw::ContextMenu::new(element, move || {
+            ContextMenu::new(element, move || {
                 ::spel_katalog_widget::ListMenu::new()
-                    .push(widget::text("Game"))
+                    .push("Spel Katalog")
+                    .separator()
+                    .button("Install Game", || Request::InstallGame.into_request())
+                    .separator()
+                    .push("Game")
                     .separator()
                     .button("Run", move || {
                         Request::Run { id, sandbox: true }.into_request()

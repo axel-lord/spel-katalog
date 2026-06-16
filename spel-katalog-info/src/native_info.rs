@@ -22,7 +22,7 @@ use ::smol::unblock;
 use ::spel_katalog_common::{IntoOrRequest, OrRequest, in_place::PushMaybe as _, w};
 use ::spel_katalog_formats::{GameId, NativeGame};
 use ::spel_katalog_native::Pool;
-use ::spel_katalog_settings::CompToolsDir;
+use ::spel_katalog_settings::{CompToolsDir, ThmubnailSource};
 use ::spel_katalog_widget::monospace;
 use ::tap::{Pipe, TapOptional};
 use ::uuid::Uuid;
@@ -393,11 +393,19 @@ impl State {
                 QuickMessage::AddThumb => {
                     let uuid = self.uuid;
                     let game_db = game_db.clone();
+                    let location = settings.get::<ThmubnailSource>().to_path_buf();
 
                     Task::future(async move {
                         let file = AsyncFileDialog::new()
                             .set_title("Set Thumbnail")
-                            .add_filter("png", &["png"])
+                            .set_directory(location)
+                            .add_filter(
+                                "image",
+                                &[
+                                    "png", "jpg", "jpeg", "avif", "webp", "bmp", "tga", "tiff",
+                                    "gif", "ico", "pnm", "ff", "exr",
+                                ],
+                            )
                             .pick_file()
                             .await
                             .tap_none(|| ::log::info!("no thumbnail chosen for {uuid}"))?;
@@ -415,9 +423,12 @@ impl State {
                             })
                             .ok()?;
 
+                        let thumb = ::spel_katalog_native::make_square_thumbnail(&image)
+                            .tap_none(|| ::log::warn!("could not make thubmnail square"))?;
+
                         game_db
                             .insert_thumb(uuid)
-                            .insert(&image)
+                            .insert(&thumb)
                             .map_err(|err| {
                                 ::log::error!(
                                     "could not insert thumbnail {path:?} into database\n{err}",
@@ -428,7 +439,7 @@ impl State {
 
                         Request::DisplayThumbnail {
                             id: GameId::Native(uuid),
-                            img: ::spel_katalog_native::thumbnail(image),
+                            img: ::spel_katalog_native::thumbnail(thumb.into_owned()),
                         }
                         .pipe(OrRequest::Request)
                         .pipe(Some)

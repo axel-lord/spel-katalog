@@ -6,17 +6,20 @@ use ::std::{
     process::Stdio,
 };
 
+use ::bytes::Bytes;
+use ::iced_aw::ContextMenu;
 use ::iced_core::{Element, Length, Size, alignment::Vertical};
 use ::iced_runtime::Task;
 use ::iced_widget as widget;
+use ::image::{GenericImage, Rgba, RgbaImage};
 use ::rfd::AsyncFileDialog;
 use ::spel_katalog_common::{
     IntoOrRequest, OrRequest, display_bytes,
     in_place::{Convene, MapSelf},
 };
 use ::spel_katalog_formats::{Bind, NativeGame, NativeRunner, Timestamp};
-use ::spel_katalog_settings::{InstallLocale, Settings, ThmubnailSource};
-use ::spel_katalog_widget::rule;
+use ::spel_katalog_settings::{InstallLocale, InstallLocation, Settings, ThmubnailSource};
+use ::spel_katalog_widget::{ListMenu, rule};
 use ::tap::{Conv, Pipe, TapOptional};
 
 /// Choice of executable.
@@ -68,11 +71,15 @@ pub enum Message {
     /// Set the exe value.
     SetExe(String),
     /// Set the thumbnail value.
-    SetThumb(PathBuf),
+    SetThumb(::spel_katalog_formats::Image),
+    /// Remove the thumbnail.
+    UnsetThumb,
     /// Add available locales.
     AddLocales(Vec<String>),
     /// Set the current locale.
     SetLocale(String),
+    /// Set locale to the default value.
+    DefaultLocale,
     /// An exe should be selected.
     OpenExe,
     /// A thumbnail should be selected.
@@ -111,13 +118,84 @@ pub struct Prepare {
     /// Width of column box.
     column_width: Option<f32>,
     /// Thumbnail to use.
-    thumbnail: Option<PathBuf>,
+    thumbnail: Option<::spel_katalog_formats::Image>,
     /// Available locales.
     locales: Vec<String>,
     /// Current locale.
     locale: String,
     /// Should the game be moved.
     move_game: bool,
+}
+
+/// Show exe dialog at location.
+async fn open_exe(location: PathBuf) -> Option<String> {
+    let file = AsyncFileDialog::new()
+        .set_title("Select Executable")
+        .set_directory(&location)
+        .pick_file()
+        .await
+        .tap_none(|| ::log::warn!("no file chosen"))?;
+
+    file.path()
+        .strip_prefix(&location)
+        .map_err(|err| ::log::warn!("could not strip {location:?} from {:?}\n{err}", file.path()))
+        .ok()?
+        .as_os_str()
+        .to_str()
+        .tap_none(|| ::log::warn!("path {:?} contains non utf-8 segments", file.path()))?
+        .to_owned()
+        .pipe(Some)
+}
+
+/// Open and process a thumbnail.
+async fn open_thumb(location: PathBuf) -> Option<::spel_katalog_formats::Image> {
+    let file = AsyncFileDialog::new()
+        .set_title("Select Thumbnail")
+        .set_directory(location)
+        .add_filter(
+            "image",
+            &[
+                "png", "jpg", "jpeg", "avif", "webp", "bmp", "tga", "tiff", "gif", "ico", "pnm",
+                "ff", "exr",
+            ],
+        )
+        .pick_file()
+        .await
+        .tap_none(|| ::log::warn!("not thumbnail chosen"))?;
+
+    let path = file.path();
+    let content = ::smol::fs::read(path)
+        .await
+        .map_err(|err| ::log::error!("could not read {path:?}\n{err}"))
+        .ok()?;
+
+    let image = ::image::load_from_memory(&content)
+        .map_err(|err| ::log::error!("could not decode {path:?}\n{err}"))
+        .ok()?;
+
+    if image.width() != image.height() {
+        let single = image
+            .resize_exact(1, 1, ::image::imageops::FilterType::Lanczos3)
+            .into_rgba8();
+        let [r, g, b, _] = single.get_pixel(0, 0).0;
+        let dim = image.width().max(image.height());
+        let mut canvas = RgbaImage::from_pixel(dim, dim, Rgba([r, g, b, 192]));
+        canvas
+            .copy_from(
+                &image,
+                dim.checked_sub(image.width())? / 2,
+                dim.checked_sub(image.height())? / 2,
+            )
+            .map_err(|err| ::log::error!("failed to format thumbnail\n{err}"))
+            .ok()?;
+        Some(::spel_katalog_formats::Image {
+            width: dim,
+            height: dim,
+            bytes: Bytes::from_owner(canvas.into_raw()),
+        })
+    } else {
+        Some(image.into())
+    }
 }
 
 impl Prepare {
@@ -192,23 +270,19 @@ impl Prepare {
     }
 
     /// Get game config from current values.
-    pub fn get_config(&self) -> Option<NativeGame> {
+    pub fn get_config(&self, settings: &Settings) -> Option<NativeGame> {
         let exe = self.choice.current()?;
-        let parent = PathBuf::from(self.parent.clone());
+        let parent = self.game_dir(settings);
         let exe = parent.join(exe);
         let config = NativeGame {
-            bind: Vec::from([Bind::mirrored(parent)]),
             hidden: self.hidden,
             drives: [('g', PathBuf::from("../.."))].into_iter().collect(),
             prefix: if self.runner.is_wine() {
-                self.parent
-                    .as_str()
-                    .pipe(Path::new)
-                    .join(".umu_pfx")
-                    .pipe(Some)
+                parent.join(".umu_pfx").pipe(Some)
             } else {
                 None
             },
+            bind: Vec::from([Bind::mirrored(parent)]),
             env: if !self.locale.is_empty() {
                 [("LANG".to_owned(), self.locale.clone())]
                     .into_iter()
@@ -219,6 +293,33 @@ impl Prepare {
             ..NativeGame::new(self.title.clone(), Timestamp::now(), exe, self.runner)
         };
         Some(config)
+    }
+
+    /// Get thumbnail.
+    pub const fn thumbnail(&self) -> Option<&spel_katalog_formats::Image> {
+        self.thumbnail.as_ref()
+    }
+
+    /// Should the game be moved.
+    pub const fn move_game(&self) -> bool {
+        self.move_game
+    }
+
+    /// Get parent path.
+    pub fn parent(&self) -> &Path {
+        Path::new(&self.parent)
+    }
+
+    /// Get game directory (after move).
+    pub fn game_dir(&self, settings: &Settings) -> PathBuf {
+        if self.move_game {
+            settings
+                .get::<InstallLocation>()
+                .as_path()
+                .join(self.title.replace(['/', '\0'], ""))
+        } else {
+            PathBuf::from(self.parent.clone())
+        }
     }
 
     /// Update state with message.
@@ -274,6 +375,10 @@ impl Prepare {
                 self.locale = locale;
                 Task::none()
             }
+            Message::DefaultLocale => {
+                self.locale = settings.get::<InstallLocale>().as_str().to_owned();
+                Task::none()
+            }
             Message::EditTitle(title) => {
                 self.title = title;
                 Task::none()
@@ -283,63 +388,28 @@ impl Prepare {
                 .and_then(|title| Task::done(Message::EditTitle(title).conv::<super::Message>())),
             Message::OpenExe => {
                 let location = self.parent.clone().conv::<PathBuf>();
-                Task::<Option<_>>::future(async move {
-                    let file = AsyncFileDialog::new()
-                        .set_title("Select Executable")
-                        .set_directory(&location)
-                        .pick_file()
-                        .await
-                        .tap_none(|| ::log::warn!("no file chosen"))?;
-
-                    file.path()
-                        .strip_prefix(&location)
-                        .map_err(|err| {
-                            ::log::warn!(
-                                "could not strip {location:?} from {:?}\n{err}",
-                                file.path()
-                            )
-                        })
-                        .ok()?
-                        .as_os_str()
-                        .to_str()
-                        .tap_none(|| {
-                            ::log::warn!("path {:?} contains non utf-8 segments", file.path())
-                        })?
-                        .to_owned()
-                        .pipe(Message::SetExe)
-                        .conv::<super::Message>()
-                        .pipe(Some)
-                })
-                .and_then(Task::done)
+                Task::future(open_exe(location))
+                    .and_then(Task::done)
+                    .map(Message::SetExe)
+                    .map(super::Message::from)
             }
             Message::OpenThumb => {
                 let location = settings.get::<ThmubnailSource>().to_path_buf();
-                Task::<Option<_>>::future(async move {
-                    AsyncFileDialog::new()
-                        .set_title("Select Thumbnail")
-                        .set_directory(location)
-                        .add_filter(
-                            "image",
-                            &[
-                                "png", "jpg", "jpeg", "avif", "webp", "bmp", "tga", "tiff", "gif",
-                                "ico", "pnm", "ff", "exr",
-                            ],
-                        )
-                        .pick_file()
-                        .await
-                        .tap_none(|| ::log::warn!("not thumbnail chosen"))
-                        .map(|file| file.path().to_path_buf())
-                        .map(Message::SetThumb)
-                        .map(super::Message::Prepare)
-                })
-                .and_then(Task::done)
+                Task::future(open_thumb(location))
+                    .and_then(Task::done)
+                    .map(Message::SetThumb)
+                    .map(super::Message::from)
             }
             Message::SetThumb(thumb) => {
                 self.thumbnail = Some(thumb);
                 Task::none()
             }
+            Message::UnsetThumb => {
+                self.thumbnail = None;
+                Task::none()
+            }
             Message::Ok => self
-                .get_config()
+                .get_config(settings)
                 .map(Box::new)
                 .map(super::Message::SetEditor)
                 .map_or_else(Task::none, Task::done),
@@ -368,7 +438,7 @@ impl Prepare {
                                 .map_or(Length::Fixed(0.0), |_| Length::Fill),
                         ),
                     || {
-                        ::spel_katalog_widget::ListMenu::new()
+                        ListMenu::new()
                             .push(widget::text("title"))
                             .separator()
                             .button("Copy", || {
@@ -511,7 +581,7 @@ impl Prepare {
                         )
                         .push(rule::sized_horizontal(12))
                         .push(widget::text("Locale"))
-                        .push(
+                        .push(ContextMenu::new(
                             widget::pick_list(
                                 self.locales.as_slice(),
                                 Some(&self.locale),
@@ -522,17 +592,57 @@ impl Prepare {
                                 },
                             )
                             .padding(3),
-                        )
+                            || {
+                                ListMenu::new()
+                                    .push(widget::text("Locale"))
+                                    .separator()
+                                    .button("To Default", || {
+                                        Message::DefaultLocale
+                                            .pipe(super::Message::Prepare)
+                                            .into_message()
+                                    })
+                                    .into()
+                            },
+                        ))
                         .pipe_if(self.column_width.is_some(), |r| r.push(rule::horizontal()))
                         .convene(),
                 )
-                .pipe_some(self.thumbnail.as_deref(), |col, thumb| {
-                    col.push(
-                        widget::container(widget::image(thumb).width(300))
+                .pipe_some(
+                    self.thumbnail.clone(),
+                    |col,
+                     ::spel_katalog_formats::Image {
+                         width,
+                         height,
+                         bytes,
+                     }| {
+                        col.push(ContextMenu::new(
+                            widget::container(
+                                widget::image(::iced_core::image::Handle::from_rgba(
+                                    width, height, bytes,
+                                ))
+                                .width(150),
+                            )
                             .pipe_if(self.column_width.is_some(), |c| c.center_x(Length::Fill))
                             .convene(),
-                    )
-                })
+                            || {
+                                ListMenu::new()
+                                    .push(widget::text("Thumbnail"))
+                                    .separator()
+                                    .button("Replace", || {
+                                        Message::OpenThumb
+                                            .pipe(super::Message::Prepare)
+                                            .into_message()
+                                    })
+                                    .button("Remove", || {
+                                        Message::UnsetThumb
+                                            .pipe(super::Message::Prepare)
+                                            .into_message()
+                                    })
+                                    .into()
+                            },
+                        ))
+                    },
+                )
                 .convene()
                 .pipe_if(self.column_width.is_none(), widget::sensor)
                 .map(|sensor| {

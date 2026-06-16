@@ -50,7 +50,14 @@ pub enum Request {
     /// Request the installer be closed.
     Close,
     /// Request game to be added.
-    InstallGame(Box<NativeGame>),
+    InstallGame {
+        /// Game config.
+        config: Box<NativeGame>,
+        /// Thumbnail of game.
+        thumbnail: Option<::spel_katalog_formats::Image>,
+        /// Location to move game to.
+        move_dir: Option<(PathBuf, PathBuf)>,
+    },
 }
 
 /// Application installer.
@@ -208,7 +215,13 @@ impl Installer {
             }
             Message::Editor(message) => {
                 if let Some(editor) = &mut self.editor {
-                    editor.update(message)
+                    editor.update(
+                        message,
+                        self.prepare.thumbnail(),
+                        self.prepare.move_game(),
+                        &|| self.prepare.parent().to_path_buf(),
+                        &|| self.prepare.game_dir(settings),
+                    )
                 } else {
                     ::log::warn!("received editor message whitout an editor\n{message:#?}");
                     Task::none()

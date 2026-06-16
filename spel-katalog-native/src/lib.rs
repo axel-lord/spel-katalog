@@ -2,6 +2,7 @@
 
 use ::core::{fmt::Display, time::Duration};
 use ::std::{
+    borrow::Cow,
     io::{Cursor, Read},
     path::Path,
 };
@@ -13,7 +14,10 @@ use ::flate2::{
     Compression,
     bufread::{GzDecoder, GzEncoder},
 };
-use ::image::{DynamicImage, EncodableLayout, ImageFormat, imageops::FilterType::Lanczos3};
+use ::image::{
+    DynamicImage, EncodableLayout, GenericImage, ImageFormat, Rgba, RgbaImage,
+    imageops::FilterType::Lanczos3,
+};
 use ::r2d2::PooledConnection;
 use ::r2d2_sqlite::SqliteConnectionManager;
 use ::rusqlite::CachedStatement;
@@ -63,6 +67,29 @@ pub fn thumbnail(image: DynamicImage) -> ::spel_katalog_formats::Image {
         width: thumb.width(),
         height: thumb.height(),
         bytes: thumb.into_raw().into(),
+    }
+}
+
+/// Make a thumbnail square by letterboxing with average color.
+pub fn make_square_thumbnail(image: &DynamicImage) -> Option<Cow<'_, DynamicImage>> {
+    if image.width() != image.height() {
+        let single = image
+            .resize_exact(1, 1, ::image::imageops::FilterType::Lanczos3)
+            .into_rgba8();
+        let [r, g, b, _] = single.get_pixel(0, 0).0;
+        let dim = image.width().max(image.height());
+        let mut canvas = RgbaImage::from_pixel(dim, dim, Rgba([r, g, b, 192]));
+        canvas
+            .copy_from(
+                image,
+                dim.checked_sub(image.width())? / 2,
+                dim.checked_sub(image.height())? / 2,
+            )
+            .map_err(|err| ::log::error!("failed to format thumbnail\n{err}"))
+            .ok()?;
+        Some(Cow::Owned(canvas.into()))
+    } else {
+        Some(Cow::Borrowed(image))
     }
 }
 
@@ -299,6 +326,38 @@ impl Pool {
         let parsed =
             ::toml::from_slice::<NativeGame>(&decoded).map_err(GetError::DeserializeConfig)?;
         Ok(parsed)
+    }
+
+    /// Remove game from database.
+    ///
+    /// # Errors
+    /// If the statement cannot be prepared,
+    /// or if no database connectetion is established.
+    ///
+    /// Will not error if the game does not exist. Result will
+    /// however be logged.
+    pub fn remove_game(&self, game_id: Uuid) -> Result<(), DbError> {
+        const DELETE_THUMB: &str = r"
+            DELETE FROM games
+            WHERE uuid = $1
+        ";
+
+        let conn = self.get_conn()?;
+        let mut stmt = Self::prep_stmt(&conn, DELETE_THUMB)?;
+
+        match stmt.execute((game_id,)) {
+            Ok(0) => {
+                ::log::warn!("game with uuid {game_id} not deleted");
+            }
+            Ok(n) => {
+                ::log::info!("deleted {n} games with uuid {game_id}");
+            }
+            Err(err) => {
+                ::log::error!("failed to delete game with id {game_id}\n{err}");
+            }
+        }
+
+        Ok(())
     }
 
     /// Get a thumbnail from database.
