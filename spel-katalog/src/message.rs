@@ -86,6 +86,8 @@ pub enum Message {
     LuaDocs(::spel_katalog_lua_docs::Message),
     #[from]
     ShowInfo(crate::view::Displayed),
+    #[from]
+    Ipc(::spel_katalog_ipc::Message),
     RunGameNative(Box<NativeGame>),
     RunShellNative(Box<NativeGame>),
 }

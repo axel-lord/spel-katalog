@@ -227,6 +227,8 @@ impl App {
             .pipe(Message::Quick)
             .pipe(Task::done);
 
+        let listen_ipc = Task::stream(::spel_katalog_ipc::listen(None)).map(Message::from);
+
         let batch = Task::batch([
             receive_status,
             receive_dialog,
@@ -235,6 +237,7 @@ impl App {
             exit_recv,
             window_recv,
             show_settings,
+            listen_ipc,
         ]);
 
         (app, batch)

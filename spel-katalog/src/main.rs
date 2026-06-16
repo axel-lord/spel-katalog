@@ -1,11 +1,14 @@
 use ::std::io::{IsTerminal, Read};
 
+use ::color_eyre::{Section, eyre::eyre};
+use ::iced_futures::Subscription;
 use ::mimalloc::MiMalloc;
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog::run as run_app;
-use ::spel_katalog_cli::{Cli, Subcmd, SubcmdCallbacks};
+use ::spel_katalog_cli::{Cli, InstallGame, Subcmd, SubcmdCallbacks};
 use ::spel_katalog_lua_docs::DocsViewer;
 use ::spel_katalog_sink::SinkBuilder;
+use iced_runtime::Task;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -60,7 +63,7 @@ fn api_docs() -> ::color_eyre::Result<()> {
     }
 
     impl State {
-        fn new() -> (Self, iced_runtime::Task<Msg>) {
+        fn new() -> (Self, Task<Msg>) {
             let (_, task) = ::iced_runtime::window::open(Default::default());
             (Self::default(), task.map(Msg::Open))
         }
@@ -69,7 +72,7 @@ fn api_docs() -> ::color_eyre::Result<()> {
             "Lua Api Docs".to_owned()
         }
 
-        fn update(&mut self, message: Msg) -> iced_runtime::Task<Msg> {
+        fn update(&mut self, message: Msg) -> Task<Msg> {
             match message {
                 Msg::DocsViewer(id, message) => {
                     if let Some(viewer) = self.windows.get_mut(&id) {
@@ -103,7 +106,7 @@ fn api_docs() -> ::color_eyre::Result<()> {
             }
         }
 
-        fn subscription(&self) -> iced_futures::Subscription<Msg> {
+        fn subscription(&self) -> Subscription<Msg> {
             ::iced_runtime::window::close_events().map(Msg::Close)
         }
 
@@ -122,6 +125,36 @@ fn api_docs() -> ::color_eyre::Result<()> {
         .map_err(|err| ::color_eyre::eyre::eyre!(err))
 }
 
+fn install_game(
+    InstallGame {
+        game,
+        thumbnail,
+        hidden,
+        no_move,
+    }: InstallGame,
+) -> ::color_eyre::Result<()> {
+    if let Err(err) = ::spel_katalog_ipc::send(
+        None,
+        ::spel_katalog_ipc::Message::InstallGame {
+            source: game
+                .canonicalize()
+                .map_err(|err| eyre!(err).note(format!("is {game:?} a valid path?")))?,
+            hidden,
+            move_game: !no_move,
+            thumbnail: thumbnail
+                .map(|t| {
+                    t.canonicalize()
+                        .map_err(|err| eyre!(err).note(format!("is {t:?} a valid path?")))
+                })
+                .transpose()?,
+        },
+    ) {
+        Err(eyre!(err).note("is the application open?"))
+    } else {
+        Ok(())
+    }
+}
+
 fn main() -> ::color_eyre::Result<()> {
     ::color_eyre::install()?;
     let cli = Cli::parse();
@@ -131,5 +164,6 @@ fn main() -> ::color_eyre::Result<()> {
         other,
         batch,
         api_docs,
+        install_game,
     })
 }

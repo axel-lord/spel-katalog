@@ -1,0 +1,19 @@
+[package]
+name = "spel-katalog-ipc"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+flume = { workspace = true, features = ["async"] }
+log.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+smol.workspace = true
+tap.workspace = true
+thiserror.workspace = true
+uuid = { workspace = true, features = ["v4"] }
+
+[lints]
+workspace = true

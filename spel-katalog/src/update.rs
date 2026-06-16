@@ -1,5 +1,8 @@
 use ::core::convert::identity;
-use ::std::path::{Path, PathBuf};
+use ::std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use ::iced_core::{Size, window};
 use ::iced_runtime::Task;
@@ -12,7 +15,7 @@ use ::spel_katalog_formats::{AdditionalConfig, NativeGame};
 use ::spel_katalog_games::SelDir;
 use ::spel_katalog_run::run_umu::RunMode;
 use ::spel_katalog_settings::{
-    ConfigDir, FilterMode, Load, LutrisDb, Network, Show, Variants, YmlDir,
+    ConfigDir, FilterMode, Load, LutrisDb, Network, Settings, Show, Variants, YmlDir,
 };
 use ::tap::Pipe;
 use ::uuid::Uuid;
@@ -151,6 +154,27 @@ impl App {
         .await
     }
 
+    async fn prefill_installer(
+        settings: Arc<Settings>,
+        game_dir: PathBuf,
+        hidden: Option<bool>,
+        thumbnail: Option<PathBuf>,
+        move_game: Option<bool>,
+    ) -> Option<Task<Message>> {
+        let (parent, choice) = ::spel_katalog_installer::Installer::open_path(game_dir).await?;
+        let (installer, installer_task) = ::spel_katalog_installer::Installer::new(
+            &settings, parent, choice, hidden, thumbnail, move_game,
+        );
+
+        let (id, open_task) = ::iced_runtime::window::open(Default::default());
+
+        let add_task = Task::done(Message::OpenWindow(id, WindowType::Installer(installer)));
+
+        Some(open_task.discard().chain(add_task.chain(
+            installer_task.map(move |message| Message::Installer(id, OrRequest::Message(message))),
+        )))
+    }
+
     fn open_installer(&mut self, hidden: Option<bool>) -> Task<Message> {
         let settings = self.settings.clone();
         Task::<Option<_>>::future(async move {
@@ -159,8 +183,9 @@ impl App {
                 .to_path_buf();
 
             let (parent, choice) = ::spel_katalog_installer::Installer::open(source).await?;
-            let (installer, installer_task) =
-                ::spel_katalog_installer::Installer::new(&settings, parent, choice, hidden);
+            let (installer, installer_task) = ::spel_katalog_installer::Installer::new(
+                &settings, parent, choice, hidden, None, None,
+            );
 
             let (id, open_task) = ::iced_runtime::window::open(Default::default());
 
@@ -754,6 +779,23 @@ impl App {
                     };
                 }
             }
+            Message::Ipc(message) => match message {
+                ::spel_katalog_ipc::Message::InstallGame {
+                    source,
+                    hidden,
+                    thumbnail,
+                    move_game,
+                } => {
+                    return Task::future(Self::prefill_installer(
+                        self.settings.snapshot(),
+                        source,
+                        Some(hidden),
+                        thumbnail,
+                        Some(move_game),
+                    ))
+                    .and_then(identity);
+                }
+            },
             Message::BuildDialog(dialog) => {
                 let (_, task) = ::iced_runtime::window::open(window::Settings {
                     size: Size {

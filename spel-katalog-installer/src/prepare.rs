@@ -162,8 +162,13 @@ async fn open_thumb(location: PathBuf) -> Option<::spel_katalog_formats::Image> 
         .await
         .tap_none(|| ::log::warn!("not thumbnail chosen"))?;
 
-    let path = file.path();
-    let content = ::smol::fs::read(path)
+    let path = file.path().to_path_buf();
+    read_thumb(path).await
+}
+
+/// Read thumbnail with the given path.
+async fn read_thumb(path: PathBuf) -> Option<::spel_katalog_formats::Image> {
+    let content = ::smol::fs::read(&path)
         .await
         .map_err(|err| ::log::error!("could not read {path:?}\n{err}"))
         .ok()?;
@@ -184,6 +189,8 @@ impl Prepare {
         parent: String,
         choice: ExeChoice,
         hidden: Option<bool>,
+        thumbnail: Option<PathBuf>,
+        move_game: Option<bool>,
     ) -> (Self, Task<Message>) {
         (
             Self {
@@ -201,7 +208,7 @@ impl Prepare {
                 thumbnail: None,
                 locales: Vec::from([String::new()]),
                 locale: settings.get::<InstallLocale>().as_str().to_owned(),
-                move_game: true,
+                move_game: move_game.unwrap_or(true),
                 parent,
                 choice,
             },
@@ -249,6 +256,9 @@ impl Prepare {
                     .pipe(Message::AddLocales)
                     .pipe(Some)
             })
+            .chain(thumbnail.map_or_else(Task::none, |thumb| {
+                Task::future(async move { read_thumb(thumb).await.map(Message::SetThumb) })
+            }))
             .and_then(Task::done),
         )
     }

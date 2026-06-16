@@ -76,8 +76,11 @@ impl Installer {
         parent: String,
         choice: ExeChoice,
         hidden: Option<bool>,
+        thumbnail: Option<PathBuf>,
+        move_game: Option<bool>,
     ) -> (Self, Task<Message>) {
-        let (prepare, task) = prepare::Prepare::new(settings, parent, choice, hidden);
+        let (prepare, task) =
+            prepare::Prepare::new(settings, parent, choice, hidden, thumbnail, move_game);
         (
             Self {
                 prepare,
@@ -100,10 +103,15 @@ impl Installer {
             .await
             .tap_none(|| ::log::warn!("no game directory selected"))?;
 
-        let mut stack = vec![Cow::Borrowed(directory.path())];
+        Self::open_path(directory.path().to_path_buf()).await
+    }
+
+    /// Open given directory.
+    pub async fn open_path(directory: PathBuf) -> Option<(String, ExeChoice)> {
+        let mut stack = vec![Cow::Borrowed(directory.as_path())];
         let mut exe = Vec::<String>::new();
         let mut push_exe = |entry_path: PathBuf| {
-            match entry_path.strip_prefix(directory.path()) {
+            match entry_path.strip_prefix(&directory) {
                 Ok(rel_path) => {
                     if let Some(as_str) = rel_path.to_str() {
                         exe.push(as_str.to_owned());
@@ -113,7 +121,7 @@ impl Installer {
                 }
                 Err(err) => ::log::error!(
                     "could not remove prefix {:?} from {:?}\n{err}",
-                    directory.path(),
+                    &directory,
                     entry_path
                 ),
             };
@@ -189,8 +197,6 @@ impl Installer {
         } else {
             ::log::info!("collected exe candidates");
             let parent = directory
-                .path()
-                .to_path_buf()
                 .into_os_string()
                 .into_string()
                 .map_err(|path| {
@@ -238,8 +244,14 @@ impl Installer {
                 .map(OrRequest::Message),
             Message::SetPaths { parent, choice } => {
                 let task;
-                (self.prepare, task) =
-                    prepare::Prepare::new(settings, parent, choice, Some(self.prepare.hidden()));
+                (self.prepare, task) = prepare::Prepare::new(
+                    settings,
+                    parent,
+                    choice,
+                    Some(self.prepare.hidden()),
+                    None,
+                    None,
+                );
                 self.editor = None;
                 task.map(Message::Prepare).map(OrRequest::Message)
             }

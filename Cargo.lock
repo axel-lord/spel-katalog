@@ -4545,6 +4545,7 @@ dependencies = [
  "spel-katalog-gather",
  "spel-katalog-info",
  "spel-katalog-installer",
+ "spel-katalog-ipc",
  "spel-katalog-lua",
  "spel-katalog-lua-docs",
  "spel-katalog-native",
@@ -4752,6 +4753,20 @@ dependencies = [
  "spel-katalog-widget",
  "tap",
  "toml 1.1.2+spec-1.1.0",
+ "uuid",
+]
+
+[[package]]
+name = "spel-katalog-ipc"
+version = "0.1.0"
+dependencies = [
+ "flume",
+ "log",
+ "serde",
+ "serde_json",
+ "smol",
+ "tap",
+ "thiserror 2.0.18",
  "uuid",
 ]
 

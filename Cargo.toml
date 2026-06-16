@@ -10,6 +10,7 @@ members = [
 	"spel-katalog-gather",
 	"spel-katalog-info",
 	"spel-katalog-installer",
+	"spel-katalog-ipc",
 	"spel-katalog-lua",
 	"spel-katalog-lua-docs",
 	"spel-katalog-native",
@@ -154,3 +155,4 @@ flate2 = "1.1.9"
 iced_aw = { version = "0.14.1", default-features = false }
 tabled = { version = "0.21.0", default-features = false }
 spel-katalog-installer = { path = "spel-katalog-installer" }
+spel-katalog-ipc = { path = "spel-katalog-ipc" }
