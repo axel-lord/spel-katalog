@@ -151,7 +151,7 @@ impl App {
         .await
     }
 
-    fn open_installer(&mut self) -> Task<Message> {
+    fn open_installer(&mut self, hidden: Option<bool>) -> Task<Message> {
         let settings = self.settings.clone();
         Task::<Option<_>>::future(async move {
             let source = settings
@@ -160,7 +160,7 @@ impl App {
 
             let (parent, choice) = ::spel_katalog_installer::Installer::open(source).await?;
             let (installer, installer_task) =
-                ::spel_katalog_installer::Installer::new(&settings, parent, choice);
+                ::spel_katalog_installer::Installer::new(&settings, parent, choice, hidden);
 
             let (id, open_task) = ::iced_runtime::window::open(Default::default());
 
@@ -186,7 +186,7 @@ impl App {
                 return self.quick_update(QuickMessage::OpenInstaller);
             }
             QuickMessage::OpenInstaller => {
-                return self.open_installer();
+                return self.open_installer(None);
             }
             QuickMessage::CopyFilter => {
                 return ::iced_runtime::clipboard::write(self.filter.clone());
@@ -425,7 +425,7 @@ impl App {
                 }
             }
             ::spel_katalog_games::Request::InstallGame => {
-                return self.open_installer();
+                return self.open_installer(None);
             }
         }
         Task::none()

@@ -17,7 +17,7 @@ use ::spel_katalog_common::{
     in_place::{Convene, MapSelf},
 };
 use ::spel_katalog_formats::{Bind, NativeGame, NativeRunner, Timestamp};
-use ::spel_katalog_settings::{InstallLocale, InstallLocation, Settings, ThmubnailSource};
+use ::spel_katalog_settings::{InstallLocale, InstallLocation, Settings, Show, ThmubnailSource};
 use ::spel_katalog_widget::{ListMenu, rule};
 use ::tap::{Conv, Pipe, TapOptional};
 
@@ -179,7 +179,12 @@ async fn open_thumb(location: PathBuf) -> Option<::spel_katalog_formats::Image> 
 
 impl Prepare {
     /// Construct a new instance.
-    pub fn new(settings: &Settings, parent: String, choice: ExeChoice) -> (Self, Task<Message>) {
+    pub fn new(
+        settings: &Settings,
+        parent: String,
+        choice: ExeChoice,
+        hidden: Option<bool>,
+    ) -> (Self, Task<Message>) {
         (
             Self {
                 title: parent
@@ -191,7 +196,7 @@ impl Prepare {
                 } else {
                     NativeRunner::Linux
                 },
-                hidden: false,
+                hidden: hidden.unwrap_or_else(|| settings.get::<Show>().is_hidden()),
                 column_width: None,
                 thumbnail: None,
                 locales: Vec::from([String::new()]),
@@ -287,6 +292,11 @@ impl Prepare {
     /// Get parent path.
     pub fn parent(&self) -> &Path {
         Path::new(&self.parent)
+    }
+
+    /// Is the hidden field set to true.
+    pub const fn hidden(&self) -> bool {
+        self.hidden
     }
 
     /// Get game directory (after move).

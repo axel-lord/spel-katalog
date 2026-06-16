@@ -71,8 +71,13 @@ pub struct Installer {
 
 impl Installer {
     /// Construct a new installer.
-    pub fn new(settings: &Settings, parent: String, choice: ExeChoice) -> (Self, Task<Message>) {
-        let (prepare, task) = prepare::Prepare::new(settings, parent, choice);
+    pub fn new(
+        settings: &Settings,
+        parent: String,
+        choice: ExeChoice,
+        hidden: Option<bool>,
+    ) -> (Self, Task<Message>) {
+        let (prepare, task) = prepare::Prepare::new(settings, parent, choice, hidden);
         (
             Self {
                 prepare,
@@ -233,7 +238,8 @@ impl Installer {
                 .map(OrRequest::Message),
             Message::SetPaths { parent, choice } => {
                 let task;
-                (self.prepare, task) = prepare::Prepare::new(settings, parent, choice);
+                (self.prepare, task) =
+                    prepare::Prepare::new(settings, parent, choice, Some(self.prepare.hidden()));
                 self.editor = None;
                 task.map(Message::Prepare).map(OrRequest::Message)
             }
