@@ -1,6 +1,6 @@
 //! Environment available for settings.
 use ::core::fmt::Display;
-use ::std::fmt;
+use ::std::{fmt, path::PathBuf, sync::OnceLock};
 
 use ::rustix::{fs::Uid, process::getuid};
 use ::spel_katalog_common::lazy::Lazy;
@@ -39,59 +39,84 @@ fn remove_trailing(mut s: String) -> String {
     s
 }
 
+/// Convert a path to a string.
+fn path_into_string(path: PathBuf) -> Option<String> {
+    path.into_os_string().into_string().ok()
+}
+
+/// Get base dirs.
+fn base_dirs() -> &'static ::xdg::BaseDirectories {
+    static BASE_DIRS: OnceLock<::xdg::BaseDirectories> = OnceLock::new();
+    BASE_DIRS.get_or_init(::xdg::BaseDirectories::new)
+}
+
 /// Value for HOME.
 fn home() -> String {
-    ::std::env::var("HOME").map_or_else(
-        |err| {
-            ::log::warn!("could not get home directory, {err}");
-            format!("/tmp/spel-katalog.{}", User::current())
-        },
-        remove_trailing,
-    )
+    ::std::env::home_dir()
+        .and_then(path_into_string)
+        .map_or_else(
+            || {
+                ::log::warn!("could not get home directory");
+                format!("/tmp/spel-katalog.{}", User::current())
+            },
+            remove_trailing,
+        )
 }
 
 /// Value fo CONFIG.
 fn config() -> String {
-    ::std::env::var("XDG_CONFIG_HOME").map_or_else(
-        |err| {
-            ::log::warn!("could not get config directory, {err}");
-            format!("{HOME}/.config")
-        },
-        remove_trailing,
-    )
+    base_dirs()
+        .get_config_home()
+        .and_then(path_into_string)
+        .map_or_else(
+            || {
+                ::log::warn!("could not get config directory");
+                format!("{HOME}/.config")
+            },
+            remove_trailing,
+        )
 }
 
 /// Value for CACHE.
 fn cache() -> String {
-    ::std::env::var("XDG_CACHE_HOME").map_or_else(
-        |err| {
-            ::log::warn!("could not get cache directory, {err}");
-            format!("{HOME}/.cache")
-        },
-        remove_trailing,
-    )
+    base_dirs()
+        .get_cache_home()
+        .and_then(path_into_string)
+        .map_or_else(
+            || {
+                ::log::warn!("could not get cache directory");
+                format!("{HOME}/.cache")
+            },
+            remove_trailing,
+        )
 }
 
 /// Value for DATA.
 fn data() -> String {
-    ::std::env::var("XDG_DATA_HOME").map_or_else(
-        |err| {
-            ::log::warn!("could not get data directory, {err}");
-            format!("{HOME}/.local/share")
-        },
-        remove_trailing,
-    )
+    base_dirs()
+        .get_data_home()
+        .and_then(path_into_string)
+        .map_or_else(
+            || {
+                ::log::warn!("could not get data directory");
+                format!("{HOME}/.local/share")
+            },
+            remove_trailing,
+        )
 }
 
 /// Value for STATE.
 fn state() -> String {
-    ::std::env::var("XDG_STATE_HOME").map_or_else(
-        |err| {
-            ::log::warn!("could not get state directory, {err}");
-            format!("{HOME}/.local/state")
-        },
-        remove_trailing,
-    )
+    base_dirs()
+        .get_state_home()
+        .and_then(path_into_string)
+        .map_or_else(
+            || {
+                ::log::warn!("could not get state directory");
+                format!("{HOME}/.local/state")
+            },
+            remove_trailing,
+        )
 }
 
 /// User home directory.
@@ -108,4 +133,3 @@ pub static DATA: Lazy = Lazy::new(data);
 
 /// User config directory, defaults to `~/.local/state`.
 pub static STATE: Lazy = Lazy::new(state);
-
