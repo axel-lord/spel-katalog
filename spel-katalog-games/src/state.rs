@@ -9,22 +9,16 @@ use ::std::{
 
 use ::derive_more::{Deref, DerefMut, IsVariant};
 use ::iced_aw::ContextMenu;
-use ::iced_core::{
-    Alignment::{self},
-    Border,
-    Length::Fill,
-    text::Wrapping,
-};
+use ::iced_core::{Border, Length::Fill, text::Wrapping};
 use ::iced_futures::Subscription;
 use ::iced_runtime::Task;
 use ::iced_widget::{self as widget, container, stack};
 use ::image::ImageFormat;
-use ::itertools::Itertools;
 use ::parking_lot::Mutex;
 use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use ::rusqlite::{Connection, Statement, named_params};
 use ::rustc_hash::FxHashSet;
-use ::spel_katalog_common::{IntoOrRequest, OrRequest, StatusSender, async_status, status, w};
+use ::spel_katalog_common::{IntoOrRequest, OrRequest, StatusSender, async_status, status};
 use ::spel_katalog_formats::{Game, GameId, NativeGame};
 use ::spel_katalog_gather::{
     CoverGatherer, CoverGathererOptions, LoadDbError, load_games_from_database,
@@ -478,112 +472,103 @@ impl State {
         .map(|game| game.id());
     }
 
-    /// Render elements.
-    pub fn view(&self) -> Element<'_, OrRequest<Message, Request>> {
-        fn card<'a>(
-            game: &'a WithThumb,
-            width: f32,
-            selected: Option<GameId>,
-        ) -> Element<'a, OrRequest<Message, Request>> {
-            let handle = game.thumb.as_ref();
-            let name = game.name();
-            let id = game.id();
+    /// Get a card to display a game thumbnail.
+    fn card<'a>(&self, game: &'a WithThumb) -> Element<'a, OrRequest<Message, Request>> {
+        let handle = game.thumb.as_ref();
+        let selected = self.selected;
+        let name = game.name();
+        let id = game.id();
 
-            fn base(theme: &::iced_core::Theme) -> container::Style {
-                let style = container::bordered_box(theme);
-                style.border(Border {
-                    radius: 0.into(),
-                    ..style.border
-                })
-            }
-
-            fn batch_and_select(theme: &::iced_core::Theme) -> container::Style {
-                let style = select(theme);
-                style.border(style.border.color(theme.palette().danger))
-            }
-
-            fn select(theme: &::iced_core::Theme) -> container::Style {
-                base(theme).background(theme.palette().primary.scale_alpha(0.9))
-            }
-
-            fn batch(theme: &::iced_core::Theme) -> container::Style {
-                base(theme).background(theme.palette().danger.scale_alpha(0.9))
-            }
-
-            fn not_selected(theme: &::iced_core::Theme) -> container::Style {
-                base(theme).background(theme.palette().background.scale_alpha(0.95))
-            }
-
-            let style: fn(&::iced_core::Theme) -> container::Style =
-                match (selected, game.batch_selected) {
-                    (Some(id), false) if game.id() == id => select,
-                    (Some(id), true) if game.id() == id => batch_and_select,
-                    (_, true) => batch,
-                    (_, false) => not_selected,
-                };
-
-            let text = widget::text(name)
-                .wrapping(Wrapping::WordOrGlyph)
-                .size(14)
-                .pipe(container)
-                .padding(3)
-                .style(style)
-                .pipe(container)
-                .width(width)
-                .height(width)
-                .padding(3)
-                .align_x(Alignment::Center)
-                .align_y(Alignment::End);
-
-            let element = match handle {
-                Some(handle) => {
-                    let image = widget::image(handle)
-                        .width(width)
-                        .height(width)
-                        .content_fit(::iced_core::ContentFit::Contain);
-                    widget::mouse_area(stack([image.into(), text.into()]))
-                }
-                None => widget::mouse_area(text),
-            }
-            .interaction(::iced_core::mouse::Interaction::Pointer)
-            .on_release(AreaMessage::Select { id })
-            .on_middle_release(AreaMessage::Run { id, sandbox: true })
-            // .on_right_release(AreaMessage::BatchSelect { id })
-            .pipe(Element::from)
-            .map(OrRequest::<Message, Request>::from);
-
-            ContextMenu::new(element, move || {
-                ::spel_katalog_widget::ListMenu::new()
-                    .push("Spel Katalog")
-                    .separator()
-                    .button("Install Game", || Request::InstallGame.into_request())
-                    .separator()
-                    .push("Game")
-                    .separator()
-                    .button("Run", move || {
-                        Request::Run { id, sandbox: true }.into_request()
-                    })
-                    .button("Batch", move || Message::BatchSelect(id).into_message())
-                    .button("Info", move || Message::SelectId(id).into_message())
-                    .separator()
-                    .button("Convert", move || Request::Convert(id).into_request())
-                    .into()
+        fn base(theme: &::iced_core::Theme) -> container::Style {
+            let style = container::bordered_box(theme);
+            style.border(Border {
+                radius: 0.into(),
+                ..style.border
             })
-            .into()
         }
 
+        fn batch_and_select(theme: &::iced_core::Theme) -> container::Style {
+            let style = select(theme);
+            style.border(style.border.color(theme.palette().danger))
+        }
+
+        fn select(theme: &::iced_core::Theme) -> container::Style {
+            base(theme).background(theme.palette().primary.scale_alpha(0.9))
+        }
+
+        fn batch(theme: &::iced_core::Theme) -> container::Style {
+            base(theme).background(theme.palette().danger.scale_alpha(0.9))
+        }
+
+        fn not_selected(theme: &::iced_core::Theme) -> container::Style {
+            base(theme).background(theme.palette().background.scale_alpha(0.95))
+        }
+
+        let style: fn(&::iced_core::Theme) -> container::Style =
+            match (selected, game.batch_selected) {
+                (Some(id), false) if game.id() == id => select,
+                (Some(id), true) if game.id() == id => batch_and_select,
+                (_, true) => batch,
+                (_, false) => not_selected,
+            };
+
+        let text = widget::text(name)
+            .wrapping(Wrapping::WordOrGlyph)
+            .size(14)
+            .pipe(container)
+            .padding(3)
+            .style(style)
+            .pipe(widget::bottom_center)
+            .padding(3);
+
+        let element = match handle {
+            Some(handle) => {
+                let image = widget::image(handle)
+                    .width(Fill)
+                    .content_fit(::iced_core::ContentFit::Contain);
+                widget::mouse_area(stack([image.into(), text.into()]))
+            }
+            None => widget::mouse_area(text),
+        }
+        .interaction(::iced_core::mouse::Interaction::Pointer)
+        .on_release(AreaMessage::Select { id })
+        .on_middle_release(AreaMessage::Run { id, sandbox: true })
+        // .on_right_release(AreaMessage::BatchSelect { id })
+        .pipe(Element::from)
+        .map(OrRequest::<Message, Request>::from);
+
+        ContextMenu::new(element, move || {
+            ::spel_katalog_widget::ListMenu::new()
+                .push("Spel Katalog")
+                .separator()
+                .button("Install Game", || Request::InstallGame.into_request())
+                .separator()
+                .push("Game")
+                .separator()
+                .button("Run", move || {
+                    Request::Run { id, sandbox: true }.into_request()
+                })
+                .button("Batch", move || Message::BatchSelect(id).into_message())
+                .button("Info", move || Message::SelectId(id).into_message())
+                .separator()
+                .button("Convert", move || Request::Convert(id).into_request())
+                .into()
+        })
+        .into()
+    }
+
+    /// Render elements.
+    pub fn view(&self) -> Element<'_, OrRequest<Message, Request>> {
         widget::responsive(move |size| {
-            let columns = ((size.width as usize - 1) / 153).clamp(1, 24);
-            let width = ((size.width / columns as f32) - 3.0).clamp(150.0, 300.0);
+            let columns = ((size.width / 150.0) as usize).clamp(1, 24);
             self.columns.set(columns);
 
-            spel_katalog_widget::scrollable(w::col().align_x(Alignment::Start).width(Fill).extend(
-                self.displayed().chunks(columns).into_iter().map(|chunk| {
-                    w::row()
-                        .extend(chunk.map(|game| card(game, width, self.selected)))
-                        .into()
-                }),
-            ))
+            spel_katalog_widget::scrollable(
+                ::iced_widget::Grid::new()
+                    .columns(columns)
+                    .spacing(4)
+                    .extend(self.displayed().map(|game| self.card(game))),
+            )
             .id(widget::Id::new("games-view"))
             .into()
         })
