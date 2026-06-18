@@ -19,7 +19,7 @@
 - [ ] Profiles
 - [ ] Http for ipc
 - [ ] External scripting using ipc
-- [ ] Use iced grid for game view
+- [x] Use iced grid for game view
 - [ ] Use iced sensor for game cards
 
 # Future Goals/Possibilities
