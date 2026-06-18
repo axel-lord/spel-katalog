@@ -156,3 +156,4 @@ iced_aw = { version = "0.14.1", default-features = false }
 tabled = { version = "0.21.0", default-features = false }
 spel-katalog-installer = { path = "spel-katalog-installer" }
 spel-katalog-ipc = { path = "spel-katalog-ipc" }
+xdg = "3.0.0"
