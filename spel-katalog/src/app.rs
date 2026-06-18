@@ -1,12 +1,14 @@
 use ::std::{collections::HashMap, convert::identity, io::PipeReader, path::PathBuf, sync::Arc};
 
 use ::derive_more::IsVariant;
-use ::iced_core::{Alignment::Center, Length::Fill, window};
+use ::iced::Font;
+use ::iced_core::{Alignment::Center, Length::Fill, font, window};
 use ::iced_runtime::Task;
 use ::iced_widget::{self as widget, Row, text, text_input, toggler, value};
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog_cli::Run;
 use ::spel_katalog_common::{OrRequest, StatusSender, w};
+use ::spel_katalog_installer::Installer;
 use ::spel_katalog_settings::{CacheDir, ConfigDir, FilterMode, Network, Theme};
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::spel_katalog_widget::ListMenu;
@@ -29,6 +31,8 @@ pub enum WindowType {
     Term,
     /// Show a settings window.
     Settings,
+    /// Show an installer window.
+    Installer(Installer),
     /// Show a dialog window.
     Dialog(Dialog),
 }
@@ -223,6 +227,8 @@ impl App {
             .pipe(Message::Quick)
             .pipe(Task::done);
 
+        let listen_ipc = Task::stream(::spel_katalog_ipc::listen(None)).map(Message::from);
+
         let batch = Task::batch([
             receive_status,
             receive_dialog,
@@ -231,6 +237,7 @@ impl App {
             exit_recv,
             window_recv,
             show_settings,
+            listen_ipc,
         ]);
 
         (app, batch)
@@ -254,6 +261,10 @@ impl App {
         )
         .title(|_: &Self, _| "Spel-Katalog".to_owned())
         .subscription(Self::subscription)
+        .default_font(Font {
+            weight: font::Weight::Medium,
+            ..Font::DEFAULT
+        })
         .theme(|this: &Self, _: window::Id| {
             Some(::iced_core::Theme::from(*this.settings.get::<Theme>()))
         })
@@ -311,6 +322,9 @@ impl App {
                 .padding(5)
                 .into(),
             WindowType::Term => self.terminal.view().map(From::from),
+            WindowType::Installer(installer) => installer
+                .view(&self.settings)
+                .map(move |msg| Message::Installer(id, msg)),
         }
     }
 
@@ -318,6 +332,9 @@ impl App {
         fn with_global_context(menu: ListMenu<'_, Message>) -> ListMenu<'_, Message> {
             menu.push(widget::text("Spel Katalog"))
                 .separator()
+                .button("Install Game", || {
+                    Message::Quick(QuickMessage::OpenInstaller)
+                })
                 .button("Convert All", || Message::Quick(QuickMessage::ConvertAll))
                 .button("Open DB", || Message::Quick(QuickMessage::OpenDatabase))
                 .button("Reload Games", || Message::Quick(QuickMessage::ReloadGames))

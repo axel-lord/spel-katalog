@@ -48,6 +48,7 @@ pub enum QuickMessage {
     CopyFilter,
     PasteFilter,
     ReloadGames,
+    OpenInstaller,
 }
 
 #[derive(Debug, IsVariant, From, Clone)]
@@ -75,12 +76,18 @@ pub enum Message {
     OpenWindow(window::Id, WindowType),
     CloseWindow(window::Id),
     Dialog(window::Id, OrRequest<dialog::Message, dialog::Request>),
+    Installer(
+        window::Id,
+        OrRequest<::spel_katalog_installer::Message, ::spel_katalog_installer::Request>,
+    ),
     BuildDialog(DialogBuilder),
     #[from]
     Terminal(::spel_katalog_terminal::Message),
     LuaDocs(::spel_katalog_lua_docs::Message),
     #[from]
     ShowInfo(crate::view::Displayed),
+    #[from]
+    Ipc(::spel_katalog_ipc::Message),
     RunGameNative(Box<NativeGame>),
     RunShellNative(Box<NativeGame>),
 }

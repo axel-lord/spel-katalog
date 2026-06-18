@@ -1,17 +1,19 @@
 //! [Scrollable] impl.
 
 use ::iced_core::{Background, Color, Element, Theme};
-use ::iced_widget::Scrollable;
+use ::iced_widget::{
+    Scrollable,
+    scrollable::{Direction, Scrollbar},
+};
 
-/// Create a scrollable widget.
-#[expect(clippy::disallowed_methods)]
-pub fn scrollable<'a, Message, Renderer>(
-    element: impl Into<Element<'a, Message, Theme, Renderer>>,
+/// Apply themeing.
+fn apply<'a, Message, Renderer>(
+    scrollable: Scrollable<'a, Message, Theme, Renderer>,
 ) -> Scrollable<'a, Message, Theme, Renderer>
 where
     Renderer: ::iced_core::Renderer + ::iced_core::text::Renderer,
 {
-    ::iced_widget::scrollable(element).style(|theme, status| {
+    scrollable.style(|theme, status| {
         let ::iced_widget::scrollable::Style {
             container,
             mut vertical_rail,
@@ -67,4 +69,44 @@ where
             auto_scroll,
         }
     })
+}
+
+/// Create a scrollable widget.
+#[expect(clippy::disallowed_methods)]
+pub fn y_scrollable<'a, Message, Renderer>(
+    content: impl Into<Element<'a, Message, Theme, Renderer>>,
+) -> Scrollable<'a, Message, Theme, Renderer>
+where
+    Renderer: ::iced_core::Renderer + ::iced_core::text::Renderer,
+{
+    apply(::iced_widget::scrollable(content))
+}
+
+/// Create a scrollable widget.
+pub fn x_scrollable<'a, Message, Renderer>(
+    content: impl Into<Element<'a, Message, Theme, Renderer>>,
+) -> Scrollable<'a, Message, Theme, Renderer>
+where
+    Renderer: ::iced_core::Renderer + ::iced_core::text::Renderer,
+{
+    apply(Scrollable::with_direction(
+        content,
+        Direction::Horizontal(Scrollbar::new()),
+    ))
+}
+
+/// Create a scrollable widget.
+pub fn xy_scrollable<'a, Message, Renderer>(
+    content: impl Into<Element<'a, Message, Theme, Renderer>>,
+) -> Scrollable<'a, Message, Theme, Renderer>
+where
+    Renderer: ::iced_core::Renderer + ::iced_core::text::Renderer,
+{
+    apply(Scrollable::with_direction(
+        content,
+        Direction::Both {
+            vertical: Scrollbar::new(),
+            horizontal: Scrollbar::new(),
+        },
+    ))
 }

@@ -1,4 +1,8 @@
-use ::std::path::Path;
+use ::core::convert::identity;
+use ::std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use ::iced_core::{Size, window};
 use ::iced_runtime::Task;
@@ -11,7 +15,7 @@ use ::spel_katalog_formats::{AdditionalConfig, NativeGame};
 use ::spel_katalog_games::SelDir;
 use ::spel_katalog_run::run_umu::RunMode;
 use ::spel_katalog_settings::{
-    ConfigDir, FilterMode, Load, LutrisDb, Network, Show, Variants, YmlDir,
+    ConfigDir, FilterMode, Load, LutrisDb, Network, Settings, Show, Variants, YmlDir,
 };
 use ::tap::Pipe;
 use ::uuid::Uuid;
@@ -150,10 +154,64 @@ impl App {
         .await
     }
 
+    async fn prefill_installer(
+        settings: Arc<Settings>,
+        game_dir: PathBuf,
+        hidden: Option<bool>,
+        thumbnail: Option<PathBuf>,
+        move_game: Option<bool>,
+    ) -> Option<Task<Message>> {
+        let (parent, choice) = ::spel_katalog_installer::Installer::open_path(game_dir).await?;
+        let (installer, installer_task) = ::spel_katalog_installer::Installer::new(
+            &settings, parent, choice, hidden, thumbnail, move_game,
+        );
+
+        let (id, open_task) = ::iced_runtime::window::open(Default::default());
+
+        let add_task = Task::done(Message::OpenWindow(id, WindowType::Installer(installer)));
+
+        Some(open_task.discard().chain(add_task.chain(
+            installer_task.map(move |message| Message::Installer(id, OrRequest::Message(message))),
+        )))
+    }
+
+    fn open_installer(&mut self, hidden: Option<bool>) -> Task<Message> {
+        let settings = self.settings.clone();
+        Task::<Option<_>>::future(async move {
+            let source = settings
+                .get::<::spel_katalog_settings::InstallSource>()
+                .to_path_buf();
+
+            let (parent, choice) = ::spel_katalog_installer::Installer::open(source).await?;
+            let (installer, installer_task) = ::spel_katalog_installer::Installer::new(
+                &settings, parent, choice, hidden, None, None,
+            );
+
+            let (id, open_task) = ::iced_runtime::window::open(Default::default());
+
+            let add_task = Task::done(Message::OpenWindow(id, WindowType::Installer(installer)));
+
+            Some(
+                open_task.discard().chain(
+                    add_task.chain(
+                        installer_task.map(move |message| {
+                            Message::Installer(id, OrRequest::Message(message))
+                        }),
+                    ),
+                ),
+            )
+        })
+        .and_then(identity)
+    }
+
     fn quick_update(&mut self, msg: QuickMessage) -> Task<Message> {
         match msg {
             QuickMessage::Debug => {
                 ::log::info!("debug action activated");
+                return self.quick_update(QuickMessage::OpenInstaller);
+            }
+            QuickMessage::OpenInstaller => {
+                return self.open_installer(None);
             }
             QuickMessage::CopyFilter => {
                 return ::iced_runtime::clipboard::write(self.filter.clone());
@@ -391,6 +449,9 @@ impl App {
                     .and_then(Task::done);
                 }
             }
+            ::spel_katalog_games::Request::InstallGame => {
+                return self.open_installer(None);
+            }
         }
         Task::none()
     }
@@ -506,6 +567,73 @@ impl App {
             &delta,
             Delta::FilterMode(..) | Delta::Show(..) | Delta::SortBy(..) | Delta::SortDir(..)
         )
+    }
+
+    async fn install_game_(
+        game_db: ::spel_katalog_native::Pool,
+        config: Box<NativeGame>,
+        thumbnail: Option<::spel_katalog_formats::Image>,
+        move_dir: Option<(PathBuf, PathBuf)>,
+    ) -> Option<(Uuid, Box<NativeGame>, Option<::spel_katalog_formats::Image>)> {
+        let uuid = Uuid::now_v7();
+        game_db
+            .insert_game(uuid)
+            .insert(&config)
+            .map_err(|err| {
+                ::log::error!(
+                    "could not insert game {:?} into database\n{err}",
+                    config.name
+                )
+            })
+            .ok()?;
+
+        let thumbnain = thumbnail.and_then(::spel_katalog_formats::Image::into_image);
+        if let Some(thumbnail) = &thumbnain
+            && let Err(err) = game_db.insert_thumb(uuid).insert(thumbnail)
+        {
+            ::log::warn!("could not insert thumbnail for {uuid}\n{err}");
+        }
+
+        if let Some((src, dest)) = move_dir
+            && let Err(err) = ::smol::fs::rename(&src, &dest).await
+        {
+            ::log::error!("could not rename {src:?} to {dest:?}\n{err}");
+            if let Err(err) = game_db.remove_game(uuid) {
+                ::log::error!(
+                    "cleanup of inserted game failed, database might still contain config\n{err}"
+                );
+            }
+            return None;
+        }
+
+        Some((
+            uuid,
+            config,
+            thumbnain.map(::spel_katalog_native::thumbnail),
+        ))
+    }
+
+    pub fn install_game(
+        &mut self,
+        id: window::Id,
+        config: Box<NativeGame>,
+        thumbnail: Option<::spel_katalog_formats::Image>,
+        move_dir: Option<(PathBuf, PathBuf)>,
+    ) -> Task<Message> {
+        let game_db = self.games_db.clone();
+        Self::install_game_(game_db, config, thumbnail, move_dir)
+            .pipe(Task::future)
+            .and_then(move |(uuid, config, thumb)| {
+                ::spel_katalog_games::Message::AddNativeGame {
+                    uuid,
+                    config,
+                    thumb,
+                }
+                .into_message()
+                .pipe(Message::Games)
+                .pipe(Task::done)
+                .chain(::iced_runtime::window::close(id))
+            })
     }
 
     pub fn update(&mut self, msg: Message) -> Task<Message> {
@@ -632,6 +760,42 @@ impl App {
                         .map(move |request| Message::Dialog(id, OrRequest::Request(request)));
                 }
             }
+            Message::Installer(id, msg) => {
+                if let Some(WindowType::Installer(installer)) = self.windows.get_mut(&id) {
+                    return match msg {
+                        OrRequest::Message(msg) => installer
+                            .update(msg, &self.settings)
+                            .map(move |msg| Message::Installer(id, msg)),
+                        OrRequest::Request(req) => match req {
+                            ::spel_katalog_installer::Request::Close => {
+                                ::iced_runtime::window::close(id)
+                            }
+                            ::spel_katalog_installer::Request::InstallGame {
+                                config,
+                                thumbnail,
+                                move_dir,
+                            } => self.install_game(id, config, thumbnail, move_dir),
+                        },
+                    };
+                }
+            }
+            Message::Ipc(message) => match message {
+                ::spel_katalog_ipc::Message::InstallGame {
+                    source,
+                    hidden,
+                    thumbnail,
+                    move_game,
+                } => {
+                    return Task::future(Self::prefill_installer(
+                        self.settings.snapshot(),
+                        source,
+                        Some(hidden),
+                        thumbnail,
+                        Some(move_game),
+                    ))
+                    .and_then(identity);
+                }
+            },
             Message::BuildDialog(dialog) => {
                 let (_, task) = ::iced_runtime::window::open(window::Settings {
                     size: Size {

@@ -4,7 +4,6 @@ use ::core::convert::identity;
 use ::std::{
     ffi::OsStr,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use ::derive_more::{From, IsVariant};
@@ -15,13 +14,12 @@ use ::iced_core::{
 };
 use ::iced_highlighter::Highlighter;
 use ::iced_runtime::Task;
-use ::iced_widget::{
-    self as widget, button,
-    text_editor::{Action, Edit},
-};
+use ::iced_widget::{self as widget, button};
 use ::image::ImageError;
 use ::open::that;
-use ::spel_katalog_common::{OrRequest, PushMaybe, StatusSender, async_status, status, styling, w};
+use ::spel_katalog_common::{
+    OrRequest, StatusSender, async_status, in_place::PushMaybe as _, status, styling, w,
+};
 use ::spel_katalog_formats::{AdditionalConfig, Game, GameId, NativeGame, lutris_config};
 use ::spel_katalog_native::Pool;
 use ::spel_katalog_settings::{ConfigDir, CoverartDir, Settings, YmlDir};
@@ -37,21 +35,6 @@ mod native_table;
 
 /// Element alias.
 type Element<'a, M> = ::iced_core::Element<'a, M, ::iced_core::Theme, ::iced_renderer::Renderer>;
-
-/// Set config editor content.
-fn set_content(w: &mut widget::text_editor::Content, content: String) {
-    // Probably most correct solution.
-    // self.content = widget::text_editor::Content::with_text(&content);
-
-    // Unless performed as actions, formatting is ignored for some reason
-    [
-        Action::SelectAll,
-        Action::Edit(Edit::Delete),
-        Action::Edit(Edit::Paste(Arc::new(content))),
-    ]
-    .into_iter()
-    .for_each(|action| w.perform(action));
-}
 
 /// State of info display.
 #[derive(Debug, Default)]
@@ -334,7 +317,7 @@ impl State {
                         if current_id != &id {
                             return Task::none();
                         }
-                        set_content(w, content.clone());
+                        w::set_text_editor_content(w, content.clone());
                         *config_path = Some(path.clone());
                         *additional_roots_content = widget::text_editor::Content::with_text(
                             &additional.sandbox_root.join("\n"),
@@ -790,7 +773,7 @@ impl State {
             _ = text.drain(..pfx.len());
         }
 
-        set_content(content, text);
+        w::set_text_editor_content(content, text);
 
         Some(())
     }

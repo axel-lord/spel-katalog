@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 color-eyre.workspace = true
 derive_more = { workspace = true, features = [ "is_variant" ] }
+itertools.workspace = true
 log.workspace = true
 rustc-hash.workspace = true
 shell-words.workspace = true
@@ -15,6 +16,7 @@ smol.workspace = true
 spel-katalog-formats.workspace = true
 spel-katalog-settings.workspace = true
 spel-katalog-sink.workspace = true
+tap.workspace = true
 users.workspace = true
 
 [lints]

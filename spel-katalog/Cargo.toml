@@ -42,6 +42,7 @@ spel-katalog-formats.workspace = true
 spel-katalog-games.workspace = true
 spel-katalog-gather.workspace = true
 spel-katalog-info.workspace = true
+spel-katalog-installer.workspace = true
 spel-katalog-lua-docs.workspace = true
 spel-katalog-lua.workspace = true
 spel-katalog-native.workspace = true
@@ -57,6 +58,7 @@ toml.workspace = true
 users.workspace = true
 uuid = { workspace = true, features = ["v4", "v7"] }
 yaml-rust2.workspace = true
+spel-katalog-ipc.workspace = true
 
 [build-dependencies]
 spel-katalog-build.workspace = true

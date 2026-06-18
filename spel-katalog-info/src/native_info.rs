@@ -1,11 +1,12 @@
 //! Info view for native game.
 
 use ::core::ops::Not;
-use ::std::{io::Cursor, sync::Arc};
+use ::std::{borrow::Cow, io::Cursor, sync::Arc};
 
 use ::derive_more::From;
 use ::iced_core::{
     Alignment::{self, Center},
+    Font,
     Length::{self, Fill},
     alignment::Vertical,
     keyboard::{Key, Modifiers, key},
@@ -18,10 +19,10 @@ use ::iced_widget::{
 use ::image::ImageFormat;
 use ::rfd::AsyncFileDialog;
 use ::smol::unblock;
-use ::spel_katalog_common::{IntoOrRequest, OrRequest, PushMaybe, w};
+use ::spel_katalog_common::{IntoOrRequest, OrRequest, in_place::PushMaybe as _, w};
 use ::spel_katalog_formats::{GameId, NativeGame};
 use ::spel_katalog_native::Pool;
-use ::spel_katalog_settings::CompToolsDir;
+use ::spel_katalog_settings::{CompToolsDir, ThmubnailSource};
 use ::spel_katalog_widget::monospace;
 use ::tap::{Pipe, TapOptional};
 use ::uuid::Uuid;
@@ -159,7 +160,7 @@ impl State {
 
     /// Set text content of config editor.
     pub fn set_content(&mut self, content: String) {
-        crate::set_content(&mut self.conf_view, content);
+        w::set_text_editor_content(&mut self.conf_view, content);
     }
 
     /// Create a function that is ran with the parsed
@@ -392,11 +393,19 @@ impl State {
                 QuickMessage::AddThumb => {
                     let uuid = self.uuid;
                     let game_db = game_db.clone();
+                    let location = settings.get::<ThmubnailSource>().to_path_buf();
 
                     Task::future(async move {
                         let file = AsyncFileDialog::new()
                             .set_title("Set Thumbnail")
-                            .add_filter("png", &["png"])
+                            .set_directory(location)
+                            .add_filter(
+                                "image",
+                                &[
+                                    "png", "jpg", "jpeg", "avif", "webp", "bmp", "tga", "tiff",
+                                    "gif", "ico", "pnm", "ff", "exr",
+                                ],
+                            )
                             .pick_file()
                             .await
                             .tap_none(|| ::log::info!("no thumbnail chosen for {uuid}"))?;
@@ -414,9 +423,12 @@ impl State {
                             })
                             .ok()?;
 
+                        let thumb = ::spel_katalog_native::make_square_thumbnail(Cow::Owned(image))
+                            .tap_none(|| ::log::warn!("could not make thubmnail square"))?;
+
                         game_db
                             .insert_thumb(uuid)
-                            .insert(&image)
+                            .insert(&thumb)
                             .map_err(|err| {
                                 ::log::error!(
                                     "could not insert thumbnail {path:?} into database\n{err}",
@@ -427,7 +439,7 @@ impl State {
 
                         Request::DisplayThumbnail {
                             id: GameId::Native(uuid),
-                            img: ::spel_katalog_native::thumbnail(image),
+                            img: ::spel_katalog_native::thumbnail(thumb.into_owned()),
                         }
                         .pipe(OrRequest::Request)
                         .pipe(Some)
@@ -435,7 +447,8 @@ impl State {
                     .and_then(Task::done)
                 }
                 QuickMessage::Paste => ::iced_runtime::clipboard::read().and_then(|content| {
-                    Arc::new(content)
+                    content
+                        .pipe(Arc::new)
                         .pipe(Edit::Paste)
                         .pipe(Action::Edit)
                         .pipe(Message::ConfAction)
@@ -450,14 +463,14 @@ impl State {
                 QuickMessage::Undo => {
                     if let Some(content) = self.history.pop() {
                         self.future.push(self.conf_view.text());
-                        self.set_content(content.clone());
+                        self.set_content(content);
                     }
                     Task::none()
                 }
                 QuickMessage::Redo => {
                     if let Some(content) = self.future.pop() {
                         self.history.push(self.conf_view.text());
-                        self.set_content(content.clone());
+                        self.set_content(content);
                     }
                     Task::none()
                 }
@@ -528,7 +541,10 @@ impl State {
                             }),
                     )
                     .push_maybe(thumb.is_some().then(spel_katalog_widget::rule::vertical))
-                    .push(monospace(InfoTable { id, shadows }.get_table().to_string())),
+                    .push(
+                        monospace(InfoTable { id, shadows }.get_table().to_string())
+                            .wrapping(::iced_core::text::Wrapping::Glyph),
+                    ),
             )
             .into()
     }
@@ -590,6 +606,8 @@ impl State {
                     widget::themer(
                         Some(::iced_core::Theme::SolarizedDark),
                         text_editor::TextEditor::new(&self.conf_view)
+                            .font(Font::MONOSPACE)
+                            .wrapping(::iced_core::text::Wrapping::Glyph)
                             .key_binding(|event| {
                                 if let Key::Named(named) = event.modified_key {
                                     match named {

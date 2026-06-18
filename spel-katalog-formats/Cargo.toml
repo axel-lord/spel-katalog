@@ -14,6 +14,7 @@ indexmap.workspace = true
 rustc-hash.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_bytes.workspace = true
+strum = { workspace = true, features = ["derive"] }
 thiserror.workspace = true
 uuid = { workspace = true, features = ["serde"] }
 yaml-rust2.workspace = true

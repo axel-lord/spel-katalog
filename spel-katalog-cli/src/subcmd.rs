@@ -25,6 +25,24 @@ pub struct SubcmdCallbacks<E> {
 
     /// Callback to use when showing lua api docs.
     pub api_docs: fn() -> Result<(), E>,
+
+    /// Callbacks to use when installing a game.
+    pub install_game: fn(InstallGame) -> Result<(), E>,
+}
+
+/// Install a game.
+#[derive(Debug, ::clap::Args)]
+pub struct InstallGame {
+    /// Game to install.
+    pub game: PathBuf,
+    /// Thumbnail of game.
+    pub thumbnail: Option<PathBuf>,
+    /// Should the game be hidden.
+    #[arg(long)]
+    pub hidden: bool,
+    /// Should the game not be moved.
+    #[arg(long)]
+    pub no_move: bool,
 }
 
 /// Error returned whe subcmd perform fails.
@@ -126,6 +144,8 @@ pub enum Subcmd {
     Batch(#[command(flatten)] Batch),
     /// View lua api documentation
     LuaApi,
+    /// Open game installer.
+    InstallGame(#[command(flatten)] InstallGame),
 }
 
 impl Default for Subcmd {
@@ -148,6 +168,7 @@ impl Subcmd {
             other,
             batch,
             api_docs,
+            install_game,
         } = callbacks;
         match self {
             Subcmd::Skeleton { output, settings } => {
@@ -172,6 +193,7 @@ impl Subcmd {
             Subcmd::Run(cli) => run(cli)?,
             Subcmd::Batch(cli) => batch(cli)?,
             Subcmd::LuaApi => api_docs()?,
+            Subcmd::InstallGame(game) => install_game(game)?,
         }
         Ok(())
     }

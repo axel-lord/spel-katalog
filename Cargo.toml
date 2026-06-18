@@ -9,11 +9,15 @@ members = [
 	"spel-katalog-games",
 	"spel-katalog-gather",
 	"spel-katalog-info",
+	"spel-katalog-installer",
+	"spel-katalog-ipc",
 	"spel-katalog-lua",
-	"spel-katalog-lua-docs", "spel-katalog-native",
+	"spel-katalog-lua-docs",
+	"spel-katalog-native",
 	"spel-katalog-reflect",
 	"spel-katalog-reflect/derive",
-	"spel-katalog-reflect/derive-lib", "spel-katalog-run",
+	"spel-katalog-reflect/derive-lib",
+	"spel-katalog-run",
 	"spel-katalog-settings",
 	"spel-katalog-sink",
 	"spel-katalog-terminal",
@@ -82,7 +86,7 @@ iced_renderer = { version = "0.14.0", features = ["wgpu"] }
 iced_runtime = "0.14.0"
 iced_widget = { version = "0.14.2", features = ["image", "lazy"] }
 iced_winit = { version = "0.14.0", default-features = false, features = ["wayland"] }
-image = { version = "0.25.10", default-features = false, features = ["rayon", "png", "jpeg"] }
+image = { version = "0.25.10", features = ["rayon", "default-formats"] }
 indexmap = "2.14.0"
 itertools = "0.14.0"
 log = "0.4.29"
@@ -150,3 +154,6 @@ bytemuck = "1.25.0"
 flate2 = "1.1.9"
 iced_aw = { version = "0.14.1", default-features = false }
 tabled = { version = "0.21.0", default-features = false }
+spel-katalog-installer = { path = "spel-katalog-installer" }
+spel-katalog-ipc = { path = "spel-katalog-ipc" }
+xdg = "3.0.0"

@@ -16,6 +16,7 @@ use ::spel_katalog_formats::{
     lutris_config,
 };
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
+use ::tap::Pipe;
 
 use crate::{Callback, macros::args};
 
@@ -76,7 +77,6 @@ async fn init_umu_prefix(
     umu: &Path,
     umu_prefix: &Path,
     verbs: &[String],
-    dll_override: &mut (dyn '_ + Send + Sync + Iterator<Item = &str>),
     drives: &mut (dyn '_ + Send + Sync + Iterator<Item = (char, &Path)>),
     sink_builder: &SinkBuilder,
     envs: &FxHashMap<String, String>,
@@ -110,13 +110,6 @@ async fn init_umu_prefix(
         return Err(eyre!("could not create umu prefix"));
     }
 
-    let dll_overrides = dll_override.collect::<BTreeSet<_>>();
-    let reg_exe = umu_prefix.join("drive_c/windows/system32/reg.exe");
-
-    for dll_override in dll_overrides {
-        add_dll_override(dll_override, umu_prefix, umu, &reg_exe, &sink_builder, envs).await;
-    }
-
     for (letter, link) in drives {
         if let Err(err) =
             ::smol::fs::unix::symlink(link, umu_prefix.join(format!("dosdevices/{letter}:"))).await
@@ -127,55 +120,6 @@ async fn init_umu_prefix(
     }
 
     Ok(())
-}
-
-/// Add a dell override to prefix.
-async fn add_dll_override(
-    dll_override: &str,
-    umu_prefix: &Path,
-    umu: &Path,
-    reg_exe: &Path,
-    sink_builder: &SinkBuilder,
-    envs: &FxHashMap<String, String>,
-) {
-    ::log::info!("adding dll override {dll_override:?}");
-    let (stdout, stderr) =
-        match sink_builder.build_double(|| SinkIdentity::Name(format!("add {dll_override}"))) {
-            Ok([stdout, stderr]) => (stdout, stderr),
-            Err(err) => {
-                ::log::error!("could not create dll override {dll_override}\n{err}");
-                return;
-            }
-        };
-    let status = Command::new(umu)
-        .stdout(stdout)
-        .stderr(stderr)
-        .args(args![
-            reg_exe,
-            "add",
-            r"HKCU\Software\Wine\DllOverrides",
-            "/f",
-            "/v",
-            dll_override,
-            "/d",
-            "native,builtin"
-        ])
-        .envs(envs)
-        .env("WINEPREFIX", umu_prefix)
-        .env("WINEDEBUG", "-all")
-        .env("UMU_LOG", "0")
-        .kill_on_drop(true)
-        .status()
-        .await
-        .map_err(|err| ::log::error!("failed to add dll override {dll_override:?}\n{err}"));
-
-    if let Ok(status) = status
-        && !status.success()
-    {
-        ::log::error!(
-            "could not add dll override {dll_override:?}, wine exited with status {status}"
-        );
-    }
 }
 
 /// Split terminal command line into executable and arguments.
@@ -302,10 +246,6 @@ impl NativeUmuCtx<'_> {
                 umu,
                 prefix,
                 &wt_verb,
-                &mut global_dll_override
-                    .iter()
-                    .chain(&dll_override)
-                    .map(String::as_str),
                 &mut drives
                     .iter()
                     .map(|(letter, link)| (*letter, link.as_path())),
@@ -385,6 +325,20 @@ impl NativeUmuCtx<'_> {
 
         if let Some(prefix) = prefix.as_deref() {
             args.extend(args!["--setenv", "WINEPREFIX", prefix]);
+        }
+
+        if !dll_override.is_empty() || !global_dll_override.is_empty() {
+            let dll_overrides = dll_override
+                .iter()
+                .chain(&global_dll_override)
+                .map(String::as_str)
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .pipe(|i| ::itertools::Itertools::intersperse(i, ","))
+                .chain(["=n,b"])
+                .collect::<String>();
+
+            args.extend(args!["--setenv", "WINEDLLOVERRIDES", dll_overrides]);
         }
 
         if let Some(parent) = exe.parent() {
