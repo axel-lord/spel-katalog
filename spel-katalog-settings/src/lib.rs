@@ -10,8 +10,8 @@ use ::spel_katalog_common::{StatusSender, async_status, w};
 use ::std::{collections::HashMap, path::PathBuf, sync::Arc};
 use ::tap::Pipe;
 
-mod list;
 mod environment;
+mod list;
 
 #[doc(hidden)]
 mod generated {

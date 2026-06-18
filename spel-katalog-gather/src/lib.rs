@@ -1,4 +1,4 @@
-//! Utilities for gathering information used by application.
+//! Utilities to gather resources.
 
 mod load_covers;
 mod load_game_db;

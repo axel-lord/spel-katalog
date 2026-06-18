@@ -44,11 +44,9 @@ impl App {
 
                         Named::Tab => QuickMessage::Next,
                         Named::Enter | Named::Space => QuickMessage::RunSelected,
-                        Named::F1 => QuickMessage::ToggleLuaApi,
                         Named::F2 => QuickMessage::ToggleSettings,
                         Named::F3 => QuickMessage::ToggleMain,
                         Named::F5 => QuickMessage::ToggleGameInfo,
-                        Named::F6 => QuickMessage::ToggleBatch,
                         Named::F7 => QuickMessage::ToggleProcessInfo,
                         _ => return None,
                     },
@@ -59,10 +57,8 @@ impl App {
                     return None;
                 };
                 match chr {
-                    "b" => QuickMessage::ToggleBatch,
                     "m" => QuickMessage::ToggleMain,
                     "s" => QuickMessage::ToggleSettings,
-                    "l" => QuickMessage::ToggleLuaApi,
                     "p" => QuickMessage::ToggleProcessInfo,
                     "g" => QuickMessage::ToggleGameInfo,
                     "d" => QuickMessage::Debug,
