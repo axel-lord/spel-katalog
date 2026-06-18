@@ -1,4 +1,4 @@
-use ::std::{collections::HashMap, convert::identity, io::PipeReader, path::PathBuf, sync::Arc};
+use ::std::{convert::identity, io::PipeReader, sync::Arc};
 
 use ::derive_more::IsVariant;
 use ::iced::Font;
@@ -7,34 +7,26 @@ use ::iced_runtime::Task;
 use ::iced_widget::{self as widget, Row, text, text_input, toggler, value};
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog_cli::Run;
-use ::spel_katalog_common::{OrRequest, StatusSender, w};
+use ::spel_katalog_common::{StatusSender, w};
 use ::spel_katalog_installer::Installer;
-use ::spel_katalog_settings::{CacheDir, ConfigDir, FilterMode, Network, Theme};
+use ::spel_katalog_settings::{ConfigDir, FilterMode, Network, Theme};
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::spel_katalog_widget::ListMenu;
 use ::tap::Pipe;
 
-use crate::{
-    Element, ExitReceiver, Message, QuickMessage,
-    dialog::{Dialog, DialogBuilder},
-    get_modules, get_settings, process_info, view,
-};
+use crate::{Element, ExitReceiver, Message, QuickMessage, get_settings, process_info, view};
 
 /// Specific kind of window.
 #[derive(Debug, IsVariant, Clone)]
 pub enum WindowType {
     /// Window is the main window.
     Main,
-    /// Show lua api.
-    LuaApi,
     /// Show terminal.
     Term,
     /// Show a settings window.
     Settings,
     /// Show an installer window.
-    Installer(Installer),
-    /// Show a dialog window.
-    Dialog(Dialog),
+    Installer(Box<Installer>),
 }
 
 #[derive(Debug)]
@@ -45,55 +37,13 @@ pub(crate) struct App {
     pub filter: String,
     pub view: view::State,
     pub info: ::spel_katalog_info::State,
-    pub batch: ::spel_katalog_batch::State,
     pub sender: StatusSender,
     pub process_list: Vec<process_info::ProcessInfo>,
     pub sink_builder: SinkBuilder,
     pub windows: FxHashMap<window::Id, WindowType>,
-    pub dialog_tx: ::flume::Sender<DialogBuilder>,
     pub terminal: ::spel_katalog_terminal::Terminal,
-    pub docs_viewer: ::spel_katalog_lua_docs::DocsViewer,
     pub process_view_semaphore: Arc<::smol::lock::Semaphore>,
     pub games_db: ::spel_katalog_native::Pool,
-}
-
-/// Virtual table passed to lua.
-#[derive(Debug)]
-pub struct LuaVt {
-    pub sender: ::flume::Sender<DialogBuilder>,
-    pub settings: Arc<::spel_katalog_settings::Settings>,
-}
-
-impl ::spel_katalog_lua::Virtual for LuaVt {
-    fn available_modules(&self) -> FxHashMap<String, String> {
-        get_modules(&self.settings)
-    }
-
-    fn open_dialog(&self, text: String, buttons: Vec<String>) -> mlua::Result<Option<String>> {
-        let (dialog, rx) = DialogBuilder::new(text, buttons);
-        self.sender.send(dialog).map_err(::mlua::Error::external)?;
-        Ok(rx.recv().ok())
-    }
-
-    fn thumb_db_path(&self) -> mlua::Result<PathBuf> {
-        Ok(self
-            .settings
-            .get::<CacheDir>()
-            .as_path()
-            .join("thumbnails.db"))
-    }
-
-    fn settings(&self) -> mlua::Result<HashMap<&'_ str, String>> {
-        Ok(self.settings.generic())
-    }
-
-    fn additional_config_path(&self, game_id: i64) -> mlua::Result<PathBuf> {
-        Ok(self
-            .settings
-            .get::<ConfigDir>()
-            .as_path()
-            .join(format!("games/{game_id}.toml")))
-    }
 }
 
 /// Initial state created by new.
@@ -101,7 +51,6 @@ impl ::spel_katalog_lua::Virtual for LuaVt {
 struct Initial {
     app: App,
     status_rx: ::flume::Receiver<String>,
-    dialog_rx: ::flume::Receiver<DialogBuilder>,
     terminal_rx: Option<::flume::Receiver<(PipeReader, SinkIdentity)>>,
     show_settings: bool,
 }
@@ -141,10 +90,7 @@ impl Initial {
         let sender = status_tx.into();
         let process_list = Vec::new();
         let windows = FxHashMap::default();
-        let batch = Default::default();
-        let (dialog_tx, dialog_rx) = ::flume::bounded(64);
         let terminal = ::spel_katalog_terminal::Terminal::default().with_limit(256);
-        let docs_viewer = Default::default();
         let process_view_semaphore = Arc::new(::smol::lock::Semaphore::new(1));
         let games_db = ::spel_katalog_native::Pool::new(
             &settings.get::<ConfigDir>().as_path().join("games.db"),
@@ -158,8 +104,6 @@ impl Initial {
         };
 
         let app = App {
-            batch,
-            dialog_tx,
             filter,
             games,
             info,
@@ -171,14 +115,12 @@ impl Initial {
             terminal,
             view,
             windows,
-            docs_viewer,
             process_view_semaphore,
             games_db,
         };
 
         Ok(Self {
             app,
-            dialog_rx,
             status_rx,
             terminal_rx,
             show_settings,
@@ -193,7 +135,6 @@ impl App {
                 Initial {
                     app,
                     status_rx,
-                    dialog_rx,
                     terminal_rx,
                     show_settings,
                 },
@@ -204,7 +145,6 @@ impl App {
         let main = open_main.map(|id| Message::OpenWindow(id, WindowType::Main));
 
         let receive_status = Task::stream(status_rx.into_stream()).map(Message::Status);
-        let receive_dialog = Task::stream(dialog_rx.into_stream()).map(Message::BuildDialog);
         let exit_recv = exit_recv
             .map(|exit_recv| Task::future(exit_recv.recv()).then(|_| ::iced_runtime::exit()))
             .unwrap_or_else(Task::none);
@@ -231,7 +171,6 @@ impl App {
 
         let batch = Task::batch([
             receive_status,
-            receive_dialog,
             load_db,
             main,
             exit_recv,
@@ -272,13 +211,6 @@ impl App {
         .map_err(|err| ::color_eyre::eyre::eyre!(err))
     }
 
-    pub fn lua_vt(&self) -> Arc<LuaVt> {
-        Arc::new(LuaVt {
-            sender: self.dialog_tx.clone(),
-            settings: self.settings.snapshot(),
-        })
-    }
-
     pub async fn collect_process_info() -> Option<Message> {
         match process_info::ProcessInfo::open().await {
             Ok(summary) => Some(Message::ProcessInfo(summary)),
@@ -306,18 +238,6 @@ impl App {
 
         match ty {
             WindowType::Main => self.view_main(),
-            WindowType::LuaApi => widget::container(
-                widget::container(widget::themer(
-                    Some(::iced_core::Theme::Dark),
-                    self.docs_viewer.view().map(Message::LuaDocs),
-                ))
-                .style(widget::container::dark),
-            )
-            .padding(5)
-            .into(),
-            WindowType::Dialog(dialog) => dialog
-                .view()
-                .map(move |msg| Message::Dialog(id, OrRequest::Message(msg))),
             WindowType::Settings => widget::container(self.settings.view().map(Message::Settings))
                 .padding(5)
                 .into(),
@@ -370,10 +290,7 @@ impl App {
                 }),
             )
             .push(widget::space::vertical().height(5))
-            .push(
-                self.view
-                    .view(&self.games, &self.info, &self.process_list, &self.batch),
-            )
+            .push(self.view.view(&self.games, &self.info, &self.process_list))
             .push(widget::space::vertical().height(3))
             .push(spel_katalog_widget::rule::horizontal())
             .push(widget::space::vertical().height(3))

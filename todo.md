@@ -14,7 +14,7 @@
 - [x] Merge process and batch view with info view, with some kind of switching mechanism
 - [ ] Unresized cover cache, and cover size option with different caches for different sizes
 - [ ] Add more refined database access limitations
-- [ ] Remove current lua scripting 
+- [x] Remove current lua scripting 
 - [ ] Use xdg base dirs for some settings
 - [ ] Profiles
 - [ ] Http for ipc

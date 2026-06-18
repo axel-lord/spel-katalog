@@ -1,7 +1,6 @@
 [workspace]
 members = [
 	"spel-katalog",
-	"spel-katalog-batch",
 	"spel-katalog-build",
 	"spel-katalog-cli",
 	"spel-katalog-common",
@@ -11,8 +10,6 @@ members = [
 	"spel-katalog-info",
 	"spel-katalog-installer",
 	"spel-katalog-ipc",
-	"spel-katalog-lua",
-	"spel-katalog-lua-docs",
 	"spel-katalog-native",
 	"spel-katalog-reflect",
 	"spel-katalog-reflect/derive",
@@ -91,7 +88,6 @@ indexmap = "2.14.0"
 itertools = "0.14.0"
 log = "0.4.29"
 memchr = "2.8.0"
-mlua = { version = "0.11.6", features = ["luau", "luau-jit", "vendored", "macros"] }
 nalgebra = "0.34.2"
 once_cell = "1.21.4"
 open = "5.3.4"
@@ -114,7 +110,6 @@ serde_json = "1.0.149"
 shell-words = "1.1.1"
 smallvec = "1.15.1"
 smol = "2.0.2"
-spel-katalog-batch = { path = "spel-katalog-batch" }
 spel-katalog-build = { path = "spel-katalog-build" }
 spel-katalog-cli = { path = "spel-katalog-cli" }
 spel-katalog-common = { path = "spel-katalog-common" }
@@ -122,8 +117,6 @@ spel-katalog-formats = { path = "spel-katalog-formats" }
 spel-katalog-games = { path = "spel-katalog-games" }
 spel-katalog-gather = { path = "spel-katalog-gather" }
 spel-katalog-info = { path = "spel-katalog-info" }
-spel-katalog-lua = { path = "spel-katalog-lua" }
-spel-katalog-lua-docs = { path = "spel-katalog-lua-docs" }
 spel-katalog-native = { path = "spel-katalog-native" }
 spel-katalog-reflect = { path = "spel-katalog-reflect" }
 spel-katalog-reflect-derive = { path = "spel-katalog-reflect/derive" }

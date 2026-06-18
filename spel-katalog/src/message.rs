@@ -3,11 +3,7 @@ use ::iced_core::window;
 use ::spel_katalog_common::OrRequest;
 use ::spel_katalog_formats::NativeGame;
 
-use crate::{
-    app::WindowType,
-    dialog::{self, DialogBuilder},
-    process_info, view,
-};
+use crate::{app::WindowType, process_info, view};
 
 #[derive(Debug, Clone, Copy, Default, IsVariant, PartialEq, Eq, Hash)]
 pub enum Safety {
@@ -35,9 +31,7 @@ pub enum QuickMessage {
     Prev,
     RefreshProcessInfo,
     RunSelected,
-    ToggleBatch,
     ToggleGameInfo,
-    ToggleLuaApi,
     ToggleMain,
     ToggleNetwork,
     ToggleProcessInfo,
@@ -71,19 +65,14 @@ pub enum Message {
         pid: i64,
         terminate: bool,
     },
-    #[from]
-    Batch(OrRequest<::spel_katalog_batch::Message, ::spel_katalog_batch::Request>),
     OpenWindow(window::Id, WindowType),
     CloseWindow(window::Id),
-    Dialog(window::Id, OrRequest<dialog::Message, dialog::Request>),
     Installer(
         window::Id,
         OrRequest<::spel_katalog_installer::Message, ::spel_katalog_installer::Request>,
     ),
-    BuildDialog(DialogBuilder),
     #[from]
     Terminal(::spel_katalog_terminal::Message),
-    LuaDocs(::spel_katalog_lua_docs::Message),
     #[from]
     ShowInfo(crate::view::Displayed),
     #[from]

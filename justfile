@@ -49,7 +49,7 @@ sanity: autoinherit fmt test-all
 install: autoinherit fmt
 	cargo +nightly install --path {{crate}} -Z build-std=std,panic_abort -Z build-std-features="optimize_for_size"
 
-build *EXTRA: sanity
+build *EXTRA: autoinherit fmt
 	cargo +nightly build --release -p {{crate}} -Z build-std=std,panic_abort -Z build-std-features="optimize_for_size" {{EXTRA}}
 
 build-match-num *EXTRA:

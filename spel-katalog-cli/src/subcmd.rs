@@ -4,7 +4,7 @@ use ::std::path::{Path, PathBuf};
 
 use ::clap::Subcommand;
 
-use crate::{batch::Batch, completions::completions, init_config::init_config, skeleton::skeleton};
+use crate::{completions::completions, init_config::init_config, skeleton::skeleton};
 
 /// Get default shell.
 fn get_shell() -> ::clap_complete::Shell {
@@ -19,12 +19,6 @@ pub struct SubcmdCallbacks<E> {
 
     /// Callback that is called before other subcommands.
     pub other: fn() -> Result<(), E>,
-
-    /// Callback to use when running batch.
-    pub batch: fn(Batch) -> Result<(), E>,
-
-    /// Callback to use when showing lua api docs.
-    pub api_docs: fn() -> Result<(), E>,
 
     /// Callbacks to use when installing a game.
     pub install_game: fn(InstallGame) -> Result<(), E>,
@@ -140,10 +134,6 @@ pub enum Subcmd {
         #[arg(long)]
         skip_lua_update: bool,
     },
-    /// Run a batch script without starting full application.
-    Batch(#[command(flatten)] Batch),
-    /// View lua api documentation
-    LuaApi,
     /// Open game installer.
     InstallGame(#[command(flatten)] InstallGame),
 }
@@ -166,8 +156,6 @@ impl Subcmd {
         let SubcmdCallbacks {
             run,
             other,
-            batch,
-            api_docs,
             install_game,
         } = callbacks;
         match self {
@@ -191,8 +179,6 @@ impl Subcmd {
                 init_config(path, skip_lua_update);
             }
             Subcmd::Run(cli) => run(cli)?,
-            Subcmd::Batch(cli) => batch(cli)?,
-            Subcmd::LuaApi => api_docs()?,
             Subcmd::InstallGame(game) => install_game(game)?,
         }
         Ok(())

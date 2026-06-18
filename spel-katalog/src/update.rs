@@ -1,67 +1,21 @@
 use ::core::convert::identity;
-use ::std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use ::std::{path::PathBuf, sync::Arc};
 
 use ::iced_core::{Size, window};
 use ::iced_runtime::Task;
 use ::image::DynamicImage;
-use ::rustc_hash::FxHashMap;
 use ::rustix::process::{Pid, RawPid};
-use ::spel_katalog_batch::BatchInfo;
 use ::spel_katalog_common::{IntoOrRequest, OrRequest};
-use ::spel_katalog_formats::{AdditionalConfig, NativeGame};
+use ::spel_katalog_formats::NativeGame;
 use ::spel_katalog_games::SelDir;
 use ::spel_katalog_run::run_umu::RunMode;
 use ::spel_katalog_settings::{
-    ConfigDir, FilterMode, Load, LutrisDb, Network, Settings, Show, Variants, YmlDir,
+    ConfigDir, FilterMode, Load, LutrisDb, Network, Settings, Show, Variants,
 };
 use ::tap::Pipe;
 use ::uuid::Uuid;
 
 use crate::{App, Message, QuickMessage, Safety, app::WindowType};
-
-pub fn gather<'a>(
-    yml_dir: &str,
-    config_dir: &str,
-    games: impl IntoIterator<Item = &'a ::spel_katalog_formats::Game>,
-) -> Vec<BatchInfo> {
-    games
-        .into_iter()
-        .filter_map(|game| match game {
-            ::spel_katalog_formats::Game::Lutris(lutris_game) => Some(lutris_game),
-            ::spel_katalog_formats::Game::Native { .. } => None,
-        })
-        .map(|game| BatchInfo {
-            id: game.id,
-            slug: game.slug.clone(),
-            name: game.name.clone(),
-            runner: game.runner.to_string(),
-            config: format!("{yml_dir}/{}.yml", game.configpath),
-            hidden: game.hidden,
-            attrs: 'attrs: {
-                let path = format!("{config_dir}/games/{}.toml", game.id);
-                let path = Path::new(&path);
-
-                if !path.exists() {
-                    break 'attrs FxHashMap::default();
-                }
-
-                ::std::fs::read_to_string(path)
-                    .map_err(|err| ::log::error!("could not read additional path {path:?}\n{err}"))
-                    .ok()
-                    .and_then(|content| {
-                        let additional = ::toml::from_str::<AdditionalConfig>(&content)
-                            .map_err(|err| ::log::error!("could not parse toml of {path:?}\n{err}"))
-                            .ok()?;
-                        Some(additional.attrs)
-                    })
-                    .unwrap_or_default()
-            },
-        })
-        .collect()
-}
 
 #[derive(Default)]
 #[non_exhaustive]
@@ -168,7 +122,10 @@ impl App {
 
         let (id, open_task) = ::iced_runtime::window::open(Default::default());
 
-        let add_task = Task::done(Message::OpenWindow(id, WindowType::Installer(installer)));
+        let add_task = Task::done(Message::OpenWindow(
+            id,
+            WindowType::Installer(Box::new(installer)),
+        ));
 
         Some(open_task.discard().chain(add_task.chain(
             installer_task.map(move |message| Message::Installer(id, OrRequest::Message(message))),
@@ -189,7 +146,10 @@ impl App {
 
             let (id, open_task) = ::iced_runtime::window::open(Default::default());
 
-            let add_task = Task::done(Message::OpenWindow(id, WindowType::Installer(installer)));
+            let add_task = Task::done(Message::OpenWindow(
+                id,
+                WindowType::Installer(Box::new(installer)),
+            ));
 
             Some(
                 open_task.discard().chain(
@@ -336,16 +296,6 @@ impl App {
                 if let Some(id) = self.games.selected() {
                     return self.run_game(id, Safety::Sandbox, false);
                 }
-            }
-            QuickMessage::ToggleBatch => {
-                self.view.toggle_displayed(crate::view::Displayed::Batch);
-            }
-            QuickMessage::ToggleLuaApi => {
-                return self.toggle_window(
-                    |t| t.is_lua_api(),
-                    || WindowType::LuaApi,
-                    WindowToggleSettings::default(),
-                );
             }
             QuickMessage::ToggleSettings => {
                 return self.toggle_window(
@@ -521,43 +471,6 @@ impl App {
         }
     }
 
-    fn batch_request(&mut self, request: ::spel_katalog_batch::Request) -> Task<Message> {
-        match request {
-            ::spel_katalog_batch::Request::ShowProcesses => {
-                Task::done(Message::Quick(QuickMessage::OpenProcessInfo))
-            }
-            ::spel_katalog_batch::Request::GatherBatchInfo(scope) => {
-                let yml_dir = self.settings.get::<YmlDir>();
-                let yml_dir = yml_dir.as_str();
-                let config_dir = self.settings.get::<ConfigDir>().as_str();
-                match scope {
-                    ::spel_katalog_batch::Scope::All => gather(
-                        yml_dir,
-                        config_dir,
-                        self.games.all().iter().map(|game| &game.game),
-                    ),
-                    ::spel_katalog_batch::Scope::Shown => gather(
-                        yml_dir,
-                        config_dir,
-                        self.games.displayed().map(|game| &game.game),
-                    ),
-                    ::spel_katalog_batch::Scope::Batch => gather(
-                        yml_dir,
-                        config_dir,
-                        self.games.batch_selected().map(|game| &game.game),
-                    ),
-                }
-                .pipe(::spel_katalog_batch::Message::RunBatch)
-                .pipe(OrRequest::Message)
-                .pipe(Message::Batch)
-                .pipe(Task::done)
-            }
-            ::spel_katalog_batch::Request::ReloadCache => {
-                self.games.find_cached(&self.settings).map(Message::Games)
-            }
-        }
-    }
-
     fn should_re_sort(msg: &::spel_katalog_settings::Message) -> bool {
         use ::spel_katalog_settings::Delta;
         let ::spel_katalog_settings::Message::Delta(delta) = msg else {
@@ -721,21 +634,6 @@ impl App {
                 })
                 .then(|_| Task::none());
             }
-            Message::Batch(or_request) => match or_request {
-                OrRequest::Message(msg) => {
-                    return self
-                        .batch
-                        .update(
-                            msg,
-                            &self.sender,
-                            &self.settings,
-                            &self.sink_builder,
-                            self.lua_vt(),
-                        )
-                        .map(From::from);
-                }
-                OrRequest::Request(request) => return self.batch_request(request),
-            },
             Message::OpenWindow(id, window_type) => {
                 self.windows.insert(id, window_type);
             }
@@ -745,19 +643,6 @@ impl App {
                 if self.windows.is_empty() || matches!(closed, Some(WindowType::Term)) {
                     self.sink_builder = ::spel_katalog_sink::SinkBuilder::Inherit;
                     return ::iced_runtime::exit();
-                }
-            }
-            Message::Dialog(id, msg) => {
-                let msg = match msg {
-                    OrRequest::Message(msg) => msg,
-                    OrRequest::Request(request) => match request {
-                        crate::dialog::Request::Close => return ::iced_runtime::window::close(id),
-                    },
-                };
-                if let Some(WindowType::Dialog(dialog)) = self.windows.get_mut(&id) {
-                    return dialog
-                        .update(msg)
-                        .map(move |request| Message::Dialog(id, OrRequest::Request(request)));
                 }
             }
             Message::Installer(id, msg) => {
@@ -796,22 +681,6 @@ impl App {
                     .and_then(identity);
                 }
             },
-            Message::BuildDialog(dialog) => {
-                let (_, task) = ::iced_runtime::window::open(window::Settings {
-                    size: Size {
-                        width: 500.0,
-                        height: 250.0,
-                    },
-                    position: window::Position::Centered,
-                    ..Default::default()
-                });
-                return task.map(move |id| {
-                    Message::OpenWindow(id, WindowType::Dialog(dialog.clone().build()))
-                });
-            }
-            Message::LuaDocs(msg) => {
-                return self.docs_viewer.update(msg).map(Message::LuaDocs);
-            }
             Message::ShowInfo(displayed) => {
                 self.view.displayed = displayed;
                 self.view.show_info();

@@ -23,7 +23,6 @@ image.workspace = true
 itertools.workspace = true
 log = { workspace = true, features = ["max_level_debug", "release_max_level_info"] }
 mimalloc.workspace = true
-mlua = { workspace = true, features = ["serde"] }
 open.workspace = true
 parking_lot.workspace = true
 paste.workspace = true
@@ -35,7 +34,6 @@ rustix = { workspace = true, features = ["process"] }
 serde = { workspace = true, features = ["derive"] }
 shell-words.workspace = true
 smol.workspace = true
-spel-katalog-batch.workspace = true
 spel-katalog-cli.workspace = true
 spel-katalog-common.workspace = true
 spel-katalog-formats.workspace = true
@@ -43,8 +41,6 @@ spel-katalog-games.workspace = true
 spel-katalog-gather.workspace = true
 spel-katalog-info.workspace = true
 spel-katalog-installer.workspace = true
-spel-katalog-lua-docs.workspace = true
-spel-katalog-lua.workspace = true
 spel-katalog-native.workspace = true
 spel-katalog-run.workspace = true
 spel-katalog-settings.workspace = true

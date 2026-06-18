@@ -18,29 +18,7 @@ use ::spel_katalog_settings::{
 use ::spel_katalog_sink::SinkIdentity;
 use ::tap::{Pipe, TapOptional};
 
-use crate::{
-    App, Message, QuickMessage, Safety, oneshot_broadcast::oneshot_broadcast,
-    run_game::run_script::BatchView,
-};
-
-mod run_script;
-
-#[derive(Debug, ::thiserror::Error)]
-enum ScriptGatherError {
-    /// Forwarded io error.
-    #[error(transparent)]
-    Io(#[from] ::std::io::Error),
-    /// Lua error.
-    #[error(transparent)]
-    Lua(#[from] LuaError),
-    /// Error reading lua script.
-    #[error("clould not read file {1:?}\n{0}")]
-    ReadLuaScript(#[source] ::std::io::Error, PathBuf),
-}
-
-#[derive(Debug, ::thiserror::Error)]
-#[error("lua error occured\n{0}")]
-struct LuaError(String);
+use crate::{App, Message, QuickMessage, Safety, oneshot_broadcast::oneshot_broadcast};
 
 #[derive(Debug, ::thiserror::Error)]
 enum ConfigError {
@@ -298,11 +276,8 @@ impl App {
             .as_path()
             .join("games")
             .join(format!("{lutris_id}.toml"));
-        let script_dir = self.settings.get::<ConfigDir>().as_path().join("scripts");
 
         let (send_open, recv_open) = oneshot_broadcast();
-
-        let lua_vt = self.lua_vt();
 
         let cmd_task = Task::future(async move {
             let config = async {
@@ -327,23 +302,6 @@ impl App {
             } else {
                 None
             };
-
-            let view = BatchView {
-                id: lutris_id,
-                slug: &slug,
-                name: &name,
-                runner: &runner,
-                config: &configpath,
-                extra: extra_config.as_ref(),
-                hidden,
-            };
-
-            if let Err(err) =
-                self::run_script::run_script(script_dir, view, &sink_builder, lua_vt).await
-            {
-                ::log::error!("failure when gathering/runnings scripts\n{err}");
-                return "running scripts failed".to_owned().into();
-            }
 
             let rungame = if no_game {
                 None
