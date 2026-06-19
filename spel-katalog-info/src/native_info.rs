@@ -81,6 +81,8 @@ pub enum Message {
     /// Quick message.
     #[from]
     Quick(QuickMessage),
+    /// Set displayed thumbnail.
+    UpdateThumb(Option<::spel_katalog_formats::Image>),
 }
 
 /// Request in use by native info view.
@@ -117,23 +119,35 @@ pub struct State {
     history: Vec<String>,
     /// Future config versions.
     future: Vec<String>,
+    /// Game thumbnail.
+    thumb: Option<::iced_core::image::Handle>,
 }
 
 impl State {
     /// Construct new state.
-    pub fn new(uuid: Uuid, game: NativeGame) -> Self {
+    pub fn new(uuid: Uuid, game: NativeGame, game_db: &Pool) -> (Self, Task<Message>) {
         let mut state = Self {
             uuid,
             conf_view: Content::new(),
             history: Vec::new(),
             future: Vec::new(),
+            thumb: None,
         };
 
         if let Ok(content) = ::toml::to_string_pretty(&game) {
             state.set_content(content);
         };
 
-        state
+        let game_db = game_db.clone();
+        (
+            state,
+            Task::<Option<_>>::future(::smol::unblock(move || {
+                let thumbnail = game_db.get_thumb(uuid).ok()?;
+                let thumbnail = ::spel_katalog_native::thumbnail(thumbnail);
+                Some(Message::UpdateThumb(Some(thumbnail)))
+            }))
+            .and_then(Task::done),
+        )
     }
 
     /// Set game config in use.
@@ -206,6 +220,18 @@ impl State {
                     self.future.clear();
                 }
                 self.conf_view.perform(action);
+                Task::none()
+            }
+            Message::UpdateThumb(thumb) => {
+                self.thumb = thumb.map(
+                    |::spel_katalog_formats::Image {
+                         width,
+                         height,
+                         bytes,
+                     }| {
+                        ::iced_core::image::Handle::from_rgba(width, height, bytes)
+                    },
+                );
                 Task::none()
             }
             Message::Quick(message) => match message {
@@ -339,6 +365,7 @@ impl State {
                 QuickMessage::RemoveThumb => {
                     let uuid = self.uuid;
                     let game_db = game_db.clone();
+                    self.thumb = None;
                     Task::future(async move {
                         if let Err(err) = unblock(move || game_db.remove_thumb(uuid)).await {
                             ::log::warn!(
@@ -437,14 +464,24 @@ impl State {
                             })
                             .ok()?;
 
-                        Request::DisplayThumbnail {
-                            id: GameId::Native(uuid),
-                            img: ::spel_katalog_native::thumbnail(thumb.into_owned()),
-                        }
-                        .pipe(OrRequest::Request)
+                        let thumbnail = ::spel_katalog_native::thumbnail(thumb.into_owned());
+
+                        [
+                            Request::DisplayThumbnail {
+                                id: GameId::Native(uuid),
+                                img: thumbnail.clone(),
+                            }
+                            .into_request()
+                            .pipe(Task::done),
+                            thumbnail
+                                .pipe(Some)
+                                .pipe(Message::UpdateThumb)
+                                .into_message()
+                                .pipe(Task::done),
+                        ]
                         .pipe(Some)
                     })
-                    .and_then(Task::done)
+                    .and_then(Task::batch)
                 }
                 QuickMessage::Paste => ::iced_runtime::clipboard::read().and_then(|content| {
                     content
@@ -489,6 +526,7 @@ impl State {
     ) -> Element<'a, M> {
         const DIM: u32 = 200;
         let name = game.name();
+        let thumb = self.thumb.as_ref().or(thumb);
         w::col()
             .push(
                 w::row()

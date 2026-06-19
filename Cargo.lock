@@ -4462,6 +4462,7 @@ dependencies = [
  "spel-katalog-common",
  "spel-katalog-formats",
  "spel-katalog-gather",
+ "spel-katalog-native",
  "spel-katalog-settings",
  "spel-katalog-widget",
  "strsim",

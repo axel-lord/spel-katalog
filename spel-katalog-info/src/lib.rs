@@ -344,9 +344,9 @@ impl State {
                             .common_parent(|| ::spel_katalog_settings::HOME.as_path());
                     }
                     GameContent::Native { uuid, config } => {
-                        *self = Self::Native {
-                            state: native_info::State::new(uuid, *config),
-                        }
+                        let (state, task) = native_info::State::new(uuid, *config, games_db);
+                        *self = Self::Native { state };
+                        return task.map(Message::NativeInfo).map(OrRequest::Message);
                     }
                 }
 

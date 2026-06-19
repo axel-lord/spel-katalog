@@ -12,8 +12,8 @@ use ::iced_aw::ContextMenu;
 use ::iced_core::{Border, Length::Fill, text::Wrapping};
 use ::iced_futures::Subscription;
 use ::iced_runtime::Task;
-use ::iced_widget::{self as widget, container, stack};
-use ::image::ImageFormat;
+use ::iced_widget::{self as widget, Sensor, container, stack};
+use ::image::{ImageFormat, RgbaImage};
 use ::parking_lot::Mutex;
 use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use ::rusqlite::{Connection, Statement, named_params};
@@ -25,7 +25,7 @@ use ::spel_katalog_gather::{
     load_thumbnail_database,
 };
 use ::spel_katalog_settings::{CacheDir, CoverartDir, Settings};
-use ::tap::Pipe;
+use ::tap::{Conv, Pipe};
 use ::uuid::Uuid;
 
 use crate::{Element, Games, games::WithThumb};
@@ -79,7 +79,7 @@ pub enum Message {
     /// Add a single game.
     AddNativeGames {
         /// Games to add.
-        games: Vec<(Uuid, NativeGame, Option<::spel_katalog_formats::Image>)>,
+        games: Vec<(Uuid, NativeGame)>,
     },
     /// Add a single game.
     AddNativeGame {
@@ -87,8 +87,6 @@ pub enum Message {
         uuid: Uuid,
         /// Config of game.
         config: Box<NativeGame>,
-        /// Thumbnail of game.
-        thumb: Option<::spel_katalog_formats::Image>,
     },
     /// Set thumbnails.
     SetImages {
@@ -113,6 +111,22 @@ pub enum Message {
         /// Game slug.
         slug: String,
     },
+    /// Update used thumbnail for native game.
+    UpdateThumbnail {
+        /// Uuid of game to update thumbnail for.
+        uuid: Uuid,
+        /// Thumbnail to use.
+        thumbnail: Option<::spel_katalog_formats::Image>,
+    },
+    /// Update thumbnail used for thumbnail.
+    UpdateThumbThumb {
+        /// Uuid of game to update thumb thumb for.
+        uuid: Uuid,
+        /// Thumbnail thumbnail to use.
+        thumb_thumb: Option<::spel_katalog_formats::Image>,
+    },
+    /// Load thumbnail from database.
+    LoadThumbnail(Uuid),
     /// Move selection.
     Select(SelDir),
     /// Select an id.
@@ -213,6 +227,7 @@ impl State {
         tx: &StatusSender,
         settings: &Settings,
         filter: &str,
+        game_db: &::spel_katalog_native::Pool,
     ) -> Task<OrRequest<Message, Request>> {
         match msg {
             Message::Sort => {
@@ -243,6 +258,7 @@ impl State {
                     games.into_iter().map(|game| WithThumb {
                         game,
                         thumb: None,
+                        thumb_thumb: None,
                         batch_selected: false,
                         shadows: None,
                         ghost: false,
@@ -256,42 +272,12 @@ impl State {
                 self.find_cached(settings)
             }
             Message::AddNativeGames { games } => {
-                self.add_games(
-                    games.into_iter().map(|(uuid, game, thumb)| WithThumb {
-                        thumb: thumb.map(
-                            |::spel_katalog_formats::Image {
-                                 width,
-                                 height,
-                                 bytes,
-                             }| {
-                                ::iced_core::image::Handle::from_rgba(width, height, bytes)
-                            },
-                        ),
-                        ..WithThumb::from((uuid, game))
-                    }),
-                    settings,
-                    filter,
-                );
+                self.add_games(games.into_iter().map(WithThumb::from), settings, filter);
                 Task::none()
             }
-            Message::AddNativeGame {
-                uuid,
-                config,
-                thumb,
-            } => {
+            Message::AddNativeGame { uuid, config } => {
                 self.add_games(
-                    iter::once(WithThumb {
-                        thumb: thumb.map(
-                            |::spel_katalog_formats::Image {
-                                 width,
-                                 height,
-                                 bytes,
-                             }| {
-                                ::iced_core::image::Handle::from_rgba(width, height, bytes)
-                            },
-                        ),
-                        ..WithThumb::from((uuid, *config))
-                    }),
+                    iter::once(WithThumb::from((uuid, *config))),
                     settings,
                     filter,
                 );
@@ -329,6 +315,20 @@ impl State {
 
                 Task::none()
             }
+            Message::UpdateThumbnail { uuid, thumbnail } => {
+                if let Some(game) = self.by_uuid_mut(uuid) {
+                    game.thumb = thumbnail.map(
+                        |::spel_katalog_formats::Image {
+                             width,
+                             height,
+                             bytes,
+                         }| {
+                            ::iced_core::image::Handle::from_rgba(width, height, bytes)
+                        },
+                    );
+                }
+                Task::none()
+            }
             Message::FlushCache => {
                 let (slugs, images) = mem::take(&mut self.cache_queue);
                 let cache_path = settings.get::<CacheDir>().to_path_buf();
@@ -351,6 +351,60 @@ impl State {
             Message::BatchSelect(id) => {
                 if let Some(game) = self.games.by_id_mut(id) {
                     game.batch_selected = !game.batch_selected;
+                }
+                Task::none()
+            }
+            Message::LoadThumbnail(uuid) => {
+                let games_db = game_db.clone();
+                Task::<Option<_>>::future(async move {
+                    let thumbnail = games_db
+                        .get_thumb(uuid)
+                        .ok()
+                        .map(::spel_katalog_native::thumbnail)?;
+
+                    Some([
+                        Message::UpdateThumbnail {
+                            uuid,
+                            thumbnail: Some(thumbnail.clone()),
+                        }
+                        .pipe(OrRequest::Message)
+                        .pipe(Task::done),
+                        Task::<Option<_>>::future(::smol::unblock(move || {
+                            let ::spel_katalog_formats::Image {
+                                width,
+                                height,
+                                bytes,
+                            } = thumbnail;
+
+                            let dim = width.min(height).min(20);
+                            let thumbnail = RgbaImage::from_raw(width, height, bytes.into())?
+                                .pipe(::image::DynamicImage::from)
+                                .resize(dim, dim, ::image::imageops::FilterType::Lanczos3)
+                                .conv::<::spel_katalog_formats::Image>();
+
+                            Message::UpdateThumbThumb {
+                                uuid,
+                                thumb_thumb: Some(thumbnail),
+                            }
+                            .into_message()
+                            .pipe(Some)
+                        }))
+                        .and_then(Task::done),
+                    ])
+                })
+                .and_then(Task::batch)
+            }
+            Message::UpdateThumbThumb { uuid, thumb_thumb } => {
+                if let Some(game) = self.by_uuid_mut(uuid) {
+                    game.thumb_thumb = thumb_thumb.map(
+                        |::spel_katalog_formats::Image {
+                             width,
+                             height,
+                             bytes,
+                         }| {
+                            ::iced_core::image::Handle::from_rgba(width, height, bytes)
+                        },
+                    );
                 }
                 Task::none()
             }
@@ -474,7 +528,7 @@ impl State {
 
     /// Get a card to display a game thumbnail.
     fn card<'a>(&self, game: &'a WithThumb) -> Element<'a, OrRequest<Message, Request>> {
-        let handle = game.thumb.as_ref();
+        let handle = game.thumb.as_ref().or(game.thumb_thumb.as_ref());
         let selected = self.selected;
         let name = game.name();
         let id = game.id();
@@ -533,11 +587,10 @@ impl State {
         .interaction(::iced_core::mouse::Interaction::Pointer)
         .on_release(AreaMessage::Select { id })
         .on_middle_release(AreaMessage::Run { id, sandbox: true })
-        // .on_right_release(AreaMessage::BatchSelect { id })
         .pipe(Element::from)
         .map(OrRequest::<Message, Request>::from);
 
-        ContextMenu::new(element, move || {
+        let element = ContextMenu::new(element, move || {
             ::spel_katalog_widget::ListMenu::new()
                 .push("Spel Katalog")
                 .separator()
@@ -554,7 +607,24 @@ impl State {
                 .button("Convert", move || Request::Convert(id).into_request())
                 .into()
         })
-        .into()
+        .into();
+
+        if let GameId::Native(uuid) = id {
+            Sensor::new(element)
+                .key(uuid)
+                .on_show(move |_| Message::LoadThumbnail(uuid).into_message())
+                .on_hide(
+                    Message::UpdateThumbnail {
+                        uuid,
+                        thumbnail: None,
+                    }
+                    .into_message(),
+                )
+                .anticipate(200)
+                .into()
+        } else {
+            element
+        }
     }
 
     /// Render elements.
@@ -642,7 +712,7 @@ fn convert_slug_image(
         height,
         bytes,
     } = image;
-    let image = ::image::RgbaImage::from_raw(width, height, bytes.into())?;
+    let image = RgbaImage::from_raw(width, height, bytes.into())?;
     let mut buf = Vec::<u8>::new();
 
     if let Err(err) = image.write_to(&mut Cursor::new(&mut buf), ImageFormat::Png) {
