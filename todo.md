@@ -21,6 +21,7 @@
 - [ ] External scripting using ipc
 - [x] Use iced grid for game view
 - [x] Use iced sensor for game cards
+- [ ] Profiling crate with feature flag to enable
 
 # Future Goals/Possibilities
 - [x] Run exe files in prefix without lutris
