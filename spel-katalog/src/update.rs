@@ -63,10 +63,7 @@ impl App {
         }
     }
 
-    fn convert_all(
-        &self,
-    ) -> impl 'static + Future<Output = Vec<(Uuid, NativeGame, Option<::spel_katalog_formats::Image>)>>
-    {
+    fn convert_all(&self) -> impl 'static + Future<Output = Vec<(Uuid, NativeGame)>> {
         let game_db = self.games_db.clone();
         let futures = self
             .games
@@ -92,7 +89,7 @@ impl App {
         game_db: ::spel_katalog_native::Pool,
         game: NativeGame,
         thumb: Option<DynamicImage>,
-    ) -> Option<(Uuid, NativeGame, Option<::spel_katalog_formats::Image>)> {
+    ) -> Option<(Uuid, NativeGame)> {
         ::smol::unblock(move || {
             let name = &game.name;
             let uuid = Uuid::now_v7();
@@ -103,7 +100,7 @@ impl App {
                 .map_err(|err| ::log::error!("failed to insert {name:?} into database\n{err}"))
                 .ok()?;
 
-            Some((uuid, game, thumb.map(From::from)))
+            Some((uuid, game))
         })
         .await
     }
@@ -207,8 +204,8 @@ impl App {
                     let games_db = self.games_db.clone();
                     Task::future(::smol::unblock(move || {
                         let mut games = Vec::new();
-                        games_db.gather(&mut |uuid, game, thumb| {
-                            games.push((uuid, game, thumb.map(::spel_katalog_native::thumbnail)));
+                        games_db.gather(&mut |uuid, game| {
+                            games.push((uuid, game));
                         });
                         Message::Games(OrRequest::Message(
                             ::spel_katalog_games::Message::AddNativeGames { games },
@@ -384,13 +381,11 @@ impl App {
                     let game_db = self.games_db.clone();
                     return Task::<Option<_>>::future(async move {
                         let (game, thumb) = future.await?;
-                        let (uuid, config, thumb) =
-                            Self::convert_game(game_db, game, thumb).await?;
+                        let (uuid, config) = Self::convert_game(game_db, game, thumb).await?;
 
                         ::spel_katalog_games::Message::AddNativeGame {
                             uuid,
                             config: Box::new(config),
-                            thumb,
                         }
                         .into_message()
                         .pipe(Message::Games)
@@ -444,6 +439,7 @@ impl App {
                     &self.sender,
                     &self.settings,
                     &self.filter,
+                    &self.games_db,
                 )
                 .map(Message::Games),
             ::spel_katalog_info::Request::SetImage { slug, image } => self
@@ -457,6 +453,7 @@ impl App {
                     &self.sender,
                     &self.settings,
                     &self.filter,
+                    &self.games_db,
                 )
                 .map(Message::Games),
             ::spel_katalog_info::Request::RunGame { id, sandbox } => {
@@ -487,7 +484,7 @@ impl App {
         config: Box<NativeGame>,
         thumbnail: Option<::spel_katalog_formats::Image>,
         move_dir: Option<(PathBuf, PathBuf)>,
-    ) -> Option<(Uuid, Box<NativeGame>, Option<::spel_katalog_formats::Image>)> {
+    ) -> Option<(Uuid, Box<NativeGame>)> {
         let uuid = Uuid::now_v7();
         game_db
             .insert_game(uuid)
@@ -500,8 +497,8 @@ impl App {
             })
             .ok()?;
 
-        let thumbnain = thumbnail.and_then(::spel_katalog_formats::Image::into_image);
-        if let Some(thumbnail) = &thumbnain
+        let thumbnail = thumbnail.and_then(::spel_katalog_formats::Image::into_image);
+        if let Some(thumbnail) = &thumbnail
             && let Err(err) = game_db.insert_thumb(uuid).insert(thumbnail)
         {
             ::log::warn!("could not insert thumbnail for {uuid}\n{err}");
@@ -519,11 +516,7 @@ impl App {
             return None;
         }
 
-        Some((
-            uuid,
-            config,
-            thumbnain.map(::spel_katalog_native::thumbnail),
-        ))
+        Some((uuid, config))
     }
 
     pub fn install_game(
@@ -536,16 +529,12 @@ impl App {
         let game_db = self.games_db.clone();
         Self::install_game_(game_db, config, thumbnail, move_dir)
             .pipe(Task::future)
-            .and_then(move |(uuid, config, thumb)| {
-                ::spel_katalog_games::Message::AddNativeGame {
-                    uuid,
-                    config,
-                    thumb,
-                }
-                .into_message()
-                .pipe(Message::Games)
-                .pipe(Task::done)
-                .chain(::iced_runtime::window::close(id))
+            .and_then(move |(uuid, config)| {
+                ::spel_katalog_games::Message::AddNativeGame { uuid, config }
+                    .into_message()
+                    .pipe(Message::Games)
+                    .pipe(Task::done)
+                    .chain(::iced_runtime::window::close(id))
             })
     }
 
@@ -576,7 +565,13 @@ impl App {
                 OrRequest::Message(message) => {
                     return self
                         .games
-                        .update(message, &self.sender, &self.settings, &self.filter)
+                        .update(
+                            message,
+                            &self.sender,
+                            &self.settings,
+                            &self.filter,
+                            &self.games_db,
+                        )
                         .map(Message::Games);
                 }
                 OrRequest::Request(request) => return self.games_request(request),

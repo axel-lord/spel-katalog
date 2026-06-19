@@ -53,7 +53,9 @@ pub struct WithThumb {
     #[deref_mut]
     pub game: Game,
     /// Thumbnail.
-    pub thumb: Option<::iced_widget::image::Handle>,
+    pub thumb: Option<::iced_core::image::Handle>,
+    /// Thumbnail preview.
+    pub thumb_thumb: Option<::iced_core::image::Handle>,
     /// Is the game batch selected.
     pub batch_selected: bool,
     /// This game shadows another game with given id.
@@ -81,6 +83,7 @@ impl From<(Uuid, NativeGame)> for WithThumb {
             batch_selected: false,
             shadows: game.shadow,
             ghost: false,
+            thumb_thumb: None,
         }
     }
 }
@@ -147,6 +150,8 @@ pub struct Games {
     id_lookup: FxHashMap<i64, usize>,
     /// Index lookup table by uuid.
     uuid_lookup: FxHashMap<Uuid, usize>,
+    /// Last state of hidden setting.
+    last_show: Option<Show>,
 }
 
 impl Games {
@@ -159,6 +164,7 @@ impl Games {
             slug_lookup,
             id_lookup,
             uuid_lookup,
+            last_show,
         } = self;
         cache.clear();
         games.clear();
@@ -166,6 +172,7 @@ impl Games {
         id_lookup.clear();
         uuid_lookup.clear();
         slug_lookup.clear();
+        *last_show = None;
     }
 
     /// Games that are currently to be displayed.
@@ -250,6 +257,7 @@ impl Games {
             id_lookup: _,
             uuid_lookup: _,
             cache,
+            last_show,
         } = self;
 
         fn get_filterend<'src>(
@@ -263,7 +271,7 @@ impl Games {
 
         fn filter_hidden<'a>(
             items: Vec<(usize, &'a mut Game, &'a mut Option<GameCache>)>,
-            show: ::spel_katalog_settings::Show,
+            show: Show,
         ) -> Vec<(usize, &'a mut Game, &'a mut Option<GameCache>)> {
             match show {
                 ::spel_katalog_settings::Show::Apparent => items
@@ -299,9 +307,24 @@ impl Games {
             }
         }
 
+        let show = *settings.get::<Show>();
+
+        if let Some(last_show) = *last_show
+            && !show.is_all()
+            && show != last_show
+        {
+            ::log::info!("show {last_show} -> {show}, removing thumbnails");
+            for game in games.iter_mut() {
+                if let GameId::Native(_uuid) = game.id() {
+                    game.thumb = None
+                }
+            }
+        }
+        *last_show = Some(show);
+
         if filter.trim().is_empty() {
             let mut filtered = get_filterend(games, cache);
-            filtered = filter_hidden(filtered, settings[Show::as_idx()]);
+            filtered = filter_hidden(filtered, show);
             sort_items(
                 &mut filtered,
                 *settings.get::<SortBy>(),
@@ -422,10 +445,22 @@ impl Games {
         self.games.get(idx)
     }
 
+    /// Get game by uuid.
+    pub fn by_uuid(&self, uuid: Uuid) -> Option<&WithThumb> {
+        let idx = self.uuid_lookup.get(&uuid)?;
+        self.games.get(*idx)
+    }
+
     /// Get a game by it's id as mutable.
     pub fn by_id_mut(&mut self, id: GameId) -> Option<&mut WithThumb> {
         let idx = self.id_lookup(id)?;
         self.games.get_mut(idx)
+    }
+
+    /// Get game by uuid.
+    pub fn by_uuid_mut(&mut self, uuid: Uuid) -> Option<&mut WithThumb> {
+        let idx = self.uuid_lookup.get(&uuid)?;
+        self.games.get_mut(*idx)
     }
 
     /// Set the thumbnail of a game.

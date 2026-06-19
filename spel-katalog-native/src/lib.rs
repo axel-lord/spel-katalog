@@ -491,13 +491,12 @@ impl Pool {
     }
 
     /// Collect native games from database.
-    pub fn gather(self, for_each: &mut dyn FnMut(Uuid, NativeGame, Option<DynamicImage>)) {
+    pub fn gather(self, for_each: &mut dyn FnMut(Uuid, NativeGame)) {
         const SELECT_GAMES: &str = r"
             SELECT 
-                games.uuid, config, image 
+                uuid, config
             FROM 
                 games
-                LEFT JOIN thumbs USING (uuid)
         ";
 
         /// Get column as blob.
@@ -563,13 +562,7 @@ impl Pool {
                 continue
             );
 
-            let image = get_column_blob(row, 2, "image", &uuid).and_then(|image| {
-                ::image::load_from_memory_with_format(image, ImageFormat::Png)
-                    .map_err(|err| ::log::error!("could not load thumbnail for {uuid}\n{err}"))
-                    .ok()
-            });
-
-            for_each(uuid, config, image);
+            for_each(uuid, config);
         }
     }
 

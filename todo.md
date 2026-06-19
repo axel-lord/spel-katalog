@@ -20,7 +20,7 @@
 - [ ] Http for ipc
 - [ ] External scripting using ipc
 - [x] Use iced grid for game view
-- [ ] Use iced sensor for game cards
+- [x] Use iced sensor for game cards
 
 # Future Goals/Possibilities
 - [x] Run exe files in prefix without lutris
