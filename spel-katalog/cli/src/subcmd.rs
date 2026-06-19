@@ -130,9 +130,6 @@ pub enum Subcmd {
     InitConfig {
         /// Path to config directory.
         path: PathBuf,
-        /// Do not update lua definition.
-        #[arg(long)]
-        skip_lua_update: bool,
     },
     /// Open game installer.
     InstallGame(#[command(flatten)] InstallGame),
@@ -171,12 +168,9 @@ impl Subcmd {
                 other()?;
                 completions(shell, name, output)?;
             }
-            Subcmd::InitConfig {
-                path,
-                skip_lua_update,
-            } => {
+            Subcmd::InitConfig { path } => {
                 other()?;
-                init_config(path, skip_lua_update);
+                init_config(path);
             }
             Subcmd::Run(cli) => run(cli)?,
             Subcmd::InstallGame(game) => install_game(game)?,
