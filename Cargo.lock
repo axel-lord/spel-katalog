@@ -4584,34 +4584,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "spel-katalog-reflect"
-version = "0.1.0"
-dependencies = [
- "pretty_assertions",
- "spel-katalog-reflect-derive",
-]
-
-[[package]]
-name = "spel-katalog-reflect-derive"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "spel-katalog-reflect-derive-lib",
- "syn",
-]
-
-[[package]]
-name = "spel-katalog-reflect-derive-lib"
-version = "0.0.0"
-dependencies = [
- "convert_case 0.11.0",
- "proc-macro2",
- "quote",
- "rustc-hash 2.1.2",
- "syn",
-]
-
-[[package]]
 name = "spel-katalog-run"
 version = "0.1.0"
 dependencies = [
