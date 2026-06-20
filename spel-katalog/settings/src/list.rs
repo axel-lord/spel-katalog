@@ -5,7 +5,7 @@ use ::iced_widget::{self as widget, Column, Row, container, pick_list, text_inpu
 use ::tap::Pipe;
 use spel_katalog_common::w;
 
-use crate::{DefaultStr, Help, Title, Variants};
+use crate::{DefaultStr, Help, Title, TrustedVariants};
 
 /// Display element with help tooltip.
 fn with_tooltip<'a, T: Help, M: 'a>(
@@ -29,7 +29,7 @@ pub fn enum_choice<'a, T, M>(
     Element<'a, M, ::iced_core::Theme, ::iced_renderer::Renderer>,
 )
 where
-    T: Variants + Clone + PartialEq + ToString + Default + Title + Help,
+    T: TrustedVariants + Clone + PartialEq + ToString + Default + Title + Help,
     M: 'a + From<T>,
 {
     (

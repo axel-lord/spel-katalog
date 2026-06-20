@@ -5,10 +5,7 @@ use ::iced_core::{Alignment, Element, Length::Fill};
 use ::iced_runtime::Task;
 use ::iced_widget::{button, space, text};
 
-use ::core::{
-    marker::PhantomData,
-    ops::{Deref, DerefMut},
-};
+use ::core::ops::{Deref, DerefMut};
 use ::spel_katalog_common::{StatusSender, async_status, w};
 use ::std::{collections::HashMap, path::PathBuf, sync::Arc};
 use ::tap::Pipe;
@@ -213,4 +210,3 @@ impl State {
             .into()
     }
 }
-

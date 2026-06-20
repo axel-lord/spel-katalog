@@ -6,4 +6,4 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-spel-katalog-settings-derive.path = "../derive"
+spel-katalog-settings-derive.workspace = true

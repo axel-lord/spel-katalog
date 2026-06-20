@@ -10,7 +10,7 @@ use ::spel_katalog_formats::NativeGame;
 use ::spel_katalog_games::SelDir;
 use ::spel_katalog_run::run_umu::RunMode;
 use ::spel_katalog_settings::{
-    ConfigDir, FilterMode, Load, LutrisDb, Network, Settings, Show, Variants,
+    ConfigDir, FilterMode, Load, LutrisDb, Network, Settings, Show, TrustedVariants,
 };
 use ::tap::Pipe;
 use ::uuid::Uuid;

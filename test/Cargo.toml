@@ -21,6 +21,7 @@ tap.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace =  true
+spel-katalog-settings-traits.workspace = true
 
 [lints]
 workspace = true

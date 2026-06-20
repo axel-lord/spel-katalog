@@ -50,7 +50,7 @@ pub trait AsIndex<S> {
 ///
 /// # Safety
 /// The `VARIANTS` associated constant must contain all variants.
-pub unsafe trait Variants
+pub unsafe trait TrustedVariants
 where
     Self: 'static + Sized,
 {
@@ -67,5 +67,25 @@ where
             .position(|v| v == self)
             .unwrap_or_else(|| unreachable!());
         Self::VARIANTS[(idx + 1) % Self::VARIANTS.len()].clone()
+    }
+}
+
+/// Trait for simple enums to provide significant variants.
+pub trait Variants
+where
+    Self: 'static + Sized,
+{
+    /// Get variants of the implementor.
+    /// Duplicates and missing variants may exist.
+    fn variants() -> &'static [Self];
+}
+
+impl<T> Variants for T
+where
+    T: TrustedVariants,
+{
+    #[inline]
+    fn variants() -> &'static [Self] {
+        Self::VARIANTS
     }
 }

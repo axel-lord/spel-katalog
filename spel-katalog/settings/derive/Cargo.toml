@@ -9,5 +9,5 @@ license.workspace = true
 proc-macro = true
 
 [dependencies]
-spel-katalog-settings-derive-lib.path = "../derive-lib/"
+spel-katalog-settings-derive-lib.workspace = true
 

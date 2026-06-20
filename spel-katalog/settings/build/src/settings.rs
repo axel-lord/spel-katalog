@@ -62,6 +62,7 @@ fn emit_enum(
         name = name.to_case(Case::Pascal)
     );
     let parse_err_msg = format!("string not one of {}", variants.join(", "));
+    let help_expr = &str_expr(doc.trim_end_matches('.'));
 
     // impls
     let impls = item::file(
@@ -85,10 +86,6 @@ fn emit_enum(
                 }
 
             },
-            item::default_str(ident, &default),
-            item::title(ident, &title_body),
-            item::help(ident, &str_expr(doc.trim_end_matches('.'))),
-            item::variants(ident, &quote! { #( Self::#variant_idents ),* }),
             item::default_expect_derive(ident, &quote! { Self::#default_ident }),
             item::display(ident, &quote! { f.write_str(self.as_str()) }),
             item::as_ref(ident, &quote! { str }, &quote! { self.as_str() }),
@@ -105,9 +102,13 @@ fn emit_enum(
         #[derive(
             Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash,
             ::serde::Deserialize, ::serde::Serialize,
-            ::clap::ValueEnum,
+            ::clap::ValueEnum, ::spel_katalog_settings_traits::TrustedVariants,
+            ::spel_katalog_settings_traits::Title,
+            ::spel_katalog_settings_traits::Help,
+            ::spel_katalog_settings_traits::DefaultStr
         )]
         #[doc = #doc]
+        #[settings(title = #title_body, default_str = #default, help = #help_expr)]
         pub enum #ident {
             #(#variant_idents,)*
         }
@@ -152,14 +153,19 @@ fn emit_path(setting: &Setting, name: &str, ident: &Ident, path: &str) -> Emit {
     let title_body = title_expr(name, setting.title.as_deref());
     let doc = doc_str(&setting.help);
     let default_value = str_expr(path);
+    let help_expr = &str_expr(doc.trim_end_matches('.'));
 
     let ty = parse_quote! {
         #[derive(
             Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash,
-            ::serde::Serialize, ::serde::Deserialize
+            ::serde::Serialize, ::serde::Deserialize,
+            ::spel_katalog_settings_traits::Title,
+            ::spel_katalog_settings_traits::Help,
+            ::spel_katalog_settings_traits::DefaultStr
         )]
         #[doc = #doc]
         #[serde(transparent)]
+        #[settings(help = #help_expr, title = #title_body, default_str = #default_value)]
         pub struct #ident(String);
     };
 
@@ -205,9 +211,6 @@ fn emit_path(setting: &Setting, name: &str, ident: &Ident, path: &str) -> Emit {
                     }
                 }
             },
-            item::title(ident, &title_body),
-            item::help(ident, &str_expr(doc.trim_end_matches('.'))),
-            item::default_str(ident, &default_value),
             item::default(
                 ident,
                 &quote! { Self(<Self as crate::DefaultStr>::default_str().into()) },
@@ -271,14 +274,19 @@ fn emit_string(setting: &Setting, name: &str, ident: &Ident, path: &str) -> Emit
     let title_body = title_expr(name, setting.title.as_deref());
     let doc = doc_str(&setting.help);
     let default_value = str_expr(path);
+    let help_expr = &str_expr(doc.trim_end_matches('.'));
 
     let ty = parse_quote! {
         #[derive(
             Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash,
-            ::serde::Serialize, ::serde::Deserialize
+            ::serde::Serialize, ::serde::Deserialize,
+            ::spel_katalog_settings_traits::Title,
+            ::spel_katalog_settings_traits::Help,
+            ::spel_katalog_settings_traits::DefaultStr
         )]
         #[doc = #doc]
         #[serde(transparent)]
+        #[settings(help = #help_expr, title = #title_body, default_str = #default_value)]
         pub struct #ident(String);
     };
 
@@ -312,9 +320,6 @@ fn emit_string(setting: &Setting, name: &str, ident: &Ident, path: &str) -> Emit
                     }
                 }
             },
-            item::title(ident, &title_body),
-            item::help(ident, &str_expr(doc.trim_end_matches('.'))),
-            item::default_str(ident, &default_value),
             item::default(
                 ident,
                 &quote! { Self(<Self as crate::DefaultStr>::default_str().into()) },
@@ -472,16 +477,12 @@ pub fn write(settings: Settings, dest: &Path) {
                 use super::*;
 
                 /// Index enum settings.
-                #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+                #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, ::spel_katalog_settings_traits::TrustedVariants)]
                 pub enum Enum {
                     #(
                         #[doc = #enum_ty_doc]
                         #enum_ty_names,
                     )*
-                }
-
-                unsafe impl crate::Variants for Enum {
-                    const VARIANTS: &[Self] = &[#( Self::#enum_ty_names ),*];
                 }
 
                 impl crate::SettingsIndex<Settings> for Enum {
@@ -495,16 +496,12 @@ pub fn write(settings: Settings, dest: &Path) {
                 }
 
                 /// Index path settings.
-                #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+                #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, ::spel_katalog_settings_traits::TrustedVariants)]
                 pub enum Path {
                     #(
                         #[doc = #path_ty_doc]
                         #path_ty_names,
                     )*
-                }
-
-                unsafe impl crate::Variants for Path {
-                    const VARIANTS: &[Self] = &[#( Self::#path_ty_names ),*];
                 }
 
                 impl crate::SettingsIndex<Settings> for Path {

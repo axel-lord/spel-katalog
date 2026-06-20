@@ -1,7 +1,7 @@
 //! Functions generating item proxies.
 
 use ::quote::ToTokens;
-use ::syn::{Expr, File, Item, Stmt, Token, Type, parse_quote, punctuated::Punctuated};
+use ::syn::{File, Item, Stmt, Type, parse_quote};
 
 /// Shadow the given identifiers with their content parsed as the given type.
 macro_rules! spec {
@@ -101,52 +101,6 @@ pub fn from(ty: &dyn ToTokens, from: &dyn ToTokens, body: &dyn ToTokens) -> Item
             fn from(value: #from) -> Self {
                 #( #body )*
             }
-        }
-    }
-}
-
-/// Generate a Title implementation for the given type with the given body.
-pub fn title(ty: &dyn ToTokens, body: &dyn ToTokens) -> Item {
-    spec!(ty: Type, body: Vec<Stmt>);
-    parse_quote! {
-        impl crate::Title for #ty {
-            fn title() -> &'static str {
-                #( #body )*
-            }
-        }
-    }
-}
-
-/// Generate a Help implementation for the given type with the given body.
-pub fn help(ty: &dyn ToTokens, body: &dyn ToTokens) -> Item {
-    spec!(ty: Type, body: Vec<Stmt>);
-    parse_quote! {
-        impl crate::Help for #ty {
-            fn help() -> &'static str {
-                #( #body )*
-            }
-        }
-    }
-}
-
-/// Generate a DefaultStr implementation for the given type with the given body.
-pub fn default_str(ty: &dyn ToTokens, body: &dyn ToTokens) -> Item {
-    spec!(ty: Type, body: Vec<Stmt>);
-    parse_quote! {
-        impl crate::DefaultStr for #ty {
-            fn default_str() -> &'static str {
-                #( #body )*
-            }
-        }
-    }
-}
-
-/// Generate a Variants implementation for the given type with the given variants.
-pub fn variants(ty: &dyn ToTokens, variants: &dyn ToTokens) -> Item {
-    spec!(ty: Type, variants: Punctuated<Expr, Token![,]>);
-    parse_quote! {
-        unsafe impl crate::Variants for #ty {
-            const VARIANTS: &[Self] = &[#variants];
         }
     }
 }

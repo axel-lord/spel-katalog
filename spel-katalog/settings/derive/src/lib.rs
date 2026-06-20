@@ -42,8 +42,8 @@ pub fn derive_default_str(tokens: TokenStream) -> TokenStream {
     lib::derive_default_str(tokens.into()).into()
 }
 
-/// Derive `Variants` trait.
-#[proc_macro_derive(Variants, attributes(variants, settings))]
+/// Derive `TrustedVariants` trait.
+#[proc_macro_derive(TrustedVariants, attributes(variants, settings))]
 pub fn derive_variants(tokens: TokenStream) -> TokenStream {
     lib::derive_variants(tokens.into()).into()
 }
