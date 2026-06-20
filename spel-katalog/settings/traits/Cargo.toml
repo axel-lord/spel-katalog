@@ -1,0 +1,9 @@
+[package]
+name = "spel-katalog-settings-traits"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+spel-katalog-settings-derive.workspace = true

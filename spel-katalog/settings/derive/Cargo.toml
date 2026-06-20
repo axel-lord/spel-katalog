@@ -1,0 +1,13 @@
+[package]
+name = "spel-katalog-settings-derive"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+spel-katalog-settings-derive-lib.workspace = true
+

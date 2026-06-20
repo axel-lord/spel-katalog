@@ -1,0 +1,27 @@
+[package]
+name = "spel-katalog-test"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "match-num"
+path = "src/match_num.rs"
+
+[dependencies]
+clap = { workspace = true, features = ["derive"] }
+color-eyre.workspace = true
+env_logger.workspace = true
+iced.workspace = true
+log.workspace = true
+rand.workspace = true
+smol.workspace = true
+tap.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace =  true
+spel-katalog-settings-traits.workspace = true
+
+[lints]
+workspace = true
