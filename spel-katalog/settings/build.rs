@@ -2,7 +2,7 @@
 
 use ::std::{env, path::Path};
 
-use ::spel_katalog_build::{format::Settings, settings};
+use ::spel_katalog_settings_build::{format::Settings, settings};
 
 fn main() {
     println!("cargo::rerun-if-changed=src/settings.toml");

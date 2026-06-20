@@ -57,7 +57,7 @@ uuid = { workspace = true, features = ["v4", "v7"] }
 yaml-rust2.workspace = true
 
 [build-dependencies]
-spel-katalog-build.workspace = true
+spel-katalog-settings-build.workspace = true
 
 [lints.rust]
 missing_debug_implementations = "warn"

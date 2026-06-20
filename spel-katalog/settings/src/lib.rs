@@ -5,10 +5,15 @@ use ::iced_core::{Alignment, Element, Length::Fill};
 use ::iced_runtime::Task;
 use ::iced_widget::{button, space, text};
 
-use ::core::ops::{Deref, DerefMut};
+use ::core::{
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 use ::spel_katalog_common::{StatusSender, async_status, w};
 use ::std::{collections::HashMap, path::PathBuf, sync::Arc};
 use ::tap::Pipe;
+
+pub use ::spel_katalog_settings_traits::*;
 
 mod environment;
 mod list;
@@ -20,12 +25,12 @@ mod generated {
 
     impl Settings {
         /// Get option by type
-        pub fn get<T: super::AsIndex>(&self) -> &T::Output {
+        pub fn get<T: super::AsIndex<Settings>>(&self) -> &T::Output {
             &self[T::as_idx()]
         }
 
         /// Get mutable option by type
-        pub fn get_mut<T: super::AsIndex>(&mut self) -> &mut T::Output {
+        pub fn get_mut<T: super::AsIndex<Settings>>(&mut self) -> &mut T::Output {
             &mut self[T::as_idx()]
         }
     }
@@ -35,53 +40,9 @@ pub use generated::*;
 /// A generic representation of current settings.
 pub type Generic = HashMap<&'static str, String>;
 
-/// Trait to provide a default string representation of a type.
-pub trait DefaultStr {
-    /// Get the default string representation of self.
-    fn default_str() -> &'static str;
-}
-
-/// Trait to provide titles for settings
-pub trait Title {
-    /// Title to use for setting.
-    fn title() -> &'static str;
-}
-
-/// Trait to provide help for settings.
-pub trait Help {
-    /// Get help for setting.
-    fn help() -> &'static str;
-}
-
-/// Trait for types which index settings.
-pub trait SettingsIndex {
-    /// Output type returned by indexing
-    type Output: ?Sized;
-
-    /// Get the output type.
-    fn get(self, settings: &Settings) -> &Self::Output;
-}
-
-/// Trait for types wich index settings.
-pub trait SettingsIndexMut
-where
-    Self: SettingsIndex,
-{
-    /// Get the output type as mutable.
-    fn get_mut(self, settings: &mut Settings) -> &mut Self::Output;
-}
-
-/// Trait for types which may supply an index type.
-pub trait AsIndex {
-    /// Output type of index operation.
-    type Output;
-    /// Supply the index.
-    fn as_idx() -> impl SettingsIndexMut<Output = Self::Output>;
-}
-
 impl<T> ::core::ops::Index<T> for Settings
 where
-    T: SettingsIndex,
+    T: SettingsIndex<Settings>,
 {
     type Output = T::Output;
 
@@ -92,34 +53,10 @@ where
 
 impl<T> ::core::ops::IndexMut<T> for Settings
 where
-    T: SettingsIndexMut,
+    T: SettingsIndexMut<Settings>,
 {
     fn index_mut(&mut self, index: T) -> &mut Self::Output {
         index.get_mut(self)
-    }
-}
-
-/// Trait for simple enums to provide all values.
-///
-/// # Safety
-/// The `VARIANTS` associated constant must contain all variants.
-pub unsafe trait Variants
-where
-    Self: 'static + Sized,
-{
-    /// All values for enum.
-    const VARIANTS: &[Self];
-
-    /// Select the next variant.
-    fn cycle(&self) -> Self
-    where
-        Self: PartialEq + Clone,
-    {
-        let idx = Self::VARIANTS
-            .iter()
-            .position(|v| v == self)
-            .unwrap_or_else(|| unreachable!());
-        Self::VARIANTS[(idx + 1) % Self::VARIANTS.len()].clone()
     }
 }
 
@@ -276,3 +213,4 @@ impl State {
             .into()
     }
 }
+

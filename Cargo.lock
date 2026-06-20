@@ -4353,7 +4353,6 @@ dependencies = [
  "serde",
  "shell-words",
  "smol",
- "spel-katalog-build",
  "spel-katalog-cli",
  "spel-katalog-common",
  "spel-katalog-formats",
@@ -4365,6 +4364,7 @@ dependencies = [
  "spel-katalog-native",
  "spel-katalog-run",
  "spel-katalog-settings",
+ "spel-katalog-settings-build",
  "spel-katalog-sink",
  "spel-katalog-terminal",
  "spel-katalog-widget",
@@ -4375,22 +4375,6 @@ dependencies = [
  "users",
  "uuid",
  "yaml-rust2",
-]
-
-[[package]]
-name = "spel-katalog-build"
-version = "0.1.0"
-dependencies = [
- "convert_case 0.11.0",
- "indexmap",
- "prettyplease",
- "proc-macro2",
- "quote",
- "regex",
- "rustc-hash 2.1.2",
- "serde",
- "syn",
- "toml 1.1.2+spec-1.1.0",
 ]
 
 [[package]]
@@ -4615,13 +4599,53 @@ dependencies = [
  "rustix 1.1.4",
  "serde",
  "smol",
- "spel-katalog-build",
  "spel-katalog-common",
+ "spel-katalog-settings-build",
+ "spel-katalog-settings-traits",
  "spel-katalog-widget",
  "tap",
  "toml 1.1.2+spec-1.1.0",
  "whoami",
  "xdg",
+]
+
+[[package]]
+name = "spel-katalog-settings-build"
+version = "0.1.0"
+dependencies = [
+ "convert_case 0.11.0",
+ "indexmap",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "rustc-hash 2.1.2",
+ "serde",
+ "syn",
+ "toml 1.1.2+spec-1.1.0",
+]
+
+[[package]]
+name = "spel-katalog-settings-derive"
+version = "0.1.0"
+dependencies = [
+ "spel-katalog-settings-derive-lib",
+]
+
+[[package]]
+name = "spel-katalog-settings-derive-lib"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "spel-katalog-settings-traits"
+version = "0.1.0"
+dependencies = [
+ "spel-katalog-settings-derive",
 ]
 
 [[package]]
@@ -4769,9 +4793,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.117"
+version = "2.0.118"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e665b8803e7b1d2a727f4023456bbbbe74da67099c585258af0ad9c5013b9b99"
+checksum = "1b9ae57f904213ebb649ce6895b8a66c66f0203b9319718f69a5612a065b1422"
 dependencies = [
  "proc-macro2",
  "quote",

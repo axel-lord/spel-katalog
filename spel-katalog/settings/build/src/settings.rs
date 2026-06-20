@@ -484,7 +484,7 @@ pub fn write(settings: Settings, dest: &Path) {
                     const VARIANTS: &[Self] = &[#( Self::#enum_ty_names ),*];
                 }
 
-                impl crate::SettingsIndex for Enum {
+                impl crate::SettingsIndex<Settings> for Enum {
                     type Output = str;
 
                     fn get(self, settings: &Settings) -> &Self::Output {
@@ -507,7 +507,7 @@ pub fn write(settings: Settings, dest: &Path) {
                     const VARIANTS: &[Self] = &[#( Self::#path_ty_names ),*];
                 }
 
-                impl crate::SettingsIndex for Path {
+                impl crate::SettingsIndex<Settings> for Path {
                     type Output = ::std::string::String;
 
                     fn get(self, settings: &Settings) -> &Self::Output {
@@ -517,7 +517,7 @@ pub fn write(settings: Settings, dest: &Path) {
                     }
                 }
 
-                impl crate::SettingsIndexMut for Path {
+                impl crate::SettingsIndexMut<Settings> for Path {
                     fn get_mut(self, settings: &mut Settings) -> &mut Self::Output {
                         match self {#(
                             Self::#path_ty_names => settings.#path_field_names_mut().as_mut(),
@@ -526,20 +526,20 @@ pub fn write(settings: Settings, dest: &Path) {
                 }
 
                 #(
-                impl crate::AsIndex for #ty_names {
+                impl crate::AsIndex<Settings> for #ty_names {
                     type Output = #ty_names;
-                    fn as_idx() -> impl crate::SettingsIndexMut<Output = Self::Output> {
+                    fn as_idx() -> impl crate::SettingsIndexMut<Settings, Output = Self::Output> {
                         #[derive(Clone, Copy)]
                         struct Idx;
 
-                        impl crate::SettingsIndex for Idx {
+                        impl crate::SettingsIndex<Settings> for Idx {
                             type Output = #ty_names;
                             fn get(self, settings: &Settings) -> &#ty_names {
                                 settings.#field_names()
                             }
                         }
 
-                        impl crate::SettingsIndexMut for Idx {
+                        impl crate::SettingsIndexMut<Settings> for Idx {
                             fn get_mut(self, settings: &mut Settings) -> &mut #ty_names {
                                 settings.#field_names_mut()
                             }
