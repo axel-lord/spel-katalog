@@ -550,14 +550,38 @@ impl App {
                 self.games.sort(&self.settings, &self.filter);
             }
             Message::Settings(message) => {
-                return if Self::should_re_sort(&message) {
-                    let task = self.settings.update(message, &self.sender);
-                    self.sort_games();
-                    task
+                let should_re_sort = Self::should_re_sort(&message);
+                let should_load_thumbs = if let ::spel_katalog_settings::Message::Delta(
+                    ::spel_katalog_settings::Delta::UnloadThumbnails(value),
+                ) = message
+                    && value.is_no()
+                {
+                    true
                 } else {
-                    self.settings.update(message, &self.sender)
+                    false
+                };
+                let task = self
+                    .settings
+                    .update(message, &self.sender)
+                    .map(Message::Settings);
+
+                if should_re_sort {
+                    self.sort_games();
                 }
-                .map(Message::Settings);
+
+                let task = if should_load_thumbs {
+                    Task::batch([
+                        task,
+                        self.games
+                            .load_all_thumbnails(&self.settings, &self.games_db)
+                            .map(OrRequest::Message)
+                            .map(Message::Games),
+                    ])
+                } else {
+                    task
+                };
+
+                return task;
             }
             Message::View(message) => return self.view.update(message),
             Message::Terminal(message) => return self.terminal.update(message).map(From::from),

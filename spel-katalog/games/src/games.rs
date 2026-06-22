@@ -7,7 +7,9 @@ use ::itertools::izip;
 use ::regex::RegexBuilder;
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog_formats::{Game, GameId, NativeGame};
-use ::spel_katalog_settings::{AsIndex, FilterMode, Settings, Show, SortBy, SortDir};
+use ::spel_katalog_settings::{
+    AsIndex, FilterMode, Settings, Show, SortBy, SortDir, UnloadThumbnails,
+};
 use ::tap::TapFallible;
 use ::uuid::Uuid;
 
@@ -310,6 +312,7 @@ impl Games {
         let show = *settings.get::<Show>();
 
         if let Some(last_show) = *last_show
+            && settings.get::<UnloadThumbnails>().is_yes()
             && !show.is_all()
             && show != last_show
         {

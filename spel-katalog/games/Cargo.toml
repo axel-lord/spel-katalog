@@ -33,6 +33,7 @@ spel-katalog-gather.workspace = true
 spel-katalog-settings.workspace = true
 spel-katalog-widget.workspace = true
 spel-katalog-native.workspace = true
+spel-katalog-profiler.workspace = true
 strsim.workspace = true
 tap.workspace = true
 thiserror.workspace = true

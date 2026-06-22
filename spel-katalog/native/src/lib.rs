@@ -44,7 +44,6 @@ macro_rules! log_err {
                     #![allow(unused, reason = "some macro invocations may leave return unused")]
                     ::log::log!($level, $fmt $(, $arg)*);
                     $($stmt)*
-                    return;
                 }
             }
         }
@@ -370,7 +369,6 @@ impl Pool {
             WHERE uuid = $1
         ";
         let conn = self.get_conn()?;
-
         let mut stmt = Self::prep_stmt(&conn, SELECT_GAME)?;
 
         stmt.query_one((game_id,), |row| {
@@ -382,6 +380,61 @@ impl Pool {
         })
         .map_err(GetError::NoResults)?
         .map_err(GetError::DecodeImage)
+    }
+
+    /// Load all thumbnails.
+    ///
+    /// # Errors
+    /// If the statement cannot be prepared,
+    /// or if no database connectetion is established.
+    pub fn get_thumbs(&self) -> Result<Vec<(Uuid, DynamicImage)>, GetError> {
+        const SELECT_GAME: &str = r"
+            SELECT uuid, image FROM thumbs
+        ";
+        let conn = self.get_conn()?;
+        let mut stmt = Self::prep_stmt(&conn, SELECT_GAME)?;
+
+        let mut rows = stmt.query([]).map_err(GetError::NoResults)?;
+
+        let mut thumbnails = Vec::new();
+        while let Some(row) = rows
+            .next()
+            .map_err(|err| ::log::error!("failed to get next row of query\n{err}"))
+            .ok()
+            .flatten()
+        {
+            let uuid = log_err!(
+                row.get::<_, Uuid>(0),
+                err,
+                ("could not get uuid of\nrow: {row:#?}\n{err}"),
+                continue
+            );
+
+            let image = log_err!(
+                row.get_ref(1),
+                err,
+                ("could not get image of row\nrow: {row:#?}\n{err}"),
+                continue
+            );
+
+            let image = log_err!(
+                image.as_bytes(),
+                err,
+                ("could not get bytes for reference\nref: {image:#?}\n{err}"),
+                continue
+            );
+
+            let image = log_err!(
+                ::image::load_from_memory_with_format(image, ImageFormat::Png),
+                err,
+                ("could not load image\n{err}"),
+                continue
+            );
+
+            thumbnails.push((uuid, image));
+        }
+
+        Ok(thumbnails)
     }
 
     /// Remove a thumbnail from database.
@@ -521,13 +574,24 @@ impl Pool {
             }
         }
 
-        let conn = log_err!(self.get(), err, "could not grab database connection\n{err}");
+        let conn = log_err!(
+            self.get(),
+            err,
+            ("could not grab database connection\n{err}"),
+            return
+        );
         let mut stmt = log_err!(
             conn.prepare_cached(SELECT_GAMES),
             err,
-            "failed to prepare query statement\n{err}"
+            ("failed to prepare query statement\n{err}"),
+            return
         );
-        let mut rows = log_err!(stmt.query([]), err, "could not query games\n{err}");
+        let mut rows = log_err!(
+            stmt.query([]),
+            err,
+            ("could not query games\n{err}"),
+            return
+        );
 
         let mut buf = Vec::<u8>::new();
         while let Some(row) = rows

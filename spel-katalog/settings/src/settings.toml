@@ -31,6 +31,12 @@ help = "How to handle hidden games"
 variants = ["Apparent", "Hidden", "All"]
 default = "Apparent"
 
+[UnloadThumbnails]
+title = "Unload Covered Thumbnails"
+help = "Should thumbnails be unloaded when now shown"
+variants = ["Yes", "No"]
+default = "Yes"
+
 [FilterMode]
 title = "Filter"
 help = "How to filter games"
