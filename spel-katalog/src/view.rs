@@ -9,6 +9,7 @@ use ::iced_core::{
 use ::iced_runtime::Task;
 use ::iced_widget::{self as widget, pane_grid};
 use ::spel_katalog_common::styling;
+use ::spel_katalog_settings::Settings;
 use ::tap::Pipe;
 
 use crate::{Element, process_info::ProcessInfo};
@@ -222,6 +223,7 @@ impl State {
         games: &'app ::spel_katalog_games::State,
         info: &'app spel_katalog_info::State,
         process_info: &'app [ProcessInfo],
+        settings: &'app Settings,
     ) -> Element<'app, crate::Message> {
         widget::responsive(move |size| {
             self.aspect_ratio.set(size.width / size.height);
@@ -229,7 +231,7 @@ impl State {
             pane_grid(&self.panes, |_pane, state, _is_maximized| {
                 pane_grid::Content::new(
                     match state {
-                        Pane::Games => games.view().map(crate::Message::from),
+                        Pane::Games => games.view(settings).map(crate::Message::from),
                         Pane::GameInfo => self.view_info(games, info, process_info),
                     }
                     .pipe(widget::container),

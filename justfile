@@ -55,6 +55,9 @@ build *EXTRA: autoinherit fmt
 run *EXTRA: autoinherit fmt
 	cargo +nightly run --release -p {{crate}} -Z build-std=std,panic_abort -Z build-std-features="optimize_for_size" {{EXTRA}}
 
+profile *EXTRA:
+	cargo run -p {{crate}} -F profiling
+
 build-match-num *EXTRA:
 	cargo build --release -p spel-katalog-test --bin match-num
 

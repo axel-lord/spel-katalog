@@ -1,0 +1,15 @@
+[package]
+name = "spel-katalog-profiler"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[features]
+std_time = []
+
+[dependencies]
+log.workspace = true
+
+[lints]
+workspace = true

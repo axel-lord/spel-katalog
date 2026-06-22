@@ -14,6 +14,7 @@ use ::iced_futures::Subscription;
 use ::iced_runtime::Task;
 use ::iced_widget::{self as widget, Sensor, container, stack};
 use ::image::{ImageFormat, RgbaImage};
+use ::itertools::Itertools;
 use ::parking_lot::Mutex;
 use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use ::rusqlite::{Connection, Statement, named_params};
@@ -24,7 +25,8 @@ use ::spel_katalog_gather::{
     CoverGatherer, CoverGathererOptions, LoadDbError, load_games_from_database,
     load_thumbnail_database,
 };
-use ::spel_katalog_settings::{CacheDir, CoverartDir, Settings};
+use ::spel_katalog_profiler as timing;
+use ::spel_katalog_settings::{CacheDir, CoverartDir, Settings, UnloadThumbnails};
 use ::tap::{Conv, Pipe};
 use ::uuid::Uuid;
 
@@ -117,6 +119,8 @@ pub enum Message {
         uuid: Uuid,
         /// Thumbnail to use.
         thumbnail: Option<::spel_katalog_formats::Image>,
+        /// Instant thumbnail was requested.
+        instant: timing::Instant,
     },
     /// Update thumbnail used for thumbnail.
     UpdateThumbThumb {
@@ -125,8 +129,10 @@ pub enum Message {
         /// Thumbnail thumbnail to use.
         thumb_thumb: Option<::spel_katalog_formats::Image>,
     },
+    /// Set multiple thumbnails.
+    SetThumbnails(Vec<(Uuid, ::spel_katalog_formats::Image)>),
     /// Load thumbnail from database.
-    LoadThumbnail(Uuid),
+    LoadThumbnail(Uuid, timing::Instant),
     /// Move selection.
     Select(SelDir),
     /// Select an id.
@@ -194,6 +200,22 @@ impl From<AreaMessage> for OrRequest<Message, Request> {
     }
 }
 
+/// Load all thumbnails from database.
+async fn load_all_thumbnails(
+    game_db: ::spel_katalog_native::Pool,
+) -> Vec<(Uuid, ::spel_katalog_formats::Image)> {
+    ::smol::unblock(move || {
+        game_db
+            .get_thumbs()
+            .map_err(|err| ::log::error!("could not get thumbnails\n{err}"))
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(uuid, thumbnail)| (uuid, ::spel_katalog_native::thumbnail(thumbnail)))
+            .collect()
+    })
+    .await
+}
+
 impl State {
     /// Get current amount of columns.
     pub const fn columns(&self) -> usize {
@@ -217,6 +239,21 @@ impl State {
                 .map(|_| Message::FlushCache)
         } else {
             Subscription::none()
+        }
+    }
+
+    /// Create a task loading all thumbnails.
+    pub fn load_all_thumbnails(
+        &self,
+        settings: &Settings,
+        game_db: &::spel_katalog_native::Pool,
+    ) -> Task<Message> {
+        let load = settings.get::<::spel_katalog_settings::Load>();
+        let unload_thumbnails = settings.get::<::spel_katalog_settings::UnloadThumbnails>();
+        if unload_thumbnails.is_no() && (load.is_native() || load.is_both()) {
+            Task::future(load_all_thumbnails(game_db.clone())).map(Message::SetThumbnails)
+        } else {
+            Task::none()
         }
     }
 
@@ -315,7 +352,11 @@ impl State {
 
                 Task::none()
             }
-            Message::UpdateThumbnail { uuid, thumbnail } => {
+            Message::UpdateThumbnail {
+                uuid,
+                thumbnail,
+                instant: _,
+            } => {
                 if let Some(game) = self.by_uuid_mut(uuid) {
                     game.thumb = thumbnail.map(
                         |::spel_katalog_formats::Image {
@@ -326,6 +367,23 @@ impl State {
                             ::iced_core::image::Handle::from_rgba(width, height, bytes)
                         },
                     );
+                }
+                Task::none()
+            }
+            Message::SetThumbnails(thumbs) => {
+                for (
+                    uuid,
+                    ::spel_katalog_formats::Image {
+                        width,
+                        height,
+                        bytes,
+                    },
+                ) in thumbs
+                {
+                    if let Some(game) = self.by_uuid_mut(uuid) {
+                        game.thumb =
+                            Some(::iced_core::image::Handle::from_rgba(width, height, bytes));
+                    }
                 }
                 Task::none()
             }
@@ -354,18 +412,17 @@ impl State {
                 }
                 Task::none()
             }
-            Message::LoadThumbnail(uuid) => {
+            Message::LoadThumbnail(uuid, instant) => {
                 let games_db = game_db.clone();
                 Task::<Option<_>>::future(async move {
-                    let thumbnail = games_db
-                        .get_thumb(uuid)
-                        .ok()
-                        .map(::spel_katalog_native::thumbnail)?;
+                    let thumbnail = games_db.get_thumb(uuid).ok()?;
+                    let thumbnail = ::spel_katalog_native::thumbnail(thumbnail);
 
                     Some([
                         Message::UpdateThumbnail {
                             uuid,
                             thumbnail: Some(thumbnail.clone()),
+                            instant,
                         }
                         .pipe(OrRequest::Message)
                         .pipe(Task::done),
@@ -527,11 +584,35 @@ impl State {
     }
 
     /// Get a card to display a game thumbnail.
-    fn card<'a>(&self, game: &'a WithThumb) -> Element<'a, OrRequest<Message, Request>> {
+    fn card<'a>(
+        &self,
+        game: &'a WithThumb,
+        should_unload_thumbnails: bool,
+    ) -> Element<'a, OrRequest<Message, Request>> {
+        let id = game.id();
+        let with_sensor = |element: Element<'a, OrRequest<Message, Request>>| {
+            if should_unload_thumbnails && let GameId::Native(uuid) = id {
+                Sensor::new(element)
+                    .key(uuid)
+                    .on_show(move |_| Message::LoadThumbnail(uuid, timing::now()).into_message())
+                    .on_hide(
+                        Message::UpdateThumbnail {
+                            uuid,
+                            thumbnail: None,
+                            instant: timing::now(),
+                        }
+                        .into_message(),
+                    )
+                    .anticipate(200)
+                    .into()
+            } else {
+                element
+            }
+        };
+
         let handle = game.thumb.as_ref().or(game.thumb_thumb.as_ref());
         let selected = self.selected;
         let name = game.name();
-        let id = game.id();
 
         fn base(theme: &::iced_core::Theme) -> container::Style {
             let style = container::bordered_box(theme);
@@ -609,36 +690,25 @@ impl State {
         })
         .into();
 
-        if let GameId::Native(uuid) = id {
-            Sensor::new(element)
-                .key(uuid)
-                .on_show(move |_| Message::LoadThumbnail(uuid).into_message())
-                .on_hide(
-                    Message::UpdateThumbnail {
-                        uuid,
-                        thumbnail: None,
-                    }
-                    .into_message(),
-                )
-                .anticipate(200)
-                .into()
-        } else {
-            element
-        }
+        with_sensor(element)
     }
 
     /// Render elements.
-    pub fn view(&self) -> Element<'_, OrRequest<Message, Request>> {
+    pub fn view(&self, settings: &Settings) -> Element<'_, OrRequest<Message, Request>> {
+        let should_unload_thumbnails = settings.get::<UnloadThumbnails>().is_yes();
         widget::responsive(move |size| {
             let columns = ((size.width / 150.0) as usize).clamp(1, 24);
             self.columns.set(columns);
 
-            spel_katalog_widget::scrollable(
-                ::iced_widget::Grid::new()
-                    .columns(columns)
-                    .spacing(4)
-                    .extend(self.displayed().map(|game| self.card(game))),
-            )
+            spel_katalog_widget::scrollable(widget::Column::new().width(Fill).spacing(4).extend(
+                self.displayed().chunks(columns).into_iter().map(|chunk| {
+                    widget::Grid::new()
+                        .columns(columns)
+                        .spacing(4)
+                        .extend(chunk.map(|game| self.card(game, should_unload_thumbnails)))
+                        .into()
+                }),
+            ))
             .id(widget::Id::new("games-view"))
             .into()
         })
