@@ -551,15 +551,6 @@ impl App {
             }
             Message::Settings(message) => {
                 let should_re_sort = Self::should_re_sort(&message);
-                let should_load_thumbs = if let ::spel_katalog_settings::Message::Delta(
-                    ::spel_katalog_settings::Delta::UnloadThumbnails(value),
-                ) = message
-                    && value.is_no()
-                {
-                    true
-                } else {
-                    false
-                };
                 let task = self
                     .settings
                     .update(message, &self.sender)
@@ -568,18 +559,6 @@ impl App {
                 if should_re_sort {
                     self.sort_games();
                 }
-
-                let task = if should_load_thumbs {
-                    Task::batch([
-                        task,
-                        self.games
-                            .load_all_thumbnails(&self.settings, &self.games_db)
-                            .map(OrRequest::Message)
-                            .map(Message::Games),
-                    ])
-                } else {
-                    task
-                };
 
                 return task;
             }

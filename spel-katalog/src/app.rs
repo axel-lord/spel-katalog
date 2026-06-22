@@ -7,7 +7,7 @@ use ::iced_runtime::Task;
 use ::iced_widget::{self as widget, Row, text, text_input, toggler, value};
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog_cli::Run;
-use ::spel_katalog_common::{OrRequest, StatusSender, w};
+use ::spel_katalog_common::{StatusSender, w};
 use ::spel_katalog_installer::Installer;
 use ::spel_katalog_settings::{ConfigDir, FilterMode, Network, Theme};
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
@@ -169,12 +169,6 @@ impl App {
 
         let listen_ipc = Task::stream(::spel_katalog_ipc::listen(None)).map(Message::from);
 
-        let load_thumbs = app
-            .games
-            .load_all_thumbnails(&app.settings, &app.games_db)
-            .map(OrRequest::Message)
-            .map(Message::Games);
-
         let batch = Task::batch([
             receive_status,
             load_db,
@@ -183,7 +177,6 @@ impl App {
             window_recv,
             show_settings,
             listen_ipc,
-            load_thumbs,
         ]);
 
         (app, batch)

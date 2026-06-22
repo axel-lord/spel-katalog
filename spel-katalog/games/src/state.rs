@@ -200,22 +200,6 @@ impl From<AreaMessage> for OrRequest<Message, Request> {
     }
 }
 
-/// Load all thumbnails from database.
-async fn load_all_thumbnails(
-    game_db: ::spel_katalog_native::Pool,
-) -> Vec<(Uuid, ::spel_katalog_formats::Image)> {
-    ::smol::unblock(move || {
-        game_db
-            .get_thumbs()
-            .map_err(|err| ::log::error!("could not get thumbnails\n{err}"))
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(uuid, thumbnail)| (uuid, ::spel_katalog_native::thumbnail(thumbnail)))
-            .collect()
-    })
-    .await
-}
-
 impl State {
     /// Get current amount of columns.
     pub const fn columns(&self) -> usize {
@@ -239,21 +223,6 @@ impl State {
                 .map(|_| Message::FlushCache)
         } else {
             Subscription::none()
-        }
-    }
-
-    /// Create a task loading all thumbnails.
-    pub fn load_all_thumbnails(
-        &self,
-        settings: &Settings,
-        game_db: &::spel_katalog_native::Pool,
-    ) -> Task<Message> {
-        let load = settings.get::<::spel_katalog_settings::Load>();
-        let unload_thumbnails = settings.get::<::spel_katalog_settings::UnloadThumbnails>();
-        if unload_thumbnails.is_no() && (load.is_native() || load.is_both()) {
-            Task::future(load_all_thumbnails(game_db.clone())).map(Message::SetThumbnails)
-        } else {
-            Task::none()
         }
     }
 
@@ -591,11 +560,14 @@ impl State {
     ) -> Element<'a, OrRequest<Message, Request>> {
         let id = game.id();
         let with_sensor = |element: Element<'a, OrRequest<Message, Request>>| {
-            if should_unload_thumbnails && let GameId::Native(uuid) = id {
-                Sensor::new(element)
+            if let GameId::Native(uuid) = id {
+                let element = Sensor::new(element)
                     .key(uuid)
                     .on_show(move |_| Message::LoadThumbnail(uuid, timing::now()).into_message())
-                    .on_hide(
+                    .anticipate(200);
+
+                if should_unload_thumbnails {
+                    element.on_hide(
                         Message::UpdateThumbnail {
                             uuid,
                             thumbnail: None,
@@ -603,8 +575,10 @@ impl State {
                         }
                         .into_message(),
                     )
-                    .anticipate(200)
-                    .into()
+                } else {
+                    element
+                }
+                .into()
             } else {
                 element
             }
