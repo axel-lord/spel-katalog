@@ -35,11 +35,20 @@ pub struct SettingsArgs {
     args: SettingsStore,
 }
 
+impl SettingsArgs {
+    /// Get xdg base directories for arguments.
+    fn get_xdg(&self) -> ::xdg::BaseDirectories {
+        ::xdg::BaseDirectories::with_prefix("spel-katalog")
+    }
+}
+
 /// Settings storage.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Settings {
     /// Inner settings stored.
     inner: Arc<SettingsStore>,
+    /// Xdg base directories.
+    xdg: Arc<::xdg::BaseDirectories>,
 }
 
 impl Settings {
@@ -58,13 +67,18 @@ impl Settings {
     {
         T::as_idx().get_mut(Arc::make_mut(&mut self.inner))
     }
+
+    /// Get xdg base directories.
+    pub fn xdg(&self) -> &::xdg::BaseDirectories {
+        &self.xdg
+    }
 }
 
 impl From<SettingsArgs> for Settings {
     fn from(value: SettingsArgs) -> Self {
-        let SettingsArgs { args } = value;
         Self {
-            inner: Arc::new(args),
+            xdg: Arc::new(value.get_xdg()),
+            inner: Arc::new(value.args),
         }
     }
 }
@@ -197,8 +211,6 @@ async fn save(settings: Settings, path: PathBuf) -> Result<PathBuf, PathBuf> {
 
 /// Load settings from given path, with specified overrides.
 pub fn load(path: &Path, overrides: SettingsArgs) -> Settings {
-    let SettingsArgs { args: overrides } = overrides;
-
     fn read_settings(config: &Path) -> Result<SettingsStore, ()> {
         let content = ::std::fs::read_to_string(config).map_err(|err| {
             ::log::warn!("could not read {config:?}, does it exists an is it readable?\n{err}");
@@ -209,12 +221,13 @@ pub fn load(path: &Path, overrides: SettingsArgs) -> Settings {
         })
     }
 
-    let settings_store = read_settings(path)
-        .unwrap_or_default()
-        .apply(Delta::create(overrides));
-
     Settings {
-        inner: Arc::new(settings_store),
+        xdg: Arc::new(overrides.get_xdg()),
+        inner: Arc::new(
+            read_settings(path)
+                .unwrap_or_default()
+                .apply(Delta::create(overrides.args)),
+        ),
     }
 }
 
