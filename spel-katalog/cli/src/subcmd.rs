@@ -108,7 +108,7 @@ pub enum Subcmd {
     Skeleton {
         /// Settings to set for skeleton.
         #[command(flatten)]
-        settings: ::spel_katalog_settings::Settings,
+        settings: ::spel_katalog_settings::SettingsArgs,
 
         /// Where to write skeleton to.
         #[arg(long, short, default_value = "-")]
@@ -158,7 +158,7 @@ impl Subcmd {
         match self {
             Subcmd::Skeleton { output, settings } => {
                 other()?;
-                skeleton(output, settings)?;
+                skeleton(output, settings.into())?;
             }
             Subcmd::Completions {
                 shell,

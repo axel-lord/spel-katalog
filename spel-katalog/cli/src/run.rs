@@ -23,7 +23,7 @@ pub fn default_config() -> &'static Path {
 pub struct Run {
     /// Settings to set for this run.
     #[command(flatten)]
-    pub settings: ::spel_katalog_settings::Settings,
+    pub settings: ::spel_katalog_settings::SettingsArgs,
 
     /// Show settings at startup.
     #[arg(long)]
@@ -45,7 +45,7 @@ pub struct Run {
 impl Default for Run {
     fn default() -> Self {
         Self {
-            settings: ::spel_katalog_settings::Settings::default(),
+            settings: Default::default(),
             show_settings: false,
             config: default_config().to_path_buf(),
             keep_terminal: false,

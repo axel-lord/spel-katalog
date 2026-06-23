@@ -81,10 +81,7 @@ impl Initial {
         let filter = String::new();
         let status = String::new();
         let view = view::State::new();
-        let settings = ::spel_katalog_settings::State {
-            settings: Arc::new(settings),
-            config,
-        };
+        let settings = ::spel_katalog_settings::State { settings, config };
         let games = ::spel_katalog_games::State::default();
         let info = ::spel_katalog_info::State::default();
         let sender = status_tx.into();

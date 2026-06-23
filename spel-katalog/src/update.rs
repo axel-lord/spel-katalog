@@ -1,5 +1,5 @@
 use ::core::convert::identity;
-use ::std::{path::PathBuf, sync::Arc};
+use ::std::path::PathBuf;
 
 use ::iced_core::{Size, window};
 use ::iced_runtime::Task;
@@ -106,7 +106,7 @@ impl App {
     }
 
     async fn prefill_installer(
-        settings: Arc<Settings>,
+        settings: Settings,
         game_dir: PathBuf,
         hidden: Option<bool>,
         thumbnail: Option<PathBuf>,

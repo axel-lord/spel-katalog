@@ -7,6 +7,7 @@ use ::std::{
 };
 
 use ::convert_case::{Case, Casing};
+use ::proc_macro2::Span;
 use ::quote::{format_ident, quote};
 use ::syn::{Ident, parse_quote};
 
@@ -416,6 +417,7 @@ pub fn write(settings: Settings, dest: &Path) {
     let mut enum_ty_doc = Vec::new();
     let mut path_ty_doc = Vec::new();
     let mut generic_names = Vec::new();
+    let settings_ident = Ident::new("SettingsStore", Span::call_site());
 
     for (name, setting, ..) in &emitted {
         let pascal_ident = name.to_case(Case::Pascal);
@@ -485,10 +487,10 @@ pub fn write(settings: Settings, dest: &Path) {
                     )*
                 }
 
-                impl crate::SettingsIndex<Settings> for Enum {
+                impl crate::SettingsIndex<#settings_ident> for Enum {
                     type Output = str;
 
-                    fn get(self, settings: &Settings) -> &Self::Output {
+                    fn get(self, settings: &#settings_ident) -> &Self::Output {
                         match self {#(
                             Self::#enum_ty_names => settings.#enum_field_names().as_str(),
                         )*}
@@ -504,18 +506,18 @@ pub fn write(settings: Settings, dest: &Path) {
                     )*
                 }
 
-                impl crate::SettingsIndex<Settings> for Path {
+                impl crate::SettingsIndex<#settings_ident> for Path {
                     type Output = ::std::string::String;
 
-                    fn get(self, settings: &Settings) -> &Self::Output {
+                    fn get(self, settings: &#settings_ident) -> &Self::Output {
                         match self {#(
                             Self::#path_ty_names => settings.#path_field_names().as_ref(),
                         )*}
                     }
                 }
 
-                impl crate::SettingsIndexMut<Settings> for Path {
-                    fn get_mut(self, settings: &mut Settings) -> &mut Self::Output {
+                impl crate::SettingsIndexMut<#settings_ident> for Path {
+                    fn get_mut(self, settings: &mut #settings_ident) -> &mut Self::Output {
                         match self {#(
                             Self::#path_ty_names => settings.#path_field_names_mut().as_mut(),
                         )*}
@@ -523,21 +525,21 @@ pub fn write(settings: Settings, dest: &Path) {
                 }
 
                 #(
-                impl crate::AsIndex<Settings> for #ty_names {
+                impl crate::AsIndex<#settings_ident> for #ty_names {
                     type Output = #ty_names;
-                    fn as_idx() -> impl crate::SettingsIndexMut<Settings, Output = Self::Output> {
+                    fn as_idx() -> impl crate::SettingsIndexMut<#settings_ident, Output = Self::Output> {
                         #[derive(Clone, Copy)]
                         struct Idx;
 
-                        impl crate::SettingsIndex<Settings> for Idx {
+                        impl crate::SettingsIndex<#settings_ident> for Idx {
                             type Output = #ty_names;
-                            fn get(self, settings: &Settings) -> &#ty_names {
+                            fn get(self, settings: &#settings_ident) -> &#ty_names {
                                 settings.#field_names()
                             }
                         }
 
-                        impl crate::SettingsIndexMut<Settings> for Idx {
-                            fn get_mut(self, settings: &mut Settings) -> &mut #ty_names {
+                        impl crate::SettingsIndexMut<#settings_ident> for Idx {
+                            fn get_mut(self, settings: &mut #settings_ident) -> &mut #ty_names {
                                 settings.#field_names_mut()
                             }
                         }
@@ -556,7 +558,7 @@ pub fn write(settings: Settings, dest: &Path) {
                 Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash,
                 ::serde::Deserialize, ::serde::Serialize, ::clap::Args,
             )]
-            pub struct Settings {
+            pub struct #settings_ident {
                 #(
                 #[doc = #ty_doc]
                 #[arg(long)]
@@ -565,7 +567,7 @@ pub fn write(settings: Settings, dest: &Path) {
                 )*
             }
 
-            impl Settings {
+            impl #settings_ident {
                 /// Apply all given delta variants.
                 pub fn apply(mut self, delta: impl IntoIterator<Item = Delta>) -> Self {
                     for delta in delta {
@@ -637,16 +639,16 @@ pub fn write(settings: Settings, dest: &Path) {
             impl Delta {
                 /// Apply delta to settings.
                 #[inline]
-                pub fn apply(self, settings: &mut Settings) -> &mut Settings {
+                pub fn apply(self, settings: &mut #settings_ident) -> &mut #settings_ident {
                     match self {
                         #( Self::#ty_names(value) => settings.#field_names = Some(value), )*
                     }
                     settings
                 }
 
-                /// Create setting deltas from a [Settings].
-                pub fn create(settings: Settings) -> impl Iterator<Item = Delta> {
-                    let Settings { #( #field_names ),* } = settings;
+                /// Create setting deltas from settings.
+                pub fn create(settings: #settings_ident) -> impl Iterator<Item = Delta> {
+                    let #settings_ident { #( #field_names ),* } = settings;
                     [#( #field_names.map(Self::#ty_names)),*].into_iter().flatten()
                 }
 
