@@ -230,6 +230,13 @@ async fn read_thumb(path: PathBuf) -> Option<::spel_katalog_formats::Image> {
     Some(thumb.into())
 }
 
+/// Text box similar to an entry.
+fn list_placeholder<M>(text: &str) -> widget::Container<'_, M> {
+    widget::container(widget::text(text))
+        .padding(3)
+        .style(widget::container::rounded_box)
+}
+
 impl Prepare {
     /// Construct a new instance.
     pub fn new(
@@ -582,13 +589,9 @@ impl Prepare {
                                 ),
                         )
                         .push(
-                            widget::container(
-                                widget::text(&self.parent)
-                                    .pipe_if(self.column_width.is_some(), |t| t.width(Length::Fill))
-                                    .convene(),
-                            )
-                            .padding(3)
-                            .style(widget::container::rounded_box),
+                            list_placeholder(&self.parent)
+                                .pipe_if(self.column_width.is_some(), |t| t.width(Length::Fill))
+                                .convene(),
                         ),
                 )
                 .push(widget::text("Executable"))
@@ -628,16 +631,26 @@ impl Prepare {
                                 .style(widget::button::success)
                                 .on_press(Message::CopyExe.conv::<super::Message>().into_message()),
                         )
-                        .push(
-                            widget::pick_list(items.as_slice(), items.get(*idx), |i: String| {
-                                Message::ChooseChoice(i)
-                                    .conv::<super::Message>()
-                                    .into_message()
-                            })
-                            .pipe_if(self.column_width.is_some(), |l| l.width(Length::Fill))
-                            .convene()
-                            .padding(3),
-                        ),
+                        .pipe_if(self.column_width.is_some(), |row| {
+                            row.push(
+                                widget::pick_list(
+                                    items.as_slice(),
+                                    items.get(*idx),
+                                    |i: String| {
+                                        Message::ChooseChoice(i)
+                                            .conv::<super::Message>()
+                                            .into_message()
+                                    },
+                                )
+                                .width(Length::Fill)
+                                .padding(3),
+                            )
+                        })
+                        .or_else(|row| {
+                            row.push(list_placeholder(
+                                items.get(*idx).map(|s| s.as_str()).unwrap_or(""),
+                            ))
+                        }),
                 })
                 .push(widget::text("Compatability Tool"))
                 .push(
@@ -660,20 +673,22 @@ impl Prepare {
                                         .into_message(),
                                 ),
                         )
-                        .push(
-                            widget::pick_list(
-                                self.comp_tools.as_slice(),
-                                Some(&self.comp_tool),
-                                |tool: String| {
-                                    Message::SetCompTool(tool)
-                                        .conv::<super::Message>()
-                                        .into_message()
-                                },
+                        .pipe_if(self.column_width.is_some(), |row| {
+                            row.push(
+                                widget::pick_list(
+                                    self.comp_tools.as_slice(),
+                                    Some(&self.comp_tool),
+                                    |tool: String| {
+                                        Message::SetCompTool(tool)
+                                            .conv::<super::Message>()
+                                            .into_message()
+                                    },
+                                )
+                                .padding(3)
+                                .width(Length::Fill),
                             )
-                            .padding(3)
-                            .pipe_if(self.column_width.is_some(), |l| l.width(Length::Fill))
-                            .convene(),
-                        ),
+                        })
+                        .or_else(|row| row.push(list_placeholder(&self.comp_tool))),
                 )
                 .push(
                     widget::Row::new()
