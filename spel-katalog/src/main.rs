@@ -14,7 +14,6 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 fn init_log(target: Option<::env_logger::Target>) {
     let mut log_builder = ::env_logger::builder();
-
     log_builder.filter_level(::log::LevelFilter::Info);
 
     if let Some(target) = target {
@@ -51,6 +50,7 @@ fn install_game(
         no_move,
     }: InstallGame,
 ) -> ::color_eyre::Result<()> {
+    init_log(None);
     let base_dirs = ::xdg::BaseDirectories::with_prefix("spel-katalog");
     if let Err(err) = ::spel_katalog_ipc::send(
         base_dirs

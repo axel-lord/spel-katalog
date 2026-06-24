@@ -1,19 +1,10 @@
 //! Inter process communication.
 
-use ::std::{
-    io::Write,
-    path::{Path, PathBuf},
-};
+use ::std::path::{Path, PathBuf};
 
-use ::flume::Sender;
 use ::serde::{Deserialize, Serialize};
-use ::smol::{
-    LocalExecutor,
-    io::AsyncReadExt,
-    stream::{Stream, StreamExt},
-};
 
-pub use crate::send::SendError;
+pub use crate::{listen::listen, send::SendError};
 
 /// Socket name.
 const NAME: &str = "spel-katalog-ipc.socket";
@@ -37,92 +28,13 @@ pub enum Message {
     },
 }
 
-/// Internal listen function.
-#[expect(clippy::future_not_send, reason = "not intended to be sent")]
-async fn listen_(
-    ex: &LocalExecutor<'_>,
-    tx: ::flume::Sender<Message>,
-    socket_path: &Path,
-    runtime_dir: &Path,
-) {
-    let Some(listener) = listen::listener(socket_path, runtime_dir).await else {
-        return;
-    };
-
-    let mut incoming = listener.incoming();
-    let mut tasks = Vec::new();
-
-    ::log::info!("ipc initialized at {socket_path:?}");
-
-    while let Some(conn) = incoming.next().await {
-        let mut conn = match conn {
-            Ok(conn) => conn,
-            Err(err) => {
-                ::log::error!("connection on {socket_path:?} failed\n{err}");
-                continue;
-            }
-        };
-
-        let tx = Sender::clone(&tx);
-        tasks.push(ex.spawn(async move {
-            let mut buf = Vec::new();
-            if let Err(err) = conn.read_to_end(&mut buf).await {
-                ::log::error!("failed to read all data for connection\n{err}");
-                return;
-            };
-
-            let message = match ::serde_json::from_slice::<Message>(&buf) {
-                Ok(message) => message,
-                Err(err) => {
-                    ::log::error!("failed to deserialize message\n{err}");
-                    return;
-                }
-            };
-
-            if let Err(err) = tx.send(message) {
-                ::log::error!("failed to send message {err}");
-            }
-        }));
-    }
-
-    for task in tasks {
-        task.await
-    }
-}
-
-/// Listen for connections, using the given profile.
-/// returns a stream of received messages.
-pub fn listen(runtime_dir: PathBuf) -> impl 'static + Stream<Item = Message> {
-    let (tx, rx) = ::flume::bounded(16);
-
-    if let Err(err) = ::std::thread::Builder::new()
-        .name(NAME.to_owned())
-        .spawn(move || {
-            ::smol::block_on(async move {
-                let socket_path = runtime_dir.join(NAME);
-                let ex = LocalExecutor::new();
-                ex.run(listen_(&ex, tx, &socket_path, &runtime_dir)).await
-            })
-        })
-    {
-        ::log::error!("failed to spawn ipc thread\n{err}");
-    }
-
-    rx.into_stream()
-}
-
 /// Attempt to send an ipc message.
 ///
 /// # Errors
 /// If no connection can be established.
 /// Or if the message cannot be serialized.
 pub fn send(runtime_dir: &Path, message: Message) -> Result<(), SendError> {
-    let path = runtime_dir.join(NAME);
-    let mut conn = ::std::os::unix::net::UnixStream::connect(&path).map_err(SendError::Connect)?;
-    ::serde_json::to_writer(&mut conn, &message).map_err(SendError::Serialize)?;
-    conn.flush().map_err(SendError::Send)?;
-    ::log::info!("message sent to {path:?}");
-    Ok(())
+    ::smol::block_on(send::send(runtime_dir, message))
 }
 
 mod send {
@@ -132,7 +44,7 @@ mod send {
 
     use ::bytes::Bytes;
     use ::http_body_util::{BodyExt, Full};
-    use ::hyper::{Request, client::conn::http1};
+    use ::hyper::{Method, Request, client::conn::http1};
     use ::smol::{LocalExecutor, net::unix::UnixStream};
     use ::smol_hyper::rt::FuturesIo;
 
@@ -187,14 +99,16 @@ mod send {
         let (mut sender, conn) = http1::handshake(io).await.map_err(SendError::Handshake)?;
 
         let ex = LocalExecutor::new();
-        let poll_conn = ex.spawn(async move {
+        ex.spawn(async move {
             if let Err(err) = conn.await {
                 ::log::error!("connection failed\n{err}")
             }
-        });
+        })
+        .detach();
         ex.run(async move {
             let req = Request::builder()
-                .uri("v1")
+                .uri("/v1")
+                .method(Method::POST)
                 .body(Full::new(message))
                 .map_err(SendError::HttpRequest)?;
 
@@ -212,9 +126,18 @@ mod send {
                 .map(|body| body.to_bytes())
                 .unwrap_or_default();
 
-            ::log::info!("status: {status}\nbody:\n{body:?}");
+            if status.is_success() {
+                ::log::info!("installer opened")
+            } else if body.is_empty() {
+                ::log::error!("status: {status}")
+            } else {
+                if let Ok(body) = str::from_utf8(&body) {
+                    ::log::error!("status: {status}, body:\n{body}")
+                } else {
+                    ::log::error!("status: {status}, body:\n{body:#?}")
+                }
+            }
 
-            poll_conn.await;
             Ok(())
         })
         .await
@@ -299,6 +222,7 @@ mod listen {
             .body(Full::new(Bytes::new()))
     }
 
+    /// Handler for http requests.
     async fn request_handler(
         req: Request<Incoming>,
         tx: &Sender<Message>,
