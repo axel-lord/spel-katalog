@@ -118,9 +118,9 @@ pub fn listen(runtime_dir: PathBuf) -> impl 'static + Stream<Item = Message> {
 /// Or if the message cannot be serialized.
 pub fn send(runtime_dir: &Path, message: Message) -> Result<(), SendError> {
     let path = runtime_dir.join(NAME);
-    let mut conn = ::std::os::unix::net::UnixStream::connect(&path)?;
-    ::serde_json::to_writer(&mut conn, &message)?;
-    conn.flush()?;
+    let mut conn = ::std::os::unix::net::UnixStream::connect(&path).map_err(SendError::Connect)?;
+    ::serde_json::to_writer(&mut conn, &message).map_err(SendError::Serialize)?;
+    conn.flush().map_err(SendError::Send)?;
     ::log::info!("message sent to {path:?}");
     Ok(())
 }
@@ -130,16 +130,34 @@ mod send {
 
     use ::std::path::Path;
 
-    use crate::Message;
+    use ::bytes::Bytes;
+    use ::http_body_util::{BodyExt, Full};
+    use ::hyper::{Request, client::conn::http1};
+    use ::smol::{LocalExecutor, net::unix::UnixStream};
+    use ::smol_hyper::rt::FuturesIo;
+
+    use crate::{Message, NAME};
     /// Error returned when failing to send a message.
     #[derive(Debug, thiserror::Error)]
     pub enum SendError {
         /// Error returned when a message cannot be serialized.
         #[error("message could not be serialized\n{0}")]
-        Serialize(#[from] ::serde_json::Error),
+        Serialize(::serde_json::Error),
         /// Error returned when a message cannot be sent.
         #[error("message could not be sent\n{0}")]
-        Send(#[from] ::std::io::Error),
+        Send(::std::io::Error),
+        /// Error returned when socket cannot be connected to.
+        #[error("could not connect to socket\n{0}")]
+        Connect(::smol::io::Error),
+        /// Error returned on when handshake fails.
+        #[error("could not perform http1 handshake\n{0}")]
+        Handshake(::hyper::Error),
+        /// Error when http request cannot be created.
+        #[error("could not build http request\n{0}")]
+        HttpRequest(::hyper::http::Error),
+        /// Error when http request cannot be sent.
+        #[error("could not send http request\n{0}")]
+        SendHttp(::hyper::Error),
     }
 
     impl SendError {
@@ -157,8 +175,49 @@ mod send {
     }
 
     /// Send an ipc message.
+    #[expect(clippy::future_not_send, reason = "not intended to be sent")]
     pub async fn send(runtime_dir: &Path, message: Message) -> Result<(), SendError> {
-        Ok(())
+        let message =
+            Bytes::from_owner(::serde_json::to_vec(&message).map_err(SendError::Serialize)?);
+        let path = runtime_dir.join(NAME);
+        let stream = UnixStream::connect(&path)
+            .await
+            .map_err(SendError::Connect)?;
+        let io = FuturesIo::new(stream);
+        let (mut sender, conn) = http1::handshake(io).await.map_err(SendError::Handshake)?;
+
+        let ex = LocalExecutor::new();
+        let poll_conn = ex.spawn(async move {
+            if let Err(err) = conn.await {
+                ::log::error!("connection failed\n{err}")
+            }
+        });
+        ex.run(async move {
+            let req = Request::builder()
+                .uri("v1")
+                .body(Full::new(message))
+                .map_err(SendError::HttpRequest)?;
+
+            let res = sender
+                .send_request(req)
+                .await
+                .map_err(SendError::SendHttp)?;
+
+            let status = res.status();
+            let body = res
+                .into_body()
+                .collect()
+                .await
+                .map_err(|err| ::log::warn!("could not collect body of response\n{err}"))
+                .map(|body| body.to_bytes())
+                .unwrap_or_default();
+
+            ::log::info!("status: {status}\nbody:\n{body:?}");
+
+            poll_conn.await;
+            Ok(())
+        })
+        .await
     }
 }
 
