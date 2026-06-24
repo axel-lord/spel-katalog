@@ -10,7 +10,7 @@ use ::spel_katalog_formats::NativeGame;
 use ::spel_katalog_games::SelDir;
 use ::spel_katalog_run::run_umu::RunMode;
 use ::spel_katalog_settings::{
-    ConfigDir, FilterMode, Load, LutrisDb, Network, Settings, Show, TrustedVariants,
+    FilterMode, Load, LutrisDb, Network, Settings, Show, TrustedVariants,
 };
 use ::tap::Pipe;
 use ::uuid::Uuid;
@@ -178,7 +178,10 @@ impl App {
                     .and_then(|filter| Task::done(Message::Filter(filter)));
             }
             QuickMessage::OpenDatabase => {
-                let path = self.settings.get::<ConfigDir>().as_path().join("games.db");
+                let Some(path) = self.settings.xdg().get_config_file("games.db") else {
+                    ::log::error!("could not get config file path for \"games.db\"");
+                    return Task::none();
+                };
                 return Task::<Option<_>>::future(::smol::unblock(move || {
                     if let Err(err) = ::open::that_detached(&path) {
                         ::log::error!("failed to open {path:?}\n{err}");

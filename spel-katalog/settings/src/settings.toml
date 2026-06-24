@@ -153,16 +153,6 @@ title = "Game Config Directory"
 help = "Path to lutris game yml config directory"
 path = "{CONFIG}/lutris/games"
 
-[ConfigDir]
-title = "Config Directory"
-help = "Path application configuration directory"
-path = "{CONFIG}/spel-katalog/"
-
-[CacheDir]
-title = "Cache Directory"
-help = "Path to cache directory"
-path = "{CACHE}/spel-katalog/"
-
 [InstallLocation]
 title = "Game Install Location"
 help = "Where to install games to"

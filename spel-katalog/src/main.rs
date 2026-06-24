@@ -1,4 +1,7 @@
-use ::std::io::{IsTerminal, Read};
+use ::std::{
+    io::{IsTerminal, Read},
+    path::Path,
+};
 
 use ::color_eyre::{Section, eyre::eyre};
 use ::mimalloc::MiMalloc;
@@ -48,8 +51,15 @@ fn install_game(
         no_move,
     }: InstallGame,
 ) -> ::color_eyre::Result<()> {
+    let base_dirs = ::xdg::BaseDirectories::with_prefix("spel-katalog");
     if let Err(err) = ::spel_katalog_ipc::send(
-        None,
+        base_dirs
+            .get_runtime_directory()
+            .map(|dir| dir.as_path())
+            .unwrap_or_else(|err| {
+                ::log::error!("could not get runtime directory, using /tmp\n{err}");
+                Path::new("/tmp")
+            }),
         ::spel_katalog_ipc::Message::InstallGame {
             source: game
                 .canonicalize()

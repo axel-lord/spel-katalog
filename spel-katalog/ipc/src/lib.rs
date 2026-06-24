@@ -15,6 +15,9 @@ use ::smol::{
 };
 use ::uuid::Uuid;
 
+/// Socket name.
+const NAME: &str = "spel-katalog-ipc.socket";
+
 /// Ipc messages.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Message {
@@ -35,8 +38,8 @@ pub enum Message {
 }
 
 /// Replace a unix socket listener.
-async fn replace_listener(socket_path: &Path) -> Option<UnixListener> {
-    let temp_path = Path::new("/tmp").join(Uuid::new_v4().to_string());
+async fn replace_listener(socket_path: &Path, runtime_dir: &Path) -> Option<UnixListener> {
+    let temp_path = runtime_dir.join(Uuid::new_v4().to_string());
     match UnixListener::bind(&temp_path) {
         Ok(listener) => match ::smol::fs::rename(&temp_path, socket_path).await {
             Ok(_) => Some(listener),
@@ -59,11 +62,11 @@ async fn replace_listener(socket_path: &Path) -> Option<UnixListener> {
 }
 
 /// Grab socket listener.
-async fn listener(socket_path: &Path) -> Option<UnixListener> {
+async fn listener(socket_path: &Path, runtime_dir: &Path) -> Option<UnixListener> {
     match UnixListener::bind(socket_path) {
         Ok(listener) => Some(listener),
         Err(err) => match err.kind() {
-            ::std::io::ErrorKind::AddrInUse => replace_listener(socket_path).await,
+            ::std::io::ErrorKind::AddrInUse => replace_listener(socket_path, runtime_dir).await,
             _ => {
                 ::log::error!("could not bind to {socket_path:?}\n{err}");
                 None
@@ -74,8 +77,13 @@ async fn listener(socket_path: &Path) -> Option<UnixListener> {
 
 /// Internal listen function.
 #[expect(clippy::future_not_send, reason = "not intended to be sent")]
-async fn listen_(ex: &LocalExecutor<'_>, tx: ::flume::Sender<Message>, socket_path: &Path) {
-    let Some(listener) = listener(socket_path).await else {
+async fn listen_(
+    ex: &LocalExecutor<'_>,
+    tx: ::flume::Sender<Message>,
+    socket_path: &Path,
+    runtime_dir: &Path,
+) {
+    let Some(listener) = listener(socket_path, runtime_dir).await else {
         return;
     };
 
@@ -120,25 +128,18 @@ async fn listen_(ex: &LocalExecutor<'_>, tx: ::flume::Sender<Message>, socket_pa
     }
 }
 
-/// Get scoket name.
-fn name(profile: Option<&str>) -> String {
-    let profile = profile.unwrap_or("default");
-    format!("spel-katalog-ipc-{profile}")
-}
-
 /// Listen for connections, using the given profile.
 /// returns a stream of received messages.
-pub fn listen(profile: Option<&str>) -> impl 'static + Stream<Item = Message> {
+pub fn listen(runtime_dir: PathBuf) -> impl 'static + Stream<Item = Message> {
     let (tx, rx) = ::flume::bounded(16);
-    let name = name(profile);
 
     if let Err(err) = ::std::thread::Builder::new()
-        .name(name.clone())
+        .name(NAME.to_owned())
         .spawn(move || {
             ::smol::block_on(async move {
-                let socket_path = Path::new("/tmp").join(name);
+                let socket_path = runtime_dir.join(NAME);
                 let ex = LocalExecutor::new();
-                ex.run(listen_(&ex, tx, &socket_path)).await
+                ex.run(listen_(&ex, tx, &socket_path, &runtime_dir)).await
             })
         })
     {
@@ -178,9 +179,8 @@ impl SendError {
 /// # Errors
 /// If no connection can be established.
 /// Or if the message cannot be serialized.
-pub fn send(profile: Option<&str>, message: Message) -> Result<(), SendError> {
-    let name = name(profile);
-    let path = Path::new("/tmp").join(&name);
+pub fn send(runtime_dir: &Path, message: Message) -> Result<(), SendError> {
+    let path = runtime_dir.join(NAME);
     let mut conn = ::std::os::unix::net::UnixStream::connect(&path)?;
     ::serde_json::to_writer(&mut conn, &message)?;
     conn.flush()?;

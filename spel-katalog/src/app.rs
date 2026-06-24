@@ -1,5 +1,6 @@
-use ::std::{convert::identity, io::PipeReader, sync::Arc};
+use ::std::{convert::identity, io::PipeReader, path::Path, sync::Arc};
 
+use ::color_eyre::{Section, eyre::eyre};
 use ::derive_more::IsVariant;
 use ::iced::Font;
 use ::iced_core::{Alignment::Center, Length::Fill, font, window};
@@ -9,7 +10,7 @@ use ::rustc_hash::FxHashMap;
 use ::spel_katalog_cli::Run;
 use ::spel_katalog_common::{StatusSender, w};
 use ::spel_katalog_installer::Installer;
-use ::spel_katalog_settings::{ConfigDir, FilterMode, Network, Theme};
+use ::spel_katalog_settings::{FilterMode, Network, Theme};
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::spel_katalog_widget::ListMenu;
 use ::tap::Pipe;
@@ -90,7 +91,10 @@ impl Initial {
         let terminal = ::spel_katalog_terminal::Terminal::default().with_limit(256);
         let process_view_semaphore = Arc::new(::smol::lock::Semaphore::new(1));
         let games_db = ::spel_katalog_native::Pool::new(
-            &settings.get::<ConfigDir>().as_path().join("games.db"),
+            &settings
+                .xdg()
+                .place_config_file("games.db")
+                .map_err(|err| eyre!(err).note("does home exist?"))?,
         )?;
 
         let (sink_builder, terminal_rx) = if show_terminal {
@@ -164,7 +168,17 @@ impl App {
             .pipe(Message::Quick)
             .pipe(Task::done);
 
-        let listen_ipc = Task::stream(::spel_katalog_ipc::listen(None)).map(Message::from);
+        let listen_ipc = Task::stream(::spel_katalog_ipc::listen(
+            app.settings
+                .xdg()
+                .get_runtime_directory()
+                .cloned()
+                .unwrap_or_else(|err| {
+                    ::log::warn!("could not get runtime directory, using /tmp\n{err}");
+                    Path::new("/tmp").to_path_buf()
+                }),
+        ))
+        .map(Message::from);
 
         let batch = Task::batch([
             receive_status,

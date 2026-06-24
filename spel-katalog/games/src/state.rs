@@ -26,7 +26,7 @@ use ::spel_katalog_gather::{
     load_thumbnail_database,
 };
 use ::spel_katalog_profiler as timing;
-use ::spel_katalog_settings::{CacheDir, CoverartDir, Settings, UnloadThumbnails};
+use ::spel_katalog_settings::{CoverartDir, Settings, UnloadThumbnails};
 use ::tap::{Conv, Pipe};
 use ::uuid::Uuid;
 
@@ -358,14 +358,22 @@ impl State {
             }
             Message::FlushCache => {
                 let (slugs, images) = mem::take(&mut self.cache_queue);
-                let cache_path = settings.get::<CacheDir>().to_path_buf();
-                Task::future(cache_images(slugs, images, cache_path, tx.clone()))
-                    .then(|_| Task::none())
+                if let Some(cache_path) = settings.xdg().get_cache_home() {
+                    Task::future(cache_images(slugs, images, cache_path, tx.clone()))
+                        .then(|_| Task::none())
+                } else {
+                    ::log::error!("could not get cache dir for application");
+                    Task::none()
+                }
             }
             Message::RemoveImage { slug } => {
                 self.remove_image(&slug);
-                let cache_path = settings.get::<CacheDir>().to_path_buf();
-                Task::future(uncache_image(slug, cache_path)).then(|_| Task::none())
+                if let Some(cache_path) = settings.xdg().get_cache_home() {
+                    Task::future(uncache_image(slug, cache_path)).then(|_| Task::none())
+                } else {
+                    ::log::error!("could not get cache dir for application");
+                    Task::none()
+                }
             }
             Message::Select(sel_dir) => {
                 self.select(sel_dir);
@@ -439,7 +447,10 @@ impl State {
 
     /// Find cached images.
     pub fn find_cached(&mut self, settings: &Settings) -> Task<OrRequest<Message, Request>> {
-        let cache_dir = settings.get::<CacheDir>().to_path_buf();
+        let Some(cache_dir) = settings.xdg().get_cache_home() else {
+            ::log::error!("could not get cache dir");
+            return Task::none();
+        };
         let cover_dir = settings.get::<CoverartDir>().to_path_buf();
 
         let game_slugs = self

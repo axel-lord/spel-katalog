@@ -12,7 +12,7 @@ use ::spel_katalog_run::{
     run_umu::{CommonUmuCtx, LutrisCtx, LutrisUmuCtx, NativeUmuCtx, RunMode},
 };
 use ::spel_katalog_settings::{
-    BubblewrapExe, ConfigDir, DllOverrides, FirejailExe, GamescopeExe, LutrisExe, Network, OnRun,
+    BubblewrapExe, DllOverrides, FirejailExe, GamescopeExe, LutrisExe, Network, OnRun,
     SandboxExtras, SandboxMode, Settings, ShellExe, TermCommand, UmuRunExe, UseGamescope, YmlDir,
 };
 use ::spel_katalog_sink::SinkIdentity;
@@ -70,10 +70,9 @@ impl App {
                 let configpath = format!("{yml_dir}/{}.yml", game.configpath);
                 let extra_config_path = self
                     .settings
-                    .get::<ConfigDir>()
-                    .as_path()
-                    .join("games")
-                    .join(format!("{lutris_id}.toml"));
+                    .xdg()
+                    .get_config_file(format!("games/{lutris_id}.toml"))
+                    .tap_none(|| ::log::error!("could not get games/{lutris_id} in config dir"))?;
 
                 Some(async move {
                     let config = ::smol::fs::read_to_string(&configpath)
@@ -270,12 +269,14 @@ impl App {
         let sink_builder = self.sink_builder.clone();
         let yml_dir = self.settings.get::<YmlDir>();
         let configpath = format!("{yml_dir}/{}.yml", game.configpath);
-        let extra_config_path = self
+        let Some(extra_config_path) = self
             .settings
-            .get::<ConfigDir>()
-            .as_path()
-            .join("games")
-            .join(format!("{lutris_id}.toml"));
+            .xdg()
+            .get_config_file(format!("games/{lutris_id}.toml"))
+        else {
+            ::log::error!("could not get games/{lutris_id}.toml in config dir");
+            return Task::none();
+        };
 
         let (send_open, recv_open) = oneshot_broadcast();
 

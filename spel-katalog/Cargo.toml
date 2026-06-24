@@ -59,6 +59,7 @@ toml.workspace = true
 users.workspace = true
 uuid = { workspace = true, features = ["v4", "v7"] }
 yaml-rust2.workspace = true
+xdg.workspace = true
 
 [build-dependencies]
 spel-katalog-settings-build.workspace = true
