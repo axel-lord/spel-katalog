@@ -395,7 +395,7 @@ impl Pool {
     ) -> Result<Vec<(Uuid, DynamicImage)>, DbError> {
         const SELECT_GAME: &str = r"
             SELECT image FROM thumbs
-            WHERE uuid = $1
+            WHERE uid = $1
         ";
         let conn = self.get_conn()?;
         let stmt = Self::prep_stmt(&conn, SELECT_GAME)?;
