@@ -122,6 +122,8 @@ pub enum Message {
         /// Instant thumbnail was requested.
         instant: timing::Instant,
     },
+    /// Update multiple thumbnails.
+    UpdateThumbnails(Vec<(Uuid, Option<::spel_katalog_formats::Image>)>),
     /// Update thumbnail used for thumbnail.
     UpdateThumbThumb {
         /// Uuid of game to update thumb thumb for.
@@ -129,10 +131,12 @@ pub enum Message {
         /// Thumbnail thumbnail to use.
         thumb_thumb: Option<::spel_katalog_formats::Image>,
     },
-    /// Set multiple thumbnails.
-    SetThumbnails(Vec<(Uuid, ::spel_katalog_formats::Image)>),
+    /// Update multiple thumb thumbs.
+    UpdateThumbThumbs(Vec<(Uuid, Option<::spel_katalog_formats::Image>)>),
     /// Load thumbnail from database.
     LoadThumbnail(Uuid, timing::Instant),
+    /// Load multiple thumbnails.
+    LoadThumbnails(Vec<Uuid>),
     /// Move selection.
     Select(SelDir),
     /// Select an id.
@@ -198,6 +202,87 @@ impl From<AreaMessage> for OrRequest<Message, Request> {
             AreaMessage::Run { id, sandbox } => OrRequest::Request(Request::Run { id, sandbox }),
         }
     }
+}
+
+/// Generate smaller thumbnail for thumbnail.
+fn generate_thumb_thumb(
+    thumbnail: ::spel_katalog_formats::Image,
+) -> Option<::spel_katalog_formats::Image> {
+    let ::spel_katalog_formats::Image {
+        width,
+        height,
+        bytes,
+    } = thumbnail;
+
+    let dim = width.min(height).min(20);
+    let thumbnail = RgbaImage::from_raw(width, height, bytes.into())?
+        .pipe(::image::DynamicImage::from)
+        .resize(dim, dim, ::image::imageops::FilterType::Lanczos3)
+        .conv::<::spel_katalog_formats::Image>();
+
+    Some(thumbnail)
+}
+
+/// Load thumbnail for uuid.
+fn load_thumb(
+    games_db: ::spel_katalog_native::Pool,
+    uuid: Uuid,
+    instant: timing::Instant,
+) -> Option<[Task<Message>; 2]> {
+    let thumbnail = games_db.get_thumb(uuid).ok()?;
+    let thumbnail = ::spel_katalog_native::thumbnail(thumbnail);
+
+    Some([
+        Message::UpdateThumbnail {
+            uuid,
+            thumbnail: Some(thumbnail.clone()),
+            instant,
+        }
+        .pipe(Task::done),
+        Task::future(::smol::unblock(move || generate_thumb_thumb(thumbnail))).and_then(
+            move |thumb_thumb| {
+                Message::UpdateThumbThumb {
+                    uuid,
+                    thumb_thumb: Some(thumb_thumb),
+                }
+                .pipe(Task::done)
+            },
+        ),
+    ])
+}
+
+/// Load multiple thumbnails.
+fn load_thumbs(
+    games_db: ::spel_katalog_native::Pool,
+    uuids: Vec<Uuid>,
+) -> Option<[Task<Message>; 2]> {
+    let thumbnails = games_db
+        .get_thumbs(&mut uuids.into_iter())
+        .map_err(|err| ::log::error!("could not load thumbnails\n{err}"))
+        .ok()?;
+
+    let thumbnails = thumbnails
+        .into_iter()
+        .map(|(uuid, thumbnail)| (uuid, ::spel_katalog_native::thumbnail(thumbnail)))
+        .collect::<Vec<_>>();
+
+    let update_task = thumbnails
+        .iter()
+        .map(|(uuid, thumb)| (*uuid, Some(thumb.clone())))
+        .collect::<Vec<_>>()
+        .pipe(Message::UpdateThumbnails)
+        .pipe(Task::done);
+
+    let thumb_thumb_task = ::smol::unblock(move || {
+        thumbnails
+            .into_iter()
+            .map(|(uuid, thumb)| (uuid, generate_thumb_thumb(thumb)))
+            .collect::<Vec<_>>()
+    })
+    .pipe(Task::future)
+    .map(Message::UpdateThumbThumbs);
+
+    Some([update_task, thumb_thumb_task])
 }
 
 impl State {
@@ -327,31 +412,15 @@ impl State {
                 instant: _,
             } => {
                 if let Some(game) = self.by_uuid_mut(uuid) {
-                    game.thumb = thumbnail.map(
-                        |::spel_katalog_formats::Image {
-                             width,
-                             height,
-                             bytes,
-                         }| {
-                            ::iced_core::image::Handle::from_rgba(width, height, bytes)
-                        },
-                    );
+                    game.thumb = thumbnail.map(|t| t.map(::iced_core::image::Handle::from_rgba));
                 }
                 Task::none()
             }
-            Message::SetThumbnails(thumbs) => {
-                for (
-                    uuid,
-                    ::spel_katalog_formats::Image {
-                        width,
-                        height,
-                        bytes,
-                    },
-                ) in thumbs
-                {
+            Message::UpdateThumbnails(thumbs) => {
+                for (uuid, thumbnail) in thumbs {
                     if let Some(game) = self.by_uuid_mut(uuid) {
                         game.thumb =
-                            Some(::iced_core::image::Handle::from_rgba(width, height, bytes));
+                            thumbnail.map(|t| t.map(::iced_core::image::Handle::from_rgba));
                     }
                 }
                 Task::none()
@@ -391,54 +460,31 @@ impl State {
             }
             Message::LoadThumbnail(uuid, instant) => {
                 let games_db = game_db.clone();
-                Task::<Option<_>>::future(async move {
-                    let thumbnail = games_db.get_thumb(uuid).ok()?;
-                    let thumbnail = ::spel_katalog_native::thumbnail(thumbnail);
-
-                    Some([
-                        Message::UpdateThumbnail {
-                            uuid,
-                            thumbnail: Some(thumbnail.clone()),
-                            instant,
-                        }
-                        .pipe(OrRequest::Message)
-                        .pipe(Task::done),
-                        Task::<Option<_>>::future(::smol::unblock(move || {
-                            let ::spel_katalog_formats::Image {
-                                width,
-                                height,
-                                bytes,
-                            } = thumbnail;
-
-                            let dim = width.min(height).min(20);
-                            let thumbnail = RgbaImage::from_raw(width, height, bytes.into())?
-                                .pipe(::image::DynamicImage::from)
-                                .resize(dim, dim, ::image::imageops::FilterType::Lanczos3)
-                                .conv::<::spel_katalog_formats::Image>();
-
-                            Message::UpdateThumbThumb {
-                                uuid,
-                                thumb_thumb: Some(thumbnail),
-                            }
-                            .into_message()
-                            .pipe(Some)
-                        }))
-                        .and_then(Task::done),
-                    ])
-                })
-                .and_then(Task::batch)
+                ::smol::unblock(move || load_thumb(games_db, uuid, instant))
+                    .pipe(Task::future)
+                    .and_then(Task::batch)
+                    .map(OrRequest::Message)
+            }
+            Message::LoadThumbnails(uuids) => {
+                let games_db = game_db.clone();
+                ::smol::unblock(move || load_thumbs(games_db, uuids))
+                    .pipe(Task::future)
+                    .and_then(Task::batch)
+                    .map(OrRequest::Message)
             }
             Message::UpdateThumbThumb { uuid, thumb_thumb } => {
                 if let Some(game) = self.by_uuid_mut(uuid) {
-                    game.thumb_thumb = thumb_thumb.map(
-                        |::spel_katalog_formats::Image {
-                             width,
-                             height,
-                             bytes,
-                         }| {
-                            ::iced_core::image::Handle::from_rgba(width, height, bytes)
-                        },
-                    );
+                    game.thumb_thumb =
+                        thumb_thumb.map(|t| t.map(::iced_core::image::Handle::from_rgba));
+                }
+                Task::none()
+            }
+            Message::UpdateThumbThumbs(thumb_thumbs) => {
+                for (uuid, thumb_thumb) in thumb_thumbs {
+                    if let Some(game) = self.by_uuid_mut(uuid) {
+                        game.thumb_thumb =
+                            thumb_thumb.map(|t| t.map(::iced_core::image::Handle::from_rgba));
+                    }
                 }
                 Task::none()
             }

@@ -382,12 +382,62 @@ impl Pool {
         .map_err(GetError::DecodeImage)
     }
 
+    /// Get thumbnails for the specified ids.
+    ///
+    /// # Errors
+    /// If the statement cannot be prepared,
+    /// or if no database connectetion is established.
+    ///
+    /// Other errors may be logged whilst the function carries on.
+    pub fn get_thumbs(
+        &self,
+        game_ids: &mut dyn Iterator<Item = Uuid>,
+    ) -> Result<Vec<(Uuid, DynamicImage)>, DbError> {
+        const SELECT_GAME: &str = r"
+            SELECT uuid, image FROM thumbs
+            WHERE uuid = $1
+        ";
+        let conn = self.get_conn()?;
+        let stmt = Self::prep_stmt(&conn, SELECT_GAME)?;
+
+        /// Inner function dissalows any non-conforming
+        /// control flow in retrieval loop.
+        fn inner(
+            mut stmt: CachedStatement<'_>,
+            game_ids: &mut dyn Iterator<Item = Uuid>,
+        ) -> Vec<(Uuid, DynamicImage)> {
+            let mut thumbnails = Vec::new();
+
+            for game_id in game_ids {
+                let thumbnail = stmt.query_one((game_id,), |row| {
+                    let bytes = row.get_ref(0)?.as_bytes()?;
+                    Ok(::image::load_from_memory_with_format(
+                        bytes,
+                        ImageFormat::Png,
+                    ))
+                });
+
+                match thumbnail {
+                    Ok(Ok(thumbnail)) => thumbnails.push((game_id, thumbnail)),
+                    Ok(Err(err)) => ::log::warn!("failed to decode thumbnail for {game_id}\n{err}"),
+                    Err(err) => ::log::warn!("could not get thumbnail for {game_id}\n{err}"),
+                }
+            }
+
+            thumbnails
+        }
+
+        Ok(inner(stmt, game_ids))
+    }
+
     /// Load all thumbnails.
     ///
     /// # Errors
     /// If the statement cannot be prepared,
     /// or if no database connectetion is established.
-    pub fn get_thumbs(&self) -> Result<Vec<(Uuid, DynamicImage)>, GetError> {
+    ///
+    /// Other errors may be logged whilst the function carries on.
+    pub fn get_all_thumbs(&self) -> Result<Vec<(Uuid, DynamicImage)>, GetError> {
         const SELECT_GAME: &str = r"
             SELECT uuid, image FROM thumbs
         ";
