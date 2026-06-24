@@ -867,7 +867,11 @@ impl State {
     }
 
     /// View info.
-    pub fn view<'a>(&'a self, has_thumb: bool) -> Element<'a, OrRequest<Message, Request>> {
+    pub fn view<'a>(
+        &'a self,
+        has_thumb: bool,
+        settings: &Settings,
+    ) -> Element<'a, OrRequest<Message, Request>> {
         match self {
             State::Lutris {
                 id,
@@ -1002,7 +1006,9 @@ impl State {
                     ))
                     .into()
             }
-            State::Native { state } => state.view().map(|msg| msg.map_message(Message::NativeInfo)),
+            State::Native { state } => state
+                .view(settings)
+                .map(|msg| msg.map_message(Message::NativeInfo)),
             State::None => widget::text("No game selected").into(),
         }
     }

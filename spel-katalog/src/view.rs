@@ -171,6 +171,7 @@ impl State {
     fn view_info<'app>(
         &'app self,
         games: &'app ::spel_katalog_games::State,
+        settings: &'app Settings,
         info: &'app spel_katalog_info::State,
         process_info: &'app [ProcessInfo],
     ) -> Element<'app, crate::Message> {
@@ -187,7 +188,10 @@ impl State {
                             self.buttons(),
                         ))
                         .push(spel_katalog_widget::rule::horizontal())
-                        .push(info.view(game.thumb.is_some()).map(crate::Message::from))
+                        .push(
+                            info.view(game.thumb.is_some(), settings)
+                                .map(crate::Message::from),
+                        )
                         .spacing(3)
                         .padding(5)
                         .pipe(widget::container)
@@ -232,7 +236,7 @@ impl State {
                 pane_grid::Content::new(
                     match state {
                         Pane::Games => games.view(settings).map(crate::Message::from),
-                        Pane::GameInfo => self.view_info(games, info, process_info),
+                        Pane::GameInfo => self.view_info(games, settings, info, process_info),
                     }
                     .pipe(widget::container),
                 )

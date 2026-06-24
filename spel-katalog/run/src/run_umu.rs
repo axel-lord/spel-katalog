@@ -211,6 +211,7 @@ impl NativeUmuCtx<'_> {
             bind,
             ro_bind,
             use_gamescope,
+            gamescope_args,
             shadow: _,
         } = config;
 
@@ -349,7 +350,9 @@ impl NativeUmuCtx<'_> {
             args.extend(args![shell]);
         } else {
             if use_gamescope {
-                args.extend(args![gamescope, "--"]);
+                args.extend(args![gamescope]);
+                args.extend(gamescope_args.iter().map(OsString::from));
+                args.extend(args!["--"]);
             }
             if runner.is_wine() {
                 args.extend(args![umu]);
@@ -489,6 +492,7 @@ impl<'a> LutrisCtx<'a> {
             bind,
             ro_bind: Vec::new(),
             use_gamescope: None,
+            gamescope_args: Vec::new(),
             shadow: Some(id),
         })
     }

@@ -45,6 +45,10 @@ pub struct NativeGame {
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub use_gamescope: Option<bool>,
 
+    /// Arguments to pass to gamescope.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub gamescope_args: Vec<String>,
+
     /// Environment variabnles of game.
     #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
     pub env: FxHashMap<String, String>,
@@ -90,6 +94,7 @@ impl NativeGame {
             env: Default::default(),
             attrs: Default::default(),
             drives: Default::default(),
+            gamescope_args: Default::default(),
             dll_override: Default::default(),
             wt_verb: Default::default(),
             bind: Default::default(),

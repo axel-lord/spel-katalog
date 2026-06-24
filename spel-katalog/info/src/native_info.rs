@@ -4,6 +4,7 @@ use ::core::ops::Not;
 use ::std::{borrow::Cow, io::Cursor, sync::Arc};
 
 use ::derive_more::From;
+use ::iced_aw::ContextMenu;
 use ::iced_core::{
     Alignment::{self, Center},
     Font,
@@ -67,6 +68,8 @@ pub enum QuickMessage {
     AddBind,
     /// Add a specific compatability tool.
     AddCompTool,
+    /// Set use_gamescope to true.
+    UseGamescope,
 }
 
 /// Message in use by native info view.
@@ -291,6 +294,17 @@ impl State {
                         })
                     })
                     .and_then(Task::done),
+                QuickMessage::UseGamescope => self.get_content().then(|mut game| {
+                    game.use_gamescope = Some(true);
+                    if game.gamescope_args.is_empty() {
+                        game.gamescope_args.push(String::from("--scaler=integer"));
+                    }
+
+                    Box::new(game)
+                        .pipe(Message::UpdateConfig)
+                        .into_message()
+                        .pipe(Task::done)
+                }),
                 QuickMessage::Run => self.with_content(|game| {
                     Box::new(game)
                         .pipe(Request::RunGame)
@@ -587,10 +601,33 @@ impl State {
             .into()
     }
 
+    /// Create context menu widget for editor.
+    fn context_menu(&self) -> Element<'_, OrRequest<Message, crate::Request>> {
+        ::spel_katalog_widget::ListMenu::new()
+            .push(widget::text("Config"))
+            .separator()
+            .button_if(self.conf_view.selection().is_some(), "Copy", || {
+                QuickMessage::Copy
+            })
+            .button("Paste", || QuickMessage::Paste)
+            .separator()
+            .button_if(!self.history.is_empty(), "Undo", || QuickMessage::Undo)
+            .button_if(!self.future.is_empty(), "Redo", || QuickMessage::Redo)
+            .separator()
+            .button("Add Bind", || QuickMessage::AddBind)
+            .button("Comp Tool", || QuickMessage::AddCompTool)
+            .button("Gamescope", || QuickMessage::UseGamescope)
+            .pipe(Element::from)
+            .map(Message::Quick)
+            .map(OrRequest::Message)
+    }
+
     /// View native info.
-    pub fn view(&self) -> Element<'_, OrRequest<Message, crate::Request>> {
+    pub fn view(&self, settings: &Settings) -> Element<'_, OrRequest<Message, crate::Request>> {
         widget::Column::new()
             .spacing(3)
+            .height(Fill)
+            .width(Fill)
             .push(
                 widget::Row::new()
                     .spacing(3)
@@ -639,90 +676,72 @@ impl State {
                     .map(Message::Quick)
                     .map(OrRequest::Message),
             )
-            .push(::spel_katalog_widget::scrollable(
-                ::iced_aw::widget::ContextMenu::new(
-                    widget::themer(
-                        Some(::iced_core::Theme::SolarizedDark),
-                        text_editor::TextEditor::new(&self.conf_view)
-                            .font(Font::MONOSPACE)
-                            .wrapping(::iced_core::text::Wrapping::Glyph)
-                            .key_binding(|event| {
-                                if let Key::Named(named) = event.modified_key {
-                                    match named {
-                                        key::Named::Tab
-                                            if event.modifiers == Modifiers::empty() =>
-                                        {
-                                            QuickMessage::Indent
-                                                .pipe(Message::Quick)
-                                                .pipe(OrRequest::Message)
-                                                .pipe(Binding::Custom)
-                                                .pipe(Some)
-                                        }
-
-                                        key::Named::Tab if event.modifiers == Modifiers::SHIFT => {
-                                            QuickMessage::Unindent
-                                                .pipe(Message::Quick)
-                                                .pipe(OrRequest::Message)
-                                                .pipe(Binding::Custom)
-                                                .pipe(Some)
-                                        }
-                                        _ => Binding::from_key_press(event),
-                                    }
-                                } else if let Key::Character(chr) = event.modified_key.as_ref() {
-                                    match chr {
-                                        "z" if event.modifiers == Modifiers::CTRL => {
-                                            QuickMessage::Undo
-                                                .pipe(Message::Quick)
-                                                .pipe(OrRequest::Message)
-                                                .pipe(Binding::Custom)
-                                                .pipe(Some)
-                                        }
-                                        "y" if event.modifiers == Modifiers::CTRL => {
-                                            QuickMessage::Redo
-                                                .pipe(Message::Quick)
-                                                .pipe(OrRequest::Message)
-                                                .pipe(Binding::Custom)
-                                                .pipe(Some)
-                                        }
-                                        _ => Binding::from_key_press(event),
-                                    }
-                                } else {
-                                    Binding::from_key_press(event)
+            .push(::spel_katalog_widget::y_scrollable(ContextMenu::new(
+                text_editor::TextEditor::new(&self.conf_view)
+                    .font(Font::MONOSPACE)
+                    .wrapping(::iced_core::text::Wrapping::Glyph)
+                    .key_binding(|event| {
+                        if let Key::Named(named) = event.modified_key {
+                            match named {
+                                key::Named::Tab if event.modifiers == Modifiers::empty() => {
+                                    QuickMessage::Indent
+                                        .pipe(Message::Quick)
+                                        .pipe(OrRequest::Message)
+                                        .pipe(Binding::Custom)
+                                        .pipe(Some)
                                 }
-                            })
-                            .highlight_with::<::iced_highlighter::Highlighter>(
-                                ::iced_highlighter::Settings {
-                                    theme: ::iced_highlighter::Theme::SolarizedDark,
-                                    token: "toml".to_owned(),
-                                },
-                                |h, _| h.to_format(),
-                            )
-                            .on_action(|action| {
-                                action.pipe(Message::ConfAction).pipe(OrRequest::Message)
-                            })
-                            .min_height(200)
-                            .padding(6),
-                    ),
-                    || {
-                        ::spel_katalog_widget::ListMenu::new()
-                            .push(widget::text("Config"))
-                            .separator()
-                            .button_if(self.conf_view.selection().is_some(), "Copy", || {
-                                QuickMessage::Copy
-                            })
-                            .button("Paste", || QuickMessage::Paste)
-                            .separator()
-                            .button_if(!self.history.is_empty(), "Undo", || QuickMessage::Undo)
-                            .button_if(!self.future.is_empty(), "Redo", || QuickMessage::Redo)
-                            .separator()
-                            .button("Add Bind", || QuickMessage::AddBind)
-                            .button("Comp Tool", || QuickMessage::AddCompTool)
-                            .pipe(Element::from)
-                            .map(Message::Quick)
-                            .map(OrRequest::Message)
-                    },
-                ),
-            ))
+
+                                key::Named::Tab if event.modifiers == Modifiers::SHIFT => {
+                                    QuickMessage::Unindent
+                                        .pipe(Message::Quick)
+                                        .pipe(OrRequest::Message)
+                                        .pipe(Binding::Custom)
+                                        .pipe(Some)
+                                }
+                                _ => Binding::from_key_press(event),
+                            }
+                        } else if let Key::Character(chr) = event.modified_key.as_ref() {
+                            match chr {
+                                "z" if event.modifiers == Modifiers::CTRL => QuickMessage::Undo
+                                    .pipe(Message::Quick)
+                                    .pipe(OrRequest::Message)
+                                    .pipe(Binding::Custom)
+                                    .pipe(Some),
+                                "y" if event.modifiers == Modifiers::CTRL => QuickMessage::Redo
+                                    .pipe(Message::Quick)
+                                    .pipe(OrRequest::Message)
+                                    .pipe(Binding::Custom)
+                                    .pipe(Some),
+                                _ => Binding::from_key_press(event),
+                            }
+                        } else {
+                            Binding::from_key_press(event)
+                        }
+                    })
+                    .highlight_with::<::iced_highlighter::Highlighter>(
+                        ::iced_highlighter::Settings {
+                            theme: match settings.get::<::spel_katalog_settings::Theme>() {
+                                ::spel_katalog_settings::Theme::SolarizedDark => {
+                                    ::iced_highlighter::Theme::SolarizedDark
+                                }
+                                theme
+                                    if ::iced_core::Theme::from(*theme)
+                                        .extended_palette()
+                                        .is_dark =>
+                                {
+                                    ::iced_highlighter::Theme::Base16Mocha
+                                }
+                                _ => ::iced_highlighter::Theme::InspiredGitHub,
+                            },
+                            token: "toml".to_owned(),
+                        },
+                        |h, _| h.to_format(),
+                    )
+                    .on_action(|action| action.pipe(Message::ConfAction).pipe(OrRequest::Message))
+                    .min_height(200)
+                    .padding(6),
+                || self.context_menu(),
+            )))
             .into()
     }
 }
