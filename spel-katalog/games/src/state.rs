@@ -4,7 +4,7 @@ use ::core::{cell::Cell, convert::identity, iter, mem, ops::ControlFlow, time::D
 use ::std::{
     io::Cursor,
     path::{Path, PathBuf},
-    sync::LazyLock,
+    sync::{Arc, LazyLock},
 };
 
 use ::derive_more::{Deref, DerefMut, IsVariant};
@@ -123,7 +123,7 @@ pub enum Message {
         instant: timing::Instant,
     },
     /// Update multiple thumbnails.
-    UpdateThumbnails(Vec<(Uuid, Option<::spel_katalog_formats::Image>)>),
+    UpdateThumbnails(Arc<[(Uuid, Option<::spel_katalog_formats::Image>)]>),
     /// Update thumbnail used for thumbnail.
     UpdateThumbThumb {
         /// Uuid of game to update thumb thumb for.
@@ -132,11 +132,11 @@ pub enum Message {
         thumb_thumb: Option<::spel_katalog_formats::Image>,
     },
     /// Update multiple thumb thumbs.
-    UpdateThumbThumbs(Vec<(Uuid, Option<::spel_katalog_formats::Image>)>),
+    UpdateThumbThumbs(Arc<[(Uuid, Option<::spel_katalog_formats::Image>)]>),
     /// Load thumbnail from database.
     LoadThumbnail(Uuid, timing::Instant),
     /// Load multiple thumbnails.
-    LoadThumbnails(Vec<Uuid>),
+    LoadThumbnails(Arc<[Uuid]>),
     /// Move selection.
     Select(SelDir),
     /// Select an id.
@@ -254,10 +254,10 @@ fn load_thumb(
 /// Load multiple thumbnails.
 fn load_thumbs(
     games_db: ::spel_katalog_native::Pool,
-    uuids: Vec<Uuid>,
+    uuids: Arc<[Uuid]>,
 ) -> Option<[Task<Message>; 2]> {
     let thumbnails = games_db
-        .get_thumbs(&mut uuids.into_iter())
+        .get_thumbs(&mut uuids.iter().copied())
         .map_err(|err| ::log::error!("could not load thumbnails\n{err}"))
         .ok()?;
 
@@ -269,7 +269,7 @@ fn load_thumbs(
     let update_task = thumbnails
         .iter()
         .map(|(uuid, thumb)| (*uuid, Some(thumb.clone())))
-        .collect::<Vec<_>>()
+        .collect::<Arc<_>>()
         .pipe(Message::UpdateThumbnails)
         .pipe(Task::done);
 
@@ -277,7 +277,7 @@ fn load_thumbs(
         thumbnails
             .into_iter()
             .map(|(uuid, thumb)| (uuid, generate_thumb_thumb(thumb)))
-            .collect::<Vec<_>>()
+            .collect::<Arc<_>>()
     })
     .pipe(Task::future)
     .map(Message::UpdateThumbThumbs);
@@ -417,7 +417,7 @@ impl State {
                 Task::none()
             }
             Message::UpdateThumbnails(thumbs) => {
-                for (uuid, thumbnail) in thumbs {
+                for (uuid, thumbnail) in thumbs.iter().cloned() {
                     if let Some(game) = self.by_uuid_mut(uuid) {
                         game.thumb =
                             thumbnail.map(|t| t.map(::iced_core::image::Handle::from_rgba));
@@ -480,7 +480,7 @@ impl State {
                 Task::none()
             }
             Message::UpdateThumbThumbs(thumb_thumbs) => {
-                for (uuid, thumb_thumb) in thumb_thumbs {
+                for (uuid, thumb_thumb) in thumb_thumbs.iter().cloned() {
                     if let Some(game) = self.by_uuid_mut(uuid) {
                         game.thumb_thumb =
                             thumb_thumb.map(|t| t.map(::iced_core::image::Handle::from_rgba));
@@ -610,37 +610,8 @@ impl State {
     }
 
     /// Get a card to display a game thumbnail.
-    fn card<'a>(
-        &self,
-        game: &'a WithThumb,
-        should_unload_thumbnails: bool,
-    ) -> Element<'a, OrRequest<Message, Request>> {
+    fn card<'a>(&self, game: &'a WithThumb) -> Element<'a, OrRequest<Message, Request>> {
         let id = game.id();
-        let with_sensor = |element: Element<'a, OrRequest<Message, Request>>| {
-            if let GameId::Native(uuid) = id {
-                let element = Sensor::new(element)
-                    .key(uuid)
-                    .on_show(move |_| Message::LoadThumbnail(uuid, timing::now()).into_message())
-                    .anticipate(200);
-
-                if should_unload_thumbnails {
-                    element.on_hide(
-                        Message::UpdateThumbnail {
-                            uuid,
-                            thumbnail: None,
-                            instant: timing::now(),
-                        }
-                        .into_message(),
-                    )
-                } else {
-                    element
-                }
-                .into()
-            } else {
-                element
-            }
-        };
-
         let handle = game.thumb.as_ref().or(game.thumb_thumb.as_ref());
         let selected = self.selected;
         let name = game.name();
@@ -721,7 +692,8 @@ impl State {
         })
         .into();
 
-        with_sensor(element)
+        // with_sensor(element)
+        element
     }
 
     /// Render elements.
@@ -733,11 +705,39 @@ impl State {
 
             spel_katalog_widget::scrollable(widget::Column::new().width(Fill).spacing(4).extend(
                 self.displayed().chunks(columns).into_iter().map(|chunk| {
-                    widget::Grid::new()
-                        .columns(columns)
-                        .spacing(4)
-                        .extend(chunk.map(|game| self.card(game, should_unload_thumbnails)))
+                    let mut grid = widget::Grid::new().columns(columns).spacing(4);
+                    let mut watched = Vec::new();
+
+                    for game in chunk {
+                        grid = grid.push(self.card(game));
+                        if let GameId::Native(uuid) = game.id() {
+                            watched.push(uuid);
+                        }
+                    }
+
+                    let watched = Arc::<[_]>::from(watched);
+
+                    if watched.is_empty() {
+                        grid.into()
+                    } else {
+                        let sensor = Sensor::new(grid)
+                            .key((watched.first().copied(), watched.last().copied()));
+
+                        if should_unload_thumbnails {
+                            let watched = watched.clone();
+                            sensor.on_hide(
+                                Message::UpdateThumbnails(
+                                    watched.iter().cloned().map(|uuid| (uuid, None)).collect(),
+                                )
+                                .into_message(),
+                            )
+                        } else {
+                            sensor
+                        }
+                        .on_show(move |_| Message::LoadThumbnails(watched.clone()).into_message())
+                        .anticipate(200)
                         .into()
+                    }
                 }),
             ))
             .id(widget::Id::new("games-view"))

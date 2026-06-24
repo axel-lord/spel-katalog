@@ -394,7 +394,7 @@ impl Pool {
         game_ids: &mut dyn Iterator<Item = Uuid>,
     ) -> Result<Vec<(Uuid, DynamicImage)>, DbError> {
         const SELECT_GAME: &str = r"
-            SELECT uuid, image FROM thumbs
+            SELECT image FROM thumbs
             WHERE uuid = $1
         ";
         let conn = self.get_conn()?;
