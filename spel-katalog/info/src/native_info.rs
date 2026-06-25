@@ -70,6 +70,8 @@ pub enum QuickMessage {
     AddCompTool,
     /// Set use_gamescope to true.
     UseGamescope,
+    /// Open dialog to select exe.
+    OpenExeDialog,
 }
 
 /// Message in use by native info view.
@@ -497,6 +499,30 @@ impl State {
                     })
                     .and_then(Task::batch)
                 }
+                QuickMessage::OpenExeDialog => self
+                    .get_content()
+                    .then(|mut config| {
+                        Task::<Option<_>>::future(async move {
+                            let mut file = AsyncFileDialog::new().set_title("Select Executable");
+
+                            if let Some(location) = config.exe.parent() {
+                                file = file.set_directory(location);
+                            }
+
+                            let file = file
+                                .pick_file()
+                                .await
+                                .tap_none(|| ::log::info!("no exe chosen for {:?}", config.name))?;
+
+                            config.exe = file.path().to_path_buf();
+
+                            Box::new(config)
+                                .pipe(Message::UpdateConfig)
+                                .into_message()
+                                .pipe(Some)
+                        })
+                    })
+                    .and_then(Task::done),
                 QuickMessage::Paste => ::iced_runtime::clipboard::read().and_then(|content| {
                     content
                         .pipe(Arc::new)
@@ -617,6 +643,7 @@ impl State {
             .button("Add Bind", || QuickMessage::AddBind)
             .button("Comp Tool", || QuickMessage::AddCompTool)
             .button("Gamescope", || QuickMessage::UseGamescope)
+            .button("Set Exe", || QuickMessage::OpenExeDialog)
             .pipe(Element::from)
             .map(Message::Quick)
             .map(OrRequest::Message)
