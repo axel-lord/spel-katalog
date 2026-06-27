@@ -8,11 +8,9 @@ use ::iced_runtime::Task;
 use ::iced_widget::{self as widget};
 use ::smol::stream::StreamExt;
 use ::spel_katalog_common::OrRequest;
-use ::spel_katalog_formats::NativeGame;
+use ::spel_katalog_formats::{ExeChoice, InstallerPrepareConfig, NativeGame};
 use ::spel_katalog_settings::{InstallSource, Settings};
 use ::tap::TapOptional;
-
-pub use crate::prepare::ExeChoice;
 
 mod editor;
 mod prepare;
@@ -73,14 +71,9 @@ impl Installer {
     /// Construct a new installer.
     pub fn new(
         settings: &Settings,
-        parent: String,
-        choice: ExeChoice,
-        hidden: Option<bool>,
-        thumbnail: Option<PathBuf>,
-        move_game: Option<bool>,
+        installer_config: InstallerPrepareConfig,
     ) -> (Self, Task<Message>) {
-        let (prepare, task) =
-            prepare::Prepare::new(settings, parent, choice, hidden, thumbnail, move_game);
+        let (prepare, task) = prepare::Prepare::new(settings, installer_config);
         (
             Self {
                 prepare,
@@ -246,11 +239,13 @@ impl Installer {
                 let task;
                 (self.prepare, task) = prepare::Prepare::new(
                     settings,
-                    parent,
-                    choice,
-                    Some(self.prepare.hidden()),
-                    None,
-                    None,
+                    InstallerPrepareConfig {
+                        parent,
+                        choice,
+                        hidden: Some(self.prepare.hidden()),
+                        thumbnail: None,
+                        move_game: None,
+                    },
                 );
                 self.editor = None;
                 task.map(Message::Prepare).map(OrRequest::Message)

@@ -3,7 +3,6 @@
 use ::std::{
     borrow::Cow,
     collections::HashMap,
-    ffi::OsStr,
     path::{Path, PathBuf},
     process::Stdio,
 };
@@ -18,49 +17,14 @@ use ::spel_katalog_common::{
     IntoOrRequest, OrRequest, display_bytes,
     in_place::{Convene, MapSelf},
 };
-use ::spel_katalog_formats::{Bind, NativeGame, NativeRunner, Timestamp};
+use ::spel_katalog_formats::{
+    Bind, ExeChoice, InstallerPrepareConfig, NativeGame, NativeRunner, Timestamp,
+};
 use ::spel_katalog_settings::{
     CompToolDefault, CompToolsDir, InstallLocale, InstallLocation, Settings, Show, ThmubnailSource,
 };
 use ::spel_katalog_widget::{ListMenu, rule};
 use ::tap::{Conv, Pipe, TapOptional};
-
-/// Choice of executable.
-#[derive(Debug, Clone)]
-pub enum ExeChoice {
-    /// A single exe is chosen.
-    /// If not representable by a string
-    /// lossy conversion is performed and the
-    /// original path is included.
-    Value(String),
-    /// A list of executables that are available.
-    /// Every entry has the same format as [Self::Value]
-    /// The first value is the index of the chosen candidate.
-    List(usize, Vec<String>),
-}
-
-impl ExeChoice {
-    /// get current choice.
-    pub fn current(&self) -> Option<&str> {
-        match self {
-            ExeChoice::Value(exe) => Some(exe),
-            ExeChoice::List(idx, items) => items.get(*idx).as_ref().map(|s| s.as_str()),
-        }
-    }
-
-    /// Get file extension of selected choice.
-    pub fn extension(&self) -> Option<&str> {
-        Path::new(self.current()?)
-            .extension()
-            .and_then(OsStr::to_str)
-    }
-
-    /// Check if choice has given extension.
-    pub fn has_ext(&self, ext: &str) -> bool {
-        self.extension()
-            .is_some_and(|e| e.eq_ignore_ascii_case(ext))
-    }
-}
 
 /// Preparation messages.
 #[derive(Debug, Clone)]
@@ -241,12 +205,15 @@ impl Prepare {
     /// Construct a new instance.
     pub fn new(
         settings: &Settings,
-        parent: String,
-        choice: ExeChoice,
-        hidden: Option<bool>,
-        thumbnail: Option<PathBuf>,
-        move_game: Option<bool>,
+        installer_config: InstallerPrepareConfig,
     ) -> (Self, Task<Message>) {
+        let InstallerPrepareConfig {
+            parent,
+            choice,
+            hidden,
+            thumbnail,
+            move_game,
+        } = installer_config;
         let find_locales = Task::<Option<_>>::future(async {
             const FULL: &str = "localectl list-locales";
             const CMD: &str = "localectl";

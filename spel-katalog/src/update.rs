@@ -6,9 +6,8 @@ use ::iced_runtime::Task;
 use ::image::DynamicImage;
 use ::rustix::process::{Pid, RawPid};
 use ::spel_katalog_common::{IntoOrRequest, OrRequest};
-use ::spel_katalog_formats::NativeGame;
+use ::spel_katalog_formats::{InstallerConfig, InstallerPrepareConfig, NativeGame};
 use ::spel_katalog_games::SelDir;
-use ::spel_katalog_installer::ExeChoice;
 use ::spel_katalog_run::run_umu::RunMode;
 use ::spel_katalog_settings::{
     FilterMode, Load, LutrisDb, Network, Settings, Show, TrustedVariants,
@@ -108,32 +107,15 @@ impl App {
 
     async fn prefill_installer(
         settings: Settings,
-        game_dir: PathBuf,
-        hidden: Option<bool>,
-        thumbnail: Option<PathBuf>,
-        move_game: Option<bool>,
-        exe: Option<PathBuf>,
+        installer_config: InstallerConfig,
     ) -> Option<Task<Message>> {
-        let (parent, choice) = if let Some(exe) = exe {
-            (
-                game_dir
-                    .into_os_string()
-                    .into_string()
-                    .map_err(|err| ::log::error!("could not convert {err:?} to utf-8"))
-                    .ok()?,
-                ExeChoice::Value(
-                    exe.into_os_string()
-                        .into_string()
-                        .map_err(|err| ::log::error!("could not convert {err:?} to utf-8"))
-                        .ok()?,
-                ),
-            )
-        } else {
-            ::spel_katalog_installer::Installer::open_path(game_dir).await?
-        };
-
         let (installer, installer_task) = ::spel_katalog_installer::Installer::new(
-            &settings, parent, choice, hidden, thumbnail, move_game,
+            &settings,
+            installer_config
+                .into_prepare_config(|game_dir| {
+                    ::spel_katalog_installer::Installer::open_path(game_dir)
+                })
+                .await?,
         );
 
         let (id, open_task) = ::iced_runtime::window::open(Default::default());
@@ -157,7 +139,14 @@ impl App {
 
             let (parent, choice) = ::spel_katalog_installer::Installer::open(source).await?;
             let (installer, installer_task) = ::spel_katalog_installer::Installer::new(
-                &settings, parent, choice, hidden, None, None,
+                &settings,
+                InstallerPrepareConfig {
+                    parent,
+                    choice,
+                    hidden,
+                    thumbnail: None,
+                    move_game: None,
+                },
             );
 
             let (id, open_task) = ::iced_runtime::window::open(Default::default());
@@ -685,22 +674,9 @@ impl App {
                 }
             }
             Message::Ipc(message) => match message {
-                ::spel_katalog_ipc::Message::InstallGame {
-                    source,
-                    hidden,
-                    thumbnail,
-                    move_game,
-                    exe,
-                } => {
-                    return Task::future(Self::prefill_installer(
-                        self.settings.snapshot(),
-                        source,
-                        Some(hidden),
-                        thumbnail,
-                        Some(move_game),
-                        exe,
-                    ))
-                    .and_then(identity);
+                ::spel_katalog_ipc::Message::InstallGame(config) => {
+                    return Task::future(Self::prefill_installer(self.settings.snapshot(), config))
+                        .and_then(identity);
                 }
             },
             Message::ShowInfo(displayed) => {

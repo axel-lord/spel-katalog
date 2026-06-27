@@ -7,6 +7,7 @@ use ::color_eyre::{Section, eyre::eyre};
 use ::mimalloc::MiMalloc;
 use ::spel_katalog::run as run_app;
 use ::spel_katalog_cli::{Cli, InstallGame, Subcmd, SubcmdCallbacks};
+use ::spel_katalog_formats::InstallerConfig;
 use ::spel_katalog_sink::SinkBuilder;
 
 #[global_allocator]
@@ -61,20 +62,20 @@ fn install_game(
                 ::log::error!("could not get runtime directory, using /tmp\n{err}");
                 Path::new("/tmp")
             }),
-        ::spel_katalog_ipc::Message::InstallGame {
-            source: game
+        ::spel_katalog_ipc::Message::InstallGame(InstallerConfig {
+            game_dir: game
                 .canonicalize()
                 .map_err(|err| eyre!(err).note(format!("is {game:?} a valid path?")))?,
-            hidden,
-            move_game: !no_move,
+            exe,
+            hidden: Some(hidden),
             thumbnail: thumbnail
                 .map(|t| {
                     t.canonicalize()
                         .map_err(|err| eyre!(err).note(format!("is {t:?} a valid path?")))
                 })
                 .transpose()?,
-            exe,
-        },
+            move_game: Some(!no_move),
+        }),
     ) {
         Err(eyre!(err).note("is the application open?"))
     } else {

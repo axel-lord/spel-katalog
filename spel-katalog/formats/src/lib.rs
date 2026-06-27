@@ -5,6 +5,7 @@ pub use self::{
     bind::{Bind, Symlink},
     game::{Game, GameId},
     image::Image,
+    installer::{ExeChoice, InstallerConfig, InstallerPrepareConfig},
     lutris_game::{LutrisGame, LutrisRunner},
     native_game::{NativeGame, NativeRunner},
     timestamp::{TimeStampParseError, Timestamp, TimestampFromIntError},
@@ -14,6 +15,7 @@ mod addititional_config;
 mod bind;
 mod game;
 mod image;
+mod installer;
 mod lutris_game;
 mod native_game;
 mod timestamp;
