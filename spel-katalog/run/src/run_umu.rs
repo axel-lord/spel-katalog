@@ -286,6 +286,7 @@ impl NativeUmuCtx<'_> {
             "--bind-try", &wayland, wayland,
             "--ro-bind", &xauthority, xauthority,
             "--dev-bind", "/dev/dri", "/dev/dri",
+            "--dev-bind", "/dev/snd", "/dev/snd",
             "--bind", &umu_dir, umu_dir,
             "--setenv", "PATH", "/usr/bin",
             "--hostname", "spel-katalog",
