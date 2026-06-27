@@ -52,6 +52,7 @@ fn install_game(
         no_move,
         exe,
         installer_dir,
+        dummy,
     }: InstallGame,
 ) -> ::color_eyre::Result<()> {
     init_log(None);
@@ -63,6 +64,14 @@ fn install_game(
     let ro_bind = installer_dir
         .map(|d| Vec::from_iter([Bind::mirrored(d)]))
         .unwrap_or_default();
+    let game_dir = game
+        .canonicalize()
+        .map_err(|err| eyre!(err).note(format!("is {game:?} a valid path?")))?;
+    let exe = if !dummy {
+        exe
+    } else {
+        Some(game_dir.join("dummy.exe"))
+    };
 
     if let Err(err) = ::spel_katalog_ipc::send(
         base_dirs
@@ -73,9 +82,7 @@ fn install_game(
                 Path::new("/tmp")
             }),
         ::spel_katalog_ipc::Message::InstallGame(InstallerConfig {
-            game_dir: game
-                .canonicalize()
-                .map_err(|err| eyre!(err).note(format!("is {game:?} a valid path?")))?,
+            game_dir,
             exe,
             hidden: Some(hidden),
             thumbnail: thumbnail

@@ -21,4 +21,7 @@ pub struct InstallGame {
     /// Add a directory with an installer.
     #[arg(long)]
     pub installer_dir: Option<PathBuf>,
+    /// Set exe to a dummy value.
+    #[arg(long, conflicts_with = "exe")]
+    pub dummy: bool,
 }
