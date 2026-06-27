@@ -4602,6 +4602,8 @@ dependencies = [
  "image",
  "log",
  "rfd",
+ "rustc-hash 2.1.2",
+ "serde",
  "smol",
  "spel-katalog-common",
  "spel-katalog-formats",

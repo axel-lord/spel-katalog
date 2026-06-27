@@ -5,7 +5,10 @@ use ::std::{
     path::{Path, PathBuf},
 };
 
+use ::rustc_hash::FxHashMap;
 use ::serde::{Deserialize, Serialize};
+
+use crate::Bind;
 
 /// Arguments passed to installer prefill.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,6 +27,18 @@ pub struct InstallerConfig {
     /// Should the game be moved.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub move_game: Option<bool>,
+    /// Drive letters to add.
+    #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
+    pub drives: FxHashMap<char, PathBuf>,
+    /// Additional directories sandbox will be given read and write access to.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub bind: Vec<Bind>,
+    /// Additional directories sandbox will be given read access to.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub ro_bind: Vec<Bind>,
+    /// Environment variables of game.
+    #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
+    pub env: FxHashMap<String, String>,
 }
 
 impl InstallerConfig {
@@ -40,6 +55,10 @@ impl InstallerConfig {
             hidden,
             thumbnail,
             move_game,
+            drives,
+            bind,
+            ro_bind,
+            env,
         } = self;
         let (parent, choice) = if let Some(exe) = exe {
             (
@@ -65,6 +84,10 @@ impl InstallerConfig {
             hidden,
             thumbnail,
             move_game,
+            drives,
+            bind,
+            ro_bind,
+            env,
         })
     }
 }
@@ -85,6 +108,18 @@ pub struct InstallerPrepareConfig {
     /// Should the game be moved.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub move_game: Option<bool>,
+    /// Drive letters to add.
+    #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
+    pub drives: FxHashMap<char, PathBuf>,
+    /// Additional directories sandbox will be given read and write access to.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub bind: Vec<Bind>,
+    /// Additional directories sandbox will be given read access to.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub ro_bind: Vec<Bind>,
+    /// Environment variables of game.
+    #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
+    pub env: FxHashMap<String, String>,
 }
 
 /// Choice of executable.

@@ -1,4 +1,5 @@
 use ::std::{
+    collections::HashMap,
     io::{IsTerminal, Read},
     path::Path,
 };
@@ -7,7 +8,7 @@ use ::color_eyre::{Section, eyre::eyre};
 use ::mimalloc::MiMalloc;
 use ::spel_katalog::run as run_app;
 use ::spel_katalog_cli::{Cli, InstallGame, Subcmd, SubcmdCallbacks};
-use ::spel_katalog_formats::InstallerConfig;
+use ::spel_katalog_formats::{Bind, InstallerConfig};
 use ::spel_katalog_sink::SinkBuilder;
 
 #[global_allocator]
@@ -50,10 +51,19 @@ fn install_game(
         hidden,
         no_move,
         exe,
+        installer_dir,
     }: InstallGame,
 ) -> ::color_eyre::Result<()> {
     init_log(None);
     let base_dirs = ::xdg::BaseDirectories::with_prefix("spel-katalog");
+    let drives = installer_dir
+        .as_ref()
+        .map(|d| HashMap::from_iter([('i', d.clone())]))
+        .unwrap_or_default();
+    let ro_bind = installer_dir
+        .map(|d| Vec::from_iter([Bind::mirrored(d)]))
+        .unwrap_or_default();
+
     if let Err(err) = ::spel_katalog_ipc::send(
         base_dirs
             .get_runtime_directory()
@@ -75,6 +85,10 @@ fn install_game(
                 })
                 .transpose()?,
             move_game: Some(!no_move),
+            drives,
+            bind: Default::default(),
+            ro_bind,
+            env: Default::default(),
         }),
     ) {
         Err(eyre!(err).note("is the application open?"))

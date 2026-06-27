@@ -2,7 +2,6 @@
 
 use ::std::{
     borrow::Cow,
-    collections::HashMap,
     path::{Path, PathBuf},
     process::Stdio,
 };
@@ -12,6 +11,8 @@ use ::iced_core::{Element, Length, Size, alignment::Vertical};
 use ::iced_runtime::Task;
 use ::iced_widget::{self as widget};
 use ::rfd::AsyncFileDialog;
+use ::rustc_hash::FxHashMap;
+use ::serde::{Deserialize, Serialize};
 use ::smol::stream::StreamExt;
 use ::spel_katalog_common::{
     IntoOrRequest, OrRequest, display_bytes,
@@ -104,6 +105,25 @@ pub struct Prepare {
     comp_tool: String,
     /// Should the game be moved.
     move_game: bool,
+    /// Extra config values.
+    extra: Extra,
+}
+
+/// Additional config values not displayed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Extra {
+    /// Drive letters to add.
+    #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
+    pub drives: FxHashMap<char, PathBuf>,
+    /// Additional directories sandbox will be given read and write access to.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub bind: Vec<Bind>,
+    /// Additional directories sandbox will be given read access to.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub ro_bind: Vec<Bind>,
+    /// Environment variables of game.
+    #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
+    pub env: FxHashMap<String, String>,
 }
 
 /// Show exe dialog at location.
@@ -213,6 +233,10 @@ impl Prepare {
             hidden,
             thumbnail,
             move_game,
+            drives,
+            bind,
+            ro_bind,
+            env,
         } = installer_config;
         let find_locales = Task::<Option<_>>::future(async {
             const FULL: &str = "localectl list-locales";
@@ -325,6 +349,12 @@ impl Prepare {
                 move_game: move_game.unwrap_or(true),
                 parent,
                 choice,
+                extra: Extra {
+                    drives,
+                    bind,
+                    ro_bind,
+                    env,
+                },
             },
             Task::batch([find_locales, read_thumb, read_comp_tools]).and_then(Task::done),
         )
@@ -336,7 +366,12 @@ impl Prepare {
         let parent = self.game_dir(settings);
         let exe = parent.join(exe);
 
-        let mut env = HashMap::default();
+        let Extra {
+            mut drives,
+            mut bind,
+            ro_bind,
+            mut env,
+        } = self.extra.clone();
 
         if !self.locale.is_empty() {
             env.insert("LANG".to_owned(), self.locale.clone());
@@ -346,16 +381,20 @@ impl Prepare {
             env.insert("PROTONPATH".to_owned(), self.comp_tool.clone());
         }
 
+        drives.insert('g', PathBuf::from("../.."));
+        bind.push(Bind::mirrored(parent.clone()));
+
         let config = NativeGame {
             hidden: self.hidden,
-            drives: [('g', PathBuf::from("../.."))].into_iter().collect(),
+            drives,
             prefix: if self.runner.is_wine() {
                 parent.join(".umu_pfx").pipe(Some)
             } else {
                 None
             },
-            bind: Vec::from([Bind::mirrored(parent)]),
+            bind,
             env,
+            ro_bind,
             ..NativeGame::new(self.title.clone(), Timestamp::now(), exe, self.runner)
         };
         Some(config)

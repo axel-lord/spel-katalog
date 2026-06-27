@@ -245,6 +245,10 @@ impl Installer {
                         hidden: Some(self.prepare.hidden()),
                         thumbnail: None,
                         move_game: None,
+                        drives: Default::default(),
+                        bind: Default::default(),
+                        ro_bind: Default::default(),
+                        env: Default::default(),
                     },
                 );
                 self.editor = None;

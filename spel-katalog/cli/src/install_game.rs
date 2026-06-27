@@ -18,4 +18,7 @@ pub struct InstallGame {
     /// Exe to use for game.
     #[arg(long)]
     pub exe: Option<PathBuf>,
+    /// Add a directory with an installer.
+    #[arg(long)]
+    pub installer_dir: Option<PathBuf>,
 }

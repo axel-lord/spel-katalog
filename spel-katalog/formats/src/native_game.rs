@@ -49,7 +49,7 @@ pub struct NativeGame {
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub gamescope_args: Vec<String>,
 
-    /// Environment variabnles of game.
+    /// Environment variables of game.
     #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
     pub env: FxHashMap<String, String>,
 
