@@ -48,6 +48,7 @@ fn install_game(
         thumbnail,
         hidden,
         no_move,
+        exe,
     }: InstallGame,
 ) -> ::color_eyre::Result<()> {
     init_log(None);
@@ -72,6 +73,7 @@ fn install_game(
                         .map_err(|err| eyre!(err).note(format!("is {t:?} a valid path?")))
                 })
                 .transpose()?,
+            exe,
         },
     ) {
         Err(eyre!(err).note("is the application open?"))

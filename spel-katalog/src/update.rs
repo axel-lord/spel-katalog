@@ -8,6 +8,7 @@ use ::rustix::process::{Pid, RawPid};
 use ::spel_katalog_common::{IntoOrRequest, OrRequest};
 use ::spel_katalog_formats::NativeGame;
 use ::spel_katalog_games::SelDir;
+use ::spel_katalog_installer::ExeChoice;
 use ::spel_katalog_run::run_umu::RunMode;
 use ::spel_katalog_settings::{
     FilterMode, Load, LutrisDb, Network, Settings, Show, TrustedVariants,
@@ -111,8 +112,26 @@ impl App {
         hidden: Option<bool>,
         thumbnail: Option<PathBuf>,
         move_game: Option<bool>,
+        exe: Option<PathBuf>,
     ) -> Option<Task<Message>> {
-        let (parent, choice) = ::spel_katalog_installer::Installer::open_path(game_dir).await?;
+        let (parent, choice) = if let Some(exe) = exe {
+            (
+                game_dir
+                    .into_os_string()
+                    .into_string()
+                    .map_err(|err| ::log::error!("could not convert {err:?} to utf-8"))
+                    .ok()?,
+                ExeChoice::Value(
+                    exe.into_os_string()
+                        .into_string()
+                        .map_err(|err| ::log::error!("could not convert {err:?} to utf-8"))
+                        .ok()?,
+                ),
+            )
+        } else {
+            ::spel_katalog_installer::Installer::open_path(game_dir).await?
+        };
+
         let (installer, installer_task) = ::spel_katalog_installer::Installer::new(
             &settings, parent, choice, hidden, thumbnail, move_game,
         );
@@ -671,6 +690,7 @@ impl App {
                     hidden,
                     thumbnail,
                     move_game,
+                    exe,
                 } => {
                     return Task::future(Self::prefill_installer(
                         self.settings.snapshot(),
@@ -678,6 +698,7 @@ impl App {
                         Some(hidden),
                         thumbnail,
                         Some(move_game),
+                        exe,
                     ))
                     .and_then(identity);
                 }

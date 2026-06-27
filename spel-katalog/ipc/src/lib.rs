@@ -22,9 +22,12 @@ pub enum Message {
         /// Should the game be moved.
         #[serde(default, skip_serializing_if = "::std::ops::Not::not")]
         move_game: bool,
-        /// thumbnail of game.
+        /// Thumbnail of game.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         thumbnail: Option<PathBuf>,
+        /// Exe of game.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        exe: Option<PathBuf>,
     },
 }
 

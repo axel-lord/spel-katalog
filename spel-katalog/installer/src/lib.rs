@@ -12,7 +12,7 @@ use ::spel_katalog_formats::NativeGame;
 use ::spel_katalog_settings::{InstallSource, Settings};
 use ::tap::TapOptional;
 
-use crate::prepare::ExeChoice;
+pub use crate::prepare::ExeChoice;
 
 mod editor;
 mod prepare;

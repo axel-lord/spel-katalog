@@ -4,13 +4,15 @@ use ::clap::Parser;
 
 pub use self::{
     batch::Batch,
+    install_game::InstallGame,
     run::Run,
-    subcmd::{InstallGame, SubCmdError, Subcmd, SubcmdCallbacks},
+    subcmd::{SubCmdError, Subcmd, SubcmdCallbacks},
 };
 
 mod batch;
 mod completions;
 mod init_config;
+mod install_game;
 mod run;
 mod skeleton;
 mod subcmd;

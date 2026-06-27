@@ -4,7 +4,7 @@ use ::std::path::{Path, PathBuf};
 
 use ::clap::Subcommand;
 
-use crate::{completions::completions, init_config::init_config, skeleton::skeleton};
+use crate::{InstallGame, completions::completions, init_config::init_config, skeleton::skeleton};
 
 /// Get default shell.
 fn get_shell() -> ::clap_complete::Shell {
@@ -22,21 +22,6 @@ pub struct SubcmdCallbacks<E> {
 
     /// Callbacks to use when installing a game.
     pub install_game: fn(InstallGame) -> Result<(), E>,
-}
-
-/// Install a game.
-#[derive(Debug, ::clap::Args)]
-pub struct InstallGame {
-    /// Game to install.
-    pub game: PathBuf,
-    /// Thumbnail of game.
-    pub thumbnail: Option<PathBuf>,
-    /// Should the game be hidden.
-    #[arg(long)]
-    pub hidden: bool,
-    /// Should the game not be moved.
-    #[arg(long)]
-    pub no_move: bool,
 }
 
 /// Error returned whe subcmd perform fails.
