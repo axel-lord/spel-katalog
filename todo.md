@@ -22,6 +22,7 @@
 - [x] Use iced grid for game view
 - [x] Use iced sensor for game cards
 - [x] Profiling crate with feature flag to enable
+- [ ] Deamon for spawning game processes
 
 # Future Goals/Possibilities
 - [x] Run exe files in prefix without lutris
