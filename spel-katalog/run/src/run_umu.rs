@@ -368,7 +368,7 @@ impl NativeUmuCtx<'_> {
         ::log::info!("running {process_path:?} with args\n{args:#?}");
         let cmd = Command::new(process_path)
             .args(args)
-            .kill_on_drop(true)
+            .reap_on_drop(false)
             .stdout(stdout)
             .stderr(stderr)
             .status();
