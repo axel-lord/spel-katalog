@@ -58,7 +58,7 @@ strsim.workspace = true
 tap.workspace = true
 thiserror.workspace = true
 toml.workspace = true
-unicode-segmentation = "1.13.3"
+unicode-segmentation.workspace = true
 users.workspace = true
 uuid = { workspace = true, features = ["v4", "v7"] }
 xdg.workspace = true

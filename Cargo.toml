@@ -161,3 +161,4 @@ yaml-rust2 = "0.11.0"
 spel-katalog-install = { path = "spel-katalog-install" }
 spel-katalog-lazy = { path = "spel-katalog/lazy" }
 spel-katalog-settings-view = { path = "spel-katalog/settings/view" }
+unicode-segmentation = "1.13.3"
