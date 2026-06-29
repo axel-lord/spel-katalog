@@ -4,7 +4,11 @@ use ::bytes::Bytes;
 use ::http_body_util::{BodyExt, Full};
 use ::hyper::{Method, Request, client::conn::http1};
 use ::serde::Serialize;
-use ::smol::{future::FutureExt, net::unix::UnixStream};
+use ::smol::{
+    future::FutureExt,
+    io::{AsyncRead, AsyncWrite},
+    net::unix::UnixStream,
+};
 use ::smol_hyper::rt::FuturesIo;
 use ::xdg::BaseDirectories;
 
@@ -51,25 +55,22 @@ impl SendError {
     }
 }
 
-/// Send an ipc message.
+/// Send a message to the given writer, only returning the
+/// writer and response body if the message was sent successfully.
 ///
 /// # Errors
 /// If the message cannot be sent.
-pub async fn send<M>(xdg: &BaseDirectories, name: &'static str, message: M) -> Result<(), SendError>
+pub async fn send<M, W>(mut stream: W, message: M) -> Result<(W, Option<Bytes>), SendError>
 where
     M: Serialize,
+    W: AsyncWrite + AsyncRead + Unpin,
 {
     let message = Bytes::from_owner(::serde_json::to_vec(&message).map_err(SendError::Serialize)?);
-    let path = xdg
-        .get_runtime_file(name)
-        .map_err(SendError::GetRuntimeDir)?;
-    let stream = UnixStream::connect(&path)
-        .await
-        .map_err(SendError::Connect)?;
-    let io = FuturesIo::new(stream);
+    let io = FuturesIo::new(&mut stream);
     let (mut sender, conn) = http1::handshake(io).await.map_err(SendError::Handshake)?;
-
     let run = async move { conn.await.map_err(SendError::ConnectionFailed) };
+    let mut body = None;
+    let body_ref = &mut body;
     let send = async move {
         let req = Request::builder()
             .uri("/v1")
@@ -92,7 +93,8 @@ where
             .unwrap_or_default();
 
         if status.is_success() {
-            ::log::info!("installer opened")
+            ::log::info!("installer opened");
+            *body_ref = Some(body);
         } else if body.is_empty() {
             ::log::error!("status: {status}")
         } else {
@@ -106,5 +108,18 @@ where
         Ok(())
     };
 
-    send.race(run).await
+    send.or(run).await?;
+
+    Ok((stream, body))
+}
+
+/// Connect to an ipc socket.
+///
+/// # Errors
+/// If connection cannot be established.
+pub async fn connect(xdg: &BaseDirectories, name: &'static str) -> Result<UnixStream, SendError> {
+    let path = xdg
+        .get_runtime_file(name)
+        .map_err(SendError::GetRuntimeDir)?;
+    UnixStream::connect(&path).await.map_err(SendError::Connect)
 }

@@ -4486,6 +4486,7 @@ dependencies = [
  "tap",
  "thiserror 2.0.18",
  "toml 1.1.2+spec-1.1.0",
+ "unicode-segmentation",
  "users",
  "uuid",
  "xdg",
@@ -4736,7 +4737,6 @@ dependencies = [
  "smol",
  "spel-katalog-formats",
  "spel-katalog-settings",
- "spel-katalog-sink",
  "tap",
  "users",
 ]

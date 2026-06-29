@@ -56,15 +56,15 @@ where
     let listener = listener(socket_path).await?;
 
     loop {
-        let (stream, _) = listener
+        let (mut stream, _) = listener
             .accept()
             .await
             .map_err(|err| ::log::error!("could not accept on unix socket\n{err}"))
             .ok()?;
-        let io = FuturesIo::new(stream);
         let tx = tx.clone();
 
         ex.spawn(async move {
+            let io = FuturesIo::new(&mut stream);
             let serve = http1::Builder::new()
                 .serve_connection(io, service_fn(|req| request_handler(req, &tx)));
             if let Err(err) = serve.await {

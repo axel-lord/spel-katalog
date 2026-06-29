@@ -1,12 +1,54 @@
 //! Crate with functionality for shared output sinks.
 
 use ::std::{
-    io::{PipeReader, PipeWriter, pipe},
+    io::{PipeReader, PipeWriter, Stderr, Stdout, Write, pipe, stderr, stdout},
     process::Stdio,
     sync::Arc,
 };
 
 use ::derive_more::Display;
+
+/// [Write] implementation available for inherit and pipe
+/// sinks.
+#[derive(Debug)]
+pub enum SinkWriter {
+    /// Stdout writer.
+    Stdout(Stdout),
+    /// Stderr writer
+    Stderr(Stderr),
+    /// Pipe writer.
+    Pipe(PipeWriter),
+}
+
+impl SinkWriter {
+    /// Get new writer of stdout variant.
+    pub fn stdout() -> Self {
+        Self::Stdout(stdout())
+    }
+
+    /// Get new writer of stderr variant.
+    pub fn stderr() -> Self {
+        Self::Stderr(stderr())
+    }
+}
+
+impl Write for SinkWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match self {
+            SinkWriter::Stdout(stdout) => stdout.write(buf),
+            SinkWriter::Stderr(stderr) => stderr.write(buf),
+            SinkWriter::Pipe(pipe_writer) => pipe_writer.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            SinkWriter::Stdout(stdout) => stdout.flush(),
+            SinkWriter::Stderr(stderr) => stderr.flush(),
+            SinkWriter::Pipe(pipe_writer) => pipe_writer.flush(),
+        }
+    }
+}
 
 /// The identity of a sink.
 /// Used when choosing output.
@@ -92,7 +134,7 @@ impl SinkBuilder {
         }
     }
 
-    /// Get two pipewriters if possible, returns `Ok(None)` if `Inherit`,
+    /// Get two pipew riters if possible, returns `Ok(None)` if `Inherit`,
     /// otherwise attempts to clone/create a pipe. If creating `id` will
     /// be called to set identity of pipe.
     ///
@@ -118,6 +160,33 @@ impl SinkBuilder {
             }
             SinkBuilder::ClonePipe(pipe_writer) => {
                 Ok(Some([pipe_writer.try_clone()?, pipe_writer.try_clone()?]))
+            }
+        }
+    }
+
+    /// Get two sink writers if possible. If `Inherit` will return [Stdout] and [Stderr] handles,
+    /// if `CreatePipe` will create two pipes, and if `ClonePipe` will clone pipe twice.
+    ///
+    /// # Errors
+    /// If pipe creation fails.
+    pub fn get_writer_double(
+        &self,
+        id: impl FnOnce() -> SinkIdentity,
+    ) -> ::std::io::Result<[SinkWriter; 2]> {
+        match self {
+            SinkBuilder::Inherit => Ok([SinkWriter::stdout(), SinkWriter::stderr()]),
+            SinkBuilder::CreatePipe(sender) => {
+                let (r, w) = pipe()?;
+                let w2 = w.try_clone()?;
+
+                sender
+                    .send((r, id()))
+                    .map_err(|err| ::std::io::Error::other(err.to_string()))?;
+
+                Ok([SinkWriter::Pipe(w), SinkWriter::Pipe(w2)])
+            }
+            SinkBuilder::ClonePipe(pipe_writer) => {
+                Ok([pipe_writer.try_clone()?, pipe_writer.try_clone()?].map(SinkWriter::Pipe))
             }
         }
     }

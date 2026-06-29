@@ -26,12 +26,19 @@ pub fn listen(
 /// If no connection can be established.
 /// Or if the message cannot be serialized.
 pub fn send(xdg: &::xdg::BaseDirectories, message: Message) -> Result<(), SendError> {
-    ::smol::block_on(crate::send::send(xdg, NAME, message))
+    _ = ::smol::block_on(async move {
+        let socket = crate::send::connect(xdg, NAME).await?;
+        crate::send::send(socket, message).await
+    })?;
+    Ok(())
 }
 
 pub mod generic {
     //! Generic ipc listen and send.
-    pub use crate::{listen::listen, send::send};
+    pub use crate::{
+        listen::listen,
+        send::{connect, send},
+    };
 }
 
 mod listen;

@@ -15,7 +15,6 @@ use ::spel_katalog_formats::{
     AdditionalConfig, Bind, GameId, LutrisRunner, NativeGame, NativeRunner, Timestamp,
     lutris_config,
 };
-use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::tap::Pipe;
 
 use crate::{Callback, macros::args};
@@ -44,8 +43,10 @@ pub struct CommonUmuCtx<'a> {
     pub gamescope: &'a Path,
     /// Callback used to signal game was started.
     pub callback: Callback,
-    /// Builder to create output sinks using.
-    pub sink_builder: SinkBuilder,
+    /// File to write stdout to.
+    pub stdout: ::std::io::PipeWriter,
+    /// File to write stderr to.
+    pub stderr: ::std::io::PipeWriter,
 }
 
 /// Context needed to run native games.
@@ -78,15 +79,10 @@ async fn init_umu_prefix(
     umu_prefix: &Path,
     verbs: &[String],
     drives: &mut (dyn '_ + Send + Sync + Iterator<Item = (char, &Path)>),
-    sink_builder: &SinkBuilder,
+    stdout: ::std::io::PipeWriter,
+    stderr: ::std::io::PipeWriter,
     envs: &FxHashMap<String, String>,
 ) -> ::color_eyre::Result<()> {
-    let sink_builder = sink_builder
-        .with_locked_channel(|| SinkIdentity::StaticName("prefix preparation"))
-        .map_err(|err| eyre!(err).note("could not lock sink builder, {err}"))?;
-    let [stdout, stderr] = sink_builder
-        .build_double(|| SinkIdentity::StaticName("winetricks"))
-        .map_err(|err| eyre!(err).note("could not build sinks for winetricks"))?;
     let status = Command::new(umu)
         .stdout(stdout)
         .stderr(stderr)
@@ -190,7 +186,8 @@ impl NativeUmuCtx<'_> {
                     callback: send_open,
                     use_gamescope: global_use_gamescope,
                     gamescope,
-                    sink_builder,
+                    stdout,
+                    stderr,
                 },
             config,
         } = self;
@@ -243,6 +240,8 @@ impl NativeUmuCtx<'_> {
             && let Some(prefix) = prefix.as_deref()
             && (run_mode.is_init() || !prefix.exists())
         {
+            let stdout = stdout.try_clone()?;
+            let stderr = stderr.try_clone()?;
             init_umu_prefix(
                 umu,
                 prefix,
@@ -250,7 +249,8 @@ impl NativeUmuCtx<'_> {
                 &mut drives
                     .iter()
                     .map(|(letter, link)| (*letter, link.as_path())),
-                &sink_builder,
+                stdout,
+                stderr,
                 &env,
             )
             .await?;
@@ -361,9 +361,6 @@ impl NativeUmuCtx<'_> {
             args.extend(args![exe]);
         }
 
-        let [stdout, stderr] = sink_builder
-            .build_double(|| SinkIdentity::Name(name.clone()))
-            .map_err(|err| eyre!("failed to build sinks for {name}").error(err))?;
         let process_path = term_path.unwrap_or_else(|| bwrap.to_path_buf());
         ::log::info!("running {process_path:?} with args\n{args:#?}");
         let cmd = Command::new(process_path)
