@@ -560,10 +560,10 @@ pub fn write(settings: Settings, dest: &Path) {
             )]
             pub struct #settings_ident {
                 #(
-                #[doc = #ty_doc]
+                #[doc(hidden)]
                 #[arg(long)]
                 #[serde(skip_serializing_if = "Option::is_none", default)]
-                pub(crate) #field_names: Option<#ty_names>,
+                pub #field_names: Option<#ty_names>,
                 )*
             }
 
@@ -608,20 +608,29 @@ pub fn write(settings: Settings, dest: &Path) {
                 }
 
                 )*
+            }
 
-                /// Get element to display enum options.
-                pub fn view_enums(&self) -> ::iced_core::Element<'_,  Delta, ::iced_core::Theme, ::iced_renderer::Renderer> {
-                    crate::list::enum_list([
-                        #( crate::list::enum_choice(self.#enum_field_names), )*
-                    ]).into()
-                }
+            /// Get an array with `for_each` applied to each enum setting.
+            #[macro_export]
+            macro_rules! view_enums {
+                ($this:expr, $for_each:path) => {
+                    {
+                        let _s: &#settings_ident = &$this;
+                        [ #( ($for_each)(_s.#enum_field_names) ),* ]
+                    }
+                };
+            }
 
-                /// Get element to display path options.
-                pub fn view_paths(&self) -> ::iced_widget::Column<'_, Delta, ::iced_core::Theme, ::iced_renderer::Renderer> {
-                    crate::list::path_list([
-                        #( crate::list::path_input(&self.#path_field_names), )*
-                    ])
-                }
+
+            /// Get an array with `for_each` applied to each path/string setting.
+            #[macro_export]
+            macro_rules! view_paths {
+                ($this:expr, $for_each:path) => {
+                    {
+                        let _s: &#settings_ident = &$this;
+                        [ #( ($for_each)(&_s.#path_field_names) ),* ]
+                    }
+                };
             }
 
             /// A Change in a setting.

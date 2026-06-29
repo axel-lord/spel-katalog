@@ -69,7 +69,6 @@ pub use self::{
 };
 
 pub mod in_place;
-pub mod lazy;
 pub mod styling;
 pub mod w;
 

@@ -1,0 +1,21 @@
+[package]
+name = "spel-katalog-settings-view"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+spel-katalog-common.workspace = true
+spel-katalog-widget.workspace = true
+spel-katalog-settings-traits.workspace = true
+tap.workspace = true
+iced_core.workspace = true
+iced_renderer.workspace = true
+iced_runtime.workspace = true
+iced_widget.workspace = true
+spel-katalog-settings.workspace = true
+derive_more = { workspace = true, features = ["from", "is_variant", "display", "into_iterator", "as_ref", "deref", "into", "deref_mut"] }
+
+[lints]
+workspace = true

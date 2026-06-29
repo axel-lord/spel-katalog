@@ -32,7 +32,7 @@ pub enum WindowType {
 
 #[derive(Debug)]
 pub(crate) struct App {
-    pub settings: ::spel_katalog_settings::State,
+    pub settings: ::spel_katalog_settings_view::State,
     pub games: ::spel_katalog_games::State,
     pub status: String,
     pub filter: String,
@@ -82,7 +82,7 @@ impl Initial {
         let filter = String::new();
         let status = String::new();
         let view = view::State::new();
-        let settings = ::spel_katalog_settings::State { settings, config };
+        let settings = ::spel_katalog_settings_view::State { settings, config };
         let games = ::spel_katalog_games::State::default();
         let info = ::spel_katalog_info::State::default();
         let sender = status_tx.into();
@@ -207,7 +207,9 @@ impl App {
             ..Font::DEFAULT
         })
         .theme(|this: &Self, _: window::Id| {
-            Some(::iced_core::Theme::from(*this.settings.get::<Theme>()))
+            Some(::spel_katalog_settings_view::conv_theme(
+                *this.settings.get::<Theme>(),
+            ))
         })
         .run()
         .map_err(|err| ::color_eyre::eyre::eyre!(err))
@@ -315,7 +317,7 @@ impl App {
                         toggler(self.settings.get::<Network>().is_enabled())
                             .spacing(0)
                             .on_toggle(|net| {
-                                Message::Settings(::spel_katalog_settings::Message::Delta(
+                                Message::Settings(::spel_katalog_settings_view::Message::Delta(
                                     spel_katalog_settings::Delta::Network(match net {
                                         true => spel_katalog_settings::Network::Enabled,
                                         false => spel_katalog_settings::Network::Disabled,

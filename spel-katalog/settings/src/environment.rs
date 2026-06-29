@@ -3,7 +3,7 @@ use ::core::fmt::Display;
 use ::std::{fmt, path::PathBuf, sync::OnceLock};
 
 use ::rustix::{fs::Uid, process::getuid};
-use ::spel_katalog_common::lazy::Lazy;
+use ::spel_katalog_lazy::Lazy;
 
 /// Displayable user, may be either a numeric id or a username.
 #[derive(Debug)]

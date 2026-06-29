@@ -51,7 +51,7 @@ pub enum Message {
     Status(String),
     Filter(String),
     #[from]
-    Settings(::spel_katalog_settings::Message),
+    Settings(::spel_katalog_settings_view::Message),
     #[from]
     View(view::Message),
     #[from]

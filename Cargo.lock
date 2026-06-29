@@ -4470,6 +4470,7 @@ dependencies = [
  "spel-katalog-games",
  "spel-katalog-gather",
  "spel-katalog-info",
+ "spel-katalog-install",
  "spel-katalog-installer",
  "spel-katalog-ipc",
  "spel-katalog-native",
@@ -4477,6 +4478,7 @@ dependencies = [
  "spel-katalog-run",
  "spel-katalog-settings",
  "spel-katalog-settings-build",
+ "spel-katalog-settings-view",
  "spel-katalog-sink",
  "spel-katalog-terminal",
  "spel-katalog-widget",
@@ -4515,6 +4517,10 @@ dependencies = [
  "log",
  "serde",
 ]
+
+[[package]]
+name = "spel-katalog-daemon"
+version = "0.1.0"
 
 [[package]]
 name = "spel-katalog-formats"
@@ -4611,6 +4617,7 @@ dependencies = [
  "spel-katalog-gather",
  "spel-katalog-native",
  "spel-katalog-settings",
+ "spel-katalog-settings-view",
  "spel-katalog-widget",
  "tabled",
  "tap",
@@ -4618,6 +4625,20 @@ dependencies = [
  "toml 1.1.2+spec-1.1.0",
  "uuid",
  "yaml-rust2",
+]
+
+[[package]]
+name = "spel-katalog-install"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "color-eyre",
+ "env_logger",
+ "log",
+ "spel-katalog-cli",
+ "spel-katalog-formats",
+ "spel-katalog-ipc",
+ "xdg",
 ]
 
 [[package]]
@@ -4641,6 +4662,7 @@ dependencies = [
  "spel-katalog-formats",
  "spel-katalog-native",
  "spel-katalog-settings",
+ "spel-katalog-settings-view",
  "spel-katalog-widget",
  "tap",
  "toml 1.1.2+spec-1.1.0",
@@ -4666,6 +4688,10 @@ dependencies = [
  "uuid",
  "xdg",
 ]
+
+[[package]]
+name = "spel-katalog-lazy"
+version = "0.1.0"
 
 [[package]]
 name = "spel-katalog-native"
@@ -4721,18 +4747,13 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "derive_more",
- "iced_core",
- "iced_renderer",
- "iced_runtime",
- "iced_widget",
  "log",
  "rustix 1.1.4",
  "serde",
  "smol",
- "spel-katalog-common",
+ "spel-katalog-lazy",
  "spel-katalog-settings-build",
  "spel-katalog-settings-traits",
- "spel-katalog-widget",
  "tap",
  "toml 1.1.2+spec-1.1.0",
  "whoami",
@@ -4776,6 +4797,22 @@ name = "spel-katalog-settings-traits"
 version = "0.1.0"
 dependencies = [
  "spel-katalog-settings-derive",
+]
+
+[[package]]
+name = "spel-katalog-settings-view"
+version = "0.1.0"
+dependencies = [
+ "derive_more",
+ "iced_core",
+ "iced_renderer",
+ "iced_runtime",
+ "iced_widget",
+ "spel-katalog-common",
+ "spel-katalog-settings",
+ "spel-katalog-settings-traits",
+ "spel-katalog-widget",
+ "tap",
 ]
 
 [[package]]

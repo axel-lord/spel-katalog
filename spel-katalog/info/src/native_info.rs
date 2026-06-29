@@ -752,7 +752,7 @@ impl State {
                                     ::iced_highlighter::Theme::SolarizedDark
                                 }
                                 theme
-                                    if ::iced_core::Theme::from(*theme)
+                                    if ::spel_katalog_settings_view::conv_theme(*theme)
                                         .extended_palette()
                                         .is_dark =>
                                 {

@@ -27,6 +27,7 @@ spel-katalog-formats.workspace = true
 spel-katalog-gather.workspace = true
 spel-katalog-native.workspace = true
 spel-katalog-settings.workspace = true
+spel-katalog-settings-view.workspace = true
 spel-katalog-widget.workspace = true
 tabled = { workspace = true, features = ["std"] }
 tap.workspace = true
