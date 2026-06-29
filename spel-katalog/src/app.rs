@@ -1,4 +1,4 @@
-use ::std::{convert::identity, io::PipeReader, path::Path, sync::Arc};
+use ::std::{convert::identity, io::PipeReader, sync::Arc};
 
 use ::color_eyre::{Section, eyre::eyre};
 use ::derive_more::IsVariant;
@@ -168,17 +168,8 @@ impl App {
             .pipe(Message::Quick)
             .pipe(Task::done);
 
-        let listen_ipc = Task::stream(::spel_katalog_ipc::listen(
-            app.settings
-                .xdg()
-                .get_runtime_directory()
-                .cloned()
-                .unwrap_or_else(|err| {
-                    ::log::warn!("could not get runtime directory, using /tmp\n{err}");
-                    Path::new("/tmp").to_path_buf()
-                }),
-        ))
-        .map(Message::from);
+        let listen_ipc =
+            Task::stream(::spel_katalog_ipc::listen(app.settings.xdg())).map(Message::from);
 
         let batch = Task::batch([
             receive_status,

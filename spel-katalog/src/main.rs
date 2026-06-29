@@ -1,7 +1,6 @@
 use ::std::{
     collections::HashMap,
     io::{IsTerminal, Read},
-    path::Path,
 };
 
 use ::color_eyre::{Section, eyre::eyre};
@@ -74,13 +73,7 @@ fn install_game(
     };
 
     if let Err(err) = ::spel_katalog_ipc::send(
-        base_dirs
-            .get_runtime_directory()
-            .map(|dir| dir.as_path())
-            .unwrap_or_else(|err| {
-                ::log::error!("could not get runtime directory, using /tmp\n{err}");
-                Path::new("/tmp")
-            }),
+        &base_dirs,
         ::spel_katalog_ipc::Message::InstallGame(InstallerConfig {
             game_dir,
             exe,

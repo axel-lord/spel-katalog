@@ -19,6 +19,7 @@ spel-katalog-formats.workspace = true
 tap.workspace = true
 thiserror.workspace = true
 uuid = { workspace = true, features = ["v4"] }
+xdg.workspace = true
 
 [lints]
 workspace = true
