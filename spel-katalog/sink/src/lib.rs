@@ -2,6 +2,7 @@
 
 use ::std::{
     io::{PipeReader, PipeWriter, Stderr, Stdout, Write, pipe, stderr, stdout},
+    os::fd::{AsFd, BorrowedFd},
     process::Stdio,
     sync::Arc,
 };
@@ -18,6 +19,16 @@ pub enum SinkWriter {
     Stderr(Stderr),
     /// Pipe writer.
     Pipe(PipeWriter),
+}
+
+impl AsFd for SinkWriter {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        match self {
+            SinkWriter::Stdout(stdout) => stdout.as_fd(),
+            SinkWriter::Stderr(stderr) => stderr.as_fd(),
+            SinkWriter::Pipe(pipe_writer) => pipe_writer.as_fd(),
+        }
+    }
 }
 
 impl SinkWriter {

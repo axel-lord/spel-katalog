@@ -2,6 +2,7 @@ use ::core::convert::Infallible;
 use ::std::{
     ffi::{OsStr, OsString},
     io::PipeReader,
+    os::fd::OwnedFd,
     path::{Path, PathBuf},
 };
 
@@ -20,7 +21,7 @@ use ::spel_katalog_settings::{
     SandboxExtras, SandboxMode, Settings, ShellExe, TermCommand, UmuRunExe, UseGamescope, YmlDir,
 };
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity, SinkWriter};
-use ::tap::{Pipe, TapOptional};
+use ::tap::{Conv, Pipe, TapOptional};
 use ::unicode_segmentation::UnicodeSegmentation;
 
 use crate::{App, Message, QuickMessage, Safety, oneshot_broadcast::oneshot_broadcast};
@@ -97,7 +98,7 @@ async fn io_pair(
             mut w2: ::smol::fs::File,
         ) -> ::std::io::Result<()> {
             let mut w1 = ::smol::Unblock::new(w1);
-            let mut r = ::smol::Unblock::new(r);
+            let mut r = r.conv::<OwnedFd>().conv::<smol::fs::File>();
 
             let mut buf = [0; 128];
             loop {
