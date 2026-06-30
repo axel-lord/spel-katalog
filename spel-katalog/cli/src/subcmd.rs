@@ -3,8 +3,9 @@
 use ::std::path::{Path, PathBuf};
 
 use ::clap::Subcommand;
+use ::spel_katalog_install::InstallGame;
 
-use crate::{InstallGame, completions::completions, init_config::init_config, skeleton::skeleton};
+use crate::{completions::completions, init_config::init_config, skeleton::skeleton};
 
 /// Get default shell.
 fn get_shell() -> ::clap_complete::Shell {
@@ -13,15 +14,9 @@ fn get_shell() -> ::clap_complete::Shell {
 
 /// Callbacks required when performing subcommand.
 #[derive(Debug)]
-pub struct SubcmdCallbacks<E> {
+pub struct SubcmdCallbacks {
     /// Callback to use when running application.
-    pub run: fn(crate::Run) -> Result<(), E>,
-
-    /// Callback that is called before other subcommands.
-    pub other: fn() -> Result<(), E>,
-
-    /// Callbacks to use when installing a game.
-    pub install_game: fn(InstallGame) -> Result<(), E>,
+    pub run: fn(crate::Run) -> ::color_eyre::Result<()>,
 }
 
 /// Error returned whe subcmd perform fails.
@@ -131,18 +126,10 @@ impl Subcmd {
     ///
     /// # Errors
     /// Forwards whatever errors may occur in callback for given subcommand.
-    pub fn perform<E>(self, callbacks: SubcmdCallbacks<E>) -> Result<(), E>
-    where
-        E: From<SubCmdError>,
-    {
-        let SubcmdCallbacks {
-            run,
-            other,
-            install_game,
-        } = callbacks;
+    pub fn perform(self, callbacks: SubcmdCallbacks) -> ::color_eyre::Result<()> {
+        let SubcmdCallbacks { run } = callbacks;
         match self {
             Subcmd::Skeleton { output, settings } => {
-                other()?;
                 skeleton(output, settings.into())?;
             }
             Subcmd::Completions {
@@ -150,15 +137,15 @@ impl Subcmd {
                 name,
                 output,
             } => {
-                other()?;
                 completions(shell, name, output)?;
             }
             Subcmd::InitConfig { path } => {
-                other()?;
                 init_config(path);
             }
             Subcmd::Run(cli) => run(cli)?,
-            Subcmd::InstallGame(game) => install_game(game)?,
+            Subcmd::InstallGame(game) => {
+                ::spel_katalog_install::install_game(game)?;
+            }
         }
         Ok(())
     }

@@ -4499,7 +4499,9 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "clap_complete",
+ "color-eyre",
  "log",
+ "spel-katalog-install",
  "spel-katalog-settings",
  "tap",
  "thiserror 2.0.18",
@@ -4522,6 +4524,10 @@ dependencies = [
 [[package]]
 name = "spel-katalog-daemon"
 version = "0.1.0"
+dependencies = [
+ "clap",
+ "spel-katalog-ipc",
+]
 
 [[package]]
 name = "spel-katalog-formats"
@@ -4636,7 +4642,6 @@ dependencies = [
  "color-eyre",
  "env_logger",
  "log",
- "spel-katalog-cli",
  "spel-katalog-formats",
  "spel-katalog-ipc",
  "xdg",

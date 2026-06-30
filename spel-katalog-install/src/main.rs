@@ -3,8 +3,7 @@
 use ::clap::Parser;
 use ::color_eyre::Result;
 use ::log::LevelFilter;
-use ::spel_katalog_cli::InstallGame;
-use ::spel_katalog_install::install_game;
+use ::spel_katalog_install::{InstallGame, install_game};
 
 /// Install a game.
 #[derive(Debug, Parser)]

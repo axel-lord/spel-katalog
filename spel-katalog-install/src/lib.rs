@@ -1,10 +1,34 @@
 //! Game installation cli to ipc message.
 
 use ::std::collections::HashMap;
+use ::std::path::PathBuf;
 
 use ::color_eyre::{Result, Section, eyre::eyre};
-use ::spel_katalog_cli::InstallGame;
 use ::spel_katalog_formats::{Bind, InstallerConfig};
+
+/// Install a game.
+#[derive(Debug, ::clap::Args)]
+pub struct InstallGame {
+    /// Game to install.
+    pub game: PathBuf,
+    /// Thumbnail of game.
+    pub thumbnail: Option<PathBuf>,
+    /// Should the game be hidden.
+    #[arg(long)]
+    pub hidden: bool,
+    /// Should the game not be moved.
+    #[arg(long)]
+    pub no_move: bool,
+    /// Exe to use for game.
+    #[arg(long)]
+    pub exe: Option<PathBuf>,
+    /// Add a directory with an installer.
+    #[arg(long)]
+    pub installer_dir: Option<PathBuf>,
+    /// Set exe to a dummy value.
+    #[arg(long, conflicts_with = "exe")]
+    pub dummy: bool,
+}
 
 /// Send ipc message to install game.
 ///

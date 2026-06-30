@@ -8,7 +8,9 @@ license.workspace = true
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
 clap_complete.workspace = true
+color-eyre.workspace = true
 log.workspace = true
+spel-katalog-install.workspace = true
 spel-katalog-settings.workspace = true
 tap.workspace = true
 thiserror.workspace = true

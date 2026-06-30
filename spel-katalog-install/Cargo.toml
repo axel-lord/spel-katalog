@@ -8,7 +8,6 @@ license.workspace = true
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
 spel-katalog-ipc.workspace = true
-spel-katalog-cli.workspace = true
 spel-katalog-formats.workspace = true
 log.workspace = true
 env_logger.workspace = true

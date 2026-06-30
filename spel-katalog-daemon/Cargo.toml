@@ -6,6 +6,8 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+spel-katalog-ipc.workspace = true
+clap = { workspace = true, features = ["derive"] }
 
 [lints]
 workspace = true
