@@ -1,34 +1,34 @@
 //! Server component.
 
-use ::core::convert::Infallible;
-use ::std::path::Path;
+use ::core::{convert::Infallible, fmt::Display};
+use ::std::{path::Path, rc::Rc};
 
 use ::bytes::Bytes;
-use ::flume::{Sender, bounded};
-use ::http_body_util::{BodyExt, Full};
+use ::http_body_util::Full;
 use ::hyper::{
-    Method, Request, Response, StatusCode, body::Incoming, server::conn::http1, service::service_fn,
+    Request, Response, StatusCode, body::Incoming, server::conn::http1, service::service_fn,
 };
-use ::serde::de::DeserializeOwned;
-use ::smol::{LocalExecutor, net::unix::UnixListener, stream::Stream};
+use ::smol::{LocalExecutor, net::unix::UnixListener};
 use ::smol_hyper::rt::FuturesIo;
-use ::tap::{Pipe, TapOptional};
+use ::tap::{Conv, Pipe, TapOptional};
 use ::uuid::Uuid;
 use ::xdg::BaseDirectories;
 
 /// Listen for connections using given runtime dir.
 /// Returns a stream of received messages.
-pub fn listen<M>(xdg: &BaseDirectories, name: &'static str) -> impl 'static + Stream<Item = M>
-where
-    M: 'static + Send + DeserializeOwned,
-{
-    let (tx, rx) = bounded(64);
-
+pub fn listen<
+    H: 'static + Send + Fn(Request<Incoming>) -> F,
+    F: Future<Output = Result<Bytes, HttpResponse>>,
+>(
+    xdg: &BaseDirectories,
+    name: &'static str,
+    handler: H,
+) {
     let socket_path = match xdg.place_runtime_file(name) {
         Ok(path) => path,
         Err(err) => {
             ::log::error!("could not get runtime dir, or create parents\n{err}");
-            return rx.into_stream();
+            return;
         }
     };
 
@@ -36,24 +36,27 @@ where
         .name(name.to_owned())
         .spawn(move || {
             let ex = LocalExecutor::new();
-            ex.run(listen_(&ex, tx, &socket_path))
+            ex.run(listen_(&ex, &socket_path, handler))
                 .pipe(::smol::block_on)
         });
 
     if let Err(err) = thread {
         ::log::error!("failed to spawn ipc thread\n{err}");
     }
-
-    rx.into_stream()
 }
 
 /// Internal listen function.
 #[expect(clippy::future_not_send, reason = "not intended to be sent")]
-async fn listen_<M>(ex: &LocalExecutor<'_>, tx: Sender<M>, socket_path: &Path) -> Option<Infallible>
-where
-    M: 'static + Send + DeserializeOwned,
-{
+async fn listen_<
+    H: 'static + Fn(Request<Incoming>) -> F,
+    F: Future<Output = Result<Bytes, HttpResponse>>,
+>(
+    ex: &LocalExecutor<'_>,
+    socket_path: &Path,
+    handler: H,
+) -> Option<Infallible> {
     let listener = listener(socket_path).await?;
+    let handler = Rc::new(handler);
 
     loop {
         let (mut stream, _) = listener
@@ -61,12 +64,12 @@ where
             .await
             .map_err(|err| ::log::error!("could not accept on unix socket\n{err}"))
             .ok()?;
-        let tx = tx.clone();
+        let handler = Rc::clone(&handler);
 
         ex.spawn(async move {
             let io = FuturesIo::new(&mut stream);
             let serve = http1::Builder::new()
-                .serve_connection(io, service_fn(|req| request_handler(req, &tx)));
+                .serve_connection(io, service_fn(|req| request_handler(req, handler.as_ref())));
             if let Err(err) = serve.await {
                 ::log::error!("error serving http connection\n{err}");
             }
@@ -75,53 +78,138 @@ where
     }
 }
 
-/// Create an empty response with the given status code.
-fn empty_response(status: StatusCode) -> Result<Response<Full<Bytes>>, ::hyper::http::Error> {
-    Response::builder()
-        .status(status)
-        .body(Full::new(Bytes::new()))
+/// Handler for http requests.
+async fn request_handler<
+    H: Fn(Request<Incoming>) -> F,
+    F: Future<Output = Result<Bytes, HttpResponse>>,
+>(
+    req: Request<Incoming>,
+    handler: H,
+) -> Result<Response<Full<Bytes>>, ::hyper::http::Error> {
+    match handler(req).await {
+        Ok(body) => Response::builder()
+            .status(StatusCode::OK)
+            .body(Full::new(body)),
+        Err(response) => response.into_http(),
+    }
 }
 
-/// Handler for http requests.
-async fn request_handler<M>(
-    req: Request<Incoming>,
-    tx: &Sender<M>,
-) -> Result<Response<Full<Bytes>>, ::hyper::http::Error>
-where
-    M: 'static + Send + DeserializeOwned,
-{
-    if req.method() == Method::POST {
-        match req.uri().path().trim_matches('/') {
-            "v1" => {
-                let body = match req.into_body().collect().await {
-                    Ok(body) => body.to_bytes(),
-                    Err(err) => {
-                        ::log::error!("could not collect request body\n{err}");
-                        return empty_response(StatusCode::INTERNAL_SERVER_ERROR);
-                    }
-                };
+/// Error which may be converted to an http response.
+#[derive(Debug, Clone)]
+pub struct HttpResponse {
+    /// Kind of error.
+    kind: ResponseKind,
+    /// Error body.
+    body: Bytes,
+}
 
-                let message = match ::serde_json::from_slice::<M>(&body) {
-                    Ok(message) => message,
-                    Err(err) => {
-                        return Response::builder()
-                            .status(StatusCode::BAD_REQUEST)
-                            .body(Full::new(Bytes::from_owner(err.to_string())));
-                    }
-                };
+impl HttpResponse {
+    /// Convert into an http response.
+    ///
+    /// # Errors
+    /// If http response cannot be built.
+    pub fn into_http(self) -> Result<Response<Full<Bytes>>, ::hyper::http::Error> {
+        let Self { kind, body } = self;
 
-                match tx.send_async(message).await {
-                    Ok(()) => empty_response(StatusCode::ACCEPTED),
-                    Err(err) => {
-                        ::log::error!("could not forward received message\n{err}");
-                        empty_response(StatusCode::INTERNAL_SERVER_ERROR)
-                    }
-                }
-            }
-            _ => empty_response(StatusCode::NOT_FOUND),
+        Response::builder()
+            .status(kind.conv::<StatusCode>())
+            .body(Full::new(body))
+    }
+}
+
+impl From<ResponseKind> for HttpResponse {
+    fn from(value: ResponseKind) -> Self {
+        HttpResponse {
+            kind: value,
+            body: Bytes::new(),
         }
-    } else {
-        empty_response(StatusCode::METHOD_NOT_ALLOWED)
+    }
+}
+
+impl<E> From<E> for HttpResponse
+where
+    E: Display,
+{
+    /// Convert any display implementor to the [ErrorResponse::Internal] variant.
+    fn from(value: E) -> Self {
+        let body = value.to_string().pipe(Bytes::from_owner);
+        HttpResponse {
+            kind: ResponseKind::Internal,
+            body,
+        }
+    }
+}
+
+impl<T> From<HttpResponse> for Result<T, HttpResponse> {
+    fn from(value: HttpResponse) -> Self {
+        Err(value)
+    }
+}
+
+/// Error which may be converted to an http response.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResponseKind {
+    /// Internal error.
+    Internal,
+    /// Not an error.
+    Ok,
+    /// Request was accepted.
+    Accepted,
+    /// Bad request from client.
+    BadRequest,
+    /// Method may not be used.
+    MethodNotAllowed,
+    /// Resource was not found.
+    NotFound,
+}
+
+impl ResponseKind {
+    /// Create an error response with the given kind and body.
+    pub const fn with_body(self, body: Bytes) -> HttpResponse {
+        HttpResponse { kind: self, body }
+    }
+
+    /// Create an error response with the given kind and body from given error.
+    pub fn with_err<E: ToString>(self, err: E) -> HttpResponse {
+        HttpResponse {
+            kind: self,
+            body: Bytes::from_owner(err.to_string()),
+        }
+    }
+
+    /// Convert into a response with a body.
+    ///
+    /// # Errors
+    /// If http cannot be built.
+    pub const fn into_response<T>(self, body: Bytes) -> Result<T, HttpResponse> {
+        Err(self.with_body(body))
+    }
+
+    /// Convert into an empty response.
+    ///
+    /// # Errors
+    /// If http cannot be built.
+    pub const fn into_empty_response<T>(self) -> Result<T, HttpResponse> {
+        Err(self.with_body(Bytes::new()))
+    }
+}
+
+impl<T> From<ResponseKind> for Result<T, HttpResponse> {
+    fn from(value: ResponseKind) -> Self {
+        value.into_empty_response()
+    }
+}
+
+impl From<ResponseKind> for StatusCode {
+    fn from(value: ResponseKind) -> Self {
+        match value {
+            ResponseKind::Internal => StatusCode::INTERNAL_SERVER_ERROR,
+            ResponseKind::Ok => StatusCode::OK,
+            ResponseKind::Accepted => StatusCode::ACCEPTED,
+            ResponseKind::BadRequest => StatusCode::BAD_REQUEST,
+            ResponseKind::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
+            ResponseKind::NotFound => StatusCode::NOT_FOUND,
+        }
     }
 }
 

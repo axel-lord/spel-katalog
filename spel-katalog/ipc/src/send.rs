@@ -1,14 +1,9 @@
 //! Client component.
 
 use ::bytes::Bytes;
-use ::http_body_util::{BodyExt, Full};
-use ::hyper::{Method, Request, client::conn::http1};
-use ::serde::Serialize;
-use ::smol::{
-    future::FutureExt,
-    io::{AsyncRead, AsyncWrite},
-    net::unix::UnixStream,
-};
+use ::http_body_util::Full;
+use ::hyper::{Method, Request, Response, body::Incoming, client::conn::http1};
+use ::smol::{future::FutureExt, net::unix::UnixStream};
 use ::smol_hyper::rt::FuturesIo;
 use ::xdg::BaseDirectories;
 
@@ -39,6 +34,9 @@ pub enum SendError {
     /// Connection failed.
     #[error("connection failed\n{0}")]
     ConnectionFailed(::hyper::Error),
+    /// No response was received.
+    #[error("received no response")]
+    NoResponse,
 }
 
 impl SendError {
@@ -60,20 +58,20 @@ impl SendError {
 ///
 /// # Errors
 /// If the message cannot be sent.
-pub async fn send<M, W>(mut stream: W, message: M) -> Result<(W, Option<Bytes>), SendError>
-where
-    M: Serialize,
-    W: AsyncWrite + AsyncRead + Unpin,
-{
-    let message = Bytes::from_owner(::serde_json::to_vec(&message).map_err(SendError::Serialize)?);
+pub async fn send(
+    mut stream: UnixStream,
+    message: Bytes,
+    uri: &str,
+) -> Result<Response<Incoming>, SendError> {
     let io = FuturesIo::new(&mut stream);
     let (mut sender, conn) = http1::handshake(io).await.map_err(SendError::Handshake)?;
-    let run = async move { conn.await.map_err(SendError::ConnectionFailed) };
-    let mut body = None;
-    let body_ref = &mut body;
+    let run = async move {
+        conn.await.map_err(SendError::ConnectionFailed)?;
+        Err(SendError::NoResponse)
+    };
     let send = async move {
         let req = Request::builder()
-            .uri("/v1")
+            .uri(uri)
             .method(Method::POST)
             .body(Full::new(message))
             .map_err(SendError::HttpRequest)?;
@@ -83,34 +81,10 @@ where
             .await
             .map_err(SendError::SendHttp)?;
 
-        let status = res.status();
-        let body = res
-            .into_body()
-            .collect()
-            .await
-            .map_err(|err| ::log::warn!("could not collect body of response\n{err}"))
-            .map(|body| body.to_bytes())
-            .unwrap_or_default();
-
-        if status.is_success() {
-            ::log::info!("installer opened");
-            *body_ref = Some(body);
-        } else if body.is_empty() {
-            ::log::error!("status: {status}")
-        } else {
-            if let Ok(body) = str::from_utf8(&body) {
-                ::log::error!("status: {status}, body:\n{body}")
-            } else {
-                ::log::error!("status: {status}, body:\n{body:#?}")
-            }
-        }
-
-        Ok(())
+        Ok(res)
     };
 
-    send.or(run).await?;
-
-    Ok((stream, body))
+    send.or(run).await
 }
 
 /// Connect to an ipc socket.
