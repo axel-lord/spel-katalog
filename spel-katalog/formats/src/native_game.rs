@@ -9,6 +9,17 @@ use ::strum::VariantArray;
 
 use crate::{Bind, GameId, Timestamp};
 
+/// How to run game.
+#[derive(Debug, Clone, Copy, IsVariant, Serialize, Deserialize)]
+pub enum RunMode {
+    /// Run executable.
+    Exe,
+    /// Run shell.
+    Shell,
+    /// Stop after init.
+    Init,
+}
+
 /// Loaded game data.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]

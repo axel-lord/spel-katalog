@@ -1,28 +1,23 @@
-use ::core::convert::Infallible;
 use ::std::{
     ffi::{OsStr, OsString},
-    io::PipeReader,
-    os::fd::OwnedFd,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
-use ::iced::futures::TryFutureExt;
 use ::iced_runtime::Task;
 use ::image::DynamicImage;
-use ::smol::io::{AsyncReadExt, AsyncWriteExt};
 use ::spel_katalog_common::status;
-use ::spel_katalog_formats::{AdditionalConfig, Game, GameId, NativeGame, lutris_config};
+use ::spel_katalog_formats::{AdditionalConfig, Game, GameId, NativeGame, RunMode, lutris_config};
 use ::spel_katalog_run::{
-    Callback,
-    run_umu::{CommonUmuCtx, LutrisCtx, LutrisUmuCtx, NativeUmuCtx, RunMode},
+    Callback, dll_overrides, io_pair, log_dir,
+    run_umu::{CommonUmuCtx, LutrisCtx, LutrisUmuCtx},
+    sandbox_ro_dirs,
 };
 use ::spel_katalog_settings::{
-    BubblewrapExe, DllOverrides, FirejailExe, GamescopeExe, LutrisExe, Network, OnRun,
-    SandboxExtras, SandboxMode, Settings, ShellExe, TermCommand, UmuRunExe, UseGamescope, YmlDir,
+    BubblewrapExe, FirejailExe, GamescopeExe, LutrisExe, Network, OnRun, SandboxMode, ShellExe,
+    TermCommand, UmuRunExe, UseGamescope, YmlDir,
 };
-use ::spel_katalog_sink::{SinkBuilder, SinkIdentity, SinkWriter};
-use ::tap::{Conv, Pipe, TapOptional};
-use ::unicode_segmentation::UnicodeSegmentation;
+use ::spel_katalog_sink::SinkIdentity;
+use ::tap::{Pipe, TapOptional};
 
 use crate::{App, Message, QuickMessage, Safety, oneshot_broadcast::oneshot_broadcast};
 
@@ -47,103 +42,6 @@ async fn parse_extra_config(extra_config_path: &Path) -> Result<AdditionalConfig
         ::log::error!("could not parse {extra_config_path:?}\n{err}");
         format!("could not parse {extra_config_path:?}")
     })
-}
-
-/// Get log directory if available.
-fn log_dir(xdg: &::xdg::BaseDirectories) -> Option<PathBuf> {
-    xdg.get_runtime_file("logs")
-        .map_err(|err| ::log::error!("could not get runtime directory\n{err}"))
-        .ok()
-}
-
-/// Get stdout and stderr file handles.
-async fn io_pair(
-    log_dir: &Path,
-    name: &str,
-    sink_builder: SinkBuilder,
-) -> Option<[::std::io::PipeWriter; 2]> {
-    let when = ::spel_katalog_formats::Timestamp::now();
-    ::smol::fs::create_dir_all(&log_dir)
-        .map_err(|err| ::log::error!("could not create {log_dir:?}\n{err}"))
-        .await
-        .ok()?;
-    let trunc_name = name.graphemes(true).take(30).collect::<String>();
-    let stdout_filename = log_dir.join(format!("{when}-{trunc_name}-stdout.log"));
-    let stderr_filename = log_dir.join(format!("{when}-{trunc_name}-stderr.log"));
-    let stdout_log = ::smol::fs::File::create(&stdout_filename)
-        .await
-        .map_err(|err| ::log::error!("could not create {stdout_filename:?}\n{err}"))
-        .ok()?;
-    let stderr_log = ::smol::fs::File::create(&stderr_filename)
-        .await
-        .map_err(|err| ::log::error!("could not create {stderr_filename:?}\n{err}"))
-        .ok()?;
-
-    ::smol::unblock(move || {
-        let (stdout_reader, stdout) = ::std::io::pipe()
-            .map_err(|err| ::log::error!("could not create stdout pipe {err}"))
-            .ok()?;
-        let (stderr_reader, stderr) = ::std::io::pipe()
-            .map_err(|err| ::log::error!("could not create stderr pipe {err}"))
-            .ok()?;
-
-        let [stdout_writer, stderr_writer] = sink_builder
-            .get_writer_double(|| SinkIdentity::Name(trunc_name.clone()))
-            .map_err(|err| ::log::error!("could not create sink pipes for {trunc_name}\n{err}"))
-            .ok()?;
-
-        async fn split_copy(
-            r: PipeReader,
-            w1: SinkWriter,
-            mut w2: ::smol::fs::File,
-        ) -> ::std::io::Result<()> {
-            let mut w1 = ::smol::Unblock::new(w1);
-            let mut r = r.conv::<OwnedFd>().conv::<smol::fs::File>();
-
-            let mut buf = [0; 128];
-            loop {
-                let n = r.read(&mut buf).await?;
-                if n == 0 {
-                    break;
-                }
-
-                let buf = &buf[..n];
-
-                let w1 = w1.write_all(buf);
-                let w2 = w2.write_all(buf);
-
-                let (r1, r2) = ::smol::future::zip(w1, w2).await;
-                r1?;
-                r2?;
-            }
-
-            let (r1, r2) = ::smol::future::zip(w1.flush(), w2.flush()).await;
-            r1?;
-            r2?;
-
-            Ok(())
-        }
-
-        _ = ::std::thread::Builder::new()
-            .name(format!("spel-katalog-pipes-{trunc_name}"))
-            .spawn(move || -> Option<Infallible> {
-                ::smol::block_on(async move {
-                    let stdout_task = split_copy(stdout_reader, stdout_writer, stdout_log)
-                        .map_err(|err| ::log::error!("error copying stdout\n{err}"));
-                    let stderr_task = split_copy(stderr_reader, stderr_writer, stderr_log)
-                        .map_err(|err| ::log::error!("error copying stderr\n{err}"));
-
-                    let (_, _) = ::smol::future::zip(stdout_task, stderr_task).await;
-
-                    None
-                })
-            })
-            .map_err(|err| ::log::error!("could not spawn pipe writer thread\n{err}"))
-            .ok()?;
-
-        Some([stdout, stderr])
-    })
-    .await
 }
 
 impl App {
@@ -243,73 +141,18 @@ impl App {
         }
     }
 
-    /// Get sandbox extra read-only dirs.
-    fn sandbox_ro_dirs(settings: &Settings) -> Vec<PathBuf> {
-        settings
-            .get::<SandboxExtras>()
-            .split(';')
-            .map(|sb| sb.trim())
-            .filter(|sb| !sb.is_empty())
-            .map(PathBuf::from)
-            .collect()
-    }
-
-    /// Get global dll overrides.
-    fn dll_overrides(settings: &Settings) -> Vec<String> {
-        settings
-            .get::<DllOverrides>()
-            .split(';')
-            .map(|ovr| ovr.trim())
-            .filter(|ovr| !ovr.is_empty())
-            .map(String::from)
-            .collect()
-    }
-
     /// Run a native game.
     pub fn run_native_game(&mut self, game: NativeGame, run_mode: RunMode) -> Task<Message> {
-        let bwrap = self.settings.get::<BubblewrapExe>().clone();
-        let umu = self.settings.get::<UmuRunExe>().clone();
-        let shell = self.settings.get::<ShellExe>().clone();
-        let term = self.settings.get::<TermCommand>().clone();
-        let net_disabled = self.settings.get::<Network>().is_disabled();
-        let use_gamescope = self.settings.get::<UseGamescope>().is_yes();
-        let gamescope = self.settings.get::<GamescopeExe>().clone();
-        let sandbox_ro_dirs = Self::sandbox_ro_dirs(&self.settings);
-        let dll_overrides = Self::dll_overrides(&self.settings);
-        let sink_builder = self.sink_builder.clone();
-        let Some(log_dir) = log_dir(self.settings.xdg()) else {
+        let Some(task) = ::spel_katalog_run::run_native_game(
+            game,
+            run_mode,
+            &self.settings,
+            self.sink_builder.clone(),
+        ) else {
             return Task::none();
         };
 
-        Task::<Option<Message>>::future(async move {
-            let name = game.name.clone();
-            let [stdout, stderr] = io_pair(&log_dir, &name, sink_builder).await?;
-
-            let ctx = NativeUmuCtx {
-                common: CommonUmuCtx {
-                    bwrap: bwrap.as_path(),
-                    umu: umu.as_path(),
-                    shell: shell.as_path(),
-                    term: &term,
-                    net_disabled,
-                    dll_overrides,
-                    sandbox_ro_dirs,
-                    use_gamescope,
-                    stdout,
-                    stderr,
-                    gamescope: gamescope.as_path(),
-                    callback: Callback::default(),
-                },
-                config: game,
-            };
-
-            ctx.run(run_mode)
-                .await
-                .map_err(|err| ::log::error!("could not run game {name}\n{err}"))
-                .map(Message::from)
-                .ok()
-        })
-        .and_then(Task::done)
+        Task::future(task).and_then(|message| Task::done(message.into()))
     }
 
     pub fn run_game(&mut self, id: GameId, safety: Safety, no_game: bool) -> Task<Message> {
@@ -361,8 +204,8 @@ impl App {
         let gamescope = self.settings.get::<GamescopeExe>().clone();
         let use_gamescope = self.settings.get::<UseGamescope>().is_yes();
         let sandbox_mode = *self.settings.get::<SandboxMode>();
-        let sandbox_ro_dirs = Self::sandbox_ro_dirs(&self.settings);
-        let dll_overrides = Self::dll_overrides(&self.settings);
+        let sandbox_ro_dirs = sandbox_ro_dirs(&self.settings);
+        let dll_overrides = dll_overrides(&self.settings);
         let slug = game.slug.clone();
         let name = game.name.clone();
         let runner = game.runner.clone();

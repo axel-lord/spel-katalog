@@ -3,12 +3,12 @@
 pub use self::{
     addititional_config::AdditionalConfig,
     bind::{Bind, Symlink},
-    daemon::DaemonResponse,
+    daemon::{DaemonResponse, DaemonRunGame},
     game::{Game, GameId},
     image::Image,
     installer::{ExeChoice, InstallerConfig, InstallerPrepareConfig},
     lutris_game::{LutrisGame, LutrisRunner},
-    native_game::{NativeGame, NativeRunner},
+    native_game::{NativeGame, NativeRunner, RunMode},
     timestamp::{TimeStampParseError, Timestamp, TimestampFromIntError},
 };
 

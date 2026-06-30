@@ -69,9 +69,15 @@ impl Settings {
 
 impl From<SettingsArgs> for Settings {
     fn from(value: SettingsArgs) -> Self {
+        Settings::from(value.args)
+    }
+}
+
+impl From<SettingsStore> for Settings {
+    fn from(value: SettingsStore) -> Self {
         Self {
-            xdg: Arc::new(value.get_xdg()),
-            inner: Arc::new(value.args),
+            xdg: Arc::new(::xdg::BaseDirectories::with_prefix("spel-katalog")),
+            inner: Arc::new(value),
         }
     }
 }

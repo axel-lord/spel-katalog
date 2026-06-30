@@ -6,9 +6,8 @@ use ::iced_runtime::Task;
 use ::image::DynamicImage;
 use ::rustix::process::{Pid, RawPid};
 use ::spel_katalog_common::{IntoOrRequest, OrRequest};
-use ::spel_katalog_formats::{InstallerConfig, InstallerPrepareConfig, NativeGame};
+use ::spel_katalog_formats::{InstallerConfig, InstallerPrepareConfig, NativeGame, RunMode};
 use ::spel_katalog_games::SelDir;
-use ::spel_katalog_run::run_umu::RunMode;
 use ::spel_katalog_settings::{
     FilterMode, Load, LutrisDb, Network, Settings, Show, TrustedVariants,
 };

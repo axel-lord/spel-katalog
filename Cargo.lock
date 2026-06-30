@@ -4750,8 +4750,11 @@ dependencies = [
  "smol",
  "spel-katalog-formats",
  "spel-katalog-settings",
+ "spel-katalog-sink",
  "tap",
+ "unicode-segmentation",
  "users",
+ "xdg",
 ]
 
 [[package]]

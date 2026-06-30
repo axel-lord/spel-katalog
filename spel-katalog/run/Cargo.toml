@@ -15,8 +15,11 @@ shell-words.workspace = true
 smol.workspace = true
 spel-katalog-formats.workspace = true
 spel-katalog-settings.workspace = true
+spel-katalog-sink.workspace = true
+unicode-segmentation.workspace = true
 tap.workspace = true
 users.workspace = true
+xdg.workspace = true
 
 [lints]
 workspace = true

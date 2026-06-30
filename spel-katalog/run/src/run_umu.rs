@@ -8,11 +8,10 @@ use ::std::{
 };
 
 use ::color_eyre::{Section, eyre::eyre};
-use ::derive_more::IsVariant;
 use ::rustc_hash::FxHashMap;
 use ::smol::process::Command;
 use ::spel_katalog_formats::{
-    AdditionalConfig, Bind, GameId, LutrisRunner, NativeGame, NativeRunner, Timestamp,
+    AdditionalConfig, Bind, GameId, LutrisRunner, NativeGame, NativeRunner, RunMode, Timestamp,
     lutris_config,
 };
 use ::tap::Pipe;
@@ -130,17 +129,6 @@ fn term_path(term: &str) -> ::color_eyre::Result<(PathBuf, Vec<PathBuf>)> {
         PathBuf::from(term),
         term_args.iter().map(PathBuf::from).collect(),
     ))
-}
-
-/// How to run game.
-#[derive(Debug, Clone, Copy, IsVariant)]
-pub enum RunMode {
-    /// Run executable.
-    Exe,
-    /// Run shell.
-    Shell,
-    /// Stop after init.
-    Init,
 }
 
 impl NativeUmuCtx<'_> {
