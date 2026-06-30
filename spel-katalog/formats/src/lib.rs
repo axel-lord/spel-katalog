@@ -3,6 +3,7 @@
 pub use self::{
     addititional_config::AdditionalConfig,
     bind::{Bind, Symlink},
+    daemon::DaemonResponse,
     game::{Game, GameId},
     image::Image,
     installer::{ExeChoice, InstallerConfig, InstallerPrepareConfig},
@@ -13,6 +14,7 @@ pub use self::{
 
 mod addititional_config;
 mod bind;
+mod daemon;
 mod game;
 mod image;
 mod installer;

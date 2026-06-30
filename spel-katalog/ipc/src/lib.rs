@@ -1,12 +1,11 @@
 //! Inter process communication.
 
 use ::bytes::Bytes;
-use ::http_body_util::BodyExt;
-use ::hyper::Method;
 
+use crate::http::ResponseCode;
 pub use crate::{
-    listen::{HttpResponse, ResponseKind},
-    send::SendError,
+    listen::IncomingRequest,
+    send::{IncomingResponse, SendError},
 };
 
 /// Socket name.
@@ -28,22 +27,22 @@ pub fn listen(
     crate::listen::listen(xdg, NAME, move |incoming| {
         let tx = tx.clone();
         async move {
-            if incoming.method() == Method::POST {
-                match incoming.uri().path().trim_matches('/') {
+            if incoming.method().is_post() {
+                match incoming.uri_path() {
                     "v1" => {
-                        let body = incoming.into_body().collect().await?.to_bytes();
+                        let body = incoming.body().await?;
 
                         let message = ::serde_json::from_slice::<Message>(&body)
-                            .map_err(|err| ResponseKind::BadRequest.with_err(err))?;
+                            .map_err(|err| ResponseCode::BadRequest.with_err(err))?;
 
                         tx.send_async(message).await?;
 
-                        ResponseKind::Accepted.into()
+                        ResponseCode::Accepted.into()
                     }
-                    _ => ResponseKind::NotFound.into(),
+                    _ => ResponseCode::NotFound.into(),
                 }
             } else {
-                ResponseKind::MethodNotAllowed.into()
+                ResponseCode::MethodNotAllowed.into()
             }
         }
     });
@@ -63,24 +62,21 @@ pub fn send(xdg: &::xdg::BaseDirectories, message: Message) -> Result<(), SendEr
         let socket = crate::send::connect(xdg, NAME).await?;
         let response = crate::send::send(socket, message, "/v1").await?;
 
-        let status = response.status();
-        let body = response
-            .into_body()
-            .collect()
-            .await
-            .map_err(|err| ::log::warn!("could not collect body of response\n{err}"))
-            .map(|body| body.to_bytes())
-            .unwrap_or_default();
+        let status = response.code();
+        let body = response.body().await?;
 
         if status.is_success() {
             ::log::info!("installer opened");
         } else if body.is_empty() {
-            ::log::error!("status: {status}")
+            ::log::error!("status: {status}", status = status.display())
         } else {
             if let Ok(body) = str::from_utf8(&body) {
-                ::log::error!("status: {status}, body:\n{body}")
+                ::log::error!("status: {status}, body:\n{body}", status = status.display())
             } else {
-                ::log::error!("status: {status}, body:\n{body:#?}")
+                ::log::error!(
+                    "status: {status}, body:\n{body:#?}",
+                    status = status.display()
+                )
             }
         }
         Ok(())
@@ -94,6 +90,8 @@ pub mod generic {
         send::{connect, send},
     };
 }
+
+pub mod http;
 
 mod listen;
 mod send;

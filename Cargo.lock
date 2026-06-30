@@ -4526,7 +4526,15 @@ name = "spel-katalog-daemon"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "color-eyre",
+ "env_logger",
+ "flume",
+ "log",
+ "serde_json",
+ "smol",
+ "spel-katalog-formats",
  "spel-katalog-ipc",
+ "xdg",
 ]
 
 [[package]]

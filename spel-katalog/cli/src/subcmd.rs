@@ -5,7 +5,11 @@ use ::std::path::{Path, PathBuf};
 use ::clap::Subcommand;
 use ::spel_katalog_install::InstallGame;
 
-use crate::{completions::completions, init_config::init_config, skeleton::skeleton};
+use crate::{
+    completions::{Binary, completions},
+    init_config::init_config,
+    skeleton::skeleton,
+};
 
 /// Get default shell.
 fn get_shell() -> ::clap_complete::Shell {
@@ -96,15 +100,18 @@ pub enum Subcmd {
     },
     /// Output completions.
     Completions {
-        /// Shell to use.
+        /// Shell to generate completions for.
         #[arg(short, long, value_enum, default_value_t = get_shell())]
         shell: ::clap_complete::Shell,
         /// Name of the binary completions should be generated for.
-        #[arg(short, long, default_value = "spel-katalog")]
-        name: String,
+        #[arg(short, long)]
+        name: Option<String>,
         /// Where to write completions to.
         #[arg(short, long, default_value = "-")]
         output: PathBuf,
+        /// Which application to generate completions for.
+        #[arg(short, long, value_enum, default_value_t)]
+        binary: Binary,
     },
     /// Generate missing config. And/Or update lua definition.
     InitConfig {
@@ -136,15 +143,16 @@ impl Subcmd {
                 shell,
                 name,
                 output,
+                binary,
             } => {
-                completions(shell, name, output)?;
+                completions(binary, shell, name, output)?;
             }
             Subcmd::InitConfig { path } => {
                 init_config(path);
             }
             Subcmd::Run(cli) => run(cli)?,
             Subcmd::InstallGame(game) => {
-                ::spel_katalog_install::install_game(game)?;
+                game.run()?;
             }
         }
         Ok(())

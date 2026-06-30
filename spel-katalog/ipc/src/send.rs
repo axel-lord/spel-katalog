@@ -1,11 +1,13 @@
 //! Client component.
 
 use ::bytes::Bytes;
-use ::http_body_util::Full;
+use ::http_body_util::{BodyExt, Full};
 use ::hyper::{Method, Request, Response, body::Incoming, client::conn::http1};
 use ::smol::{future::FutureExt, net::unix::UnixStream};
 use ::smol_hyper::rt::FuturesIo;
 use ::xdg::BaseDirectories;
+
+use crate::http::ResponseCode;
 
 /// Error returned when failing to send a message.
 #[derive(Debug, thiserror::Error)]
@@ -37,6 +39,9 @@ pub enum SendError {
     /// No response was received.
     #[error("received no response")]
     NoResponse,
+    /// Response body could not be collected.
+    #[error("could not collect response body\n{0}")]
+    CollectResponse(::hyper::Error),
 }
 
 impl SendError {
@@ -53,6 +58,33 @@ impl SendError {
     }
 }
 
+/// An incoming http response.
+#[derive(Debug)]
+pub struct IncomingResponse {
+    /// Wrapped incoming body.
+    inner: Response<Incoming>,
+}
+impl IncomingResponse {
+    /// Convert into body of incoming message.
+    ///
+    /// # Errors
+    /// If the body cannot be collected.
+    pub async fn body(self) -> Result<Bytes, SendError> {
+        Ok(self
+            .inner
+            .into_body()
+            .collect()
+            .await
+            .map_err(SendError::CollectResponse)?
+            .to_bytes())
+    }
+
+    /// Get response code of response.
+    pub fn code(&self) -> ResponseCode {
+        self.inner.status().into()
+    }
+}
+
 /// Send a message to the given writer, only returning the
 /// writer and response body if the message was sent successfully.
 ///
@@ -62,7 +94,7 @@ pub async fn send(
     mut stream: UnixStream,
     message: Bytes,
     uri: &str,
-) -> Result<Response<Incoming>, SendError> {
+) -> Result<IncomingResponse, SendError> {
     let io = FuturesIo::new(&mut stream);
     let (mut sender, conn) = http1::handshake(io).await.map_err(SendError::Handshake)?;
     let run = async move {
@@ -81,7 +113,7 @@ pub async fn send(
             .await
             .map_err(SendError::SendHttp)?;
 
-        Ok(res)
+        Ok(IncomingResponse { inner: res })
     };
 
     send.or(run).await

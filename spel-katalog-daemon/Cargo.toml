@@ -6,8 +6,16 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-spel-katalog-ipc.workspace = true
 clap = { workspace = true, features = ["derive"] }
+color-eyre.workspace = true
+env_logger.workspace = true
+serde_json.workspace = true
+flume = { workspace = true, features = ["async"] }
+log.workspace = true
+smol.workspace = true
+spel-katalog-ipc.workspace = true
+spel-katalog-formats.workspace = true
+xdg.workspace = true
 
 [lints]
 workspace = true
