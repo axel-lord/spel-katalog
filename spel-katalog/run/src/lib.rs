@@ -83,7 +83,7 @@ pub async fn io_pair(
             .ok()?;
 
         let [stdout_writer, stderr_writer] = sink_builder
-            .get_writer_double(|| SinkIdentity::Name(trunc_name.clone()))
+            .get_writers(|| SinkIdentity::Name(trunc_name.clone()))
             .map_err(|err| ::log::error!("could not create sink pipes for {trunc_name}\n{err}"))
             .ok()?;
 

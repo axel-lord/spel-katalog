@@ -86,6 +86,37 @@ pub enum SinkBuilder {
     CreatePipe(::flume::Sender<(PipeReader, SinkIdentity)>),
     /// Clone an already created pipe.
     ClonePipe(Arc<PipeWriter>),
+    /// Clone two already created pipes.
+    ClonePipes {
+        /// Stdout pipe.
+        stdout: Arc<PipeWriter>,
+        /// Stderr pipe.
+        stderr: Arc<PipeWriter>,
+    },
+}
+
+impl From<PipeWriter> for SinkBuilder {
+    fn from(value: PipeWriter) -> Self {
+        SinkBuilder::ClonePipe(Arc::new(value))
+    }
+}
+
+impl From<(PipeWriter, PipeWriter)> for SinkBuilder {
+    fn from((stdout, stderr): (PipeWriter, PipeWriter)) -> Self {
+        SinkBuilder::ClonePipes {
+            stdout: Arc::new(stdout),
+            stderr: Arc::new(stderr),
+        }
+    }
+}
+
+impl From<[PipeWriter; 2]> for SinkBuilder {
+    fn from([stdout, stderr]: [PipeWriter; 2]) -> Self {
+        SinkBuilder::ClonePipes {
+            stdout: Arc::new(stdout),
+            stderr: Arc::new(stderr),
+        }
+    }
 }
 
 impl SinkBuilder {
@@ -117,32 +148,11 @@ impl SinkBuilder {
                 Self::ClonePipe(Arc::new(w))
             }
             SinkBuilder::ClonePipe(pipe_writer) => Self::ClonePipe(pipe_writer.clone()),
+            SinkBuilder::ClonePipes { stdout, stderr } => Self::ClonePipes {
+                stdout: stdout.clone(),
+                stderr: stderr.clone(),
+            },
         })
-    }
-
-    /// Get a pipewriter if possible, returns `Ok(None)` if `Inherit`,
-    /// otherwise attempts to clone/create a pipe. If creating `id` will
-    /// be called to set identity of pipe.
-    ///
-    /// # Errors
-    /// If pipe creation fails.
-    pub fn get_pipe_writer(
-        &self,
-        id: impl FnOnce() -> SinkIdentity,
-    ) -> ::std::io::Result<Option<PipeWriter>> {
-        match self {
-            SinkBuilder::Inherit => Ok(None),
-            SinkBuilder::CreatePipe(sender) => {
-                let (r, w) = pipe()?;
-
-                sender
-                    .send((r, id()))
-                    .map_err(|err| ::std::io::Error::other(err.to_string()))?;
-
-                Ok(Some(w))
-            }
-            SinkBuilder::ClonePipe(pipe_writer) => pipe_writer.try_clone().map(Some),
-        }
     }
 
     /// Get two pipew riters if possible, returns `Ok(None)` if `Inherit`,
@@ -153,7 +163,7 @@ impl SinkBuilder {
     ///
     /// # Errors
     /// If pipe creation fails.
-    pub fn get_pipe_writer_double(
+    pub fn get_pipe_writers(
         &self,
         id: impl FnOnce() -> SinkIdentity,
     ) -> ::std::io::Result<Option<[PipeWriter; 2]>> {
@@ -172,6 +182,10 @@ impl SinkBuilder {
             SinkBuilder::ClonePipe(pipe_writer) => {
                 Ok(Some([pipe_writer.try_clone()?, pipe_writer.try_clone()?]))
             }
+
+            SinkBuilder::ClonePipes { stdout, stderr } => {
+                Ok(Some([stdout.try_clone()?, stderr.try_clone()?]))
+            }
         }
     }
 
@@ -180,7 +194,7 @@ impl SinkBuilder {
     ///
     /// # Errors
     /// If pipe creation fails.
-    pub fn get_writer_double(
+    pub fn get_writers(
         &self,
         id: impl FnOnce() -> SinkIdentity,
     ) -> ::std::io::Result<[SinkWriter; 2]> {
@@ -199,26 +213,9 @@ impl SinkBuilder {
             SinkBuilder::ClonePipe(pipe_writer) => {
                 Ok([pipe_writer.try_clone()?, pipe_writer.try_clone()?].map(SinkWriter::Pipe))
             }
-        }
-    }
-
-    /// Get a process sink.
-    ///
-    /// # Errors
-    /// If pipes should be created but fails.
-    pub fn build(&self, id: impl FnOnce() -> SinkIdentity) -> ::std::io::Result<Stdio> {
-        match self {
-            SinkBuilder::Inherit => Ok(Stdio::inherit()),
-            SinkBuilder::CreatePipe(sender) => {
-                let (r, w) = pipe()?;
-
-                sender
-                    .send((r, id()))
-                    .map_err(|err| ::std::io::Error::other(err.to_string()))?;
-
-                Ok(Stdio::from(w))
+            SinkBuilder::ClonePipes { stdout, stderr } => {
+                Ok([stdout.try_clone()?, stderr.try_clone()?].map(SinkWriter::Pipe))
             }
-            SinkBuilder::ClonePipe(pipe_writer) => pipe_writer.try_clone().map(Stdio::from),
         }
     }
 
@@ -228,7 +225,7 @@ impl SinkBuilder {
     ///
     /// # Errors
     /// If pipes should be created but fail.
-    pub fn build_double(&self, id: impl FnOnce() -> SinkIdentity) -> ::std::io::Result<[Stdio; 2]> {
+    pub fn build(&self, id: impl FnOnce() -> SinkIdentity) -> ::std::io::Result<[Stdio; 2]> {
         match self {
             SinkBuilder::Inherit => Ok([Stdio::inherit(), Stdio::inherit()]),
             SinkBuilder::CreatePipe(sender) => {
@@ -241,10 +238,12 @@ impl SinkBuilder {
 
                 Ok([w, w2].map(Stdio::from))
             }
-            SinkBuilder::ClonePipe(pipe_writer) => Ok([
-                pipe_writer.try_clone()?.into(),
-                pipe_writer.try_clone()?.into(),
-            ]),
+            SinkBuilder::ClonePipe(pipe_writer) => {
+                Ok([pipe_writer.try_clone()?, pipe_writer.try_clone()?].map(Stdio::from))
+            }
+            SinkBuilder::ClonePipes { stdout, stderr } => {
+                Ok([stdout.try_clone()?, stderr.try_clone()?].map(Stdio::from))
+            }
         }
     }
 }

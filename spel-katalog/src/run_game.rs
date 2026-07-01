@@ -266,14 +266,13 @@ impl App {
                 s
             }
 
-            let (stdout, stderr) =
-                match sink_builder.build_double(|| SinkIdentity::GameId(lutris_id)) {
-                    Ok([stdout, stderr]) => (stdout, stderr),
-                    Err(err) => {
-                        ::log::error!("could not create process output sinks\n{err}");
-                        return "could not create output sinks".to_owned().into();
-                    }
-                };
+            let (stdout, stderr) = match sink_builder.build(|| SinkIdentity::GameId(lutris_id)) {
+                Ok([stdout, stderr]) => (stdout, stderr),
+                Err(err) => {
+                    ::log::error!("could not create process output sinks\n{err}");
+                    return "could not create output sinks".to_owned().into();
+                }
+            };
 
             let cmd = match (safety, sandbox_mode) {
                 (Safety::None, _) => {
