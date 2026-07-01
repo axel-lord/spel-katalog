@@ -62,7 +62,7 @@ run-crate CRATE *EXTRA:
 
 install-daemon: (build-crate daemon_crate)
 	mkdir -p $XDG_DATA_HOME/spel-katalog
-	cp target/release/spel-katalog-daemon $XDG_DATA_HOME/spel-katalog/
+	cp --remove-destination target/release/spel-katalog-daemon $XDG_DATA_HOME/spel-katalog/
 
 # Install project.
 install: autoinherit fmt (install-crate crate) (install-crate installer_crate) install-daemon
