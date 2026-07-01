@@ -4462,6 +4462,7 @@ dependencies = [
  "rustc-hash 2.1.2",
  "rustix 1.1.4",
  "serde",
+ "serde_json",
  "shell-words",
  "smol",
  "spel-katalog-cli",
@@ -4525,15 +4526,23 @@ dependencies = [
 name = "spel-katalog-daemon"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "clap",
  "color-eyre",
  "env_logger",
  "flume",
  "log",
+ "rustix 1.1.4",
  "serde_json",
  "smol",
  "spel-katalog-formats",
  "spel-katalog-ipc",
+ "spel-katalog-run",
+ "spel-katalog-settings",
+ "spel-katalog-sink",
+ "tap",
+ "tinyvec",
+ "uuid",
  "xdg",
 ]
 
@@ -4552,6 +4561,7 @@ dependencies = [
  "serde_bytes",
  "strum",
  "thiserror 2.0.18",
+ "unicode-segmentation",
  "uuid",
  "yaml-rust2",
 ]
@@ -6269,6 +6279,9 @@ name = "xdg"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fb433233f2df9344722454bc7e96465c9d03bff9d77c248f9e7523fe79585b5"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "xkbcommon-dl"

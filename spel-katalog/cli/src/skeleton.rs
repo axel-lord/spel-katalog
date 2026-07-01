@@ -14,16 +14,16 @@ pub fn skeleton(
 ) -> Result<(), SubCmdError> {
     let mut stdout;
     let mut file;
-    let writer: &mut dyn Write;
-    if output.as_os_str().to_str() == Some("-") {
+
+    let writer: &mut dyn Write = if output.as_os_str().to_str() == Some("-") {
         stdout = ::std::io::stdout().lock();
-        writer = &mut stdout;
+        &mut stdout
     } else {
         file = ::std::fs::File::create(&output)
             .map(BufWriter::new)
             .map_err(SubCmdError::open_create(&output))?;
-        writer = &mut file;
-    }
+        &mut file
+    };
     ::std::io::copy(
         &mut ::std::io::Cursor::new(
             ::toml::to_string_pretty(&settings.skeleton()).map_err(SubCmdError::SkeletonToToml)?,

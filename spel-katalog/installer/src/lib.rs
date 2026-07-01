@@ -113,9 +113,7 @@ impl Installer {
                     }
                 }
                 Err(err) => ::log::error!(
-                    "could not remove prefix {:?} from {:?}\n{err}",
-                    &directory,
-                    entry_path
+                    "could not remove prefix {directory:?} from {entry_path:?}\n{err}",
                 ),
             };
         };

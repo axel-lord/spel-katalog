@@ -8,23 +8,23 @@ use crate::{NativeGame, RunMode};
 
 /// Response returned when running a game on a daemon.
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct DaemonResponse {
-    /// Path to stdout pipe.
-    pub stdout_pipe: PathBuf,
-    /// Path to stderr pipe.
-    pub stderr_pipe: PathBuf,
+pub enum DaemonRunResponse {
+    /// A Pipe was created.
+    CreatedPipe {
+        /// Name of pipe.
+        name: String,
+        /// Path of pipe.
+        path: PathBuf,
+    },
 }
 
-/// Game run config.
+/// Run request sent to daemon.
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub enum DaemonRunGame<S> {
-    /// Run game using provided config.
-    Config {
-        /// Config of game to run.
-        config: NativeGame,
-        /// How to run game.
-        run_mode: RunMode,
-        /// Settings to use when running game.
-        settings: S,
-    },
+pub struct DaemonRunConfigRequest<S> {
+    /// Config of game to run.
+    pub config: NativeGame,
+    /// How to run game.
+    pub run_mode: RunMode,
+    /// Settings to use when running game.
+    pub settings: S,
 }

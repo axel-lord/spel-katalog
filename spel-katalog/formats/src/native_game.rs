@@ -6,6 +6,7 @@ use ::derive_more::{Display, IsVariant};
 use ::rustc_hash::FxHashMap;
 use ::serde::{Deserialize, Serialize};
 use ::strum::VariantArray;
+use ::unicode_segmentation::UnicodeSegmentation;
 
 use crate::{Bind, GameId, Timestamp};
 
@@ -111,6 +112,11 @@ impl NativeGame {
             bind: Default::default(),
             ro_bind: Default::default(),
         }
+    }
+
+    /// Get name truncated to at most 30 characters.
+    pub fn trunc_name(&self) -> String {
+        self.name.graphemes(true).take(30).collect()
     }
 }
 

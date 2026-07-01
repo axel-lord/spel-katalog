@@ -3,10 +3,15 @@ use ::std::{
     path::Path,
 };
 
+use ::bytes::Bytes;
 use ::iced_runtime::Task;
 use ::image::DynamicImage;
 use ::spel_katalog_common::status;
-use ::spel_katalog_formats::{AdditionalConfig, Game, GameId, NativeGame, RunMode, lutris_config};
+use ::spel_katalog_formats::{
+    AdditionalConfig, DaemonRunConfigRequest, DaemonRunResponse, Game, GameId, NativeGame, RunMode,
+    lutris_config,
+};
+use ::spel_katalog_ipc::http::ResponseCode;
 use ::spel_katalog_run::{
     Callback, dll_overrides,
     run_umu::{CommonUmuCtx, LutrisCtx, LutrisUmuCtx},
@@ -143,16 +148,84 @@ impl App {
 
     /// Run a native game.
     pub fn run_native_game(&mut self, game: NativeGame, run_mode: RunMode) -> Task<Message> {
-        let Some(task) = ::spel_katalog_run::run_native_game(
-            game,
-            run_mode,
-            &self.settings,
-            self.sink_builder.clone(),
-        ) else {
-            return Task::none();
+        let settings = self.settings.snapshot();
+        let sink_builder = self.sink_builder.clone();
+        let task = async move {
+            let conn =
+                ::spel_katalog_ipc::generic::connect(settings.xdg(), "spel-katalog-daemon-ipc")
+                    .await;
+
+            match conn {
+                Ok(conn) => {
+                    let message = ::serde_json::to_vec(&DaemonRunConfigRequest {
+                        config: game,
+                        run_mode,
+                        settings,
+                    })
+                    .map_err(|err| ::log::error!("could not create daemon request for game\n{err}"))
+                    .ok()?
+                    .pipe(Bytes::from_owner);
+
+                    let response = ::spel_katalog_ipc::generic::send(conn, message, "/run")
+                        .await
+                        .map_err(|err| ::log::error!("failed to send run config to daemon\n{err}"))
+                        .ok()?;
+
+                    let code = response.code();
+                    let body = response
+                        .body()
+                        .await
+                        .map_err(|err| {
+                            ::log::error!(
+                                "could not collect response body for response with code {}\n{err}",
+                                code.display()
+                            )
+                        })
+                        .ok()?;
+
+                    if code != ResponseCode::Ok {
+                        ::log::error!(
+                            "response from daemon was {}, expected Ok\n{body:?}",
+                            code.display(),
+                        );
+                        return None;
+                    }
+
+                    let response = ::serde_json::from_slice::<DaemonRunResponse>(&body)
+                        .map_err(|err| {
+                            ::log::error!("could not deserialize daemon response\n{err}")
+                        })
+                        .ok()?;
+
+                    match response {
+                        DaemonRunResponse::CreatedPipe { name, path } => async move {
+                            let fifo = ::smol::fs::File::open(&path).await?;
+                            let [stdout, _] = sink_builder.writers(|| name)?;
+                            let writer = stdout.into_async();
+                            ::smol::io::copy(fifo, writer).await?;
+                            Ok(())
+                        }
+                        .await
+                        .map_err(|err: ::smol::io::Error| {
+                            ::log::error!("error while reading fifo\n{err}")
+                        })
+                        .ok()?,
+                    };
+                    None
+                }
+                Err(err) => {
+                    ::log::error!(
+                        "could not connect to daemon ipc socket, running game from main\n{err}"
+                    );
+
+                    ::spel_katalog_run::run_native_game(game, run_mode, &settings, sink_builder)?
+                        .await
+                        .map(Message::from)
+                }
+            }
         };
 
-        Task::future(task).and_then(|message| Task::done(message.into()))
+        Task::future(task).and_then(Task::done)
     }
 
     pub fn run_game(&mut self, id: GameId, safety: Safety, no_game: bool) -> Task<Message> {
@@ -273,7 +346,7 @@ impl App {
 
             let cmd = match (safety, sandbox_mode) {
                 (Safety::None, _) => {
-                    ::log::info!("executing {lutris:?} with arguments\n{:#?}", &[&rungame]);
+                    ::log::info!("executing {lutris:?} with arguments\n{:#?}", [&rungame]);
                     ::smol::process::Command::new(lutris)
                         .args(rungame)
                         .kill_on_drop(true)

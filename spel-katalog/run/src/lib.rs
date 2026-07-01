@@ -13,7 +13,7 @@ use ::spel_katalog_settings::{
     BubblewrapExe, DllOverrides, GamescopeExe, Network, SandboxExtras, Settings, ShellExe,
     TermCommand, UmuRunExe, UseGamescope,
 };
-use ::spel_katalog_sink::{SinkBuilder, SinkIdentity, SinkWriter};
+use ::spel_katalog_sink::{AsyncSinkWriter, SinkBuilder, SinkIdentity};
 use ::tap::Conv;
 use ::unicode_segmentation::UnicodeSegmentation;
 
@@ -79,38 +79,31 @@ async fn sink_proxy(log_dir: &Path, name: &str, sink_builder: SinkBuilder) -> Op
             .ok()?;
 
         let [stdout_writer, stderr_writer] = sink_builder
-            .writers(|| SinkIdentity::Name(trunc_name.clone()))
+            .async_writers(|| SinkIdentity::Name(trunc_name.clone()))
             .map_err(|err| ::log::error!("could not create sink pipes for {trunc_name}\n{err}"))
             .ok()?;
 
         async fn split_copy(
-            r: PipeReader,
-            w1: SinkWriter,
-            mut w2: ::smol::fs::File,
+            reader: PipeReader,
+            mut sink: AsyncSinkWriter,
+            mut file: ::smol::fs::File,
         ) -> ::std::io::Result<()> {
-            let mut w1 = w1.into_async();
-            let mut r = r.conv::<OwnedFd>().conv::<smol::fs::File>();
+            let mut reader = reader.conv::<OwnedFd>().conv::<smol::fs::File>();
 
             let mut buf = [0; 128];
             loop {
-                let n = r.read(&mut buf).await?;
+                let n = reader.read(&mut buf).await?;
                 if n == 0 {
                     break;
                 }
 
                 let buf = &buf[..n];
-
-                let w1 = w1.write_all(buf);
-                let w2 = w2.write_all(buf);
-
-                let (r1, r2) = ::smol::future::zip(w1, w2).await;
-                r1?;
-                r2?;
+                let sink_future = sink.write_all(buf);
+                let file_future = file.write_all(buf);
+                ::smol::future::try_zip(sink_future, file_future).await?;
             }
 
-            let (r1, r2) = ::smol::future::zip(w1.flush(), w2.flush()).await;
-            r1?;
-            r2?;
+            ::smol::future::try_zip(sink.flush(), file.flush()).await?;
 
             Ok(())
         }
@@ -122,10 +115,11 @@ async fn sink_proxy(log_dir: &Path, name: &str, sink_builder: SinkBuilder) -> Op
                     let stdout_task = split_copy(stdout_reader, stdout_writer, stdout_log);
                     let stderr_task = split_copy(stderr_reader, stderr_writer, stderr_log);
 
-                    let (r1, r2) = ::smol::future::zip(stdout_task, stderr_task).await;
+                    let (stdout_result, stderr_result) =
+                        ::smol::future::zip(stdout_task, stderr_task).await;
 
-                    _ = r1.map_err(|err| ::log::error!("error copying stdout\n{err}"));
-                    _ = r2.map_err(|err| ::log::error!("error copying stderr\n{err}"));
+                    _ = stdout_result.map_err(|err| ::log::error!("error copying stdout\n{err}"));
+                    _ = stderr_result.map_err(|err| ::log::error!("error copying stderr\n{err}"));
 
                     None
                 })

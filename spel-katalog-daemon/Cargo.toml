@@ -6,15 +6,23 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+bytes.workspace = true
 clap = { workspace = true, features = ["derive"] }
 color-eyre.workspace = true
 env_logger.workspace = true
-serde_json.workspace = true
 flume = { workspace = true, features = ["async"] }
 log.workspace = true
+rustix = { workspace = true, features = ["fs"] }
+serde_json.workspace = true
 smol.workspace = true
-spel-katalog-ipc.workspace = true
 spel-katalog-formats.workspace = true
+spel-katalog-ipc.workspace = true
+spel-katalog-run.workspace = true
+spel-katalog-settings.workspace = true
+spel-katalog-sink.workspace = true
+tap.workspace = true
+tinyvec = "1.11.0"
+uuid = { workspace = true, features = ["v7"] }
 xdg.workspace = true
 
 [lints]

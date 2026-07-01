@@ -3,7 +3,7 @@
 pub use self::{
     addititional_config::AdditionalConfig,
     bind::{Bind, Symlink},
-    daemon::{DaemonResponse, DaemonRunGame},
+    daemon::{DaemonRunConfigRequest, DaemonRunResponse},
     game::{Game, GameId},
     image::Image,
     installer::{ExeChoice, InstallerConfig, InstallerPrepareConfig},

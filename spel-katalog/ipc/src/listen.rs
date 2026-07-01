@@ -1,7 +1,7 @@
 //! Server component.
 
 use ::core::convert::Infallible;
-use ::std::{path::Path, rc::Rc};
+use ::std::{path::Path, rc::Rc, thread::JoinHandle};
 
 use ::bytes::Bytes;
 use ::http_body_util::{BodyExt, Full};
@@ -25,26 +25,24 @@ pub fn listen<
     xdg: &BaseDirectories,
     name: &'static str,
     handler: H,
-) {
+) -> Option<JoinHandle<()>> {
     let socket_path = match xdg.place_runtime_file(name) {
         Ok(path) => path,
         Err(err) => {
             ::log::error!("could not get runtime dir, or create parents\n{err}");
-            return;
+            return None;
         }
     };
 
-    let thread = ::std::thread::Builder::new()
+    ::std::thread::Builder::new()
         .name(name.to_owned())
         .spawn(move || {
             let ex = LocalExecutor::new();
             ex.run(listen_(&ex, &socket_path, handler))
-                .pipe(::smol::block_on)
-        });
-
-    if let Err(err) = thread {
-        ::log::error!("failed to spawn ipc thread\n{err}");
-    }
+                .pipe(::smol::block_on);
+        })
+        .map_err(|err| ::log::error!("failed to spawn ipc thread\n{err}"))
+        .ok()
 }
 
 /// Internal listen function.

@@ -1,6 +1,7 @@
 //! Settings widgets.
 
 use ::clap::Args;
+use ::serde::{Deserialize, Serialize, ser::SerializeStruct};
 
 use ::core::ops::{Deref, DerefMut};
 use ::std::{
@@ -36,12 +37,44 @@ impl SettingsArgs {
 }
 
 /// Settings storage.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(from = "Settings_")]
 pub struct Settings {
     /// Inner settings stored.
     inner: Arc<SettingsStore>,
     /// Xdg base directories.
     xdg: Arc<::xdg::BaseDirectories>,
+}
+
+/// Struct used for deserialization of [Settings].
+#[derive(Debug, Deserialize)]
+struct Settings_ {
+    /// Settings store.
+    store: SettingsStore,
+    /// Xdg basedirectories.
+    xdg: ::xdg::BaseDirectories,
+}
+
+impl From<Settings_> for Settings {
+    fn from(Settings_ { store, xdg }: Settings_) -> Self {
+        Settings {
+            inner: Arc::new(store),
+            xdg: Arc::new(xdg),
+        }
+    }
+}
+
+impl Serialize for Settings {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let Settings { inner, xdg } = self;
+        let mut state = serializer.serialize_struct("Settings", 2)?;
+        state.serialize_field("store", inner.as_ref())?;
+        state.serialize_field("xdg", xdg.as_ref())?;
+        state.end()
+    }
 }
 
 impl Settings {
