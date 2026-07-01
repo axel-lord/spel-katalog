@@ -21,7 +21,7 @@ spel-katalog-run.workspace = true
 spel-katalog-settings.workspace = true
 spel-katalog-sink.workspace = true
 tap.workspace = true
-tinyvec = "1.11.0"
+tinyvec.workspace = true
 uuid = { workspace = true, features = ["v7"] }
 xdg.workspace = true
 

@@ -60,8 +60,12 @@ build-crate CRATE *EXTRA:
 run-crate CRATE *EXTRA:
 	cargo +nightly run --release -p {{CRATE}} -Z build-std=std,panic_abort -Z build-std-features="optimize_for_size" {{EXTRA}}
 
+install-daemon: (build-crate daemon_crate)
+	mkdir -p $XDG_DATA_HOME/spel-katalog
+	cp target/release/spel-katalog-daemon $XDG_DATA_HOME/spel-katalog/
+
 # Install project.
-install: autoinherit fmt (install-crate crate) (install-crate installer_crate)
+install: autoinherit fmt (install-crate crate) (install-crate installer_crate) install-daemon
 
 # Build project.
 build *EXTRA: autoinherit fmt (build-crate crate EXTRA)

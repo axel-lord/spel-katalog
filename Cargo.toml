@@ -162,3 +162,5 @@ spel-katalog-install = { path = "spel-katalog-install" }
 spel-katalog-lazy = { path = "spel-katalog/lazy" }
 spel-katalog-settings-view = { path = "spel-katalog/settings/view" }
 unicode-segmentation = "1.13.3"
+pin-project = "1.1.13"
+tinyvec = "1.11.0"
