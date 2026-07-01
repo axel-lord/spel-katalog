@@ -8,7 +8,7 @@ use ::image::DynamicImage;
 use ::spel_katalog_common::status;
 use ::spel_katalog_formats::{AdditionalConfig, Game, GameId, NativeGame, RunMode, lutris_config};
 use ::spel_katalog_run::{
-    Callback, dll_overrides, io_pair, log_dir,
+    Callback, dll_overrides,
     run_umu::{CommonUmuCtx, LutrisCtx, LutrisUmuCtx},
     sandbox_ro_dirs,
 };
@@ -215,9 +215,6 @@ impl App {
         let sink_builder = self.sink_builder.clone();
         let yml_dir = self.settings.get::<YmlDir>();
         let configpath = format!("{yml_dir}/{}.yml", game.configpath);
-        let Some(log_dir) = log_dir(self.settings.xdg()) else {
-            return Task::none();
-        };
         let Some(extra_config_path) = self
             .settings
             .xdg()
@@ -323,10 +320,6 @@ impl App {
                     return "only bubblewrap supported for shell".to_owned().into();
                 }
                 (safety, SandboxMode::Bubblewrap) => {
-                    let Some([stdout, stderr]) = io_pair(&log_dir, &name, sink_builder).await
-                    else {
-                        return "could not create stdout and stderr logs".to_owned().into();
-                    };
                     let ctx = LutrisUmuCtx {
                         common: CommonUmuCtx {
                             bwrap: bwrap.as_path(),
@@ -339,8 +332,7 @@ impl App {
                             dll_overrides,
                             gamescope: gamescope.as_path(),
                             use_gamescope,
-                            stdout,
-                            stderr,
+                            sink_builder,
                         },
                         lutris: LutrisCtx {
                             config: &config,

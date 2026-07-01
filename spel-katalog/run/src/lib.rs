@@ -23,7 +23,7 @@ mod macros;
 pub mod run_umu;
 
 /// Get log directory if available.
-pub fn log_dir(xdg: &::xdg::BaseDirectories) -> Option<PathBuf> {
+fn log_dir(xdg: &::xdg::BaseDirectories) -> Option<PathBuf> {
     xdg.get_runtime_file("logs")
         .map_err(|err| ::log::error!("could not get runtime directory\n{err}"))
         .ok()
@@ -52,11 +52,7 @@ pub fn dll_overrides(settings: &Settings) -> Vec<String> {
 }
 
 /// Get stdout and stderr file handles.
-pub async fn io_pair(
-    log_dir: &Path,
-    name: &str,
-    sink_builder: SinkBuilder,
-) -> Option<[::std::io::PipeWriter; 2]> {
+async fn sink_proxy(log_dir: &Path, name: &str, sink_builder: SinkBuilder) -> Option<SinkBuilder> {
     let when = ::spel_katalog_formats::Timestamp::now();
     ::smol::fs::create_dir_all(&log_dir)
         .await
@@ -83,7 +79,7 @@ pub async fn io_pair(
             .ok()?;
 
         let [stdout_writer, stderr_writer] = sink_builder
-            .get_writers(|| SinkIdentity::Name(trunc_name.clone()))
+            .writers(|| SinkIdentity::Name(trunc_name.clone()))
             .map_err(|err| ::log::error!("could not create sink pipes for {trunc_name}\n{err}"))
             .ok()?;
 
@@ -92,7 +88,7 @@ pub async fn io_pair(
             w1: SinkWriter,
             mut w2: ::smol::fs::File,
         ) -> ::std::io::Result<()> {
-            let mut w1 = ::smol::Unblock::new(w1);
+            let mut w1 = w1.into_async();
             let mut r = r.conv::<OwnedFd>().conv::<smol::fs::File>();
 
             let mut buf = [0; 128];
@@ -137,7 +133,7 @@ pub async fn io_pair(
             .map_err(|err| ::log::error!("could not spawn pipe writer thread\n{err}"))
             .ok()?;
 
-        Some([stdout, stderr])
+        Some([stdout, stderr].into())
     })
     .await
 }
@@ -162,7 +158,7 @@ pub fn run_native_game(
 
     Some(async move {
         let name = game.name.clone();
-        let [stdout, stderr] = io_pair(&log_dir, &name, sink_builder).await?;
+        let sink_builder = sink_proxy(&log_dir, &name, sink_builder).await?;
 
         let ctx = NativeUmuCtx {
             common: CommonUmuCtx {
@@ -174,8 +170,7 @@ pub fn run_native_game(
                 dll_overrides,
                 sandbox_ro_dirs,
                 use_gamescope,
-                stdout,
-                stderr,
+                sink_builder,
                 gamescope: gamescope.as_path(),
                 callback: Callback::default(),
             },

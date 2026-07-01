@@ -14,6 +14,7 @@ use ::spel_katalog_formats::{
     AdditionalConfig, Bind, GameId, LutrisRunner, NativeGame, NativeRunner, RunMode, Timestamp,
     lutris_config,
 };
+use ::spel_katalog_sink::SinkBuilder;
 use ::tap::Pipe;
 
 use crate::{Callback, macros::args};
@@ -42,10 +43,8 @@ pub struct CommonUmuCtx<'a> {
     pub gamescope: &'a Path,
     /// Callback used to signal game was started.
     pub callback: Callback,
-    /// File to write stdout to.
-    pub stdout: ::std::io::PipeWriter,
-    /// File to write stderr to.
-    pub stderr: ::std::io::PipeWriter,
+    /// Sink builder to use for command outputs.
+    pub sink_builder: SinkBuilder,
 }
 
 /// Context needed to run native games.
@@ -78,10 +77,10 @@ async fn init_umu_prefix(
     umu_prefix: &Path,
     verbs: &[String],
     drives: &mut (dyn '_ + Send + Sync + Iterator<Item = (char, &Path)>),
-    stdout: ::std::io::PipeWriter,
-    stderr: ::std::io::PipeWriter,
+    sink_builder: SinkBuilder,
     envs: &FxHashMap<String, String>,
 ) -> ::color_eyre::Result<()> {
+    let [stdout, stderr] = sink_builder.build(|| "Init Prefix")?;
     let status = Command::new(umu)
         .stdout(stdout)
         .stderr(stderr)
@@ -174,8 +173,7 @@ impl NativeUmuCtx<'_> {
                     callback: send_open,
                     use_gamescope: global_use_gamescope,
                     gamescope,
-                    stdout,
-                    stderr,
+                    sink_builder,
                 },
             config,
         } = self;
@@ -228,8 +226,6 @@ impl NativeUmuCtx<'_> {
             && let Some(prefix) = prefix.as_deref()
             && (run_mode.is_init() || !prefix.exists())
         {
-            let stdout = stdout.try_clone()?;
-            let stderr = stderr.try_clone()?;
             init_umu_prefix(
                 umu,
                 prefix,
@@ -237,8 +233,7 @@ impl NativeUmuCtx<'_> {
                 &mut drives
                     .iter()
                     .map(|(letter, link)| (*letter, link.as_path())),
-                stdout,
-                stderr,
+                sink_builder.clone(),
                 &env,
             )
             .await?;
@@ -351,6 +346,7 @@ impl NativeUmuCtx<'_> {
 
         let process_path = term_path.unwrap_or_else(|| bwrap.to_path_buf());
         ::log::info!("running {process_path:?} with args\n{args:#?}");
+        let [stdout, stderr] = sink_builder.build(|| name.clone())?;
         let cmd = Command::new(process_path)
             .args(args)
             .stdout(stdout)
