@@ -143,20 +143,15 @@ title = "Compatability tools"
 help = "Path to default compatability tool directory"
 path = "{DATA}/umu/compatibilitytools"
 
+[CompToolDefault]
+title = "Default Compatability Tool"
+help = "Path to default compatability tool used by installer"
+path = ""
+
 [YmlDir]
 title = "Game Config Directory"
 help = "Path to lutris game yml config directory"
 path = "{CONFIG}/lutris/games"
-
-[ConfigDir]
-title = "Config Directory"
-help = "Path application configuration directory"
-path = "{CONFIG}/spel-katalog/"
-
-[CacheDir]
-title = "Cache Directory"
-help = "Path to cache directory"
-path = "{CACHE}/spel-katalog/"
 
 [InstallLocation]
 title = "Game Install Location"

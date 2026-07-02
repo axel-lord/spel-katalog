@@ -3,8 +3,13 @@
 use ::std::path::{Path, PathBuf};
 
 use ::clap::Subcommand;
+use ::spel_katalog_install::InstallGame;
 
-use crate::{completions::completions, init_config::init_config, skeleton::skeleton};
+use crate::{
+    completions::{Binary, completions},
+    init_config::init_config,
+    skeleton::skeleton,
+};
 
 /// Get default shell.
 fn get_shell() -> ::clap_complete::Shell {
@@ -13,30 +18,9 @@ fn get_shell() -> ::clap_complete::Shell {
 
 /// Callbacks required when performing subcommand.
 #[derive(Debug)]
-pub struct SubcmdCallbacks<E> {
+pub struct SubcmdCallbacks {
     /// Callback to use when running application.
-    pub run: fn(crate::Run) -> Result<(), E>,
-
-    /// Callback that is called before other subcommands.
-    pub other: fn() -> Result<(), E>,
-
-    /// Callbacks to use when installing a game.
-    pub install_game: fn(InstallGame) -> Result<(), E>,
-}
-
-/// Install a game.
-#[derive(Debug, ::clap::Args)]
-pub struct InstallGame {
-    /// Game to install.
-    pub game: PathBuf,
-    /// Thumbnail of game.
-    pub thumbnail: Option<PathBuf>,
-    /// Should the game be hidden.
-    #[arg(long)]
-    pub hidden: bool,
-    /// Should the game not be moved.
-    #[arg(long)]
-    pub no_move: bool,
+    pub run: fn(crate::Run) -> ::color_eyre::Result<()>,
 }
 
 /// Error returned whe subcmd perform fails.
@@ -108,7 +92,7 @@ pub enum Subcmd {
     Skeleton {
         /// Settings to set for skeleton.
         #[command(flatten)]
-        settings: ::spel_katalog_settings::Settings,
+        settings: ::spel_katalog_settings::SettingsArgs,
 
         /// Where to write skeleton to.
         #[arg(long, short, default_value = "-")]
@@ -116,15 +100,18 @@ pub enum Subcmd {
     },
     /// Output completions.
     Completions {
-        /// Shell to use.
+        /// Shell to generate completions for.
         #[arg(short, long, value_enum, default_value_t = get_shell())]
         shell: ::clap_complete::Shell,
         /// Name of the binary completions should be generated for.
-        #[arg(short, long, default_value = "spel-katalog")]
-        name: String,
+        #[arg(short, long)]
+        name: Option<String>,
         /// Where to write completions to.
         #[arg(short, long, default_value = "-")]
         output: PathBuf,
+        /// Which application to generate completions for.
+        #[arg(short, long, value_enum, default_value_t)]
+        binary: Binary,
     },
     /// Generate missing config. And/Or update lua definition.
     InitConfig {
@@ -146,34 +133,27 @@ impl Subcmd {
     ///
     /// # Errors
     /// Forwards whatever errors may occur in callback for given subcommand.
-    pub fn perform<E>(self, callbacks: SubcmdCallbacks<E>) -> Result<(), E>
-    where
-        E: From<SubCmdError>,
-    {
-        let SubcmdCallbacks {
-            run,
-            other,
-            install_game,
-        } = callbacks;
+    pub fn perform(self, callbacks: SubcmdCallbacks) -> ::color_eyre::Result<()> {
+        let SubcmdCallbacks { run } = callbacks;
         match self {
             Subcmd::Skeleton { output, settings } => {
-                other()?;
-                skeleton(output, settings)?;
+                skeleton(output, settings.into())?;
             }
             Subcmd::Completions {
                 shell,
                 name,
                 output,
+                binary,
             } => {
-                other()?;
-                completions(shell, name, output)?;
+                completions(binary, shell, name, output)?;
             }
             Subcmd::InitConfig { path } => {
-                other()?;
                 init_config(path);
             }
             Subcmd::Run(cli) => run(cli)?,
-            Subcmd::InstallGame(game) => install_game(game)?,
+            Subcmd::InstallGame(game) => {
+                game.run()?;
+            }
         }
         Ok(())
     }

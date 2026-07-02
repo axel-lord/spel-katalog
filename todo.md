@@ -15,13 +15,15 @@
 - [ ] Unresized cover cache, and cover size option with different caches for different sizes
 - [ ] Add more refined database access limitations
 - [x] Remove current lua scripting 
-- [ ] Use xdg base dirs for some settings
+- [x] Use xdg base dirs for some settings
 - [ ] Profiles
-- [ ] Http for ipc
+- [x] Http for ipc
 - [ ] External scripting using ipc
 - [x] Use iced grid for game view
 - [x] Use iced sensor for game cards
-- [ ] Profiling crate with feature flag to enable
+- [x] Profiling crate with feature flag to enable
+- [x] Deamon for spawning game processes
+- [ ] Logging in terminal window
 
 # Future Goals/Possibilities
 - [x] Run exe files in prefix without lutris

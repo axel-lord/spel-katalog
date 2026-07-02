@@ -1,16 +1,15 @@
 use ::core::convert::identity;
-use ::std::{path::PathBuf, sync::Arc};
+use ::std::path::PathBuf;
 
 use ::iced_core::{Size, window};
 use ::iced_runtime::Task;
 use ::image::DynamicImage;
 use ::rustix::process::{Pid, RawPid};
 use ::spel_katalog_common::{IntoOrRequest, OrRequest};
-use ::spel_katalog_formats::NativeGame;
+use ::spel_katalog_formats::{InstallerConfig, InstallerPrepareConfig, NativeGame, RunMode};
 use ::spel_katalog_games::SelDir;
-use ::spel_katalog_run::run_umu::RunMode;
 use ::spel_katalog_settings::{
-    ConfigDir, FilterMode, Load, LutrisDb, Network, Settings, Show, TrustedVariants,
+    FilterMode, Load, LutrisDb, Network, Settings, Show, TrustedVariants,
 };
 use ::tap::Pipe;
 use ::uuid::Uuid;
@@ -106,15 +105,16 @@ impl App {
     }
 
     async fn prefill_installer(
-        settings: Arc<Settings>,
-        game_dir: PathBuf,
-        hidden: Option<bool>,
-        thumbnail: Option<PathBuf>,
-        move_game: Option<bool>,
+        settings: Settings,
+        installer_config: InstallerConfig,
     ) -> Option<Task<Message>> {
-        let (parent, choice) = ::spel_katalog_installer::Installer::open_path(game_dir).await?;
         let (installer, installer_task) = ::spel_katalog_installer::Installer::new(
-            &settings, parent, choice, hidden, thumbnail, move_game,
+            &settings,
+            installer_config
+                .into_prepare_config(|game_dir| {
+                    ::spel_katalog_installer::Installer::open_path(game_dir)
+                })
+                .await?,
         );
 
         let (id, open_task) = ::iced_runtime::window::open(Default::default());
@@ -138,7 +138,18 @@ impl App {
 
             let (parent, choice) = ::spel_katalog_installer::Installer::open(source).await?;
             let (installer, installer_task) = ::spel_katalog_installer::Installer::new(
-                &settings, parent, choice, hidden, None, None,
+                &settings,
+                InstallerPrepareConfig {
+                    parent,
+                    choice,
+                    hidden,
+                    thumbnail: None,
+                    move_game: None,
+                    drives: Default::default(),
+                    bind: Default::default(),
+                    ro_bind: Default::default(),
+                    env: Default::default(),
+                },
             );
 
             let (id, open_task) = ::iced_runtime::window::open(Default::default());
@@ -178,7 +189,10 @@ impl App {
                     .and_then(|filter| Task::done(Message::Filter(filter)));
             }
             QuickMessage::OpenDatabase => {
-                let path = self.settings.get::<ConfigDir>().as_path().join("games.db");
+                let Some(path) = self.settings.xdg().get_config_file("games.db") else {
+                    ::log::error!("could not get config file path for \"games.db\"");
+                    return Task::none();
+                };
                 return Task::<Option<_>>::future(::smol::unblock(move || {
                     if let Err(err) = ::open::that_detached(&path) {
                         ::log::error!("failed to open {path:?}\n{err}");
@@ -468,9 +482,9 @@ impl App {
         }
     }
 
-    fn should_re_sort(msg: &::spel_katalog_settings::Message) -> bool {
+    fn should_re_sort(msg: &::spel_katalog_settings_view::Message) -> bool {
         use ::spel_katalog_settings::Delta;
-        let ::spel_katalog_settings::Message::Delta(delta) = msg else {
+        let ::spel_katalog_settings_view::Message::Delta(delta) = msg else {
             return false;
         };
         matches!(
@@ -551,15 +565,6 @@ impl App {
             }
             Message::Settings(message) => {
                 let should_re_sort = Self::should_re_sort(&message);
-                let should_load_thumbs = if let ::spel_katalog_settings::Message::Delta(
-                    ::spel_katalog_settings::Delta::UnloadThumbnails(value),
-                ) = message
-                    && value.is_no()
-                {
-                    true
-                } else {
-                    false
-                };
                 let task = self
                     .settings
                     .update(message, &self.sender)
@@ -568,18 +573,6 @@ impl App {
                 if should_re_sort {
                     self.sort_games();
                 }
-
-                let task = if should_load_thumbs {
-                    Task::batch([
-                        task,
-                        self.games
-                            .load_all_thumbnails(&self.settings, &self.games_db)
-                            .map(OrRequest::Message)
-                            .map(Message::Games),
-                    ])
-                } else {
-                    task
-                };
 
                 return task;
             }
@@ -684,20 +677,9 @@ impl App {
                 }
             }
             Message::Ipc(message) => match message {
-                ::spel_katalog_ipc::Message::InstallGame {
-                    source,
-                    hidden,
-                    thumbnail,
-                    move_game,
-                } => {
-                    return Task::future(Self::prefill_installer(
-                        self.settings.snapshot(),
-                        source,
-                        Some(hidden),
-                        thumbnail,
-                        Some(move_game),
-                    ))
-                    .and_then(identity);
+                ::spel_katalog_ipc::Message::InstallGame(config) => {
+                    return Task::future(Self::prefill_installer(self.settings.snapshot(), config))
+                        .and_then(identity);
                 }
             },
             Message::ShowInfo(displayed) => {

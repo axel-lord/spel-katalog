@@ -8,14 +8,13 @@ use ::std::{
 };
 
 use ::color_eyre::{Section, eyre::eyre};
-use ::derive_more::IsVariant;
 use ::rustc_hash::FxHashMap;
 use ::smol::process::Command;
 use ::spel_katalog_formats::{
-    AdditionalConfig, Bind, GameId, LutrisRunner, NativeGame, NativeRunner, Timestamp,
+    AdditionalConfig, Bind, GameId, LutrisRunner, NativeGame, NativeRunner, RunMode, Timestamp,
     lutris_config,
 };
-use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
+use ::spel_katalog_sink::SinkBuilder;
 use ::tap::Pipe;
 
 use crate::{Callback, macros::args};
@@ -44,7 +43,7 @@ pub struct CommonUmuCtx<'a> {
     pub gamescope: &'a Path,
     /// Callback used to signal game was started.
     pub callback: Callback,
-    /// Builder to create output sinks using.
+    /// Sink builder to use for command outputs.
     pub sink_builder: SinkBuilder,
 }
 
@@ -78,15 +77,10 @@ async fn init_umu_prefix(
     umu_prefix: &Path,
     verbs: &[String],
     drives: &mut (dyn '_ + Send + Sync + Iterator<Item = (char, &Path)>),
-    sink_builder: &SinkBuilder,
+    sink_builder: SinkBuilder,
     envs: &FxHashMap<String, String>,
 ) -> ::color_eyre::Result<()> {
-    let sink_builder = sink_builder
-        .with_locked_channel(|| SinkIdentity::StaticName("prefix preparation"))
-        .map_err(|err| eyre!(err).note("could not lock sink builder, {err}"))?;
-    let [stdout, stderr] = sink_builder
-        .build_double(|| SinkIdentity::StaticName("winetricks"))
-        .map_err(|err| eyre!(err).note("could not build sinks for winetricks"))?;
+    let [stdout, stderr] = sink_builder.build(|| "Init Prefix")?;
     let status = Command::new(umu)
         .stdout(stdout)
         .stderr(stderr)
@@ -134,17 +128,6 @@ fn term_path(term: &str) -> ::color_eyre::Result<(PathBuf, Vec<PathBuf>)> {
         PathBuf::from(term),
         term_args.iter().map(PathBuf::from).collect(),
     ))
-}
-
-/// How to run game.
-#[derive(Debug, Clone, Copy, IsVariant)]
-pub enum RunMode {
-    /// Run executable.
-    Exe,
-    /// Run shell.
-    Shell,
-    /// Stop after init.
-    Init,
 }
 
 impl NativeUmuCtx<'_> {
@@ -211,6 +194,7 @@ impl NativeUmuCtx<'_> {
             bind,
             ro_bind,
             use_gamescope,
+            gamescope_args,
             shadow: _,
         } = config;
 
@@ -249,7 +233,7 @@ impl NativeUmuCtx<'_> {
                 &mut drives
                     .iter()
                     .map(|(letter, link)| (*letter, link.as_path())),
-                &sink_builder,
+                sink_builder.clone(),
                 &env,
             )
             .await?;
@@ -285,6 +269,7 @@ impl NativeUmuCtx<'_> {
             "--bind-try", &wayland, wayland,
             "--ro-bind", &xauthority, xauthority,
             "--dev-bind", "/dev/dri", "/dev/dri",
+            "--dev-bind", "/dev/snd", "/dev/snd",
             "--bind", &umu_dir, umu_dir,
             "--setenv", "PATH", "/usr/bin",
             "--hostname", "spel-katalog",
@@ -349,7 +334,9 @@ impl NativeUmuCtx<'_> {
             args.extend(args![shell]);
         } else {
             if use_gamescope {
-                args.extend(args![gamescope, "--"]);
+                args.extend(args![gamescope]);
+                args.extend(gamescope_args.iter().map(OsString::from));
+                args.extend(args!["--"]);
             }
             if runner.is_wine() {
                 args.extend(args![umu]);
@@ -357,14 +344,11 @@ impl NativeUmuCtx<'_> {
             args.extend(args![exe]);
         }
 
-        let [stdout, stderr] = sink_builder
-            .build_double(|| SinkIdentity::Name(name.clone()))
-            .map_err(|err| eyre!("failed to build sinks for {name}").error(err))?;
         let process_path = term_path.unwrap_or_else(|| bwrap.to_path_buf());
         ::log::info!("running {process_path:?} with args\n{args:#?}");
+        let [stdout, stderr] = sink_builder.build(|| name.clone())?;
         let cmd = Command::new(process_path)
             .args(args)
-            .kill_on_drop(true)
             .stdout(stdout)
             .stderr(stderr)
             .status();
@@ -489,6 +473,7 @@ impl<'a> LutrisCtx<'a> {
             bind,
             ro_bind: Vec::new(),
             use_gamescope: None,
+            gamescope_args: Vec::new(),
             shadow: Some(id),
         })
     }

@@ -1,19 +1,25 @@
 use ::std::{
     ffi::{OsStr, OsString},
-    path::{Path, PathBuf},
+    path::Path,
 };
 
+use ::bytes::Bytes;
 use ::iced_runtime::Task;
 use ::image::DynamicImage;
 use ::spel_katalog_common::status;
-use ::spel_katalog_formats::{AdditionalConfig, Game, GameId, NativeGame, lutris_config};
+use ::spel_katalog_formats::{
+    AdditionalConfig, DaemonRunConfigRequest, DaemonRunResponse, Game, GameId, NativeGame, RunMode,
+    lutris_config,
+};
+use ::spel_katalog_ipc::http::ResponseCode;
 use ::spel_katalog_run::{
-    Callback,
-    run_umu::{CommonUmuCtx, LutrisCtx, LutrisUmuCtx, NativeUmuCtx, RunMode},
+    Callback, dll_overrides,
+    run_umu::{CommonUmuCtx, LutrisCtx, LutrisUmuCtx},
+    sandbox_ro_dirs,
 };
 use ::spel_katalog_settings::{
-    BubblewrapExe, ConfigDir, DllOverrides, FirejailExe, GamescopeExe, LutrisExe, Network, OnRun,
-    SandboxExtras, SandboxMode, Settings, ShellExe, TermCommand, UmuRunExe, UseGamescope, YmlDir,
+    BubblewrapExe, FirejailExe, GamescopeExe, LutrisExe, Network, OnRun, SandboxMode, ShellExe,
+    TermCommand, UmuRunExe, UseGamescope, YmlDir,
 };
 use ::spel_katalog_sink::SinkIdentity;
 use ::tap::{Pipe, TapOptional};
@@ -70,10 +76,9 @@ impl App {
                 let configpath = format!("{yml_dir}/{}.yml", game.configpath);
                 let extra_config_path = self
                     .settings
-                    .get::<ConfigDir>()
-                    .as_path()
-                    .join("games")
-                    .join(format!("{lutris_id}.toml"));
+                    .xdg()
+                    .get_config_file(format!("games/{lutris_id}.toml"))
+                    .tap_none(|| ::log::error!("could not get games/{lutris_id} in config dir"))?;
 
                 Some(async move {
                     let config = ::smol::fs::read_to_string(&configpath)
@@ -141,73 +146,86 @@ impl App {
         }
     }
 
-    /// Get sandbox extra read-only dirs.
-    fn sandbox_ro_dirs(settings: &Settings) -> Vec<PathBuf> {
-        settings
-            .get::<SandboxExtras>()
-            .split(';')
-            .map(|sb| sb.trim())
-            .filter(|sb| !sb.is_empty())
-            .map(PathBuf::from)
-            .collect()
-    }
-
-    /// Get global dll overrides.
-    fn dll_overrides(settings: &Settings) -> Vec<String> {
-        settings
-            .get::<DllOverrides>()
-            .split(';')
-            .map(|ovr| ovr.trim())
-            .filter(|ovr| !ovr.is_empty())
-            .map(String::from)
-            .collect()
-    }
-
     /// Run a native game.
     pub fn run_native_game(&mut self, game: NativeGame, run_mode: RunMode) -> Task<Message> {
-        let bwrap = self.settings.get::<BubblewrapExe>().clone();
-        let umu = self.settings.get::<UmuRunExe>().clone();
-        let shell = self.settings.get::<ShellExe>().clone();
-        let term = self.settings.get::<TermCommand>().clone();
-        let net_disabled = self.settings.get::<Network>().is_disabled();
-        let use_gamescope = self.settings.get::<UseGamescope>().is_yes();
-        let gamescope = self.settings.get::<GamescopeExe>().clone();
+        let settings = self.settings.snapshot();
         let sink_builder = self.sink_builder.clone();
-        let sandbox_ro_dirs = Self::sandbox_ro_dirs(&self.settings);
-        let dll_overrides = Self::dll_overrides(&self.settings);
+        let task = async move {
+            let conn =
+                ::spel_katalog_ipc::generic::connect(settings.xdg(), "spel-katalog-daemon-ipc")
+                    .await;
 
-        Task::<Option<Message>>::future(async move {
-            let name = game.name.clone();
-            let sink_builder = sink_builder
-                .with_locked_channel(|| SinkIdentity::Name(name.clone()))
-                .map_err(|err| {
-                    ::log::error!("could not create locked sink builder for {name}\n{err}")
-                })
-                .ok()?;
-            let ctx = NativeUmuCtx {
-                common: CommonUmuCtx {
-                    bwrap: bwrap.as_path(),
-                    umu: umu.as_path(),
-                    shell: shell.as_path(),
-                    term: &term,
-                    net_disabled,
-                    sink_builder,
-                    dll_overrides,
-                    sandbox_ro_dirs,
-                    use_gamescope,
-                    gamescope: gamescope.as_path(),
-                    callback: Callback::default(),
-                },
-                config: game,
-            };
+            match conn {
+                Ok(conn) => {
+                    let message = ::serde_json::to_vec(&DaemonRunConfigRequest {
+                        config: game,
+                        run_mode,
+                        settings,
+                    })
+                    .map_err(|err| ::log::error!("could not create daemon request for game\n{err}"))
+                    .ok()?
+                    .pipe(Bytes::from_owner);
 
-            ctx.run(run_mode)
-                .await
-                .map_err(|err| ::log::error!("could not run game {name}\n{err}"))
-                .map(Message::from)
-                .ok()
-        })
-        .and_then(Task::done)
+                    let response = ::spel_katalog_ipc::generic::send(conn, message, "/run")
+                        .await
+                        .map_err(|err| ::log::error!("failed to send run config to daemon\n{err}"))
+                        .ok()?;
+
+                    let code = response.code();
+                    let body = response
+                        .body()
+                        .await
+                        .map_err(|err| {
+                            ::log::error!(
+                                "could not collect response body for response with code {}\n{err}",
+                                code.display()
+                            )
+                        })
+                        .ok()?;
+
+                    if code != ResponseCode::Ok {
+                        ::log::error!(
+                            "response from daemon was {}, expected Ok\n{body:?}",
+                            code.display(),
+                        );
+                        return None;
+                    }
+
+                    let response = ::serde_json::from_slice::<DaemonRunResponse>(&body)
+                        .map_err(|err| {
+                            ::log::error!("could not deserialize daemon response\n{err}")
+                        })
+                        .ok()?;
+
+                    match response {
+                        DaemonRunResponse::CreatedPipe { name, path } => async move {
+                            let fifo = ::smol::fs::File::open(&path).await?;
+                            let [stdout, _] = sink_builder.writers(|| name)?;
+                            let writer = stdout.into_async();
+                            ::smol::io::copy(fifo, writer).await?;
+                            Ok(())
+                        }
+                        .await
+                        .map_err(|err: ::smol::io::Error| {
+                            ::log::error!("error while reading fifo\n{err}")
+                        })
+                        .ok()?,
+                    };
+                    None
+                }
+                Err(err) => {
+                    ::log::error!(
+                        "could not connect to daemon ipc socket, running game from main\n{err}"
+                    );
+
+                    ::spel_katalog_run::run_native_game(game, run_mode, &settings, sink_builder)?
+                        .await
+                        .map(Message::from)
+                }
+            }
+        };
+
+        Task::future(task).and_then(Task::done)
     }
 
     pub fn run_game(&mut self, id: GameId, safety: Safety, no_game: bool) -> Task<Message> {
@@ -259,8 +277,8 @@ impl App {
         let gamescope = self.settings.get::<GamescopeExe>().clone();
         let use_gamescope = self.settings.get::<UseGamescope>().is_yes();
         let sandbox_mode = *self.settings.get::<SandboxMode>();
-        let sandbox_ro_dirs = Self::sandbox_ro_dirs(&self.settings);
-        let dll_overrides = Self::dll_overrides(&self.settings);
+        let sandbox_ro_dirs = sandbox_ro_dirs(&self.settings);
+        let dll_overrides = dll_overrides(&self.settings);
         let slug = game.slug.clone();
         let name = game.name.clone();
         let runner = game.runner.clone();
@@ -270,12 +288,14 @@ impl App {
         let sink_builder = self.sink_builder.clone();
         let yml_dir = self.settings.get::<YmlDir>();
         let configpath = format!("{yml_dir}/{}.yml", game.configpath);
-        let extra_config_path = self
+        let Some(extra_config_path) = self
             .settings
-            .get::<ConfigDir>()
-            .as_path()
-            .join("games")
-            .join(format!("{lutris_id}.toml"));
+            .xdg()
+            .get_config_file(format!("games/{lutris_id}.toml"))
+        else {
+            ::log::error!("could not get games/{lutris_id}.toml in config dir");
+            return Task::none();
+        };
 
         let (send_open, recv_open) = oneshot_broadcast();
 
@@ -316,18 +336,17 @@ impl App {
                 s
             }
 
-            let (stdout, stderr) =
-                match sink_builder.build_double(|| SinkIdentity::GameId(lutris_id)) {
-                    Ok([stdout, stderr]) => (stdout, stderr),
-                    Err(err) => {
-                        ::log::error!("could not create process output sinks\n{err}");
-                        return "could not create output sinks".to_owned().into();
-                    }
-                };
+            let (stdout, stderr) = match sink_builder.build(|| SinkIdentity::GameId(lutris_id)) {
+                Ok([stdout, stderr]) => (stdout, stderr),
+                Err(err) => {
+                    ::log::error!("could not create process output sinks\n{err}");
+                    return "could not create output sinks".to_owned().into();
+                }
+            };
 
             let cmd = match (safety, sandbox_mode) {
                 (Safety::None, _) => {
-                    ::log::info!("executing {lutris:?} with arguments\n{:#?}", &[&rungame]);
+                    ::log::info!("executing {lutris:?} with arguments\n{:#?}", [&rungame]);
                     ::smol::process::Command::new(lutris)
                         .args(rungame)
                         .kill_on_drop(true)
@@ -373,11 +392,10 @@ impl App {
                     ::log::error!("shell requires sandbox mode of bubblewrap");
                     return "only bubblewrap supported for shell".to_owned().into();
                 }
-                (Safety::Sandbox, SandboxMode::Bubblewrap) => {
-                    return LutrisUmuCtx {
+                (safety, SandboxMode::Bubblewrap) => {
+                    let ctx = LutrisUmuCtx {
                         common: CommonUmuCtx {
                             bwrap: bwrap.as_path(),
-                            sink_builder,
                             term: &term,
                             umu: umu.as_path(),
                             net_disabled,
@@ -387,6 +405,7 @@ impl App {
                             dll_overrides,
                             gamescope: gamescope.as_path(),
                             use_gamescope,
+                            sink_builder,
                         },
                         lutris: LutrisCtx {
                             config: &config,
@@ -399,41 +418,13 @@ impl App {
                             installed_at,
                             id,
                         },
-                    }
-                    .run()
-                    .await
-                    .into();
-                }
-                (Safety::SandboxShell, SandboxMode::Bubblewrap) => {
-                    return LutrisUmuCtx {
-                        common: CommonUmuCtx {
-                            bwrap: bwrap.as_path(),
-                            net_disabled,
-                            sandbox_ro_dirs,
-                            callback: Callback::new(|| send_open.send(())),
-                            shell: shell.as_path(),
-                            sink_builder,
-                            term: &term,
-                            umu: umu.as_path(),
-                            dll_overrides,
-                            gamescope: gamescope.as_path(),
-                            use_gamescope,
-                        },
-                        lutris: LutrisCtx {
-                            config: &config,
-                            exe: &config.game.exe,
-                            extra_config: extra_config.as_ref(),
-                            name: &name,
-                            runner,
-                            wine_prefix: config.game.prefix.as_deref(),
-                            hidden,
-                            installed_at,
-                            id,
-                        },
-                    }
-                    .run_shell()
-                    .await
-                    .into();
+                    };
+
+                    return if safety.is_sandbox_shell() {
+                        ctx.run_shell().await.into()
+                    } else {
+                        ctx.run().await.into()
+                    };
                 }
             };
 

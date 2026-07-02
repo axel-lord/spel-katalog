@@ -182,7 +182,9 @@ impl Editor {
                                 ::iced_highlighter::Theme::SolarizedDark
                             }
                             theme
-                                if ::iced_core::Theme::from(*theme).extended_palette().is_dark =>
+                                if ::spel_katalog_settings_view::conv_theme(*theme)
+                                    .extended_palette()
+                                    .is_dark =>
                             {
                                 ::iced_highlighter::Theme::Base16Mocha
                             }

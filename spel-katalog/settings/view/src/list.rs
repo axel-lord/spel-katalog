@@ -5,7 +5,7 @@ use ::iced_widget::{self as widget, Column, Row, container, pick_list, text_inpu
 use ::tap::Pipe;
 use spel_katalog_common::w;
 
-use crate::{DefaultStr, Help, Title, TrustedVariants};
+use ::spel_katalog_settings_traits::{DefaultStr, Help, Title, TrustedVariants};
 
 /// Display element with help tooltip.
 fn with_tooltip<'a, T: Help, M: 'a>(

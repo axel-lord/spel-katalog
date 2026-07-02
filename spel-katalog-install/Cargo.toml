@@ -1,0 +1,18 @@
+[package]
+name = "spel-katalog-install"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+clap = { workspace = true, features = ["derive"] }
+spel-katalog-ipc.workspace = true
+spel-katalog-formats.workspace = true
+log.workspace = true
+env_logger.workspace = true
+color-eyre.workspace = true
+xdg.workspace = true
+
+[lints]
+workspace = true

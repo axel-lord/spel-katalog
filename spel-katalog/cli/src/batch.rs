@@ -14,7 +14,7 @@ pub struct Batch {
 
     /// Settings to set for batch run.
     #[command(flatten)]
-    pub settings: ::spel_katalog_settings::Settings,
+    pub settings: ::spel_katalog_settings::SettingsArgs,
 
     /// Config file to load.
     #[arg(long, short, default_value=default_config().as_os_str())]

@@ -5,7 +5,7 @@ use ::clap::Parser;
 pub use self::{
     batch::Batch,
     run::Run,
-    subcmd::{InstallGame, SubCmdError, Subcmd, SubcmdCallbacks},
+    subcmd::{SubCmdError, Subcmd, SubcmdCallbacks},
 };
 
 mod batch;

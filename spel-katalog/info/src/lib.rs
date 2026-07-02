@@ -22,7 +22,7 @@ use ::spel_katalog_common::{
 };
 use ::spel_katalog_formats::{AdditionalConfig, Game, GameId, NativeGame, lutris_config};
 use ::spel_katalog_native::Pool;
-use ::spel_katalog_settings::{ConfigDir, CoverartDir, Settings, YmlDir};
+use ::spel_katalog_settings::{CoverartDir, Settings, YmlDir};
 use ::tap::Pipe;
 use ::uuid::Uuid;
 use ::yaml_rust2::Yaml;
@@ -212,11 +212,12 @@ impl State {
                     .join(&game.configpath)
                     .with_extension("yml");
 
-                let additional_path = settings
-                    .get::<ConfigDir>()
-                    .as_path()
-                    .join("games")
-                    .join(format!("{id}.toml"));
+                let Some(config_dir) = settings.xdg().get_config_home() else {
+                    ::log::error!("could not get config dir");
+                    return Task::none();
+                };
+
+                let additional_path = config_dir.join("games").join(format!("{id}.toml"));
 
                 async fn read_additional(path: &Path) -> Option<AdditionalConfig> {
                     // Usually a bad idea however since we deal with it not existing correctly
@@ -569,7 +570,11 @@ impl State {
                 if let Self::Lutris { id, additional, .. } = self {
                     let id = *id;
                     let additional = additional.clone();
-                    let extra_config_dir = settings.get::<ConfigDir>().as_path().join("games");
+                    let Some(config_dir) = settings.xdg().get_config_home() else {
+                        ::log::error!("could not get config home");
+                        return Task::none();
+                    };
+                    let extra_config_dir = config_dir.join("games");
 
                     let tx = tx.clone();
                     Task::future(async move {
@@ -862,7 +867,11 @@ impl State {
     }
 
     /// View info.
-    pub fn view<'a>(&'a self, has_thumb: bool) -> Element<'a, OrRequest<Message, Request>> {
+    pub fn view<'a>(
+        &'a self,
+        has_thumb: bool,
+        settings: &Settings,
+    ) -> Element<'a, OrRequest<Message, Request>> {
         match self {
             State::Lutris {
                 id,
@@ -997,7 +1006,9 @@ impl State {
                     ))
                     .into()
             }
-            State::Native { state } => state.view().map(|msg| msg.map_message(Message::NativeInfo)),
+            State::Native { state } => state
+                .view(settings)
+                .map(|msg| msg.map_message(Message::NativeInfo)),
             State::None => widget::text("No game selected").into(),
         }
     }

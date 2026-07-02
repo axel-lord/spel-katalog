@@ -35,6 +35,7 @@ rfd.workspace = true
 rustc-hash.workspace = true
 rustix = { workspace = true, features = ["process"] }
 serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 shell-words.workspace = true
 smol.workspace = true
 spel-katalog-cli.workspace = true
@@ -43,21 +44,25 @@ spel-katalog-formats.workspace = true
 spel-katalog-games.workspace = true
 spel-katalog-gather.workspace = true
 spel-katalog-info.workspace = true
+spel-katalog-install.workspace = true
 spel-katalog-installer.workspace = true
 spel-katalog-ipc.workspace = true
 spel-katalog-native.workspace = true
+spel-katalog-profiler.workspace = true
 spel-katalog-run.workspace = true
 spel-katalog-settings.workspace = true
+spel-katalog-settings-view.workspace = true
 spel-katalog-sink.workspace = true
 spel-katalog-terminal.workspace = true
 spel-katalog-widget.workspace = true
-spel-katalog-profiler.workspace = true
 strsim.workspace = true
 tap.workspace = true
 thiserror.workspace = true
 toml.workspace = true
+unicode-segmentation.workspace = true
 users.workspace = true
 uuid = { workspace = true, features = ["v4", "v7"] }
+xdg.workspace = true
 yaml-rust2.workspace = true
 
 [build-dependencies]

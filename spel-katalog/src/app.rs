@@ -1,5 +1,6 @@
 use ::std::{convert::identity, io::PipeReader, sync::Arc};
 
+use ::color_eyre::{Section, eyre::eyre};
 use ::derive_more::IsVariant;
 use ::iced::Font;
 use ::iced_core::{Alignment::Center, Length::Fill, font, window};
@@ -7,9 +8,9 @@ use ::iced_runtime::Task;
 use ::iced_widget::{self as widget, Row, text, text_input, toggler, value};
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog_cli::Run;
-use ::spel_katalog_common::{OrRequest, StatusSender, w};
+use ::spel_katalog_common::{StatusSender, w};
 use ::spel_katalog_installer::Installer;
-use ::spel_katalog_settings::{ConfigDir, FilterMode, Network, Theme};
+use ::spel_katalog_settings::{FilterMode, Network, Theme};
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::spel_katalog_widget::ListMenu;
 use ::tap::Pipe;
@@ -31,7 +32,7 @@ pub enum WindowType {
 
 #[derive(Debug)]
 pub(crate) struct App {
-    pub settings: ::spel_katalog_settings::State,
+    pub settings: ::spel_katalog_settings_view::State,
     pub games: ::spel_katalog_games::State,
     pub status: String,
     pub filter: String,
@@ -81,10 +82,7 @@ impl Initial {
         let filter = String::new();
         let status = String::new();
         let view = view::State::new();
-        let settings = ::spel_katalog_settings::State {
-            settings: Arc::new(settings),
-            config,
-        };
+        let settings = ::spel_katalog_settings_view::State { settings, config };
         let games = ::spel_katalog_games::State::default();
         let info = ::spel_katalog_info::State::default();
         let sender = status_tx.into();
@@ -93,7 +91,10 @@ impl Initial {
         let terminal = ::spel_katalog_terminal::Terminal::default().with_limit(256);
         let process_view_semaphore = Arc::new(::smol::lock::Semaphore::new(1));
         let games_db = ::spel_katalog_native::Pool::new(
-            &settings.get::<ConfigDir>().as_path().join("games.db"),
+            &settings
+                .xdg()
+                .place_config_file("games.db")
+                .map_err(|err| eyre!(err).note("does home exist?"))?,
         )?;
 
         let (sink_builder, terminal_rx) = if show_terminal {
@@ -167,13 +168,8 @@ impl App {
             .pipe(Message::Quick)
             .pipe(Task::done);
 
-        let listen_ipc = Task::stream(::spel_katalog_ipc::listen(None)).map(Message::from);
-
-        let load_thumbs = app
-            .games
-            .load_all_thumbnails(&app.settings, &app.games_db)
-            .map(OrRequest::Message)
-            .map(Message::Games);
+        let listen_ipc =
+            Task::stream(::spel_katalog_ipc::listen(app.settings.xdg())).map(Message::from);
 
         let batch = Task::batch([
             receive_status,
@@ -183,7 +179,6 @@ impl App {
             window_recv,
             show_settings,
             listen_ipc,
-            load_thumbs,
         ]);
 
         (app, batch)
@@ -212,7 +207,9 @@ impl App {
             ..Font::DEFAULT
         })
         .theme(|this: &Self, _: window::Id| {
-            Some(::iced_core::Theme::from(*this.settings.get::<Theme>()))
+            Some(::spel_katalog_settings_view::conv_theme(
+                *this.settings.get::<Theme>(),
+            ))
         })
         .run()
         .map_err(|err| ::color_eyre::eyre::eyre!(err))
@@ -320,7 +317,7 @@ impl App {
                         toggler(self.settings.get::<Network>().is_enabled())
                             .spacing(0)
                             .on_toggle(|net| {
-                                Message::Settings(::spel_katalog_settings::Message::Delta(
+                                Message::Settings(::spel_katalog_settings_view::Message::Delta(
                                     spel_katalog_settings::Delta::Network(match net {
                                         true => spel_katalog_settings::Network::Enabled,
                                         false => spel_katalog_settings::Network::Disabled,

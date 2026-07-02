@@ -2,7 +2,6 @@
 
 use ::std::{
     borrow::Cow,
-    ffi::OsStr,
     path::{Path, PathBuf},
     process::Stdio,
 };
@@ -12,51 +11,21 @@ use ::iced_core::{Element, Length, Size, alignment::Vertical};
 use ::iced_runtime::Task;
 use ::iced_widget::{self as widget};
 use ::rfd::AsyncFileDialog;
+use ::rustc_hash::FxHashMap;
+use ::serde::{Deserialize, Serialize};
+use ::smol::stream::StreamExt;
 use ::spel_katalog_common::{
     IntoOrRequest, OrRequest, display_bytes,
     in_place::{Convene, MapSelf},
 };
-use ::spel_katalog_formats::{Bind, NativeGame, NativeRunner, Timestamp};
-use ::spel_katalog_settings::{InstallLocale, InstallLocation, Settings, Show, ThmubnailSource};
+use ::spel_katalog_formats::{
+    Bind, ExeChoice, InstallerPrepareConfig, NativeGame, NativeRunner, Timestamp,
+};
+use ::spel_katalog_settings::{
+    CompToolDefault, CompToolsDir, InstallLocale, InstallLocation, Settings, Show, ThmubnailSource,
+};
 use ::spel_katalog_widget::{ListMenu, rule};
 use ::tap::{Conv, Pipe, TapOptional};
-
-/// Choice of executable.
-#[derive(Debug, Clone)]
-pub enum ExeChoice {
-    /// A single exe is chosen.
-    /// If not representable by a string
-    /// lossy conversion is performed and the
-    /// original path is included.
-    Value(String),
-    /// A list of executables that are available.
-    /// Every entry has the same format as [Self::Value]
-    /// The first value is the index of the chosen candidate.
-    List(usize, Vec<String>),
-}
-
-impl ExeChoice {
-    /// get current choice.
-    pub fn current(&self) -> Option<&str> {
-        match self {
-            ExeChoice::Value(exe) => Some(exe),
-            ExeChoice::List(idx, items) => items.get(*idx).as_ref().map(|s| s.as_str()),
-        }
-    }
-
-    /// Get file extension of selected choice.
-    pub fn extension(&self) -> Option<&str> {
-        Path::new(self.current()?)
-            .extension()
-            .and_then(OsStr::to_str)
-    }
-
-    /// Check if choice has given extension.
-    pub fn has_ext(&self, ext: &str) -> bool {
-        self.extension()
-            .is_some_and(|e| e.eq_ignore_ascii_case(ext))
-    }
-}
 
 /// Preparation messages.
 #[derive(Debug, Clone)]
@@ -77,6 +46,14 @@ pub enum Message {
     AddLocales(Vec<String>),
     /// Set the current locale.
     SetLocale(String),
+    /// Add available comp tools.
+    AddCompTools(Vec<String>),
+    /// Set current comp tool.
+    SetCompTool(String),
+    /// Open comp tool.
+    OpenCompTool,
+    /// Copy comp tool.
+    CopyCompTool,
     /// Set locale to the default value.
     DefaultLocale,
     /// An exe should be selected.
@@ -122,8 +99,31 @@ pub struct Prepare {
     locales: Vec<String>,
     /// Current locale.
     locale: String,
+    /// Available comp tools.
+    comp_tools: Vec<String>,
+    /// Current comp tool.
+    comp_tool: String,
     /// Should the game be moved.
     move_game: bool,
+    /// Extra config values.
+    extra: Extra,
+}
+
+/// Additional config values not displayed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Extra {
+    /// Drive letters to add.
+    #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
+    pub drives: FxHashMap<char, PathBuf>,
+    /// Additional directories sandbox will be given read and write access to.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub bind: Vec<Bind>,
+    /// Additional directories sandbox will be given read access to.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub ro_bind: Vec<Bind>,
+    /// Environment variables of game.
+    #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
+    pub env: FxHashMap<String, String>,
 }
 
 /// Show exe dialog at location.
@@ -144,6 +144,29 @@ async fn open_exe(location: PathBuf) -> Option<String> {
         .tap_none(|| ::log::warn!("path {:?} contains non utf-8 segments", file.path()))?
         .to_owned()
         .pipe(Some)
+}
+
+/// Show comp tool dialog at location.
+async fn open_comp_tool(location: PathBuf) -> Option<String> {
+    let dir = AsyncFileDialog::new()
+        .set_title("Select Compatability Tool")
+        .set_directory(&location)
+        .pick_folder()
+        .await
+        .tap_none(|| ::log::warn!("no directory chosen"))?;
+
+    let path = dir.path();
+    let path = path
+        .canonicalize()
+        .map_err(|err| ::log::warn!("could not canonicalize {path:?}\n{err}"))
+        .ok()?;
+    path.into_os_string()
+        .into_string()
+        .map_err(|path| {
+            let path = Path::new(&path);
+            ::log::warn!("could not convert {path:?} to utf-8")
+        })
+        .ok()
 }
 
 /// Open and process a thumbnail.
@@ -191,16 +214,120 @@ async fn read_thumb(path: PathBuf) -> Option<::spel_katalog_formats::Image> {
     Some(thumb.into())
 }
 
+/// Text box similar to an entry.
+fn list_placeholder<M>(text: &str) -> widget::Container<'_, M> {
+    widget::container(widget::text(text))
+        .padding(3)
+        .style(widget::container::rounded_box)
+}
+
 impl Prepare {
     /// Construct a new instance.
     pub fn new(
         settings: &Settings,
-        parent: String,
-        choice: ExeChoice,
-        hidden: Option<bool>,
-        thumbnail: Option<PathBuf>,
-        move_game: Option<bool>,
+        installer_config: InstallerPrepareConfig,
     ) -> (Self, Task<Message>) {
+        let InstallerPrepareConfig {
+            parent,
+            choice,
+            hidden,
+            thumbnail,
+            move_game,
+            drives,
+            bind,
+            ro_bind,
+            env,
+        } = installer_config;
+        let find_locales = Task::<Option<_>>::future(async {
+            const FULL: &str = "localectl list-locales";
+            const CMD: &str = "localectl";
+            const ARG: &str = "list-locales";
+            let child = ::smol::process::Command::new(CMD)
+                .arg(ARG)
+                .kill_on_drop(true)
+                .stdin(Stdio::null())
+                .stderr(Stdio::inherit())
+                .stdout(Stdio::piped())
+                .spawn()
+                .map_err(|err| ::log::warn!("could not spawn locale finder\n{err}"))
+                .ok()?;
+
+            let output = child
+                .output()
+                .await
+                .map_err(|err| ::log::warn!("{FULL} could not run\n{err}"))
+                .ok()?;
+
+            if !output.status.success() {
+                ::log::warn!("{FULL} failed\n{}", output.status);
+            }
+
+            output
+                .stdout
+                .split(|&b| b == b'\n')
+                .filter_map(|s| {
+                    str::from_utf8(s)
+                        .map_err(|err| {
+                            ::log::warn!(
+                                "could not parse locale {} as utf-8\n{err}",
+                                display_bytes(s)
+                            )
+                        })
+                        .map(|s| s.trim())
+                        .ok()
+                        .filter(|&s| !matches!(s, "" | "C.UTF-8"))
+                        .map(ToOwned::to_owned)
+                })
+                .collect::<Vec<_>>()
+                .pipe(Message::AddLocales)
+                .pipe(Some)
+        });
+
+        let read_thumb = thumbnail.map_or_else(Task::none, |thumb| {
+            Task::future(async move { read_thumb(thumb).await.map(Message::SetThumb) })
+        });
+
+        let comp_tool_dir = settings.get::<CompToolsDir>().to_path_buf();
+        let read_comp_tools = Task::<Option<_>>::future(async move {
+            let mut dir = ::smol::fs::read_dir(&comp_tool_dir)
+                .await
+                .map_err(|err| ::log::error!("could not read dir {comp_tool_dir:?}\n{err}"))
+                .ok()?;
+            let mut tools = Vec::new();
+
+            while let Some(entry) = dir.next().await {
+                let entry = match entry {
+                    Ok(entry) => entry,
+                    Err(err) => {
+                        ::log::warn!("faield to get dir entry for {comp_tool_dir:?}\n{err}");
+                        continue;
+                    }
+                };
+
+                let path = entry.path();
+                let path = match path.canonicalize() {
+                    Ok(path) => path,
+                    Err(err) => {
+                        ::log::warn!("could not canonicalize {path:?}\n{err}");
+                        continue;
+                    }
+                };
+
+                let tool = match path.into_os_string().into_string() {
+                    Ok(tool) => tool,
+                    Err(path) => {
+                        let path = Path::new(&path);
+                        ::log::warn!("could not convert comp tool path {path:?} to a utf-8 string");
+                        continue;
+                    }
+                };
+
+                tools.push(tool);
+            }
+
+            tools.pipe(Message::AddCompTools).pipe(Some)
+        });
+
         (
             Self {
                 title: parent
@@ -217,58 +344,19 @@ impl Prepare {
                 thumbnail: None,
                 locales: Vec::from([String::new()]),
                 locale: settings.get::<InstallLocale>().as_str().to_owned(),
+                comp_tools: Vec::from([String::new()]),
+                comp_tool: settings.get::<CompToolDefault>().as_str().to_owned(),
                 move_game: move_game.unwrap_or(true),
                 parent,
                 choice,
+                extra: Extra {
+                    drives,
+                    bind,
+                    ro_bind,
+                    env,
+                },
             },
-            Task::<Option<_>>::future(async {
-                const FULL: &str = "localectl list-locales";
-                const CMD: &str = "localectl";
-                const ARG: &str = "list-locales";
-                let child = ::smol::process::Command::new(CMD)
-                    .arg(ARG)
-                    .kill_on_drop(true)
-                    .stdin(Stdio::null())
-                    .stderr(Stdio::inherit())
-                    .stdout(Stdio::piped())
-                    .spawn()
-                    .map_err(|err| ::log::warn!("could not spawn locale finder\n{err}"))
-                    .ok()?;
-
-                let output = child
-                    .output()
-                    .await
-                    .map_err(|err| ::log::warn!("{FULL} could not run\n{err}"))
-                    .ok()?;
-
-                if !output.status.success() {
-                    ::log::warn!("{FULL} failed\n{}", output.status);
-                }
-
-                output
-                    .stdout
-                    .split(|&b| b == b'\n')
-                    .filter_map(|s| {
-                        str::from_utf8(s)
-                            .map_err(|err| {
-                                ::log::warn!(
-                                    "could not parse locale {} as utf-8\n{err}",
-                                    display_bytes(s)
-                                )
-                            })
-                            .map(|s| s.trim())
-                            .ok()
-                            .filter(|&s| !matches!(s, "" | "C.UTF-8"))
-                            .map(ToOwned::to_owned)
-                    })
-                    .collect::<Vec<_>>()
-                    .pipe(Message::AddLocales)
-                    .pipe(Some)
-            })
-            .chain(thumbnail.map_or_else(Task::none, |thumb| {
-                Task::future(async move { read_thumb(thumb).await.map(Message::SetThumb) })
-            }))
-            .and_then(Task::done),
+            Task::batch([find_locales, read_thumb, read_comp_tools]).and_then(Task::done),
         )
     }
 
@@ -277,22 +365,36 @@ impl Prepare {
         let exe = self.choice.current()?;
         let parent = self.game_dir(settings);
         let exe = parent.join(exe);
+
+        let Extra {
+            mut drives,
+            mut bind,
+            ro_bind,
+            mut env,
+        } = self.extra.clone();
+
+        if !self.locale.is_empty() {
+            env.insert("LANG".to_owned(), self.locale.clone());
+        }
+
+        if !self.comp_tool.is_empty() {
+            env.insert("PROTONPATH".to_owned(), self.comp_tool.clone());
+        }
+
+        drives.insert('g', PathBuf::from("../.."));
+        bind.push(Bind::mirrored(parent.clone()));
+
         let config = NativeGame {
             hidden: self.hidden,
-            drives: [('g', PathBuf::from("../.."))].into_iter().collect(),
+            drives,
             prefix: if self.runner.is_wine() {
                 parent.join(".umu_pfx").pipe(Some)
             } else {
                 None
             },
-            bind: Vec::from([Bind::mirrored(parent)]),
-            env: if !self.locale.is_empty() {
-                [("LANG".to_owned(), self.locale.clone())]
-                    .into_iter()
-                    .collect()
-            } else {
-                Default::default()
-            },
+            bind,
+            env,
+            ro_bind,
             ..NativeGame::new(self.title.clone(), Timestamp::now(), exe, self.runner)
         };
         Some(config)
@@ -383,6 +485,14 @@ impl Prepare {
                 self.locale = locale;
                 Task::none()
             }
+            Message::AddCompTools(tools) => {
+                self.comp_tools.extend(tools);
+                Task::none()
+            }
+            Message::SetCompTool(tool) => {
+                self.comp_tool = tool;
+                Task::none()
+            }
             Message::DefaultLocale => {
                 self.locale = settings.get::<InstallLocale>().as_str().to_owned();
                 Task::none()
@@ -392,11 +502,19 @@ impl Prepare {
                 Task::none()
             }
             Message::CopyTitle => ::iced_runtime::clipboard::write(self.title.clone()),
+            Message::CopyCompTool => ::iced_runtime::clipboard::write(self.comp_tool.clone()),
             Message::PasteTitle => ::iced_runtime::clipboard::read()
                 .and_then(|title| Task::done(Message::EditTitle(title).conv::<super::Message>())),
             Message::OpenExe => {
                 let location = self.parent.clone().conv::<PathBuf>();
                 Task::future(open_exe(location))
+                    .and_then(Task::done)
+                    .map(Message::SetExe)
+                    .map(super::Message::from)
+            }
+            Message::OpenCompTool => {
+                let location = settings.get::<CompToolsDir>().to_path_buf();
+                Task::future(open_comp_tool(location))
                     .and_then(Task::done)
                     .map(Message::SetExe)
                     .map(super::Message::from)
@@ -477,13 +595,9 @@ impl Prepare {
                                 ),
                         )
                         .push(
-                            widget::container(
-                                widget::text(&self.parent)
-                                    .pipe_if(self.column_width.is_some(), |t| t.width(Length::Fill))
-                                    .convene(),
-                            )
-                            .padding(3)
-                            .style(widget::container::rounded_box),
+                            list_placeholder(&self.parent)
+                                .pipe_if(self.column_width.is_some(), |t| t.width(Length::Fill))
+                                .convene(),
                         ),
                 )
                 .push(widget::text("Executable"))
@@ -523,17 +637,65 @@ impl Prepare {
                                 .style(widget::button::success)
                                 .on_press(Message::CopyExe.conv::<super::Message>().into_message()),
                         )
-                        .push(
-                            widget::pick_list(items.as_slice(), items.get(*idx), |i: String| {
-                                Message::ChooseChoice(i)
-                                    .conv::<super::Message>()
-                                    .into_message()
-                            })
-                            .pipe_if(self.column_width.is_some(), |l| l.width(Length::Fill))
-                            .convene()
-                            .padding(3),
-                        ),
+                        .pipe_if(self.column_width.is_some(), |row| {
+                            row.push(
+                                widget::pick_list(
+                                    items.as_slice(),
+                                    items.get(*idx),
+                                    |i: String| {
+                                        Message::ChooseChoice(i)
+                                            .conv::<super::Message>()
+                                            .into_message()
+                                    },
+                                )
+                                .width(Length::Fill)
+                                .padding(3),
+                            )
+                        })
+                        .or_else(|row| {
+                            row.push(list_placeholder(
+                                items.get(*idx).map(|s| s.as_str()).unwrap_or(""),
+                            ))
+                        }),
                 })
+                .push(widget::text("Compatability Tool"))
+                .push(
+                    widget::Row::new()
+                        .spacing(3)
+                        .push(
+                            widget::button("Open...").padding(3).on_press(
+                                Message::OpenCompTool
+                                    .conv::<super::Message>()
+                                    .into_message(),
+                            ),
+                        )
+                        .push(
+                            widget::button("Copy")
+                                .padding(3)
+                                .style(widget::button::success)
+                                .on_press(
+                                    Message::CopyCompTool
+                                        .conv::<super::Message>()
+                                        .into_message(),
+                                ),
+                        )
+                        .pipe_if(self.column_width.is_some(), |row| {
+                            row.push(
+                                widget::pick_list(
+                                    self.comp_tools.as_slice(),
+                                    Some(&self.comp_tool),
+                                    |tool: String| {
+                                        Message::SetCompTool(tool)
+                                            .conv::<super::Message>()
+                                            .into_message()
+                                    },
+                                )
+                                .padding(3)
+                                .width(Length::Fill),
+                            )
+                        })
+                        .or_else(|row| row.push(list_placeholder(&self.comp_tool))),
+                )
                 .push(
                     widget::Row::new()
                         .spacing(3)
@@ -655,7 +817,7 @@ impl Prepare {
                 .pipe_if(self.column_width.is_none(), widget::sensor)
                 .map(|sensor| {
                     let read_width = |size: Size| {
-                        Message::SetWidth(size.width)
+                        Message::SetWidth(size.width + 20.0)
                             .pipe(super::Message::Prepare)
                             .into_message()
                     };

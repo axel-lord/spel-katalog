@@ -69,6 +69,20 @@ impl Image {
     pub fn from_image(image: DynamicImage) -> Self {
         Self::from_rgba(image.into_rgba8())
     }
+
+    /// Give a function width, height and bytes to create a value of some type.
+    #[inline]
+    pub fn map<F, T>(self, f: F) -> T
+    where
+        F: FnOnce(u32, u32, Bytes) -> T,
+    {
+        let Self {
+            width,
+            height,
+            bytes,
+        } = self;
+        f(width, height, bytes)
+    }
 }
 
 impl From<RgbaImage> for Image {

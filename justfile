@@ -1,4 +1,6 @@
 crate := "spel-katalog"
+installer_crate := "spel-katalog-install"
+daemon_crate := "spel-katalog-daemon"
 
 default:
 	just --list
@@ -46,20 +48,39 @@ autoinherit:
 # Sanity and format check
 sanity: autoinherit fmt test-all
 
-install: autoinherit fmt
-	cargo +nightly install --path {{crate}} -Z build-std=std,panic_abort -Z build-std-features="optimize_for_size"
+# Install a crate by path.
+install-crate CRATE:
+	cargo +nightly install --path {{CRATE}} -Z build-std=std,panic_abort -Z build-std-features="optimize_for_size"
 
-build *EXTRA: autoinherit fmt
-	cargo +nightly build --release -p {{crate}} -Z build-std=std,panic_abort -Z build-std-features="optimize_for_size" {{EXTRA}}
+# Build crate by name.
+build-crate CRATE *EXTRA:
+	cargo +nightly build --release -p {{CRATE}} -Z build-std=std,panic_abort -Z build-std-features="optimize_for_size" {{EXTRA}}
 
-run *EXTRA: autoinherit fmt
-	cargo +nightly run --release -p {{crate}} -Z build-std=std,panic_abort -Z build-std-features="optimize_for_size" {{EXTRA}}
+# Run a crate by name.
+run-crate CRATE *EXTRA:
+	cargo +nightly run --release -p {{CRATE}} -Z build-std=std,panic_abort -Z build-std-features="optimize_for_size" {{EXTRA}}
 
+install-daemon: (build-crate daemon_crate)
+	mkdir -p $XDG_DATA_HOME/spel-katalog
+	cp --remove-destination target/release/spel-katalog-daemon $XDG_DATA_HOME/spel-katalog/
+
+# Install project.
+install: autoinherit fmt (install-crate crate) (install-crate installer_crate) install-daemon
+
+# Build project.
+build *EXTRA: autoinherit fmt (build-crate crate EXTRA)
+
+# Run project.
+run *EXTRA: autoinherit fmt (run-crate crate EXTRA)
+
+# Run project with profiling.
 profile *EXTRA:
 	cargo run -p {{crate}} -F profiling
 
+# Build match num test.
 build-match-num *EXTRA:
 	cargo build --release -p spel-katalog-test --bin match-num
 
+# Build match num test as an exe.
 build-match-num-exe *EXTRA:
 	cargo build --release -p spel-katalog-test --bin match-num --target=x86_64-pc-windows-gnu

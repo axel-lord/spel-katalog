@@ -27,20 +27,9 @@ type Element<'a, M> = ::iced_core::Element<'a, M, ::iced_core::Theme, ::iced_ren
 /// Get settings.
 pub fn get_settings(
     config: &Path,
-    overrides: ::spel_katalog_settings::Settings,
+    overrides: ::spel_katalog_settings::SettingsArgs,
 ) -> ::spel_katalog_settings::Settings {
-    fn read_settings(config: &Path) -> Result<::spel_katalog_settings::Settings, ()> {
-        let content = ::std::fs::read_to_string(config).map_err(|err| {
-            ::log::warn!("could not read {config:?}, does it exists an is it readable?\n{err}");
-        })?;
-
-        ::toml::from_str(&content).map_err(|err| {
-            ::log::warn!("could not parse {config:?} as toml, is it a toml file?\n{err}")
-        })
-    }
-    read_settings(config)
-        .unwrap_or_default()
-        .apply(::spel_katalog_settings::Delta::create(overrides))
+    ::spel_katalog_settings::load(config, overrides)
 }
 
 /// Run application.

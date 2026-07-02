@@ -6,14 +6,20 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+bytes.workspace = true
 flume = { workspace = true, features = ["async"] }
+http-body-util.workspace = true
+hyper = { workspace = true, features = ["client", "http1", "server"] }
 log.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+smol-hyper.workspace = true
 smol.workspace = true
+spel-katalog-formats.workspace = true
 tap.workspace = true
 thiserror.workspace = true
 uuid = { workspace = true, features = ["v4"] }
+xdg.workspace = true
 
 [lints]
 workspace = true
