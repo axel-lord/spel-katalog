@@ -4718,6 +4718,14 @@ name = "spel-katalog-lazy"
 version = "0.1.0"
 
 [[package]]
+name = "spel-katalog-log"
+version = "0.1.0"
+dependencies = [
+ "flume",
+ "log",
+]
+
+[[package]]
 name = "spel-katalog-native"
 version = "0.1.0"
 dependencies = [
