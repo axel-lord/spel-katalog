@@ -211,6 +211,7 @@ impl LogView {
             })
             .spacing(3)
             .pipe(::spel_katalog_widget::xy_scrollable)
+            .anchor_bottom()
             .width(Fill)
             .pipe(widget::container)
             .style(widget::container::bordered_box)

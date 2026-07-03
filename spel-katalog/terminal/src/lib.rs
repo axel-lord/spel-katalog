@@ -568,8 +568,8 @@ impl Terminal {
             .push(::spel_katalog_widget::rule::horizontal())
             .push(widget::themer(
                 Some(::iced_core::Theme::Dark),
-                spel_katalog_widget::scrollable(
-                    widget::container(
+                widget::container(
+                    spel_katalog_widget::xy_scrollable(
                         self.lines
                             .iter()
                             .fold(widget::Column::new(), |column, line| {
@@ -580,13 +580,14 @@ impl Terminal {
                                         .wrapping(self.wrap.into()),
                                 )
                             })
-                            .spacing(3),
+                            .spacing(3)
+                            .push(widget::space().height(20)),
                     )
-                    .style(widget::container::dark)
-                    .width(Fill),
+                    .width(Fill)
+                    .height(Fill)
+                    .anchor_bottom(),
                 )
-                .anchor_bottom()
-                .height(Fill),
+                .style(widget::container::dark),
             ))
             .push(spel_katalog_widget::rule::horizontal())
             .push(
