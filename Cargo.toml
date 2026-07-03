@@ -2,7 +2,7 @@
 members = [
 	"spel-katalog",
 	"spel-katalog-daemon",
-	"spel-katalog-install",
+	"spel-katalog-install", 
 	"spel-katalog/cli",
 	"spel-katalog/common",
 	"spel-katalog/formats",
@@ -13,6 +13,7 @@ members = [
 	"spel-katalog/ipc",
 	"spel-katalog/lazy",
 	"spel-katalog/log",
+	"spel-katalog/log/view",
 	"spel-katalog/native",
 	"spel-katalog/profiler",
 	"spel-katalog/run",
@@ -139,6 +140,7 @@ spel-katalog-installer = { path = "spel-katalog/installer" }
 spel-katalog-ipc = { path = "spel-katalog/ipc" }
 spel-katalog-lazy = { path = "spel-katalog/lazy" }
 spel-katalog-log = { path = "spel-katalog/log" }
+spel-katalog-log-view = { path = "spel-katalog/log/view" }
 spel-katalog-native = { path = "spel-katalog/native" }
 spel-katalog-profiler = { path = "spel-katalog/profiler" }
 spel-katalog-run = { path = "spel-katalog/run" }

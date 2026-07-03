@@ -6,8 +6,13 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-log.workspace = true
+log = { workspace = true, features = ["serde"] }
 flume.workspace = true
+serde = { workspace = true, features = ["derive"] }
+spel-katalog-formats.workspace = true
+bytes.workspace = true
+tap.workspace = true
+memchr.workspace = true
 
 [lints]
 workspace = true

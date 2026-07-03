@@ -2701,6 +2701,9 @@ name = "log"
 version = "0.4.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
+dependencies = [
+ "serde_core",
+]
 
 [[package]]
 name = "loop9"
@@ -4474,6 +4477,7 @@ dependencies = [
  "spel-katalog-install",
  "spel-katalog-installer",
  "spel-katalog-ipc",
+ "spel-katalog-log",
  "spel-katalog-native",
  "spel-katalog-profiler",
  "spel-katalog-run",
@@ -4721,8 +4725,30 @@ version = "0.1.0"
 name = "spel-katalog-log"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "flume",
  "log",
+ "memchr",
+ "serde",
+ "spel-katalog-formats",
+ "tap",
+]
+
+[[package]]
+name = "spel-katalog-log-view"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "derive_more",
+ "flume",
+ "iced_core",
+ "iced_runtime",
+ "iced_widget",
+ "log",
+ "smol",
+ "spel-katalog-log",
+ "spel-katalog-widget",
+ "tap",
 ]
 
 [[package]]
@@ -4873,8 +4899,10 @@ dependencies = [
  "memchr",
  "smol",
  "spel-katalog-common",
+ "spel-katalog-log-view",
  "spel-katalog-sink",
  "spel-katalog-widget",
+ "tap",
  "vte",
 ]
 
