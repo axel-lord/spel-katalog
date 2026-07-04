@@ -241,35 +241,29 @@ impl State {
             }
             Message::Quick(message) => match message {
                 QuickMessage::AddCompTool => {
-                    let game_db = game_db.clone();
-                    let uuid = self.uuid;
                     let comp_tool_dir = settings.get::<CompToolsDir>().to_path_buf();
+                    self.get_content()
+                        .then(move |mut game| {
+                            let comp_tool_dir = comp_tool_dir.clone();
+                            Task::<Option<_>>::future(async move {
+                                let dialog = AsyncFileDialog::new()
+                                    .set_directory(&comp_tool_dir)
+                                    .pick_folder()
+                                    .await
+                                    .tap_none(|| ::log::info!("no comp tool chosen"))?;
 
-                    Task::<Option<_>>::future(async move {
-                        let dialog = AsyncFileDialog::new()
-                            .set_directory(&comp_tool_dir)
-                            .pick_folder()
-                            .await
-                            .tap_none(|| ::log::info!("no comp tool chosen"))?;
+                                game.env.insert(
+                                    "PROTONPATH".to_owned(),
+                                    dialog.path().as_os_str().to_string_lossy().into(),
+                                );
 
-                        let mut game = game_db
-                            .get_game(uuid)
-                            .inspect_err(|err| {
-                                ::log::error!("failed to get game with uuid {uuid}\n{err}")
+                                Box::new(game)
+                                    .pipe(Message::UpdateConfig)
+                                    .into_message()
+                                    .pipe(Some)
                             })
-                            .ok()?;
-
-                        game.env.insert(
-                            "PROTONPATH".to_owned(),
-                            dialog.path().as_os_str().to_string_lossy().into(),
-                        );
-
-                        Box::new(game)
-                            .pipe(Message::UpdateConfig)
-                            .into_message()
-                            .pipe(Some)
-                    })
-                    .and_then(Task::done)
+                        })
+                        .and_then(Task::done)
                 }
                 QuickMessage::AddBind => self
                     .get_content()
