@@ -97,6 +97,8 @@ impl App {
             .map(OrRequest::Message)
             .map(Message::Games);
 
-        Subscription::batch([key_event, window_close, refresh, games])
+        let terminal = self.terminal.subscription().map(Message::Terminal);
+
+        Subscription::batch([key_event, window_close, refresh, games, terminal])
     }
 }

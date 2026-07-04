@@ -703,72 +703,76 @@ impl State {
                     .map(Message::Quick)
                     .map(OrRequest::Message),
             )
-            .push(::spel_katalog_widget::y_scrollable(ContextMenu::new(
-                text_editor::TextEditor::new(&self.conf_view)
-                    .font(Font::MONOSPACE)
-                    .wrapping(::iced_core::text::Wrapping::Glyph)
-                    .key_binding(|event| {
-                        if let Key::Named(named) = event.modified_key {
-                            match named {
-                                key::Named::Tab if event.modifiers == Modifiers::empty() => {
-                                    QuickMessage::Indent
-                                        .pipe(Message::Quick)
-                                        .pipe(OrRequest::Message)
-                                        .pipe(Binding::Custom)
-                                        .pipe(Some)
-                                }
+            .push(ContextMenu::new(
+                ::spel_katalog_widget::y_scrollable(
+                    text_editor::TextEditor::new(&self.conf_view)
+                        .font(Font::MONOSPACE)
+                        .wrapping(::iced_core::text::Wrapping::Glyph)
+                        .key_binding(|event| {
+                            if let Key::Named(named) = event.modified_key {
+                                match named {
+                                    key::Named::Tab if event.modifiers == Modifiers::empty() => {
+                                        QuickMessage::Indent
+                                            .pipe(Message::Quick)
+                                            .pipe(OrRequest::Message)
+                                            .pipe(Binding::Custom)
+                                            .pipe(Some)
+                                    }
 
-                                key::Named::Tab if event.modifiers == Modifiers::SHIFT => {
-                                    QuickMessage::Unindent
+                                    key::Named::Tab if event.modifiers == Modifiers::SHIFT => {
+                                        QuickMessage::Unindent
+                                            .pipe(Message::Quick)
+                                            .pipe(OrRequest::Message)
+                                            .pipe(Binding::Custom)
+                                            .pipe(Some)
+                                    }
+                                    _ => Binding::from_key_press(event),
+                                }
+                            } else if let Key::Character(chr) = event.modified_key.as_ref() {
+                                match chr {
+                                    "z" if event.modifiers == Modifiers::CTRL => QuickMessage::Undo
                                         .pipe(Message::Quick)
                                         .pipe(OrRequest::Message)
                                         .pipe(Binding::Custom)
-                                        .pipe(Some)
+                                        .pipe(Some),
+                                    "y" if event.modifiers == Modifiers::CTRL => QuickMessage::Redo
+                                        .pipe(Message::Quick)
+                                        .pipe(OrRequest::Message)
+                                        .pipe(Binding::Custom)
+                                        .pipe(Some),
+                                    _ => Binding::from_key_press(event),
                                 }
-                                _ => Binding::from_key_press(event),
+                            } else {
+                                Binding::from_key_press(event)
                             }
-                        } else if let Key::Character(chr) = event.modified_key.as_ref() {
-                            match chr {
-                                "z" if event.modifiers == Modifiers::CTRL => QuickMessage::Undo
-                                    .pipe(Message::Quick)
-                                    .pipe(OrRequest::Message)
-                                    .pipe(Binding::Custom)
-                                    .pipe(Some),
-                                "y" if event.modifiers == Modifiers::CTRL => QuickMessage::Redo
-                                    .pipe(Message::Quick)
-                                    .pipe(OrRequest::Message)
-                                    .pipe(Binding::Custom)
-                                    .pipe(Some),
-                                _ => Binding::from_key_press(event),
-                            }
-                        } else {
-                            Binding::from_key_press(event)
-                        }
-                    })
-                    .highlight_with::<::iced_highlighter::Highlighter>(
-                        ::iced_highlighter::Settings {
-                            theme: match settings.get::<::spel_katalog_settings::Theme>() {
-                                ::spel_katalog_settings::Theme::SolarizedDark => {
-                                    ::iced_highlighter::Theme::SolarizedDark
-                                }
-                                theme
-                                    if ::spel_katalog_settings_view::conv_theme(*theme)
-                                        .extended_palette()
-                                        .is_dark =>
-                                {
-                                    ::iced_highlighter::Theme::Base16Mocha
-                                }
-                                _ => ::iced_highlighter::Theme::InspiredGitHub,
+                        })
+                        .highlight_with::<::iced_highlighter::Highlighter>(
+                            ::iced_highlighter::Settings {
+                                theme: match settings.get::<::spel_katalog_settings::Theme>() {
+                                    ::spel_katalog_settings::Theme::SolarizedDark => {
+                                        ::iced_highlighter::Theme::SolarizedDark
+                                    }
+                                    theme
+                                        if ::spel_katalog_settings_view::conv_theme(*theme)
+                                            .extended_palette()
+                                            .is_dark =>
+                                    {
+                                        ::iced_highlighter::Theme::Base16Mocha
+                                    }
+                                    _ => ::iced_highlighter::Theme::InspiredGitHub,
+                                },
+                                token: "toml".to_owned(),
                             },
-                            token: "toml".to_owned(),
-                        },
-                        |h, _| h.to_format(),
-                    )
-                    .on_action(|action| action.pipe(Message::ConfAction).pipe(OrRequest::Message))
-                    .min_height(200)
-                    .padding(6),
+                            |h, _| h.to_format(),
+                        )
+                        .on_action(|action| {
+                            action.pipe(Message::ConfAction).pipe(OrRequest::Message)
+                        })
+                        .min_height(200)
+                        .padding(6),
+                ),
                 || self.context_menu(),
-            )))
+            ))
             .into()
     }
 }

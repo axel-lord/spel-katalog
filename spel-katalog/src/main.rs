@@ -1,5 +1,6 @@
 use ::std::io::{IsTerminal, Read};
 
+use ::log::LevelFilter;
 use ::mimalloc::MiMalloc;
 use ::spel_katalog::run as run_app;
 use ::spel_katalog_cli::{Cli, Subcmd, SubcmdCallbacks};
@@ -23,15 +24,21 @@ fn run(cli: ::spel_katalog_cli::Run) -> ::color_eyre::Result<()> {
 
 fn main() -> ::color_eyre::Result<()> {
     ::color_eyre::install()?;
+
     let cli = Cli::parse();
     let cmd = Subcmd::from(cli);
-    let mut log_builder = ::env_logger::builder();
-    log_builder.filter_level(::log::LevelFilter::Info);
 
-    if let Some(target) = None {
-        log_builder.target(target).init();
-    } else {
-        log_builder.init();
+    match &cmd {
+        Subcmd::Run(run) if run.show_terminal => {
+            ::spel_katalog_log::init();
+        }
+        _ => {
+            ::env_logger::builder()
+                .filter_level(LevelFilter::Info)
+                .init();
+        }
     }
+    ::log::info!("log initialized");
+
     cmd.perform(SubcmdCallbacks { run })
 }

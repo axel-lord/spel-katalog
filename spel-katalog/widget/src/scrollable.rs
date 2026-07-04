@@ -3,7 +3,7 @@
 use ::iced_core::{Background, Color, Element, Theme};
 use ::iced_widget::{
     Scrollable,
-    scrollable::{Direction, Scrollbar},
+    scrollable::{Anchor, Direction, Scrollbar},
 };
 
 /// Apply themeing.
@@ -83,6 +83,20 @@ where
 }
 
 /// Create a scrollable widget.
+/// Anchored to end of y axis.
+pub fn y_end_scrollable<'a, Message, Renderer>(
+    content: impl Into<Element<'a, Message, Theme, Renderer>>,
+) -> Scrollable<'a, Message, Theme, Renderer>
+where
+    Renderer: ::iced_core::Renderer + ::iced_core::text::Renderer,
+{
+    apply(Scrollable::with_direction(
+        content,
+        Direction::Vertical(Scrollbar::new().anchor(Anchor::End)),
+    ))
+}
+
+/// Create a scrollable widget.
 pub fn x_scrollable<'a, Message, Renderer>(
     content: impl Into<Element<'a, Message, Theme, Renderer>>,
 ) -> Scrollable<'a, Message, Theme, Renderer>
@@ -96,6 +110,7 @@ where
 }
 
 /// Create a scrollable widget.
+/// Scrolls in x and y axes.
 pub fn xy_scrollable<'a, Message, Renderer>(
     content: impl Into<Element<'a, Message, Theme, Renderer>>,
 ) -> Scrollable<'a, Message, Theme, Renderer>
@@ -106,6 +121,24 @@ where
         content,
         Direction::Both {
             vertical: Scrollbar::new(),
+            horizontal: Scrollbar::new(),
+        },
+    ))
+}
+
+/// Create a scrollable widget.
+/// Scrolls in x and y axes.
+/// Anchored to the endd of the y axis.
+pub fn xy_end_scrollable<'a, Message, Renderer>(
+    content: impl Into<Element<'a, Message, Theme, Renderer>>,
+) -> Scrollable<'a, Message, Theme, Renderer>
+where
+    Renderer: ::iced_core::Renderer + ::iced_core::text::Renderer,
+{
+    apply(Scrollable::with_direction(
+        content,
+        Direction::Both {
+            vertical: Scrollbar::new().anchor(Anchor::End),
             horizontal: Scrollbar::new(),
         },
     ))

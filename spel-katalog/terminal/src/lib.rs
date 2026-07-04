@@ -16,9 +16,10 @@ use ::std::{
 };
 
 use ::iced_core::{Alignment::Center, Length::Fill};
-use ::iced_runtime::Task;
+use ::iced_runtime::{Task, futures::Subscription};
 use ::iced_widget as widget;
 use ::spel_katalog_common::in_place::PushMaybe as _;
+use ::spel_katalog_log_view::LogView;
 use ::spel_katalog_sink::SinkIdentity;
 
 /// Element alias.
@@ -98,6 +99,8 @@ pub enum Message {
     SetLineCount(String),
     /// Set text size.
     SetTextSize(u16),
+    /// Log view message.
+    LogView(::spel_katalog_log_view::Message),
 }
 
 impl Message {
@@ -274,6 +277,8 @@ impl From<Wrap> for widget::text::Wrapping {
 /// Terminal widget/window.
 #[derive(Debug)]
 pub struct Terminal {
+    /// Log view.
+    log_view: LogView,
     /// Received data/pipes.
     pipes: Vec<Pipe>,
     /// Currently displayed lines.
@@ -305,6 +310,7 @@ impl Default for Terminal {
             limit_placeholder: Default::default(),
             current_limit: Default::default(),
             limit_text: Default::default(),
+            log_view: Default::default(),
             text_size: 14,
         }
     }
@@ -318,6 +324,11 @@ impl Terminal {
             limit_placeholder: limit.to_string(),
             ..self
         }
+    }
+
+    /// Widget subscription.
+    pub fn subscription(&self) -> Subscription<Message> {
+        self.log_view.subscription().map(Message::LogView)
     }
 
     /// Update state of terminal.
@@ -403,6 +414,7 @@ impl Terminal {
                 self.text_size = size.clamp(7, 36);
                 Task::none()
             }
+            Message::LogView(msg) => self.log_view.update(msg).map(Message::LogView),
         }
     }
 
@@ -552,10 +564,12 @@ impl Terminal {
         widget::Column::new()
             .padding(3)
             .spacing(3)
+            .push(self.log_view.view().map(Message::LogView))
+            .push(::spel_katalog_widget::rule::horizontal())
             .push(widget::themer(
                 Some(::iced_core::Theme::Dark),
-                spel_katalog_widget::scrollable(
-                    widget::container(
+                widget::container(
+                    spel_katalog_widget::xy_scrollable(
                         self.lines
                             .iter()
                             .fold(widget::Column::new(), |column, line| {
@@ -566,13 +580,14 @@ impl Terminal {
                                         .wrapping(self.wrap.into()),
                                 )
                             })
-                            .spacing(3),
+                            .spacing(3)
+                            .push(widget::space().height(20)),
                     )
-                    .style(widget::container::dark)
-                    .width(Fill),
+                    .width(Fill)
+                    .height(Fill)
+                    .anchor_bottom(),
                 )
-                .anchor_bottom()
-                .height(Fill),
+                .style(widget::container::dark),
             ))
             .push(spel_katalog_widget::rule::horizontal())
             .push(

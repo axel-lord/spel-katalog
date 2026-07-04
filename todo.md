@@ -23,7 +23,7 @@
 - [x] Use iced sensor for game cards
 - [x] Profiling crate with feature flag to enable
 - [x] Deamon for spawning game processes
-- [ ] Logging in terminal window
+- [x] Logging in terminal window
 
 # Future Goals/Possibilities
 - [x] Run exe files in prefix without lutris

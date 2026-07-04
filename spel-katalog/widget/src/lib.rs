@@ -4,7 +4,7 @@ use ::iced_core::{Font, text::IntoFragment};
 
 pub use self::{
     list_menu::{ListMenu, hover_background_text_button, menu_button},
-    scrollable::{x_scrollable, xy_scrollable, y_scrollable},
+    scrollable::{x_scrollable, xy_end_scrollable, xy_scrollable, y_end_scrollable, y_scrollable},
     vertical_list_menu::VerticalListMenu,
 };
 
