@@ -24,6 +24,10 @@
 - [x] Profiling crate with feature flag to enable
 - [x] Deamon for spawning game processes
 - [x] Logging in terminal window
+- [ ] To top button on games view
+- [ ] Process info in terminal window
+- [ ] Process info for daemon run games
+- [ ] Options for native games, gamescope, proton, etc.
 
 # Future Goals/Possibilities
 - [x] Run exe files in prefix without lutris
