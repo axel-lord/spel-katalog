@@ -237,8 +237,8 @@ impl App {
 
         let game = match &game.game {
             Game::Lutris(lutris_game) => lutris_game,
-            Game::Native { uuid, .. } => {
-                let uuid = *uuid;
+            Game::Native(native_game) => {
+                let uuid = native_game.uuid;
                 let games_db = self.games_db.clone();
                 let run_shell = match safety {
                     Safety::None | Safety::Sandbox => false,

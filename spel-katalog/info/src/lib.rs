@@ -20,7 +20,9 @@ use ::open::that;
 use ::spel_katalog_common::{
     OrRequest, StatusSender, async_status, in_place::PushMaybe as _, status, styling, w,
 };
-use ::spel_katalog_formats::{AdditionalConfig, Game, GameId, NativeGameConfig, lutris_config};
+use ::spel_katalog_formats::{
+    AdditionalConfig, Game, GameId, NativeGame, NativeGameConfig, lutris_config,
+};
 use ::spel_katalog_native::Pool;
 use ::spel_katalog_settings::{CoverartDir, Settings, YmlDir};
 use ::tap::Pipe;
@@ -256,12 +258,12 @@ impl State {
                 })
                 .then(identity)
             }
-            Game::Native {
+            Game::Native(NativeGame {
                 name: _,
                 installed_at: _,
                 uuid,
                 hidden: _,
-            } => {
+            }) => {
                 let games_db = games_db.clone();
                 let uuid = *uuid;
                 Task::future(::smol::unblock(move || {

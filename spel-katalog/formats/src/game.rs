@@ -1,10 +1,10 @@
 //! Any game format.
 
-use ::derive_more::{Display, IsVariant};
+use ::derive_more::{Display, From, IsVariant};
 use ::serde::{Deserialize, Serialize};
 use ::uuid::Uuid;
 
-use crate::LutrisGame;
+use crate::{LutrisGame, NativeGame};
 
 /// Id of a game.
 #[derive(
@@ -19,21 +19,12 @@ pub enum GameId {
 }
 
 /// Game which may be native or lutris.
-#[derive(Debug, IsVariant, Clone)]
+#[derive(Debug, IsVariant, Clone, From, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Game {
     /// Game is a lutris game.
     Lutris(LutrisGame),
     /// Game is a native game.
-    Native {
-        /// Name of the game.
-        name: String,
-        /// When was the game installed.
-        installed_at: i64,
-        /// Uuid of game.
-        uuid: Uuid,
-        /// Is the game hidden.
-        hidden: bool,
-    },
+    Native(NativeGame),
 }
 
 impl Game {
@@ -41,7 +32,7 @@ impl Game {
     pub const fn hidden(&self) -> bool {
         match self {
             Game::Lutris(lutris_game) => lutris_game.hidden,
-            Game::Native { hidden, .. } => *hidden,
+            Game::Native(native_game) => native_game.hidden,
         }
     }
 
@@ -49,7 +40,7 @@ impl Game {
     pub const fn installed_at(&self) -> i64 {
         match self {
             Game::Lutris(lutris_game) => lutris_game.installed_at,
-            Game::Native { installed_at, .. } => *installed_at,
+            Game::Native(native_game) => native_game.installed_at,
         }
     }
 
@@ -57,7 +48,7 @@ impl Game {
     pub fn name(&self) -> &str {
         match self {
             Game::Lutris(lutris_game) => &lutris_game.name,
-            Game::Native { name, .. } => name,
+            Game::Native(native_game) => &native_game.name,
         }
     }
 
@@ -73,7 +64,7 @@ impl Game {
     pub const fn id(&self) -> GameId {
         match self {
             Self::Lutris(lutris_game) => GameId::Lutris(lutris_game.id),
-            Self::Native { uuid, .. } => GameId::Native(*uuid),
+            Self::Native(native_game) => GameId::Native(native_game.uuid),
         }
     }
 }
