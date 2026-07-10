@@ -8,6 +8,7 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 flume = { workspace = true, features = ["async"] }
 futures.workspace = true
+dashmap.workspace = true
 image.workspace = true
 log.workspace = true
 rayon.workspace = true

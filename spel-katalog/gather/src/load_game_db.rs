@@ -2,9 +2,10 @@
 
 use ::std::path::Path;
 
+use ::dashmap::DashMap;
 use ::rusqlite::{Connection, OpenFlags};
-use ::rustc_hash::{FxHashMap, FxHashSet};
-use ::spel_katalog_formats::{Game, GameCommon, GameLutris};
+use ::rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
+use ::spel_katalog_formats::{Game, GameCommon, GameLutris, Tag, TagId};
 
 use crate::LoadDbError;
 
@@ -12,7 +13,10 @@ use crate::LoadDbError;
 ///
 /// # Errors
 /// If games cannot be loaded from database.
-pub fn load_games_from_database(db_path: &Path) -> Result<Vec<Game>, LoadDbError> {
+pub fn load_games_from_database(
+    db_path: &Path,
+    tags: &DashMap<Tag, TagId, FxBuildHasher>,
+) -> Result<Vec<Game>, LoadDbError> {
     let db = Connection::open_with_flags(
         db_path,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -20,15 +24,9 @@ pub fn load_games_from_database(db_path: &Path) -> Result<Vec<Game>, LoadDbError
 
     let categories = db
         .prepare_cached("SELECT id, name FROM categories")?
-        .query_map([], |row| Ok((row.get("name")?, row.get("id")?)))?
-        .collect::<Result<FxHashMap<String, i64>, ::rusqlite::Error>>();
-
-    let hidden_category = categories
-        .as_ref()
-        .as_ref()
-        .ok()
-        .and_then(|categories| categories.get(".hidden").copied())
-        .unwrap_or(i64::MAX);
+        .query_map([], |row| Ok((row.get("id")?, row.get("name")?)))?
+        .collect::<Result<FxHashMap<i64, String>, ::rusqlite::Error>>()
+        .unwrap_or_default();
 
     let game_categories = db
         .prepare_cached("SELECT game_id, category_id FROM games_categories")?
@@ -92,6 +90,7 @@ pub fn load_games_from_database(db_path: &Path) -> Result<Vec<Game>, LoadDbError
                     name,
                     installed_at,
                     hidden: false,
+                    tags: Default::default(),
                 },
             })
         }
@@ -100,10 +99,23 @@ pub fn load_games_from_database(db_path: &Path) -> Result<Vec<Game>, LoadDbError
             continue;
         };
 
-        if let Some(categories) = game_categories.get(&game.id)
-            && categories.contains(&hidden_category)
-        {
-            game.hidden = true;
+        if let Some(game_categories) = game_categories.get(&game.id) {
+            for category in game_categories {
+                let Some(name) = categories.get(category) else {
+                    ::log::warn!("unknown lutris category with id: {category}");
+                    continue;
+                };
+                if name == ".hidden" {
+                    game.hidden = true;
+                    continue;
+                }
+
+                let tag = *tags
+                    .entry(Tag { name: name.clone() })
+                    .or_insert_with(TagId::new);
+
+                game.tags.insert(tag);
+            }
         }
 
         games.push(Game::Lutris(game));

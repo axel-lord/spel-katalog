@@ -8,7 +8,7 @@ use ::serde::{Deserialize, Serialize};
 use ::strum::VariantArray;
 use ::unicode_segmentation::UnicodeSegmentation;
 
-use crate::{Bind, GameId, Timestamp};
+use crate::{Bind, GameId, Tag, Timestamp};
 
 /// How to run game.
 #[derive(Debug, Clone, Copy, IsVariant, Serialize, Deserialize)]
@@ -91,7 +91,7 @@ pub struct NativeGameConfig {
 
     /// Tags assigned to game.
     #[serde(skip_serializing_if = "FxHashSet::is_empty", default)]
-    pub tags: FxHashSet<String>,
+    pub tags: FxHashSet<Tag>,
 }
 
 impl NativeGameConfig {

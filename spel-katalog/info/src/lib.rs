@@ -265,6 +265,7 @@ impl State {
                         name: _,
                         installed_at: _,
                         hidden: _,
+                        tags: _,
                     },
             }) => {
                 let games_db = games_db.clone();

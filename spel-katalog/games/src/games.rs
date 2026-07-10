@@ -2,11 +2,12 @@
 
 use ::core::{iter::FusedIterator, mem};
 
+use ::dashmap::DashMap;
 use ::derive_more::{Deref, DerefMut, IsVariant};
 use ::itertools::izip;
 use ::regex::RegexBuilder;
-use ::rustc_hash::FxHashMap;
-use ::spel_katalog_formats::{Game, GameCommon, GameId, GameNative, NativeGameConfig};
+use ::rustc_hash::{FxBuildHasher, FxHashMap};
+use ::spel_katalog_formats::{Game, GameCommon, GameId, GameNative, NativeGameConfig, Tag, TagId};
 use ::spel_katalog_settings::{
     AsIndex, FilterMode, Settings, Show, SortBy, SortDir, UnloadThumbnails,
 };
@@ -66,14 +67,13 @@ pub struct WithThumb {
     pub ghost: bool,
 }
 
-impl From<WithThumb> for Game {
-    fn from(WithThumb { game, .. }: WithThumb) -> Self {
-        game
-    }
-}
-
-impl From<(Uuid, NativeGameConfig)> for WithThumb {
-    fn from((uuid, game): (Uuid, NativeGameConfig)) -> Self {
+impl WithThumb {
+    /// Construct from a uuid, gameconfig, and tag mapping.
+    pub fn from_native(
+        uuid: Uuid,
+        game: NativeGameConfig,
+        tags: &DashMap<Tag, TagId, FxBuildHasher>,
+    ) -> WithThumb {
         Self {
             game: Game::Native(GameNative {
                 uuid,
@@ -81,6 +81,12 @@ impl From<(Uuid, NativeGameConfig)> for WithThumb {
                     name: game.name,
                     installed_at: game.timestamp.timestamp(),
                     hidden: game.hidden,
+                    tags: game
+                        .tags
+                        .iter()
+                        .cloned()
+                        .map(|tag| *tags.entry(tag).or_insert_with(TagId::new))
+                        .collect(),
                 },
             }),
             thumb: None,
@@ -89,6 +95,12 @@ impl From<(Uuid, NativeGameConfig)> for WithThumb {
             ghost: false,
             thumb_thumb: None,
         }
+    }
+}
+
+impl From<WithThumb> for Game {
+    fn from(WithThumb { game, .. }: WithThumb) -> Self {
+        game
     }
 }
 

@@ -1,14 +1,16 @@
 use ::std::{convert::identity, io::PipeReader, sync::Arc};
 
 use ::color_eyre::{Section, eyre::eyre};
+use ::dashmap::DashMap;
 use ::derive_more::IsVariant;
 use ::iced::Font;
 use ::iced_core::{Alignment::Center, Length::Fill, font, window};
 use ::iced_runtime::Task;
 use ::iced_widget::{self as widget, Row, text, text_input, toggler, value};
-use ::rustc_hash::FxHashMap;
+use ::rustc_hash::{FxBuildHasher, FxHashMap};
 use ::spel_katalog_cli::Run;
 use ::spel_katalog_common::{StatusSender, w};
+use ::spel_katalog_formats::{Tag, TagId};
 use ::spel_katalog_installer::Installer;
 use ::spel_katalog_settings::{FilterMode, Network, Theme};
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
@@ -45,6 +47,7 @@ pub(crate) struct App {
     pub terminal: ::spel_katalog_terminal::Terminal,
     pub process_view_semaphore: Arc<::smol::lock::Semaphore>,
     pub games_db: ::spel_katalog_native::Pool,
+    pub tags: Arc<DashMap<Tag, TagId, FxBuildHasher>>,
 }
 
 /// Initial state created by new.
@@ -103,6 +106,7 @@ impl Initial {
         } else {
             (sink_builder, None)
         };
+        let tags = Arc::new(Default::default());
 
         let app = App {
             filter,
@@ -118,6 +122,7 @@ impl Initial {
             windows,
             process_view_semaphore,
             games_db,
+            tags,
         };
 
         Ok(Self {

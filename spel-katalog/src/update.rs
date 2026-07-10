@@ -454,6 +454,7 @@ impl App {
                     &self.settings,
                     &self.filter,
                     &self.games_db,
+                    &self.tags,
                 )
                 .map(Message::Games),
             ::spel_katalog_info::Request::SetImage { slug, image } => self
@@ -468,6 +469,7 @@ impl App {
                     &self.settings,
                     &self.filter,
                     &self.games_db,
+                    &self.tags,
                 )
                 .map(Message::Games),
             ::spel_katalog_info::Request::RunGame { id, sandbox } => {
@@ -588,6 +590,7 @@ impl App {
                             &self.settings,
                             &self.filter,
                             &self.games_db,
+                            &self.tags,
                         )
                         .map(Message::Games);
                 }

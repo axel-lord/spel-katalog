@@ -7,6 +7,7 @@ use ::std::{
     sync::{Arc, LazyLock},
 };
 
+use ::dashmap::DashMap;
 use ::derive_more::{Deref, DerefMut, IsVariant};
 use ::iced_aw::ContextMenu;
 use ::iced_core::{Border, Length::Fill, text::Wrapping};
@@ -18,9 +19,9 @@ use ::itertools::Itertools;
 use ::parking_lot::Mutex;
 use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use ::rusqlite::{Connection, Statement, named_params};
-use ::rustc_hash::FxHashSet;
+use ::rustc_hash::{FxBuildHasher, FxHashSet};
 use ::spel_katalog_common::{IntoOrRequest, OrRequest, StatusSender, async_status, status};
-use ::spel_katalog_formats::{Game, GameId, NativeGameConfig};
+use ::spel_katalog_formats::{Game, GameId, NativeGameConfig, Tag, TagId};
 use ::spel_katalog_gather::{
     CoverGatherer, CoverGathererOptions, LoadDbError, load_games_from_database,
     load_thumbnail_database,
@@ -319,6 +320,7 @@ impl State {
         settings: &Settings,
         filter: &str,
         game_db: &::spel_katalog_native::Pool,
+        tags: &Arc<DashMap<Tag, TagId, FxBuildHasher>>,
     ) -> Task<OrRequest<Message, Request>> {
         match msg {
             Message::Sort => {
@@ -327,8 +329,9 @@ impl State {
             }
             Message::LoadDb { db_path } => {
                 let tx = tx.clone();
+                let tags = Arc::clone(tags);
                 Task::future(async move {
-                    match ::smol::unblock(move || load_games_from_database(&db_path)).await {
+                    match ::smol::unblock(move || load_games_from_database(&db_path, &tags)).await {
                         Ok(games) => games
                             .pipe(|games| Message::AddGames { games })
                             .pipe(OrRequest::Message)
@@ -363,12 +366,18 @@ impl State {
                 self.find_cached(settings)
             }
             Message::AddNativeGames { games } => {
-                self.add_games(games.into_iter().map(WithThumb::from), settings, filter);
+                self.add_games(
+                    games
+                        .into_iter()
+                        .map(|(uuid, game)| WithThumb::from_native(uuid, game, tags)),
+                    settings,
+                    filter,
+                );
                 Task::none()
             }
             Message::AddNativeGame { uuid, config } => {
                 self.add_games(
-                    iter::once(WithThumb::from((uuid, *config))),
+                    iter::once(WithThumb::from_native(uuid, *config, tags)),
                     settings,
                     filter,
                 );
