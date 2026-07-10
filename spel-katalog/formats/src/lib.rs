@@ -8,7 +8,7 @@ pub use self::{
     image::Image,
     installer::{ExeChoice, InstallerConfig, InstallerPrepareConfig},
     lutris_game::{LutrisGame, LutrisRunner},
-    native_game::{NativeGameConfig, NativeRunner, RunMode},
+    native_game_config::{NativeGameConfig, NativeRunner, RunMode},
     timestamp::{TimeStampParseError, Timestamp, TimestampFromIntError},
 };
 
@@ -19,7 +19,7 @@ mod game;
 mod image;
 mod installer;
 mod lutris_game;
-mod native_game;
+mod native_game_config;
 mod timestamp;
 
 pub mod lutris_config;
