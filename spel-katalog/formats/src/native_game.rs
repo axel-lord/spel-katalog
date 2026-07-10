@@ -3,7 +3,7 @@
 use ::std::path::PathBuf;
 
 use ::derive_more::{Display, IsVariant};
-use ::rustc_hash::FxHashMap;
+use ::rustc_hash::{FxHashMap, FxHashSet};
 use ::serde::{Deserialize, Serialize};
 use ::strum::VariantArray;
 use ::unicode_segmentation::UnicodeSegmentation;
@@ -88,6 +88,10 @@ pub struct NativeGame {
     /// Additional directories sandbox will be given read access to.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub ro_bind: Vec<Bind>,
+
+    /// Tags assigned to game.
+    #[serde(skip_serializing_if = "FxHashSet::is_empty", default)]
+    pub tags: FxHashSet<String>,
 }
 
 impl NativeGame {
@@ -111,6 +115,7 @@ impl NativeGame {
             wt_verb: Default::default(),
             bind: Default::default(),
             ro_bind: Default::default(),
+            tags: Default::default(),
         }
     }
 

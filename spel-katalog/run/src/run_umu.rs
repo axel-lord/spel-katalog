@@ -196,6 +196,7 @@ impl NativeUmuCtx<'_> {
             use_gamescope,
             gamescope_args,
             shadow: _,
+            tags: _,
         } = config;
 
         let use_gamescope = use_gamescope.unwrap_or(global_use_gamescope);
@@ -475,6 +476,7 @@ impl<'a> LutrisCtx<'a> {
             use_gamescope: None,
             gamescope_args: Vec::new(),
             shadow: Some(id),
+            tags: Default::default(),
         })
     }
 }
