@@ -1,6 +1,6 @@
 //! Any game format.
 
-use ::derive_more::{Display, From, IsVariant};
+use ::derive_more::{Deref, DerefMut, Display, From, IsVariant};
 use ::serde::{Deserialize, Serialize};
 use ::uuid::Uuid;
 
@@ -19,7 +19,9 @@ pub enum GameId {
 }
 
 /// Game which may be native or lutris.
-#[derive(Debug, IsVariant, Clone, From, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, IsVariant, Clone, From, Serialize, Deserialize, PartialEq, Eq, Deref, DerefMut)]
+#[deref(forward)]
+#[deref_mut(forward)]
 pub enum Game {
     /// Game is a lutris game.
     Lutris(LutrisGame),
@@ -28,30 +30,6 @@ pub enum Game {
 }
 
 impl Game {
-    /// Is the game hidden.
-    pub const fn hidden(&self) -> bool {
-        match self {
-            Game::Lutris(lutris_game) => lutris_game.hidden,
-            Game::Native(native_game) => native_game.hidden,
-        }
-    }
-
-    /// When was the game installed.
-    pub const fn installed_at(&self) -> i64 {
-        match self {
-            Game::Lutris(lutris_game) => lutris_game.installed_at,
-            Game::Native(native_game) => native_game.installed_at,
-        }
-    }
-
-    /// Name of the game.
-    pub fn name(&self) -> &str {
-        match self {
-            Game::Lutris(lutris_game) => &lutris_game.name,
-            Game::Native(native_game) => &native_game.name,
-        }
-    }
-
     /// Get slug of game if available.
     pub fn slug(&self) -> Option<&str> {
         match self {

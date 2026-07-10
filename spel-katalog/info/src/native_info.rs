@@ -559,7 +559,7 @@ impl State {
         buttons: Element<'a, M>,
     ) -> Element<'a, M> {
         const DIM: u32 = 200;
-        let name = game.name();
+        let name = game.name.as_str();
         let thumb = self.thumb.as_ref().or(thumb);
         w::col()
             .push(

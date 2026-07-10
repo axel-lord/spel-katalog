@@ -3,6 +3,7 @@
 pub use self::{
     addititional_config::AdditionalConfig,
     bind::{Bind, Symlink},
+    common_game::CommonGame,
     daemon::{DaemonRunConfigRequest, DaemonRunResponse},
     game::{Game, GameId},
     image::Image,
@@ -15,6 +16,7 @@ pub use self::{
 
 mod addititional_config;
 mod bind;
+mod common_game;
 mod daemon;
 mod game;
 mod image;

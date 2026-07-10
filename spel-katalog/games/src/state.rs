@@ -614,7 +614,7 @@ impl State {
         let id = game.id();
         let handle = game.thumb.as_ref().or(game.thumb_thumb.as_ref());
         let selected = self.selected;
-        let name = game.name();
+        let name = game.name.as_str();
 
         fn base(theme: &::iced_core::Theme) -> container::Style {
             let style = container::bordered_box(theme);

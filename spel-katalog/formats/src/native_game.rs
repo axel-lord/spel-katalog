@@ -1,17 +1,19 @@
 //! [NativeGame] impl.
 
+use ::derive_more::{Deref, DerefMut};
 use ::serde::{Deserialize, Serialize};
 use ::uuid::Uuid;
 
+use crate::CommonGame;
+
 /// Loaded short native game data.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Deref, DerefMut)]
 pub struct NativeGame {
-    /// Name of the game.
-    pub name: String,
-    /// When was the game installed.
-    pub installed_at: i64,
     /// Uuid of game.
     pub uuid: Uuid,
-    /// Is the game hidden.
-    pub hidden: bool,
+    /// Common game fields.
+    #[serde(flatten)]
+    #[deref]
+    #[deref_mut]
+    pub common: CommonGame,
 }

@@ -2,26 +2,27 @@
 
 use ::core::{convert::Infallible, str::FromStr};
 
-use ::derive_more::{Display, IsVariant};
+use ::derive_more::{Deref, DerefMut, Display, IsVariant};
 use ::serde::{Deserialize, Serialize};
 
+use crate::CommonGame;
+
 /// Loaded lutris game data.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Deref, DerefMut)]
 pub struct LutrisGame {
     /// Slug assinged in lutris.
     pub slug: String,
     /// Numeric id of game.
     pub id: i64,
-    /// Title used for game.
-    pub name: String,
     /// Runner in use.
     pub runner: LutrisRunner,
     /// Path to lutris yml for game.
     pub configpath: String,
-    /// Is the game hidden.
-    pub hidden: bool,
-    /// When was the game installed.
-    pub installed_at: i64,
+    /// Common game fields.
+    #[serde(flatten)]
+    #[deref]
+    #[deref_mut]
+    pub common: CommonGame,
 }
 
 /// Runner used by a game profile.

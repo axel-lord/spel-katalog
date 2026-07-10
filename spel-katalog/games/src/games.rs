@@ -6,7 +6,7 @@ use ::derive_more::{Deref, DerefMut, IsVariant};
 use ::itertools::izip;
 use ::regex::RegexBuilder;
 use ::rustc_hash::FxHashMap;
-use ::spel_katalog_formats::{Game, GameId, NativeGame, NativeGameConfig};
+use ::spel_katalog_formats::{CommonGame, Game, GameId, NativeGame, NativeGameConfig};
 use ::spel_katalog_settings::{
     AsIndex, FilterMode, Settings, Show, SortBy, SortDir, UnloadThumbnails,
 };
@@ -42,7 +42,7 @@ impl From<&Game> for GameCache {
     fn from(game: &Game) -> Self {
         GameCache {
             slug: game.slug().map(|slug| slug.to_uppercase()),
-            name: game.name().to_uppercase(),
+            name: game.name.to_uppercase(),
         }
     }
 }
@@ -76,10 +76,12 @@ impl From<(Uuid, NativeGameConfig)> for WithThumb {
     fn from((uuid, game): (Uuid, NativeGameConfig)) -> Self {
         Self {
             game: Game::Native(NativeGame {
-                name: game.name,
-                installed_at: game.timestamp.timestamp(),
                 uuid,
-                hidden: game.hidden,
+                common: CommonGame {
+                    name: game.name,
+                    installed_at: game.timestamp.timestamp(),
+                    hidden: game.hidden,
+                },
             }),
             thumb: None,
             batch_selected: false,
@@ -278,11 +280,11 @@ impl Games {
             match show {
                 ::spel_katalog_settings::Show::Apparent => items
                     .into_iter()
-                    .filter(|(_, game, _)| !game.hidden())
+                    .filter(|(_, game, _)| !game.hidden)
                     .collect(),
                 ::spel_katalog_settings::Show::Hidden => items
                     .into_iter()
-                    .filter(|(_, game, _)| game.hidden())
+                    .filter(|(_, game, _)| game.hidden)
                     .collect(),
                 ::spel_katalog_settings::Show::All => items,
             }
@@ -298,9 +300,9 @@ impl Games {
             sort_dir: SortDir,
         ) {
             match sort_by {
-                SortBy::Name => items.sort_by(|a, b| a.1.name().cmp(b.1.name())),
+                SortBy::Name => items.sort_by(|a, b| a.1.name.cmp(&b.1.name)),
                 SortBy::Added => {
-                    items.sort_by(|a, b| a.1.installed_at().cmp(&b.1.installed_at()).reverse())
+                    items.sort_by(|a, b| a.1.installed_at.cmp(&b.1.installed_at).reverse())
                 }
             };
 
@@ -407,7 +409,7 @@ impl Games {
                 if let Ok(re) = RegexBuilder::new(filter).case_insensitive(true).build() {
                     let mut filtered = get_filterend(games, cache);
                     filtered = filter_hidden(filtered, settings[Show::as_idx()]);
-                    filtered.retain(|(_, game, _)| re.is_match(game.name()));
+                    filtered.retain(|(_, game, _)| re.is_match(&game.name));
                     sort_items(
                         &mut filtered,
                         *settings.get::<SortBy>(),
