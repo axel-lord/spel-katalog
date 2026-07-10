@@ -33,7 +33,19 @@ impl TagId {
 
 /// A game tag/category.
 #[derive(
-    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, From, Into, Deref,
+    Debug,
+    Default,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    From,
+    Into,
+    Deref,
 )]
 #[repr(transparent)]
 #[serde(transparent)]
@@ -41,4 +53,11 @@ impl TagId {
 pub struct Tag {
     /// Name of the tag.
     pub name: String,
+}
+
+impl Tag {
+    /// Construct a new tag with the given name.
+    pub const fn new(name: String) -> Self {
+        Tag { name }
+    }
 }

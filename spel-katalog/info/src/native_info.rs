@@ -21,7 +21,7 @@ use ::image::ImageFormat;
 use ::rfd::AsyncFileDialog;
 use ::smol::unblock;
 use ::spel_katalog_common::{IntoOrRequest, OrRequest, in_place::PushMaybe as _, w};
-use ::spel_katalog_formats::{GameId, NativeGameConfig};
+use ::spel_katalog_formats::{GameId, NativeGameConfig, Tag};
 use ::spel_katalog_native::Pool;
 use ::spel_katalog_settings::{CompToolsDir, ThmubnailSource};
 use ::spel_katalog_widget::monospace;
@@ -68,6 +68,8 @@ pub enum QuickMessage {
     AddBind,
     /// Add a specific compatability tool.
     AddCompTool,
+    /// Add a blank tag.
+    AddTag,
     /// Set use_gamescope to true.
     UseGamescope,
     /// Open dialog to select exe.
@@ -104,6 +106,13 @@ pub enum Request {
         id: GameId,
         /// Thumbnail image.
         img: ::spel_katalog_formats::Image,
+    },
+    /// Update tags on game save.
+    UpdateTags {
+        /// Uuid of game.
+        uuid: Uuid,
+        /// Tags to use.
+        tags: Vec<Tag>,
     },
     /// Run a game.
     RunGame(Box<NativeGameConfig>),
@@ -265,6 +274,13 @@ impl State {
                         })
                         .and_then(Task::done)
                 }
+                QuickMessage::AddTag => self.get_content().then(|mut game| {
+                    game.tags.insert(Tag::default());
+                    Box::new(game)
+                        .pipe(Message::UpdateConfig)
+                        .into_message()
+                        .pipe(Task::done)
+                }),
                 QuickMessage::AddBind => self
                     .get_content()
                     .then(|mut game| {
@@ -342,11 +358,18 @@ impl State {
                             })
                             .ok()?;
 
-                        Box::new(game)
+                        let update_tags = Request::UpdateTags {
+                            uuid,
+                            tags: game.tags.iter().cloned().collect(),
+                        }
+                        .pipe(OrRequest::Request);
+                        let set_config = Box::new(game)
                             .pipe(Message::SetConfig)
-                            .pipe(OrRequest::Message)
-                            .pipe(Some)
+                            .pipe(OrRequest::Message);
+
+                        Some([set_config, update_tags])
                     })
+                    .then(|messages| Task::batch(messages.map(Task::done)))
                 }
                 QuickMessage::Discard => {
                     let game_db = game_db.clone();
@@ -638,6 +661,7 @@ impl State {
             .button("Comp Tool", || QuickMessage::AddCompTool)
             .button("Gamescope", || QuickMessage::UseGamescope)
             .button("Set Exe", || QuickMessage::OpenExeDialog)
+            .button("Add Tag", || QuickMessage::AddTag)
             .pipe(Element::from)
             .map(Message::Quick)
             .map(OrRequest::Message)

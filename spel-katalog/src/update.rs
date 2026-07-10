@@ -6,7 +6,9 @@ use ::iced_runtime::Task;
 use ::image::DynamicImage;
 use ::rustix::process::{Pid, RawPid};
 use ::spel_katalog_common::{IntoOrRequest, OrRequest};
-use ::spel_katalog_formats::{InstallerConfig, InstallerPrepareConfig, NativeGameConfig, RunMode};
+use ::spel_katalog_formats::{
+    InstallerConfig, InstallerPrepareConfig, NativeGameConfig, RunMode, TagId,
+};
 use ::spel_katalog_games::SelDir;
 use ::spel_katalog_settings::{
     FilterMode, Load, LutrisDb, Network, Settings, Show, TrustedVariants,
@@ -444,6 +446,15 @@ impl App {
                 }
                 ::spel_katalog_info::NativeRequest::RunInit(game) => {
                     self.run_native_game(*game, RunMode::Init)
+                }
+                ::spel_katalog_info::NativeRequest::UpdateTags { uuid, tags } => {
+                    if let Some(game) = self.games.by_uuid_mut(uuid) {
+                        game.tags = tags
+                            .into_iter()
+                            .map(|tag| *self.tags.entry(tag).or_insert_with(TagId::new))
+                            .collect();
+                    }
+                    Task::none()
                 }
             },
             ::spel_katalog_info::Request::RemoveImage { slug } => self
