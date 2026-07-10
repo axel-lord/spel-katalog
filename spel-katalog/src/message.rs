@@ -1,7 +1,7 @@
 use ::derive_more::{From, IsVariant};
 use ::iced_core::window;
 use ::spel_katalog_common::OrRequest;
-use ::spel_katalog_formats::NativeGame;
+use ::spel_katalog_formats::NativeGameConfig;
 
 use crate::{app::WindowType, process_info, view};
 
@@ -77,8 +77,8 @@ pub enum Message {
     ShowInfo(crate::view::Displayed),
     #[from]
     Ipc(::spel_katalog_ipc::Message),
-    RunGameNative(Box<NativeGame>),
-    RunShellNative(Box<NativeGame>),
+    RunGameNative(Box<NativeGameConfig>),
+    RunShellNative(Box<NativeGameConfig>),
 }
 
 impl<T, E> From<Result<T, E>> for Message

@@ -11,8 +11,8 @@ use ::color_eyre::{Section, eyre::eyre};
 use ::rustc_hash::FxHashMap;
 use ::smol::process::Command;
 use ::spel_katalog_formats::{
-    AdditionalConfig, Bind, GameId, LutrisRunner, NativeGame, NativeRunner, RunMode, Timestamp,
-    lutris_config,
+    AdditionalConfig, Bind, GameId, LutrisRunner, NativeGameConfig, NativeRunner, RunMode,
+    Timestamp, lutris_config,
 };
 use ::spel_katalog_sink::SinkBuilder;
 use ::tap::Pipe;
@@ -53,7 +53,7 @@ pub struct NativeUmuCtx<'a> {
     /// Common context.
     pub common: CommonUmuCtx<'a>,
     /// Game config.
-    pub config: NativeGame,
+    pub config: NativeGameConfig,
 }
 
 /// If possible bind user in wine prefix to steamuser in umu prefix.
@@ -178,7 +178,7 @@ impl NativeUmuCtx<'_> {
             config,
         } = self;
         ::log::info!("using game config\n{config:#?}");
-        let NativeGame {
+        let NativeGameConfig {
             name,
             timestamp: _,
             exe,
@@ -402,7 +402,7 @@ impl<'a> LutrisCtx<'a> {
     ///
     /// # Errors
     /// If lutris context is malformed in some way.
-    pub fn into_native(self) -> ::color_eyre::Result<NativeGame> {
+    pub fn into_native(self) -> ::color_eyre::Result<NativeGameConfig> {
         let Self {
             config,
             exe,
@@ -450,7 +450,7 @@ impl<'a> LutrisCtx<'a> {
             bind.push(home_bind);
         }
 
-        Ok(NativeGame {
+        Ok(NativeGameConfig {
             name: name.to_owned(),
             timestamp: Timestamp::try_from(installed_at)?,
             exe: exe.to_path_buf(),

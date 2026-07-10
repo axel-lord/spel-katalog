@@ -6,7 +6,7 @@ use ::iced_runtime::Task;
 use ::image::DynamicImage;
 use ::rustix::process::{Pid, RawPid};
 use ::spel_katalog_common::{IntoOrRequest, OrRequest};
-use ::spel_katalog_formats::{InstallerConfig, InstallerPrepareConfig, NativeGame, RunMode};
+use ::spel_katalog_formats::{InstallerConfig, InstallerPrepareConfig, NativeGameConfig, RunMode};
 use ::spel_katalog_games::SelDir;
 use ::spel_katalog_settings::{
     FilterMode, Load, LutrisDb, Network, Settings, Show, TrustedVariants,
@@ -62,7 +62,7 @@ impl App {
         }
     }
 
-    fn convert_all(&self) -> impl 'static + Future<Output = Vec<(Uuid, NativeGame)>> {
+    fn convert_all(&self) -> impl 'static + Future<Output = Vec<(Uuid, NativeGameConfig)>> {
         let game_db = self.games_db.clone();
         let futures = self
             .games
@@ -86,9 +86,9 @@ impl App {
 
     async fn convert_game(
         game_db: ::spel_katalog_native::Pool,
-        game: NativeGame,
+        game: NativeGameConfig,
         thumb: Option<DynamicImage>,
-    ) -> Option<(Uuid, NativeGame)> {
+    ) -> Option<(Uuid, NativeGameConfig)> {
         ::smol::unblock(move || {
             let name = &game.name;
             let uuid = Uuid::now_v7();
@@ -495,10 +495,10 @@ impl App {
 
     async fn install_game_(
         game_db: ::spel_katalog_native::Pool,
-        config: Box<NativeGame>,
+        config: Box<NativeGameConfig>,
         thumbnail: Option<::spel_katalog_formats::Image>,
         move_dir: Option<(PathBuf, PathBuf)>,
-    ) -> Option<(Uuid, Box<NativeGame>)> {
+    ) -> Option<(Uuid, Box<NativeGameConfig>)> {
         let uuid = Uuid::now_v7();
         game_db
             .insert_game(uuid)
@@ -536,7 +536,7 @@ impl App {
     pub fn install_game(
         &mut self,
         id: window::Id,
-        config: Box<NativeGame>,
+        config: Box<NativeGameConfig>,
         thumbnail: Option<::spel_katalog_formats::Image>,
         move_dir: Option<(PathBuf, PathBuf)>,
     ) -> Task<Message> {

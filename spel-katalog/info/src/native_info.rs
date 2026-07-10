@@ -21,7 +21,7 @@ use ::image::ImageFormat;
 use ::rfd::AsyncFileDialog;
 use ::smol::unblock;
 use ::spel_katalog_common::{IntoOrRequest, OrRequest, in_place::PushMaybe as _, w};
-use ::spel_katalog_formats::{GameId, NativeGame};
+use ::spel_katalog_formats::{GameId, NativeGameConfig};
 use ::spel_katalog_native::Pool;
 use ::spel_katalog_settings::{CompToolsDir, ThmubnailSource};
 use ::spel_katalog_widget::monospace;
@@ -80,9 +80,9 @@ pub enum Message {
     /// Update conf_view.
     ConfAction(widget::text_editor::Action),
     /// Set content of text editor.
-    SetConfig(Box<NativeGame>),
+    SetConfig(Box<NativeGameConfig>),
     /// Update content of text editor.
-    UpdateConfig(Box<NativeGame>),
+    UpdateConfig(Box<NativeGameConfig>),
     /// Quick message.
     #[from]
     Quick(QuickMessage),
@@ -106,11 +106,11 @@ pub enum Request {
         img: ::spel_katalog_formats::Image,
     },
     /// Run a game.
-    RunGame(Box<NativeGame>),
+    RunGame(Box<NativeGameConfig>),
     /// Run shell for a game.
-    RunShell(Box<NativeGame>),
+    RunShell(Box<NativeGameConfig>),
     /// Init prefix for a game.
-    RunInit(Box<NativeGame>),
+    RunInit(Box<NativeGameConfig>),
 }
 
 /// State of native game display.
@@ -130,7 +130,7 @@ pub struct State {
 
 impl State {
     /// Construct new state.
-    pub fn new(uuid: Uuid, game: NativeGame, game_db: &Pool) -> (Self, Task<Message>) {
+    pub fn new(uuid: Uuid, game: NativeGameConfig, game_db: &Pool) -> (Self, Task<Message>) {
         let mut state = Self {
             uuid,
             conf_view: Content::new(),
@@ -156,7 +156,7 @@ impl State {
     }
 
     /// Set game config in use.
-    pub fn set_config(&mut self, config: NativeGame, flush_history: bool) {
+    pub fn set_config(&mut self, config: NativeGameConfig, flush_history: bool) {
         match ::toml::to_string_pretty(&config) {
             Ok(text) => {
                 self.future.clear();
@@ -186,11 +186,11 @@ impl State {
     /// content of text editot if valid.
     pub fn with_content<T: 'static + Send>(
         &self,
-        with: impl 'static + Send + FnOnce(NativeGame) -> Option<T>,
+        with: impl 'static + Send + FnOnce(NativeGameConfig) -> Option<T>,
     ) -> Task<T> {
         let content = self.conf_view.text();
         Task::<Option<_>>::future(::smol::unblock(move || {
-            let game = ::toml::from_str::<NativeGame>(&content)
+            let game = ::toml::from_str::<NativeGameConfig>(&content)
                 .map_err(|err| ::log::error!("content is not formatted correctly\n{err}"))
                 .ok()?;
             with(game)
@@ -199,7 +199,7 @@ impl State {
     }
 
     /// I content can be parsed create create a task with it.
-    pub fn get_content(&self) -> Task<NativeGame> {
+    pub fn get_content(&self) -> Task<NativeGameConfig> {
         self.with_content(Some)
     }
 

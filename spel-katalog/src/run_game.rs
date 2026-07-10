@@ -8,8 +8,8 @@ use ::iced_runtime::Task;
 use ::image::DynamicImage;
 use ::spel_katalog_common::status;
 use ::spel_katalog_formats::{
-    AdditionalConfig, DaemonRunConfigRequest, DaemonRunResponse, Game, GameId, NativeGame, RunMode,
-    lutris_config,
+    AdditionalConfig, DaemonRunConfigRequest, DaemonRunResponse, Game, GameId, NativeGameConfig,
+    RunMode, lutris_config,
 };
 use ::spel_katalog_ipc::http::ResponseCode;
 use ::spel_katalog_run::{
@@ -53,7 +53,8 @@ impl App {
     pub fn game_as_native(
         &self,
         game_id: GameId,
-    ) -> Option<impl 'static + Future<Output = Option<(NativeGame, Option<DynamicImage>)>>> {
+    ) -> Option<impl 'static + Future<Output = Option<(NativeGameConfig, Option<DynamicImage>)>>>
+    {
         let Some(game) = self.games.by_id(game_id) else {
             ::log::warn!("could not find game with id {game_id}");
             return None;
@@ -147,7 +148,7 @@ impl App {
     }
 
     /// Run a native game.
-    pub fn run_native_game(&mut self, game: NativeGame, run_mode: RunMode) -> Task<Message> {
+    pub fn run_native_game(&mut self, game: NativeGameConfig, run_mode: RunMode) -> Task<Message> {
         let settings = self.settings.snapshot();
         let sink_builder = self.sink_builder.clone();
         let task = async move {

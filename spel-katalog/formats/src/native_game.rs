@@ -24,7 +24,7 @@ pub enum RunMode {
 /// Loaded game data.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct NativeGame {
+pub struct NativeGameConfig {
     /// Title used for game.
     pub name: String,
 
@@ -94,7 +94,7 @@ pub struct NativeGame {
     pub tags: FxHashSet<String>,
 }
 
-impl NativeGame {
+impl NativeGameConfig {
     /// Crate a new native game config.
     pub fn new(name: String, timestamp: Timestamp, exe: PathBuf, runner: NativeRunner) -> Self {
         Self {

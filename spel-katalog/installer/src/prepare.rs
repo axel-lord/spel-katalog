@@ -19,7 +19,7 @@ use ::spel_katalog_common::{
     in_place::{Convene, MapSelf},
 };
 use ::spel_katalog_formats::{
-    Bind, ExeChoice, InstallerPrepareConfig, NativeGame, NativeRunner, Timestamp,
+    Bind, ExeChoice, InstallerPrepareConfig, NativeGameConfig, NativeRunner, Timestamp,
 };
 use ::spel_katalog_settings::{
     CompToolDefault, CompToolsDir, InstallLocale, InstallLocation, Settings, Show, ThmubnailSource,
@@ -361,7 +361,7 @@ impl Prepare {
     }
 
     /// Get game config from current values.
-    pub fn get_config(&self, settings: &Settings) -> Option<NativeGame> {
+    pub fn get_config(&self, settings: &Settings) -> Option<NativeGameConfig> {
         let exe = self.choice.current()?;
         let parent = self.game_dir(settings);
         let exe = parent.join(exe);
@@ -384,7 +384,7 @@ impl Prepare {
         drives.insert('g', PathBuf::from("../.."));
         bind.push(Bind::mirrored(parent.clone()));
 
-        let config = NativeGame {
+        let config = NativeGameConfig {
             hidden: self.hidden,
             drives,
             prefix: if self.runner.is_wine() {
@@ -395,7 +395,7 @@ impl Prepare {
             bind,
             env,
             ro_bind,
-            ..NativeGame::new(self.title.clone(), Timestamp::now(), exe, self.runner)
+            ..NativeGameConfig::new(self.title.clone(), Timestamp::now(), exe, self.runner)
         };
         Some(config)
     }

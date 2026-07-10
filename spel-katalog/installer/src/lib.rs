@@ -8,7 +8,7 @@ use ::iced_runtime::Task;
 use ::iced_widget::{self as widget};
 use ::smol::stream::StreamExt;
 use ::spel_katalog_common::OrRequest;
-use ::spel_katalog_formats::{ExeChoice, InstallerPrepareConfig, NativeGame};
+use ::spel_katalog_formats::{ExeChoice, InstallerPrepareConfig, NativeGameConfig};
 use ::spel_katalog_settings::{InstallSource, Settings};
 use ::tap::TapOptional;
 
@@ -37,7 +37,7 @@ pub enum Message {
         choice: ExeChoice,
     },
     /// Set state to editor for game.
-    SetEditor(Box<NativeGame>),
+    SetEditor(Box<NativeGameConfig>),
     /// Return to prepare stage.
     UnsetEditor,
 }
@@ -50,7 +50,7 @@ pub enum Request {
     /// Request game to be added.
     InstallGame {
         /// Game config.
-        config: Box<NativeGame>,
+        config: Box<NativeGameConfig>,
         /// Thumbnail of game.
         thumbnail: Option<::spel_katalog_formats::Image>,
         /// Location to move game to.

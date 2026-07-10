@@ -21,7 +21,7 @@ use ::image::{
 use ::r2d2::PooledConnection;
 use ::r2d2_sqlite::SqliteConnectionManager;
 use ::rusqlite::CachedStatement;
-use ::spel_katalog_formats::NativeGame;
+use ::spel_katalog_formats::NativeGameConfig;
 use ::uuid::Uuid;
 
 /// Log error and return/execute statement if value is an error.
@@ -186,7 +186,7 @@ mod builder {
     #![allow(clippy::missing_docs_in_private_items)]
 
     use ::image::DynamicImage;
-    use ::spel_katalog_formats::NativeGame;
+    use ::spel_katalog_formats::NativeGameConfig;
     use ::uuid::Uuid;
 
     use crate::{DbError, InsertGameError, InsertThumbError, Pool};
@@ -206,7 +206,7 @@ mod builder {
             uuid: Uuid,
             /// Game config to insert.
             #[builder(finish_fn)]
-            config: &NativeGame,
+            config: &NativeGameConfig,
             /// Thumbnail to insert for game.
             thumb: Option<&DynamicImage>,
             /// Reuse buffer.
@@ -303,7 +303,7 @@ impl Pool {
     ///
     /// # Errors
     /// If the game cannot be retrieved.
-    pub fn get_game(&self, game_id: Uuid) -> Result<NativeGame, GetError> {
+    pub fn get_game(&self, game_id: Uuid) -> Result<NativeGameConfig, GetError> {
         const SELECT_GAME: &str = r"
             SELECT config FROM games
             WHERE uuid = $1
@@ -322,8 +322,8 @@ impl Pool {
             })
             .map_err(GetError::NoResults)?
             .map_err(GetError::DecompressConfig)?;
-        let parsed =
-            ::toml::from_slice::<NativeGame>(&decoded).map_err(GetError::DeserializeConfig)?;
+        let parsed = ::toml::from_slice::<NativeGameConfig>(&decoded)
+            .map_err(GetError::DeserializeConfig)?;
         Ok(parsed)
     }
 
@@ -557,7 +557,7 @@ impl Pool {
     fn insert_game_(
         conn: &::rusqlite::Connection,
         uuid: Uuid,
-        config: &NativeGame,
+        config: &NativeGameConfig,
         thumb: Option<&DynamicImage>,
         buf: &mut Vec<u8>,
     ) -> Result<(), InsertGameError> {
@@ -594,7 +594,7 @@ impl Pool {
     }
 
     /// Collect native games from database.
-    pub fn gather(self, for_each: &mut dyn FnMut(Uuid, NativeGame)) {
+    pub fn gather(self, for_each: &mut dyn FnMut(Uuid, NativeGameConfig)) {
         const SELECT_GAMES: &str = r"
             SELECT 
                 uuid, config
@@ -670,7 +670,7 @@ impl Pool {
             }
 
             let config = log_err!(
-                ::toml::from_slice::<NativeGame>(&buf),
+                ::toml::from_slice::<NativeGameConfig>(&buf),
                 err,
                 ("could not parse game config of {uuid}\n{err}"),
                 continue

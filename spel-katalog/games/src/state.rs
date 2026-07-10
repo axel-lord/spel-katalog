@@ -20,7 +20,7 @@ use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelItera
 use ::rusqlite::{Connection, Statement, named_params};
 use ::rustc_hash::FxHashSet;
 use ::spel_katalog_common::{IntoOrRequest, OrRequest, StatusSender, async_status, status};
-use ::spel_katalog_formats::{Game, GameId, NativeGame};
+use ::spel_katalog_formats::{Game, GameId, NativeGameConfig};
 use ::spel_katalog_gather::{
     CoverGatherer, CoverGathererOptions, LoadDbError, load_games_from_database,
     load_thumbnail_database,
@@ -81,14 +81,14 @@ pub enum Message {
     /// Add a single game.
     AddNativeGames {
         /// Games to add.
-        games: Vec<(Uuid, NativeGame)>,
+        games: Vec<(Uuid, NativeGameConfig)>,
     },
     /// Add a single game.
     AddNativeGame {
         /// Uuid of game to add.
         uuid: Uuid,
         /// Config of game.
-        config: Box<NativeGame>,
+        config: Box<NativeGameConfig>,
     },
     /// Set thumbnails.
     SetImages {

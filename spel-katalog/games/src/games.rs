@@ -6,7 +6,7 @@ use ::derive_more::{Deref, DerefMut, IsVariant};
 use ::itertools::izip;
 use ::regex::RegexBuilder;
 use ::rustc_hash::FxHashMap;
-use ::spel_katalog_formats::{Game, GameId, NativeGame};
+use ::spel_katalog_formats::{Game, GameId, NativeGameConfig};
 use ::spel_katalog_settings::{
     AsIndex, FilterMode, Settings, Show, SortBy, SortDir, UnloadThumbnails,
 };
@@ -72,8 +72,8 @@ impl From<WithThumb> for Game {
     }
 }
 
-impl From<(Uuid, NativeGame)> for WithThumb {
-    fn from((uuid, game): (Uuid, NativeGame)) -> Self {
+impl From<(Uuid, NativeGameConfig)> for WithThumb {
+    fn from((uuid, game): (Uuid, NativeGameConfig)) -> Self {
         Self {
             game: Game::Native {
                 name: game.name,
