@@ -28,6 +28,7 @@
 - [ ] Process info in terminal window
 - [ ] Process info for daemon run games
 - [ ] Options for native games, gamescope, proton, etc.
+- [ ] Log filtering
 
 # Future Goals/Possibilities
 - [x] Run exe files in prefix without lutris
