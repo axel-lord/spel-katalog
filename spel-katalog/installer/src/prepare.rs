@@ -19,7 +19,7 @@ use ::spel_katalog_common::{
     in_place::{Convene, MapSelf},
 };
 use ::spel_katalog_formats::{
-    Bind, ExeChoice, InstallerPrepareConfig, NativeGameConfig, NativeRunner, Timestamp,
+    Bind, ExeChoice, InstallerPrepareConfig, NativeGameConfig, RunnerNative, Timestamp,
 };
 use ::spel_katalog_settings::{
     CompToolDefault, CompToolsDir, InstallLocale, InstallLocation, Settings, Show, ThmubnailSource,
@@ -33,7 +33,7 @@ pub enum Message {
     /// A choice list item was chosen.
     ChooseChoice(String),
     /// A runner was selected.
-    ChooseRunner(NativeRunner),
+    ChooseRunner(RunnerNative),
     /// Width of of dir row was updated.
     SetWidth(f32),
     /// Set the exe value.
@@ -88,7 +88,7 @@ pub struct Prepare {
     /// Executable choice.
     choice: ExeChoice,
     /// Runner in use.
-    runner: NativeRunner,
+    runner: RunnerNative,
     /// Is the game hidden.
     hidden: bool,
     /// Width of column box.
@@ -335,9 +335,9 @@ impl Prepare {
                     .rsplit_once('/')
                     .map_or_else(String::new, |(_, title)| title.to_owned()),
                 runner: if choice.has_ext("exe") {
-                    NativeRunner::Wine
+                    RunnerNative::Wine
                 } else {
-                    NativeRunner::Linux
+                    RunnerNative::Linux
                 },
                 hidden: hidden.unwrap_or_else(|| settings.get::<Show>().is_hidden()),
                 column_width: None,
@@ -449,9 +449,9 @@ impl Prepare {
                 {
                     *idx = pos;
                     self.runner = if self.choice.has_ext("exe") {
-                        NativeRunner::Wine
+                        RunnerNative::Wine
                     } else {
-                        NativeRunner::Linux
+                        RunnerNative::Linux
                     };
                 }
                 Task::none()
@@ -739,7 +739,7 @@ impl Prepare {
                         .push(widget::text("Runner"))
                         .push(
                             widget::pick_list(
-                                NativeRunner::variants(),
+                                RunnerNative::variants(),
                                 Some(self.runner),
                                 |runner| {
                                     Message::ChooseRunner(runner)

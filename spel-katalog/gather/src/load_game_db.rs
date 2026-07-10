@@ -4,7 +4,7 @@ use ::std::path::Path;
 
 use ::rusqlite::{Connection, OpenFlags};
 use ::rustc_hash::{FxHashMap, FxHashSet};
-use ::spel_katalog_formats::{CommonGame, Game, LutrisGame};
+use ::spel_katalog_formats::{Game, GameCommon, GameLutris};
 
 use crate::LoadDbError;
 
@@ -53,7 +53,7 @@ pub fn load_games_from_database(db_path: &Path) -> Result<Vec<Game>, LoadDbError
     let mut games = Vec::new();
 
     while let Some(row) = rows.next()? {
-        fn game_from_row(row: &::rusqlite::Row) -> Option<LutrisGame> {
+        fn game_from_row(row: &::rusqlite::Row) -> Option<GameLutris> {
             let slug = row
                 .get("slug")
                 .map_err(|err| ::log::error!("could not read slug of row\n{err}"))
@@ -83,12 +83,12 @@ pub fn load_games_from_database(db_path: &Path) -> Result<Vec<Game>, LoadDbError
                 .map_err(|err| ::log::error!("could not read installed_at of row\n{err}"))
                 .ok()?;
 
-            Some(LutrisGame {
+            Some(GameLutris {
                 slug,
                 id,
                 runner,
                 configpath,
-                common: CommonGame {
+                common: GameCommon {
                     name,
                     installed_at,
                     hidden: false,

@@ -3,26 +3,25 @@
 pub use self::{
     addititional_config::AdditionalConfig,
     bind::{Bind, Symlink},
-    common_game::CommonGame,
     daemon::{DaemonRunConfigRequest, DaemonRunResponse},
-    game::{Game, GameId},
+    game::{
+        Game, GameId,
+        common::GameCommon,
+        lutris::{GameLutris, RunnerLutris},
+        native::GameNative,
+    },
     image::Image,
     installer::{ExeChoice, InstallerConfig, InstallerPrepareConfig},
-    lutris_game::{LutrisGame, LutrisRunner},
-    native_game::NativeGame,
-    native_game_config::{NativeGameConfig, NativeRunner, RunMode},
+    native_game_config::{NativeGameConfig, RunMode, RunnerNative},
     timestamp::{TimeStampParseError, Timestamp, TimestampFromIntError},
 };
 
 mod addititional_config;
 mod bind;
-mod common_game;
 mod daemon;
 mod game;
 mod image;
 mod installer;
-mod lutris_game;
-mod native_game;
 mod native_game_config;
 mod timestamp;
 

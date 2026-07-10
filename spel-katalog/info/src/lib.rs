@@ -21,7 +21,7 @@ use ::spel_katalog_common::{
     OrRequest, StatusSender, async_status, in_place::PushMaybe as _, status, styling, w,
 };
 use ::spel_katalog_formats::{
-    AdditionalConfig, CommonGame, Game, GameId, NativeGame, NativeGameConfig, lutris_config,
+    AdditionalConfig, Game, GameCommon, GameId, GameNative, NativeGameConfig, lutris_config,
 };
 use ::spel_katalog_native::Pool;
 use ::spel_katalog_settings::{CoverartDir, Settings, YmlDir};
@@ -258,10 +258,10 @@ impl State {
                 })
                 .then(identity)
             }
-            Game::Native(NativeGame {
+            Game::Native(GameNative {
                 uuid,
                 common:
-                    CommonGame {
+                    GameCommon {
                         name: _,
                         installed_at: _,
                         hidden: _,

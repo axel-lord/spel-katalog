@@ -11,7 +11,7 @@ use ::color_eyre::{Section, eyre::eyre};
 use ::rustc_hash::FxHashMap;
 use ::smol::process::Command;
 use ::spel_katalog_formats::{
-    AdditionalConfig, Bind, GameId, LutrisRunner, NativeGameConfig, NativeRunner, RunMode,
+    AdditionalConfig, Bind, GameId, NativeGameConfig, RunMode, RunnerLutris, RunnerNative,
     Timestamp, lutris_config,
 };
 use ::spel_katalog_sink::SinkBuilder;
@@ -386,7 +386,7 @@ pub struct LutrisCtx<'a> {
     /// Name of game.
     pub name: &'a str,
     /// Runner used for game.
-    pub runner: LutrisRunner,
+    pub runner: RunnerLutris,
     /// Wine prefix of game.
     pub wine_prefix: Option<&'a Path>,
     /// Is the game hidden.
@@ -455,9 +455,9 @@ impl<'a> LutrisCtx<'a> {
             timestamp: Timestamp::try_from(installed_at)?,
             exe: exe.to_path_buf(),
             runner: match runner {
-                LutrisRunner::Wine => NativeRunner::Wine,
-                LutrisRunner::Linux => NativeRunner::Linux,
-                LutrisRunner::Other(runner) => {
+                RunnerLutris::Wine => RunnerNative::Wine,
+                RunnerLutris::Linux => RunnerNative::Linux,
+                RunnerLutris::Other(runner) => {
                     return Err(eyre!("unknown runner {runner} for {name}"));
                 }
             },

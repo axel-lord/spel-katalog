@@ -4,7 +4,7 @@ use ::serde::{Deserialize, Serialize};
 
 /// Game fields common to native and lutris games.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CommonGame {
+pub struct GameCommon {
     /// Name of the game.
     pub name: String,
     /// When was the game installed.

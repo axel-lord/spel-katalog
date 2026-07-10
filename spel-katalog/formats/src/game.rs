@@ -4,7 +4,11 @@ use ::derive_more::{Deref, DerefMut, Display, From, IsVariant};
 use ::serde::{Deserialize, Serialize};
 use ::uuid::Uuid;
 
-use crate::{LutrisGame, NativeGame};
+use crate::{GameLutris, GameNative};
+
+pub(crate) mod common;
+pub(crate) mod lutris;
+pub(crate) mod native;
 
 /// Id of a game.
 #[derive(
@@ -24,9 +28,9 @@ pub enum GameId {
 #[deref_mut(forward)]
 pub enum Game {
     /// Game is a lutris game.
-    Lutris(LutrisGame),
+    Lutris(GameLutris),
     /// Game is a native game.
-    Native(NativeGame),
+    Native(GameNative),
 }
 
 impl Game {

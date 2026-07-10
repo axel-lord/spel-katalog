@@ -35,7 +35,7 @@ pub struct NativeGameConfig {
     pub exe: PathBuf,
 
     /// Runner used for game.
-    pub runner: NativeRunner,
+    pub runner: RunnerNative,
 
     /// This game shadows the given game.
     #[serde(skip_serializing_if = "Option::is_none", default)]
@@ -96,7 +96,7 @@ pub struct NativeGameConfig {
 
 impl NativeGameConfig {
     /// Crate a new native game config.
-    pub fn new(name: String, timestamp: Timestamp, exe: PathBuf, runner: NativeRunner) -> Self {
+    pub fn new(name: String, timestamp: Timestamp, exe: PathBuf, runner: RunnerNative) -> Self {
         Self {
             name,
             timestamp,
@@ -141,16 +141,16 @@ impl NativeGameConfig {
     Deserialize,
     VariantArray,
 )]
-pub enum NativeRunner {
+pub enum RunnerNative {
     /// Game is ran using wine.
     Wine,
     /// Game is ran as a native binary.
     Linux,
 }
 
-impl NativeRunner {
+impl RunnerNative {
     /// Get an array of all variants.
-    pub const fn variants() -> &'static [NativeRunner] {
+    pub const fn variants() -> &'static [RunnerNative] {
         Self::VARIANTS
     }
 }
