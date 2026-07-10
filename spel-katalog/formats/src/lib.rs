@@ -13,6 +13,7 @@ pub use self::{
     image::Image,
     installer::{ExeChoice, InstallerConfig, InstallerPrepareConfig},
     native_game_config::{NativeGameConfig, RunMode, RunnerNative},
+    tag::{Tag, TagId},
     timestamp::{TimeStampParseError, Timestamp, TimestampFromIntError},
 };
 
@@ -23,6 +24,7 @@ mod game;
 mod image;
 mod installer;
 mod native_game_config;
+mod tag;
 mod timestamp;
 
 pub mod lutris_config;
