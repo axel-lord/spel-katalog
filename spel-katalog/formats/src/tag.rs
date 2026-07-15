@@ -26,7 +26,7 @@ impl TagId {
 
         Self {
             id: NonZero::new(COUNTER.fetch_add(1, ::core::sync::atomic::Ordering::Relaxed))
-                .unwrap(),
+                .expect("function scope static atomic counter initialized tp 1 should never be 0"),
         }
     }
 }
