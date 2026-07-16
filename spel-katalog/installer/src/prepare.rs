@@ -19,7 +19,7 @@ use ::spel_katalog_common::{
     in_place::{Convene, MapSelf},
 };
 use ::spel_katalog_formats::{
-    Bind, ExeChoice, InstallerPrepareConfig, NativeGameConfig, RunnerNative, Timestamp,
+    Bind, EnvValue, ExeChoice, InstallerPrepareConfig, NativeGameConfig, RunnerNative, Timestamp,
 };
 use ::spel_katalog_settings::{
     CompToolDefault, CompToolsDir, InstallLocale, InstallLocation, Settings, Show, ThmubnailSource,
@@ -393,7 +393,10 @@ impl Prepare {
                 None
             },
             bind,
-            env,
+            env: env
+                .into_iter()
+                .map(|(key, value)| (key, EnvValue::from(value)))
+                .collect(),
             ro_bind,
             ..NativeGameConfig::new(self.title.clone(), Timestamp::now(), exe, self.runner)
         };

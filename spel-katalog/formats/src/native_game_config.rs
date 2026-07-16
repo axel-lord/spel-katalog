@@ -63,7 +63,7 @@ pub struct NativeGameConfig {
 
     /// Environment variables of game.
     #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
-    pub env: FxHashMap<String, String>,
+    pub env: FxHashMap<String, EnvValue>,
 
     /// Custom attributes for game.
     #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
@@ -152,5 +152,29 @@ impl RunnerNative {
     /// Get an array of all variants.
     pub const fn variants() -> &'static [RunnerNative] {
         Self::VARIANTS
+    }
+}
+
+/// Value of an environment variable.
+#[derive(
+    Debug, Clone, IsVariant, PartialEq, Eq, PartialOrd, Ord, Hash, Display, Serialize, Deserialize,
+)]
+#[serde(untagged, expecting = "expected a string or a table")]
+pub enum EnvValue {
+    /// Environment variable is a regular `key = value` variable.
+    Value(String),
+    /// Should the variable be unset.
+    Unset {
+        /// If false an earlier unset may be prevented.
+        unset: bool,
+    },
+}
+
+impl<S> From<S> for EnvValue
+where
+    S: Into<String>,
+{
+    fn from(value: S) -> Self {
+        Self::Value(value.into())
     }
 }

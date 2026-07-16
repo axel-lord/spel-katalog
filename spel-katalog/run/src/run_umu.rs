@@ -11,11 +11,11 @@ use ::color_eyre::{Section, eyre::eyre};
 use ::rustc_hash::FxHashMap;
 use ::smol::process::Command;
 use ::spel_katalog_formats::{
-    AdditionalConfig, Bind, GameId, NativeGameConfig, RunMode, RunnerLutris, RunnerNative,
-    Timestamp, lutris_config,
+    AdditionalConfig, Bind, EnvValue, GameId, NativeGameConfig, RunMode, RunnerLutris,
+    RunnerNative, Timestamp, lutris_config,
 };
 use ::spel_katalog_sink::SinkBuilder;
-use ::tap::Pipe;
+use ::tap::{Pipe, Tap};
 
 use crate::{Callback, macros::args};
 
@@ -78,7 +78,7 @@ async fn init_umu_prefix(
     verbs: &[String],
     drives: &mut (dyn '_ + Send + Sync + Iterator<Item = (char, &Path)>),
     sink_builder: SinkBuilder,
-    envs: &FxHashMap<String, String>,
+    envs: &FxHashMap<String, EnvValue>,
 ) -> ::color_eyre::Result<()> {
     let [stdout, stderr] = sink_builder.build(|| "Init Prefix")?;
     let status = Command::new(umu)
@@ -89,7 +89,20 @@ async fn init_umu_prefix(
                 .into_iter()
                 .chain(verbs.iter().map(String::as_str)),
         )
-        .envs(envs)
+        .tap_mut(|cmd| {
+            for (key, value) in envs {
+                match value {
+                    EnvValue::Value(val) => {
+                        cmd.env(key, val);
+                    }
+                    EnvValue::Unset { unset } => {
+                        if *unset {
+                            cmd.env_remove(key);
+                        }
+                    }
+                }
+            }
+        })
         .env("WINEPREFIX", umu_prefix)
         .kill_on_drop(true)
         .status()
@@ -306,7 +319,16 @@ impl NativeUmuCtx<'_> {
         }
 
         for (key, value) in &env {
-            args.extend(args!["--setenv", key, value]);
+            match value {
+                EnvValue::Value(value) => {
+                    args.extend(args!["--setenv", key, value]);
+                }
+                EnvValue::Unset { unset } => {
+                    if *unset {
+                        args.extend(args!["--unsetenv", key]);
+                    }
+                }
+            }
         }
 
         if let Some(prefix) = prefix.as_deref() {
@@ -464,7 +486,12 @@ impl<'a> LutrisCtx<'a> {
             prefix,
             hidden,
             use_net: None,
-            env: config.system.env.clone(),
+            env: config
+                .system
+                .env
+                .iter()
+                .map(|(key, value)| (key.clone(), EnvValue::Value(value.clone())))
+                .collect(),
             attrs: extra_config
                 .map(|extra| extra.attrs.clone())
                 .unwrap_or_default(),
