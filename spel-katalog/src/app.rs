@@ -12,7 +12,7 @@ use ::spel_katalog_cli::Run;
 use ::spel_katalog_common::{StatusSender, w};
 use ::spel_katalog_formats::{Tag, TagId};
 use ::spel_katalog_installer::Installer;
-use ::spel_katalog_settings::{FilterMode, Network, Theme};
+use ::spel_katalog_settings::{FilterMode, Network, Theme, UseWayland};
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::spel_katalog_widget::ListMenu;
 use ::tap::Pipe;
@@ -316,6 +316,21 @@ impl App {
                     .push(text(" / "))
                     .push(value(self.games.all_count()))
                     .push(widget::space::horizontal().width(7))
+                    .push(text("Wayland").style(widget::text::secondary))
+                    .push(widget::space::horizontal().width(5))
+                    .push(
+                        toggler(self.settings.get::<UseWayland>().is_enabled())
+                            .spacing(0)
+                            .on_toggle(|wl| {
+                                Message::Settings(::spel_katalog_settings_view::Message::Delta(
+                                    spel_katalog_settings::Delta::UseWayland(match wl {
+                                        true => UseWayland::Enabled,
+                                        false => UseWayland::Disabled,
+                                    }),
+                                ))
+                            }),
+                    )
+                    .push(widget::space::horizontal().width(5))
                     .push(text("Network").style(widget::text::secondary))
                     .push(widget::space::horizontal().width(5))
                     .push(
