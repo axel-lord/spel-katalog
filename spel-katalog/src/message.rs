@@ -43,6 +43,8 @@ pub enum QuickMessage {
     PasteFilter,
     ReloadGames,
     OpenInstaller,
+    ShowWelcome,
+    EscapeOne,
 }
 
 #[derive(Debug, IsVariant, From, Clone)]

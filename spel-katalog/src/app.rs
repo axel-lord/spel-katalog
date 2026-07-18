@@ -6,7 +6,7 @@ use ::derive_more::IsVariant;
 use ::iced::Font;
 use ::iced_core::{Alignment::Center, Length::Fill, font, window};
 use ::iced_runtime::Task;
-use ::iced_widget::{self as widget, Row, text, text_input, toggler, value};
+use ::iced_widget::{self as widget, Column, Container, Row, text, text_input, toggler, value};
 use ::rustc_hash::{FxBuildHasher, FxHashMap};
 use ::spel_katalog_cli::Run;
 use ::spel_katalog_common::{StatusSender, w};
@@ -32,6 +32,12 @@ pub enum WindowType {
     Installer(Box<Installer>),
 }
 
+/// Currently viewed popup.
+#[derive(Debug, IsVariant)]
+pub enum Popup {
+    Welcome,
+}
+
 #[derive(Debug)]
 pub(crate) struct App {
     pub settings: ::spel_katalog_settings_view::State,
@@ -48,6 +54,7 @@ pub(crate) struct App {
     pub process_view_semaphore: Arc<::smol::lock::Semaphore>,
     pub games_db: ::spel_katalog_native::Pool,
     pub tags: Arc<DashMap<Tag, TagId, FxBuildHasher>>,
+    pub popup: Option<Popup>,
 }
 
 /// Initial state created by new.
@@ -107,6 +114,7 @@ impl Initial {
             (sink_builder, None)
         };
         let tags = Arc::new(Default::default());
+        let popup = None;
 
         let app = App {
             filter,
@@ -123,6 +131,7 @@ impl Initial {
             process_view_semaphore,
             games_db,
             tags,
+            popup,
         };
 
         Ok(Self {
@@ -257,7 +266,8 @@ impl App {
         }
     }
 
-    pub fn view_main(&self) -> Element<'_, Message> {
+    /// View the main column of content.
+    pub fn main_column(&self) -> Column<'_, Message> {
         fn with_global_context(menu: ListMenu<'_, Message>) -> ListMenu<'_, Message> {
             menu.push(widget::text("Spel Katalog"))
                 .separator()
@@ -351,6 +361,51 @@ impl App {
                         })
                     }),
             )
-            .pipe(Element::from)
+    }
+
+    pub fn view_welcome(&self) -> Container<'_, Message> {
+        widget::Column::new()
+            .push(widget::text("Welcome to spel-katalog!"))
+            .push(widget::text("Välkomen till spel-katalog!"))
+            .align_x(Center)
+            .pipe(widget::container)
+            .style(widget::container::bordered_box)
+            .padding(30)
+    }
+
+    pub fn view_main(&self) -> Element<'_, Message> {
+        let main_column = self.main_column();
+        if let Some(popup) = &self.popup {
+            widget::Stack::new()
+                .height(Fill)
+                .width(Fill)
+                .push(main_column)
+                .push(
+                    widget::space()
+                        .pipe(widget::center)
+                        .style(|t: &::iced_core::Theme| {
+                            widget::container::background(
+                                t.extended_palette()
+                                    .background
+                                    .weakest
+                                    .color
+                                    .scale_alpha(0.7),
+                            )
+                        })
+                        .pipe(widget::mouse_area)
+                        .on_release(Message::Quick(QuickMessage::EscapeOne))
+                        .pipe(widget::opaque),
+                )
+                .push(
+                    match popup {
+                        Popup::Welcome => self.view_welcome(),
+                    }
+                    .pipe(widget::opaque)
+                    .pipe(widget::center),
+                )
+                .into()
+        } else {
+            main_column.into()
+        }
     }
 }

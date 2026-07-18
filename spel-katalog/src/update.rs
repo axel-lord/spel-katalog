@@ -16,7 +16,10 @@ use ::spel_katalog_settings::{
 use ::tap::Pipe;
 use ::uuid::Uuid;
 
-use crate::{App, Message, QuickMessage, Safety, app::WindowType};
+use crate::{
+    App, Message, QuickMessage, Safety,
+    app::{Popup, WindowType},
+};
 
 #[derive(Default)]
 #[non_exhaustive]
@@ -342,6 +345,16 @@ impl App {
             }
             QuickMessage::ToggleGameInfo => {
                 self.view.toggle_displayed(crate::view::Displayed::GameInfo);
+            }
+            QuickMessage::ShowWelcome => {
+                self.popup = Some(Popup::Welcome);
+            }
+            QuickMessage::EscapeOne => {
+                if self.popup.is_some() {
+                    self.popup = None;
+                } else if self.view.info_shown() {
+                    self.view.hide_info();
+                }
             }
         }
         Task::none()
