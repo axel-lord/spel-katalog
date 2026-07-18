@@ -4520,6 +4520,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "spel-katalog-cache-queue"
+version = "0.1.0"
+
+[[package]]
 name = "spel-katalog-cli"
 version = "0.1.0"
 dependencies = [
