@@ -5,8 +5,11 @@ use ::core::{iter::FusedIterator, mem, ops::Deref};
 use ::dashmap::DashMap;
 use ::derive_more::{Deref, DerefMut, IsVariant};
 use ::regex::RegexBuilder;
-use ::rustc_hash::{FxBuildHasher, FxHashMap};
-use ::spel_katalog_formats::{Game, GameCommon, GameId, GameNative, NativeGameConfig, Tag, TagId};
+use ::rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
+use ::spel_katalog_formats::{
+    Game, GameCommon, GameId, GameNative, NativeGameConfig, Tag, TagFilter, TagFilterAction,
+    TagFilterMode, TagId,
+};
 use ::spel_katalog_settings::{FilterMode, Settings, Show, SortBy, SortDir, UnloadThumbnails};
 use ::uuid::Uuid;
 
@@ -183,6 +186,8 @@ pub struct Games {
     uuid_lookup: FxHashMap<Uuid, usize>,
     /// Last state of hidden setting.
     last_show: Option<Show>,
+    /// Tag filter in use.
+    tag_filter: Vec<TagFilter<FxHashSet<TagId>>>,
 }
 
 impl Games {
@@ -196,6 +201,7 @@ impl Games {
             id_lookup,
             uuid_lookup,
             last_show,
+            tag_filter,
         } = self;
         cache.clear();
         games.clear();
@@ -203,6 +209,7 @@ impl Games {
         id_lookup.clear();
         uuid_lookup.clear();
         slug_lookup.clear();
+        tag_filter.clear();
         *last_show = None;
     }
 
@@ -309,6 +316,7 @@ impl Games {
     fn initial_filter_pass<'src>(
         games: &'src mut [WithThumb],
         cache: &'src mut [Option<GameCache>],
+        tag_filters: &[TagFilter<FxHashSet<TagId>>],
         show: Show,
     ) -> Vec<Filtered<'src>> {
         games
@@ -321,6 +329,32 @@ impl Games {
                 Show::All => true,
             })
             .map(|(idx, (game, cache))| Filtered { idx, game, cache })
+            .filter(|Filtered { game, .. }| {
+                for tag_filter in tag_filters {
+                    let is_match = match tag_filter.mode {
+                        TagFilterMode::Any => game.tags.intersection(tag_filter).next().is_some(),
+                        TagFilterMode::All => game.tags.is_superset(tag_filter),
+                    };
+
+                    match tag_filter.kind {
+                        TagFilterAction::Include => {
+                            if is_match {
+                                continue;
+                            } else {
+                                break;
+                            }
+                        }
+                        TagFilterAction::Exclude => {
+                            if is_match {
+                                return false;
+                            } else {
+                                continue;
+                            }
+                        }
+                    }
+                }
+                true
+            })
             .collect()
     }
 
@@ -352,10 +386,11 @@ impl Games {
             cache,
             games,
             displayed,
+            tag_filter,
             ..
         } = self;
 
-        let mut filtered = Self::initial_filter_pass(games, cache, show);
+        let mut filtered = Self::initial_filter_pass(games, cache, tag_filter, show);
         Self::default_game_sort(&mut filtered, sort_by, sort_dir);
         Self::update_displayed(displayed, filtered);
     }
@@ -366,6 +401,7 @@ impl Games {
             cache,
             games,
             displayed,
+            tag_filter,
             ..
         } = self;
 
@@ -377,7 +413,7 @@ impl Games {
             *filter = filter.to_uppercase();
         }
 
-        let mut filtered = Self::initial_filter_pass(games, cache, show);
+        let mut filtered = Self::initial_filter_pass(games, cache, tag_filter, show);
 
         filtered.retain_mut(
             |Filtered {
@@ -407,10 +443,11 @@ impl Games {
             cache,
             games,
             displayed,
+            tag_filter,
             ..
         } = self;
         let filter = filter.to_uppercase();
-        let filtered = Self::initial_filter_pass(games, cache, show);
+        let filtered = Self::initial_filter_pass(games, cache, tag_filter, show);
         let mut distances = filtered
             .into_iter()
             .map(|Filtered { idx, game, cache }| {
@@ -443,6 +480,7 @@ impl Games {
             cache,
             games,
             displayed,
+            tag_filter,
             ..
         } = self;
 
@@ -450,7 +488,7 @@ impl Games {
             return;
         };
 
-        let mut filtered = Self::initial_filter_pass(games, cache, show);
+        let mut filtered = Self::initial_filter_pass(games, cache, tag_filter, show);
         filtered.retain(
             |Filtered {
                  idx: _,

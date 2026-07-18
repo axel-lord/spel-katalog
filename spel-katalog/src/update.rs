@@ -181,7 +181,7 @@ impl App {
         match msg {
             QuickMessage::Debug => {
                 ::log::info!("debug action activated");
-                return self.quick_update(QuickMessage::OpenInstaller);
+                ::log::info!("tags: {:#?}", self.tags);
             }
             QuickMessage::OpenInstaller => {
                 return self.open_installer(None);
