@@ -354,6 +354,8 @@ impl App {
                     self.popup = None;
                 } else if self.view.info_shown() {
                     self.view.hide_info();
+                } else if self.games.selected().is_some() {
+                    self.games.select(SelDir::None);
                 }
             }
         }
