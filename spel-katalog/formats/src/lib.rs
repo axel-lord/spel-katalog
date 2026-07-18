@@ -13,7 +13,7 @@ pub use self::{
     image::Image,
     installer::{ExeChoice, InstallerConfig, InstallerPrepareConfig},
     native_game_config::{EnvValue, NativeGameConfig, RunMode, RunnerNative},
-    tag::{Tag, TagId},
+    tag::{Tag, TagFilter, TagFilterAction, TagFilterMode, TagId},
     timestamp::{TimeStampParseError, Timestamp, TimestampFromIntError},
 };
 

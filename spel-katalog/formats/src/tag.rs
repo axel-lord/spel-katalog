@@ -2,7 +2,7 @@
 
 use ::core::{num::NonZero, sync::atomic::AtomicU64};
 
-use ::derive_more::{Deref, From, Into};
+use ::derive_more::{Deref, From, Into, IsVariant};
 use ::serde::{Deserialize, Serialize};
 
 /// Id of a tag.
@@ -60,4 +60,52 @@ impl Tag {
     pub const fn new(name: String) -> Self {
         Tag { name }
     }
+}
+
+/// A Filter to apply to tags.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct TagFilter<T> {
+    /// What kind of filter is this.
+    pub kind: TagFilterAction,
+    /// Mode of the filter.
+    pub mode: TagFilterMode,
+    /// Tags used by the filter.
+    pub tags: T,
+}
+
+impl<T> TagFilter<T> {
+    /// Map tag storage.
+    pub fn map<F, V>(self, f: F) -> TagFilter<V>
+    where
+        F: FnOnce(T) -> V,
+    {
+        let Self { kind, mode, tags } = self;
+        TagFilter {
+            kind,
+            mode,
+            tags: f(tags),
+        }
+    }
+}
+
+/// What should the filter do.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, IsVariant,
+)]
+pub enum TagFilterAction {
+    /// On filter match include value.
+    Include,
+    /// On filter match exclude value.
+    Exclude,
+}
+
+/// How the filter tags match values.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, IsVariant,
+)]
+pub enum TagFilterMode {
+    /// Filter is a match if any tag is present.
+    Any,
+    /// Filter is a match if and onlt if all tags are present.
+    All,
 }
