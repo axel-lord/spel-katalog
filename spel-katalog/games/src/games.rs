@@ -1,17 +1,13 @@
 //! [Games] impl.
 
-use ::core::{iter::FusedIterator, mem};
+use ::core::{iter::FusedIterator, mem, ops::Deref};
 
 use ::dashmap::DashMap;
 use ::derive_more::{Deref, DerefMut, IsVariant};
-use ::itertools::izip;
 use ::regex::RegexBuilder;
 use ::rustc_hash::{FxBuildHasher, FxHashMap};
 use ::spel_katalog_formats::{Game, GameCommon, GameId, GameNative, NativeGameConfig, Tag, TagId};
-use ::spel_katalog_settings::{
-    AsIndex, FilterMode, Settings, Show, SortBy, SortDir, UnloadThumbnails,
-};
-use ::tap::TapFallible;
+use ::spel_katalog_settings::{FilterMode, Settings, Show, SortBy, SortDir, UnloadThumbnails};
 use ::uuid::Uuid;
 
 /// Result of trying to add a game.
@@ -31,7 +27,7 @@ pub enum GameAddDelta {
 }
 
 /// Cached game identity.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct GameCache {
     /// Game slug as uppercase.
     slug: Option<String>,
@@ -45,6 +41,25 @@ impl From<&Game> for GameCache {
             slug: game.slug().map(|slug| slug.to_uppercase()),
             name: game.name.to_uppercase(),
         }
+    }
+}
+
+/// Filtered item.
+#[derive(Debug, PartialEq, Eq)]
+struct Filtered<'a> {
+    /// Index of game.
+    idx: usize,
+    /// Game to pass on.
+    game: &'a mut Game,
+    /// Optional cached name/slug in upper case.
+    cache: &'a mut Option<GameCache>,
+}
+
+impl Deref for Filtered<'_> {
+    type Target = Game;
+
+    fn deref(&self) -> &Self::Target {
+        self.game
     }
 }
 
@@ -264,64 +279,11 @@ impl Games {
         Some(replacement)
     }
 
-    /// Sort displayed games.
-    pub fn sort(&mut self, settings: &Settings, filter: &str) {
+    /// required unload thumbnails.
+    fn thumbnail_cleanup(&mut self, settings: &Settings) -> Show {
         let Self {
-            games,
-            displayed,
-            slug_lookup: _,
-            id_lookup: _,
-            uuid_lookup: _,
-            cache,
-            last_show,
+            last_show, games, ..
         } = self;
-
-        fn get_filterend<'src>(
-            games: &'src mut [WithThumb],
-            cache: &'src mut [Option<GameCache>],
-        ) -> Vec<(usize, &'src mut Game, &'src mut Option<GameCache>)> {
-            izip!(0.., games, cache)
-                .map(|(i, WithThumb { game, .. }, cache)| (i, game, cache))
-                .collect()
-        }
-
-        fn filter_hidden<'a>(
-            items: Vec<(usize, &'a mut Game, &'a mut Option<GameCache>)>,
-            show: Show,
-        ) -> Vec<(usize, &'a mut Game, &'a mut Option<GameCache>)> {
-            match show {
-                ::spel_katalog_settings::Show::Apparent => items
-                    .into_iter()
-                    .filter(|(_, game, _)| !game.hidden)
-                    .collect(),
-                ::spel_katalog_settings::Show::Hidden => items
-                    .into_iter()
-                    .filter(|(_, game, _)| game.hidden)
-                    .collect(),
-                ::spel_katalog_settings::Show::All => items,
-            }
-        }
-
-        fn get_cache<'a>(game: &Game, cache: &'a mut Option<GameCache>) -> &'a GameCache {
-            cache.get_or_insert_with(|| GameCache::from(game))
-        }
-
-        fn sort_items(
-            items: &mut Vec<(usize, &mut Game, &mut Option<GameCache>)>,
-            sort_by: SortBy,
-            sort_dir: SortDir,
-        ) {
-            match sort_by {
-                SortBy::Name => items.sort_by(|a, b| a.1.name.cmp(&b.1.name)),
-                SortBy::Added => {
-                    items.sort_by(|a, b| a.1.installed_at.cmp(&b.1.installed_at).reverse())
-                }
-            };
-
-            if sort_dir.is_reverse() {
-                items.reverse();
-            }
-        }
 
         let show = *settings.get::<Show>();
 
@@ -339,96 +301,189 @@ impl Games {
         }
         *last_show = Some(show);
 
-        if filter.trim().is_empty() {
-            let mut filtered = get_filterend(games, cache);
-            filtered = filter_hidden(filtered, show);
-            sort_items(
-                &mut filtered,
-                *settings.get::<SortBy>(),
-                *settings.get::<SortDir>(),
-            );
-            *displayed = filtered.into_iter().map(|(i, ..)| i).collect();
+        show
+    }
+
+    /// Initial filter pass, common to all
+    /// sort methods.
+    fn initial_filter_pass<'src>(
+        games: &'src mut [WithThumb],
+        cache: &'src mut [Option<GameCache>],
+        show: Show,
+    ) -> Vec<Filtered<'src>> {
+        games
+            .iter_mut()
+            .zip(cache)
+            .enumerate()
+            .filter(|(_, (game, _))| match show {
+                Show::Apparent => !game.hidden,
+                Show::Hidden => game.hidden,
+                Show::All => true,
+            })
+            .map(|(idx, (game, cache))| Filtered { idx, game, cache })
+            .collect()
+    }
+
+    /// Ensure cache exists for game.
+    fn ensure_cache_for<'a>(game: &Game, cache: &'a mut Option<GameCache>) -> &'a GameCache {
+        cache.get_or_insert_with(|| GameCache::from(game))
+    }
+
+    /// Default sort function for games.
+    fn default_game_sort(filtered: &mut Vec<Filtered>, sort_by: SortBy, sort_dir: SortDir) {
+        match sort_by {
+            SortBy::Name => filtered.sort_by(|a, b| a.name.cmp(&b.name)),
+            SortBy::Added => filtered.sort_by(|a, b| a.installed_at.cmp(&b.installed_at).reverse()),
+        };
+
+        if sort_dir.is_reverse() {
+            filtered.reverse();
+        }
+    }
+
+    /// Set displayed game indices to match filter result.
+    fn update_displayed(displayed: &mut Vec<usize>, filtered: Vec<Filtered<'_>>) {
+        *displayed = filtered.into_iter().map(|f| f.idx).collect();
+    }
+
+    /// Apply `empty` filter to games.
+    fn filter_empty(&mut self, show: Show, sort_by: SortBy, sort_dir: SortDir) {
+        let Self {
+            cache,
+            games,
+            displayed,
+            ..
+        } = self;
+
+        let mut filtered = Self::initial_filter_pass(games, cache, show);
+        Self::default_game_sort(&mut filtered, sort_by, sort_dir);
+        Self::update_displayed(displayed, filtered);
+    }
+
+    /// Apply `filter` filter to games.
+    fn filter_filter(&mut self, filter: &str, show: Show, sort_by: SortBy, sort_dir: SortDir) {
+        let Self {
+            cache,
+            games,
+            displayed,
+            ..
+        } = self;
+
+        let Ok(mut filters) = ::shell_words::split(filter) else {
             return;
+        };
+
+        for filter in &mut filters {
+            *filter = filter.to_uppercase();
         }
 
-        match settings[FilterMode::as_idx()] {
-            FilterMode::Filter => {
-                if let Ok(filters) = ::shell_words::split(filter).tap_ok_mut(|filters| {
-                    for filter in filters {
-                        *filter = filter.to_uppercase();
-                    }
-                }) {
-                    let mut filtered = get_filterend(games, cache);
-                    filtered = filter_hidden(filtered, settings[Show::as_idx()]);
-                    filtered = filtered
-                        .into_iter()
-                        .filter_map(|mut value| {
-                            let (_, game, cache) = &mut value;
-                            let cache = get_cache(game, cache);
+        let mut filtered = Self::initial_filter_pass(games, cache, show);
 
-                            for filter in &filters {
-                                if cache.name.contains(filter) {
-                                    continue;
-                                }
-                                if let Some(slug) = &cache.slug
-                                    && slug.contains(filter)
-                                {
-                                    continue;
-                                }
-                                return None;
-                            }
+        filtered.retain_mut(
+            |Filtered {
+                 idx: _,
+                 game,
+                 cache,
+             }| {
+                let cache = Self::ensure_cache_for(game, cache);
 
-                            Some(value)
-                        })
-                        .collect();
-                    sort_items(
-                        &mut filtered,
-                        *settings.get::<SortBy>(),
-                        *settings.get::<SortDir>(),
-                    );
-                    *displayed = filtered.into_iter().map(|(i, ..)| i).collect();
-                };
-            }
-            FilterMode::Search => {
-                let mut filtered = get_filterend(games, cache);
-                filtered = filter_hidden(filtered, settings[Show::as_idx()]);
-                let filter = filter.to_uppercase();
-                let mut dists = filtered
-                    .iter_mut()
-                    .map(|(idx, game, cache)| {
-                        let cache = get_cache(game, cache);
-                        (
-                            *idx,
-                            cache.name.contains(&filter),
-                            -::strsim::normalized_damerau_levenshtein(&cache.name, &filter),
-                        )
-                    })
-                    .collect::<Vec<_>>();
-                dists.sort_by(|(_, contains_a, dist_a), (_, contains_b, dist_b)| {
-                    contains_a
-                        .cmp(contains_b)
-                        .reverse()
-                        .then(dist_a.total_cmp(dist_b))
-                });
+                filters.iter().any(|filter| {
+                    cache.name.contains(filter)
+                        || cache
+                            .slug
+                            .as_ref()
+                            .is_some_and(|slug| slug.contains(filter))
+                })
+            },
+        );
 
-                if settings[SortDir::as_idx()].is_reverse() {
-                    dists.reverse();
+        Self::default_game_sort(&mut filtered, sort_by, sort_dir);
+        Self::update_displayed(displayed, filtered);
+    }
+
+    /// Apply `search` filter to games.
+    pub fn filter_search(&mut self, filter: &str, show: Show, sort_dir: SortDir) {
+        let Self {
+            cache,
+            games,
+            displayed,
+            ..
+        } = self;
+        let filter = filter.to_uppercase();
+        let filtered = Self::initial_filter_pass(games, cache, show);
+        let mut distances = filtered
+            .into_iter()
+            .map(|Filtered { idx, game, cache }| {
+                let cache = Self::ensure_cache_for(game, cache);
+                (
+                    idx,
+                    cache.name.contains(&filter),
+                    -::strsim::normalized_damerau_levenshtein(&cache.name, &filter),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        distances.sort_by(|(_, contains_a, distance_a), (_, contains_b, distance_b)| {
+            contains_a
+                .cmp(contains_b)
+                .reverse()
+                .then(distance_a.total_cmp(distance_b))
+        });
+
+        if sort_dir.is_reverse() {
+            distances.reverse();
+        }
+
+        *displayed = distances.into_iter().map(|(idx, ..)| idx).collect();
+    }
+
+    /// Apply `regex` filter to games.
+    fn filter_regex(&mut self, filter: &str, show: Show, sort_by: SortBy, sort_dir: SortDir) {
+        let Self {
+            cache,
+            games,
+            displayed,
+            ..
+        } = self;
+
+        let Ok(re) = RegexBuilder::new(filter).case_insensitive(true).build() else {
+            return;
+        };
+
+        let mut filtered = Self::initial_filter_pass(games, cache, show);
+        filtered.retain(
+            |Filtered {
+                 idx: _,
+                 game,
+                 cache: _,
+             }| {
+                re.is_match(&game.name) || game.slug().is_some_and(|slug| re.is_match(slug))
+            },
+        );
+
+        Self::default_game_sort(&mut filtered, sort_by, sort_dir);
+        Self::update_displayed(displayed, filtered);
+    }
+
+    /// Sort displayed games.
+    pub fn sort(&mut self, settings: &Settings, filter: &str) {
+        let show = self.thumbnail_cleanup(settings);
+        let sort_by = *settings.get::<SortBy>();
+        let sort_dir = *settings.get::<SortDir>();
+
+        if filter.trim().is_empty() {
+            self.filter_empty(show, sort_by, sort_dir);
+        } else {
+            match settings.get::<FilterMode>() {
+                FilterMode::Filter => {
+                    self.filter_filter(filter, show, sort_by, sort_dir);
                 }
-
-                *displayed = dists.into_iter().map(|(i, ..)| i).collect();
-            }
-            FilterMode::Regex => {
-                if let Ok(re) = RegexBuilder::new(filter).case_insensitive(true).build() {
-                    let mut filtered = get_filterend(games, cache);
-                    filtered = filter_hidden(filtered, settings[Show::as_idx()]);
-                    filtered.retain(|(_, game, _)| re.is_match(&game.name));
-                    sort_items(
-                        &mut filtered,
-                        *settings.get::<SortBy>(),
-                        *settings.get::<SortDir>(),
-                    );
-                    *displayed = filtered.into_iter().map(|(i, ..)| i).collect();
-                };
+                FilterMode::Search => {
+                    self.filter_search(filter, show, sort_dir);
+                }
+                FilterMode::Regex => {
+                    self.filter_regex(filter, show, sort_by, sort_dir);
+                }
             }
         }
     }
