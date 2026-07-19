@@ -32,7 +32,7 @@
 
 # Future Goals/Possibilities
 - [x] Run exe files in prefix without lutris
-- [ ] Add categories
+- [x] Add categories
 - [x] Bubblewrap instead of/in addition to firejail
 
 # Passive
