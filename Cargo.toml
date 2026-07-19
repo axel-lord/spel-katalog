@@ -170,3 +170,4 @@ vte = "0.15.0"
 whoami = { version = "2.1.2", default-features = false }
 xdg = "3.0.0"
 yaml-rust2 = "0.11.0"
+spel-katalog-tag-filter = { path = "spel-katalog/tag-filter" }

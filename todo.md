@@ -25,10 +25,15 @@
 - [x] Deamon for spawning game processes
 - [x] Logging in terminal window
 - [ ] To top button on games view
+- [ ] Options for native games, gamescope, proton, etc.
+
+# QoL
+- [ ] Log filtering
 - [ ] Process info in terminal window
 - [ ] Process info for daemon run games
-- [ ] Options for native games, gamescope, proton, etc.
-- [ ] Log filtering
+- [ ] Disable games (shadow lutris but do not show)
+- [ ] Quick tag add
+- [ ] Hidden tags
 
 # Future Goals/Possibilities
 - [x] Run exe files in prefix without lutris
