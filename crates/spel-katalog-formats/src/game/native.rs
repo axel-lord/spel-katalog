@@ -11,6 +11,8 @@ use crate::GameCommon;
 pub struct GameNative {
     /// Uuid of game.
     pub uuid: Uuid,
+    /// Is the game disabled.
+    pub disabled: bool,
     /// Common game fields.
     #[serde(flatten)]
     #[deref]

@@ -163,6 +163,10 @@ impl App {
         mut game: NativeGameConfig,
         run_mode: RunMode,
     ) -> Task<Message> {
+        if game.disabled {
+            ::log::warn!("not running disabled game\n{game:#?}");
+            return Task::none();
+        }
         let settings = self.settings.snapshot();
         let sink_builder = self.sink_builder.clone();
         if self.settings.get::<UseWayland>().is_enabled()

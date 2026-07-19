@@ -260,6 +260,7 @@ impl State {
             }
             Game::Native(GameNative {
                 uuid,
+                disabled: _,
                 common:
                     GameCommon {
                         name: _,

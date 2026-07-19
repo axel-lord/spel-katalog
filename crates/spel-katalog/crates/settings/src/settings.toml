@@ -31,6 +31,11 @@ help = "How to handle hidden games"
 variants = ["Apparent", "Hidden", "All"]
 default = "Apparent"
 
+[ShowDisabled]
+help = "Should disabled games be visible"
+variants = ["Yes", "No"]
+default = "No"
+
 [UnloadThumbnails]
 title = "Unload Covered Thumbnails"
 help = "Should thumbnails be unloaded when now shown"

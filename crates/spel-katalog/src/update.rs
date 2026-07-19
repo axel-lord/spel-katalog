@@ -466,13 +466,23 @@ impl App {
                 ::spel_katalog_info::NativeRequest::RunInit(game) => {
                     self.run_native_game(*game, RunMode::Init)
                 }
-                ::spel_katalog_info::NativeRequest::UpdateTags { uuid, tags } => {
+                ::spel_katalog_info::NativeRequest::UpdateGame {
+                    uuid,
+                    tags,
+                    disabled,
+                    hidden,
+                } => {
                     if let Some(game) = self.games.by_uuid_mut(uuid) {
                         game.tags = tags
                             .into_iter()
                             .map(|tag| *self.tags.entry(tag).or_insert_with(TagId::new))
                             .collect();
+                        game.hidden = hidden;
+                        if let ::spel_katalog_formats::Game::Native(game) = &mut **game {
+                            game.disabled = disabled;
+                        }
                     }
+                    self.games.sort(&self.settings, &self.filter);
                     Task::none()
                 }
             },

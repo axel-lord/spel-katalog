@@ -10,7 +10,9 @@ use ::spel_katalog_formats::{
     Game, GameCommon, GameId, GameNative, NativeGameConfig, Tag, TagFilter, TagFilterKind,
     TagFilterMode, TagId,
 };
-use ::spel_katalog_settings::{FilterMode, Settings, Show, SortBy, SortDir, UnloadThumbnails};
+use ::spel_katalog_settings::{
+    FilterMode, Settings, Show, ShowDisabled, SortBy, SortDir, UnloadThumbnails,
+};
 use ::uuid::Uuid;
 
 /// Result of trying to add a game.
@@ -95,6 +97,7 @@ impl WithThumb {
         Self {
             game: Game::Native(GameNative {
                 uuid,
+                disabled: game.disabled,
                 common: GameCommon {
                     name: game.name,
                     installed_at: game.timestamp.timestamp(),
@@ -328,15 +331,22 @@ impl Games {
         cache: &'src mut [Option<GameCache>],
         tag_filters: &[TagFilter<FxHashSet<TagId>>],
         show: Show,
+        show_disabled: ShowDisabled,
     ) -> Vec<Filtered<'src>> {
         games
             .iter_mut()
             .zip(cache)
             .enumerate()
-            .filter(|(_, (game, _))| match show {
-                Show::Apparent => !game.hidden,
-                Show::Hidden => game.hidden,
-                Show::All => true,
+            .filter(|(_, (game, _))| {
+                if game.disabled() && show_disabled.is_no() {
+                    false
+                } else {
+                    match show {
+                        Show::Apparent => !game.hidden,
+                        Show::Hidden => game.hidden,
+                        Show::All => true,
+                    }
+                }
             })
             .map(|(idx, (game, cache))| Filtered { idx, game, cache })
             .filter(|Filtered { game, .. }| {
@@ -391,7 +401,13 @@ impl Games {
     }
 
     /// Apply `empty` filter to games.
-    fn filter_empty(&mut self, show: Show, sort_by: SortBy, sort_dir: SortDir) {
+    fn filter_empty(
+        &mut self,
+        show: Show,
+        show_disabled: ShowDisabled,
+        sort_by: SortBy,
+        sort_dir: SortDir,
+    ) {
         let Self {
             cache,
             games,
@@ -400,13 +416,20 @@ impl Games {
             ..
         } = self;
 
-        let mut filtered = Self::initial_filter_pass(games, cache, tag_filter, show);
+        let mut filtered = Self::initial_filter_pass(games, cache, tag_filter, show, show_disabled);
         Self::default_game_sort(&mut filtered, sort_by, sort_dir);
         Self::update_displayed(displayed, filtered);
     }
 
     /// Apply `filter` filter to games.
-    fn filter_filter(&mut self, filter: &str, show: Show, sort_by: SortBy, sort_dir: SortDir) {
+    fn filter_filter(
+        &mut self,
+        filter: &str,
+        show: Show,
+        show_disabled: ShowDisabled,
+        sort_by: SortBy,
+        sort_dir: SortDir,
+    ) {
         let Self {
             cache,
             games,
@@ -423,7 +446,7 @@ impl Games {
             *filter = filter.to_uppercase();
         }
 
-        let mut filtered = Self::initial_filter_pass(games, cache, tag_filter, show);
+        let mut filtered = Self::initial_filter_pass(games, cache, tag_filter, show, show_disabled);
 
         filtered.retain_mut(
             |Filtered {
@@ -448,7 +471,13 @@ impl Games {
     }
 
     /// Apply `search` filter to games.
-    pub fn filter_search(&mut self, filter: &str, show: Show, sort_dir: SortDir) {
+    pub fn filter_search(
+        &mut self,
+        filter: &str,
+        show: Show,
+        show_disabled: ShowDisabled,
+        sort_dir: SortDir,
+    ) {
         let Self {
             cache,
             games,
@@ -457,7 +486,7 @@ impl Games {
             ..
         } = self;
         let filter = filter.to_uppercase();
-        let filtered = Self::initial_filter_pass(games, cache, tag_filter, show);
+        let filtered = Self::initial_filter_pass(games, cache, tag_filter, show, show_disabled);
         let mut distances = filtered
             .into_iter()
             .map(|Filtered { idx, game, cache }| {
@@ -485,7 +514,14 @@ impl Games {
     }
 
     /// Apply `regex` filter to games.
-    fn filter_regex(&mut self, filter: &str, show: Show, sort_by: SortBy, sort_dir: SortDir) {
+    fn filter_regex(
+        &mut self,
+        filter: &str,
+        show: Show,
+        show_disabled: ShowDisabled,
+        sort_by: SortBy,
+        sort_dir: SortDir,
+    ) {
         let Self {
             cache,
             games,
@@ -498,7 +534,7 @@ impl Games {
             return;
         };
 
-        let mut filtered = Self::initial_filter_pass(games, cache, tag_filter, show);
+        let mut filtered = Self::initial_filter_pass(games, cache, tag_filter, show, show_disabled);
         filtered.retain(
             |Filtered {
                  idx: _,
@@ -516,21 +552,22 @@ impl Games {
     /// Sort displayed games.
     pub fn sort(&mut self, settings: &Settings, filter: &str) {
         let show = self.thumbnail_cleanup(settings);
+        let show_disabled = *settings.get::<ShowDisabled>();
         let sort_by = *settings.get::<SortBy>();
         let sort_dir = *settings.get::<SortDir>();
 
         if filter.trim().is_empty() {
-            self.filter_empty(show, sort_by, sort_dir);
+            self.filter_empty(show, show_disabled, sort_by, sort_dir);
         } else {
             match settings.get::<FilterMode>() {
                 FilterMode::Filter => {
-                    self.filter_filter(filter, show, sort_by, sort_dir);
+                    self.filter_filter(filter, show, show_disabled, sort_by, sort_dir);
                 }
                 FilterMode::Search => {
-                    self.filter_search(filter, show, sort_dir);
+                    self.filter_search(filter, show, show_disabled, sort_dir);
                 }
                 FilterMode::Regex => {
-                    self.filter_regex(filter, show, sort_by, sort_dir);
+                    self.filter_regex(filter, show, show_disabled, sort_by, sort_dir);
                 }
             }
         }

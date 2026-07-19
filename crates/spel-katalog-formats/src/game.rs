@@ -42,6 +42,14 @@ impl Game {
         }
     }
 
+    /// Is the game disabled.
+    pub const fn disabled(&self) -> bool {
+        match self {
+            Game::Lutris(..) => false,
+            Game::Native(game_native) => game_native.disabled,
+        }
+    }
+
     /// Get id of game.
     pub const fn id(&self) -> GameId {
         match self {

@@ -74,6 +74,8 @@ pub enum QuickMessage {
     UseGamescope,
     /// Open dialog to select exe.
     OpenExeDialog,
+    /// Disable game.
+    AddDisabled,
 }
 
 /// Message in use by native info view.
@@ -107,12 +109,16 @@ pub enum Request {
         /// Thumbnail image.
         img: ::spel_katalog_formats::Image,
     },
-    /// Update tags on game save.
-    UpdateTags {
+    /// Update game data.
+    UpdateGame {
         /// Uuid of game.
         uuid: Uuid,
         /// Tags to use.
         tags: Vec<Tag>,
+        /// Is the game disabled/enabled.
+        disabled: bool,
+        /// Is the game hidden/shown.
+        hidden: bool,
     },
     /// Run a game.
     RunGame(Box<NativeGameConfig>),
@@ -249,6 +255,13 @@ impl State {
                 Task::none()
             }
             Message::Quick(message) => match message {
+                QuickMessage::AddDisabled => self.get_content().then(|mut game| {
+                    game.disabled = true;
+                    Box::new(game)
+                        .pipe(Message::UpdateConfig)
+                        .into_message()
+                        .pipe(Task::done)
+                }),
                 QuickMessage::AddCompTool => {
                     let comp_tool_dir = settings.get::<CompToolsDir>().to_path_buf();
                     self.get_content()
@@ -318,22 +331,37 @@ impl State {
                         .pipe(Task::done)
                 }),
                 QuickMessage::Run => self.with_content(|game| {
+                    if !game.disabled {
                     Box::new(game)
                         .pipe(Request::RunGame)
                         .pipe(OrRequest::Request)
                         .pipe(Some)
+                    } else {
+                        ::log::warn!("run not available for disabled games");
+                        None
+                    }
                 }),
                 QuickMessage::Shell => self.with_content(|game| {
+                    if !game.disabled {
                     Box::new(game)
                         .pipe(Request::RunShell)
                         .pipe(OrRequest::Request)
                         .pipe(Some)
+                    } else {
+                        ::log::warn!("shell not available for disabled games");
+                        None
+                    }
                 }),
                 QuickMessage::Init => self.with_content(|game| {
-                    Box::new(game)
-                        .pipe(Request::RunInit)
-                        .pipe(OrRequest::Request)
-                        .pipe(Some)
+                    if !game.disabled {
+                        Box::new(game)
+                            .pipe(Request::RunInit)
+                            .pipe(OrRequest::Request)
+                            .pipe(Some)
+                    } else {
+                        ::log::warn!("init not available for disabled games");
+                        None
+                    }
                 }),
                 QuickMessage::Open => self.with_content(|game| {
                     let parent = game.exe.parent().tap_none(|| {
@@ -358,9 +386,11 @@ impl State {
                             })
                             .ok()?;
 
-                        let update_tags = Request::UpdateTags {
+                        let update_tags = Request::UpdateGame {
                             uuid,
                             tags: game.tags.iter().cloned().collect(),
+                            hidden: game.hidden,
+                            disabled: game.disabled,
                         }
                         .pipe(OrRequest::Request);
                         let set_config = Box::new(game)
@@ -662,6 +692,7 @@ impl State {
             .button("Gamescope", || QuickMessage::UseGamescope)
             .button("Set Exe", || QuickMessage::OpenExeDialog)
             .button("Add Tag", || QuickMessage::AddTag)
+            .button("Disable", || QuickMessage::AddDisabled)
             .pipe(Element::from)
             .map(Message::Quick)
             .map(OrRequest::Message)

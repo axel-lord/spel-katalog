@@ -49,6 +49,10 @@ pub struct NativeGameConfig {
     #[serde(skip_serializing_if = "::core::ops::Not::not", default)]
     pub hidden: bool,
 
+    /// Is the game disabled.
+    #[serde(skip_serializing_if = "::core::ops::Not::not", default)]
+    pub disabled: bool,
+
     /// Should net always be enabled/disabled.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub use_net: Option<bool>,
@@ -105,6 +109,7 @@ impl NativeGameConfig {
             shadow: None,
             prefix: None,
             hidden: false,
+            disabled: false,
             use_net: None,
             use_gamescope: None,
             env: Default::default(),

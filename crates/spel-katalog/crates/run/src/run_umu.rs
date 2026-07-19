@@ -173,6 +173,9 @@ impl NativeUmuCtx<'_> {
     /// # Errors
     /// If context cannot run given mode.
     pub async fn run(self, run_mode: RunMode) -> ::color_eyre::Result<String> {
+        if self.config.disabled {
+            return Err(eyre!("not running disabled game"));
+        }
         let NativeUmuCtx {
             common:
                 CommonUmuCtx {
@@ -210,6 +213,7 @@ impl NativeUmuCtx<'_> {
             gamescope_args,
             shadow: _,
             tags: _,
+            disabled: _,
         } = config;
 
         let use_gamescope = use_gamescope.unwrap_or(global_use_gamescope);
@@ -485,6 +489,7 @@ impl<'a> LutrisCtx<'a> {
             },
             prefix,
             hidden,
+            disabled: false,
             use_net: None,
             env: config
                 .system
