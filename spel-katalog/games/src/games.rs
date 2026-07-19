@@ -7,7 +7,7 @@ use ::derive_more::{Deref, DerefMut, IsVariant};
 use ::regex::RegexBuilder;
 use ::rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
 use ::spel_katalog_formats::{
-    Game, GameCommon, GameId, GameNative, NativeGameConfig, Tag, TagFilter, TagFilterAction,
+    Game, GameCommon, GameId, GameNative, NativeGameConfig, Tag, TagFilter, TagFilterKind,
     TagFilterMode, TagId,
 };
 use ::spel_katalog_settings::{FilterMode, Settings, Show, SortBy, SortDir, UnloadThumbnails};
@@ -237,6 +237,16 @@ impl Games {
         &mut self.games
     }
 
+    /// Set the tag filter in use.
+    pub fn set_tag_filter(&mut self, tag_filter: Vec<TagFilter<FxHashSet<TagId>>>) {
+        self.tag_filter = tag_filter;
+    }
+
+    /// Get current tag filter.
+    pub fn current_tag_filter(&self) -> &[TagFilter<FxHashSet<TagId>>] {
+        &self.tag_filter
+    }
+
     /// Amount of games.
     pub const fn all_count(&self) -> usize {
         self.games.len()
@@ -337,14 +347,14 @@ impl Games {
                     };
 
                     match tag_filter.kind {
-                        TagFilterAction::Include => {
+                        TagFilterKind::Include => {
                             if is_match {
                                 continue;
                             } else {
-                                break;
+                                return false;
                             }
                         }
-                        TagFilterAction::Exclude => {
+                        TagFilterKind::Exclude => {
                             if is_match {
                                 return false;
                             } else {

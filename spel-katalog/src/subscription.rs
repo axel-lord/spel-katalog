@@ -66,6 +66,7 @@ fn ctrl_shift_chr_key(chr: &str) -> Option<Message> {
         "g" => QuickMessage::ToggleGameInfo,
         "d" => QuickMessage::Debug,
         "w" => QuickMessage::ShowWelcome,
+        "t" => QuickMessage::ShowTagFilter,
         _ => return None,
     }))
 }

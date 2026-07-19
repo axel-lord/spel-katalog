@@ -2,10 +2,9 @@
 
 use ::std::path::Path;
 
-use ::dashmap::DashMap;
 use ::rusqlite::{Connection, OpenFlags};
-use ::rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
-use ::spel_katalog_formats::{Game, GameCommon, GameLutris, Tag, TagId};
+use ::rustc_hash::{FxHashMap, FxHashSet};
+use ::spel_katalog_formats::{Game, GameCommon, GameLutris, TagStorage};
 
 use crate::LoadDbError;
 
@@ -15,7 +14,7 @@ use crate::LoadDbError;
 /// If games cannot be loaded from database.
 pub fn load_games_from_database(
     db_path: &Path,
-    tags: &DashMap<Tag, TagId, FxBuildHasher>,
+    tags: &TagStorage,
 ) -> Result<Vec<Game>, LoadDbError> {
     let db = Connection::open_with_flags(
         db_path,
@@ -110,13 +109,11 @@ pub fn load_games_from_database(
                     continue;
                 }
 
-                let tag = *tags
-                    .entry(Tag { name: name.clone() })
-                    .or_insert_with(TagId::new);
-
-                game.tags.insert(tag);
+                game.tags.insert(tags.get_id(name));
             }
         }
+
+        game.tags.insert(tags.get_id("lutris"));
 
         games.push(Game::Lutris(game));
     }

@@ -1,19 +1,19 @@
 use ::std::{convert::identity, io::PipeReader, sync::Arc};
 
 use ::color_eyre::{Section, eyre::eyre};
-use ::dashmap::DashMap;
 use ::derive_more::IsVariant;
 use ::iced::Font;
 use ::iced_core::{Alignment::Center, Length::Fill, font, window};
 use ::iced_runtime::Task;
 use ::iced_widget::{self as widget, Column, Container, Row, text, text_input, toggler, value};
-use ::rustc_hash::{FxBuildHasher, FxHashMap};
+use ::rustc_hash::FxHashMap;
 use ::spel_katalog_cli::Run;
-use ::spel_katalog_common::{StatusSender, w};
-use ::spel_katalog_formats::{Tag, TagId};
+use ::spel_katalog_common::{OrRequest, StatusSender, w};
+use ::spel_katalog_formats::TagStorage;
 use ::spel_katalog_installer::Installer;
 use ::spel_katalog_settings::{FilterMode, Network, Theme, UseWayland};
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
+use ::spel_katalog_tag_filter::TagFilterDialog;
 use ::spel_katalog_widget::ListMenu;
 use ::tap::Pipe;
 
@@ -36,6 +36,7 @@ pub enum WindowType {
 #[derive(Debug, IsVariant)]
 pub enum Popup {
     Welcome,
+    TagFilter,
 }
 
 #[derive(Debug)]
@@ -53,7 +54,8 @@ pub(crate) struct App {
     pub terminal: ::spel_katalog_terminal::Terminal,
     pub process_view_semaphore: Arc<::smol::lock::Semaphore>,
     pub games_db: ::spel_katalog_native::Pool,
-    pub tags: Arc<DashMap<Tag, TagId, FxBuildHasher>>,
+    pub tags: TagStorage,
+    pub tag_filter: TagFilterDialog,
     pub popup: Option<Popup>,
 }
 
@@ -113,8 +115,9 @@ impl Initial {
         } else {
             (sink_builder, None)
         };
-        let tags = Arc::new(Default::default());
+        let tags = TagStorage::default();
         let popup = None;
+        let tag_filter = TagFilterDialog::new();
 
         let app = App {
             filter,
@@ -132,6 +135,7 @@ impl Initial {
             games_db,
             tags,
             popup,
+            tag_filter,
         };
 
         Ok(Self {
@@ -302,6 +306,7 @@ impl App {
                             .separator()
                             .button("Copy", || Message::Quick(QuickMessage::CopyFilter))
                             .button("Paste", || Message::Quick(QuickMessage::PasteFilter))
+                            .button("Tags", || Message::Quick(QuickMessage::ShowTagFilter))
                             .separator()
                             .pipe(with_global_context)
                             .into()
@@ -373,6 +378,16 @@ impl App {
             .padding(30)
     }
 
+    pub fn view_tag_filter(&self) -> Container<'_, Message> {
+        self.tag_filter
+            .view(&self.tags)
+            .map(OrRequest::Message)
+            .map(Message::TagFilter)
+            .pipe(widget::container)
+            .style(widget::container::bordered_box)
+            .padding(10)
+    }
+
     pub fn view_main(&self) -> Element<'_, Message> {
         let main_column = self.main_column();
         if let Some(popup) = &self.popup {
@@ -399,6 +414,7 @@ impl App {
                 .push(
                     match popup {
                         Popup::Welcome => self.view_welcome(),
+                        Popup::TagFilter => self.view_tag_filter(),
                     }
                     .pipe(widget::opaque)
                     .pipe(widget::center),

@@ -4506,6 +4506,7 @@ dependencies = [
  "spel-katalog-settings-build",
  "spel-katalog-settings-view",
  "spel-katalog-sink",
+ "spel-katalog-tag-filter",
  "spel-katalog-terminal",
  "spel-katalog-widget",
  "strsim",
@@ -4581,6 +4582,7 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "chrono",
+ "dashmap",
  "derive_more",
  "image",
  "indexmap",
@@ -4910,6 +4912,23 @@ dependencies = [
  "flume",
  "pin-project",
  "smol",
+ "tap",
+]
+
+[[package]]
+name = "spel-katalog-tag-filter"
+version = "0.1.0"
+dependencies = [
+ "iced_core",
+ "iced_highlighter",
+ "iced_runtime",
+ "iced_widget",
+ "itertools 0.15.0",
+ "log",
+ "rustc-hash 2.1.2",
+ "spel-katalog-common",
+ "spel-katalog-formats",
+ "spel-katalog-widget",
  "tap",
 ]
 

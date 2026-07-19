@@ -44,6 +44,7 @@ pub enum QuickMessage {
     ReloadGames,
     OpenInstaller,
     ShowWelcome,
+    ShowTagFilter,
     EscapeOne,
 }
 
@@ -81,6 +82,8 @@ pub enum Message {
     Ipc(::spel_katalog_ipc::Message),
     RunGameNative(Box<NativeGameConfig>),
     RunShellNative(Box<NativeGameConfig>),
+    #[from]
+    TagFilter(OrRequest<::spel_katalog_tag_filter::Message, ::spel_katalog_tag_filter::Request>),
 }
 
 impl<T, E> From<Result<T, E>> for Message

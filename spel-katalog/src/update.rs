@@ -182,6 +182,7 @@ impl App {
             QuickMessage::Debug => {
                 ::log::info!("debug action activated");
                 ::log::info!("tags: {:#?}", self.tags);
+                ::log::info!("tag filter: {:#?}", self.games.current_tag_filter());
             }
             QuickMessage::OpenInstaller => {
                 return self.open_installer(None);
@@ -348,6 +349,9 @@ impl App {
             }
             QuickMessage::ShowWelcome => {
                 self.popup = Some(Popup::Welcome);
+            }
+            QuickMessage::ShowTagFilter => {
+                self.popup = Some(Popup::TagFilter);
             }
             QuickMessage::EscapeOne => {
                 if self.popup.is_some() {
@@ -721,6 +725,20 @@ impl App {
             Message::RunShellNative(game) => {
                 return self.run_native_game(*game, RunMode::Shell);
             }
+            Message::TagFilter(or_request) => match or_request {
+                OrRequest::Message(message) => {
+                    let Self {
+                        tag_filter, tags, ..
+                    } = self;
+                    return tag_filter.update(message, tags).map(Message::TagFilter);
+                }
+                OrRequest::Request(req) => match req {
+                    ::spel_katalog_tag_filter::Request::SetFilter(tag_filters) => {
+                        self.games.set_tag_filter(tag_filters);
+                        self.games.sort(&self.settings, &self.filter);
+                    }
+                },
+            },
         }
         Task::none()
     }

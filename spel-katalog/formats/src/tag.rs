@@ -1,8 +1,11 @@
 //! [Tag] and [TagId] impls.
 
-use ::core::{num::NonZero, sync::atomic::AtomicU64};
+use ::core::{borrow::Borrow, num::NonZero, sync::atomic::AtomicU64};
+use ::std::sync::Arc;
 
-use ::derive_more::{Deref, DerefMut, From, Into, IsVariant};
+use ::dashmap::DashMap;
+use ::derive_more::{Deref, DerefMut, Display, From, Into, IsVariant};
+use ::rustc_hash::FxBuildHasher;
 use ::serde::{Deserialize, Serialize};
 
 /// Id of a tag.
@@ -55,6 +58,12 @@ pub struct Tag {
     pub name: String,
 }
 
+impl Borrow<str> for Tag {
+    fn borrow(&self) -> &str {
+        self
+    }
+}
+
 impl Tag {
     /// Construct a new tag with the given name.
     pub const fn new(name: String) -> Self {
@@ -68,7 +77,7 @@ impl Tag {
 )]
 pub struct TagFilter<T> {
     /// What kind of filter is this.
-    pub kind: TagFilterAction,
+    pub kind: TagFilterKind,
     /// Mode of the filter.
     pub mode: TagFilterMode,
     /// Tags used by the filter.
@@ -94,9 +103,20 @@ impl<T> TagFilter<T> {
 
 /// What should the filter do.
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, IsVariant,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    IsVariant,
+    Display,
 )]
-pub enum TagFilterAction {
+pub enum TagFilterKind {
     /// On filter match include value.
     Include,
     /// On filter match exclude value.
@@ -105,11 +125,45 @@ pub enum TagFilterAction {
 
 /// How the filter tags match values.
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, IsVariant,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    IsVariant,
+    Display,
 )]
 pub enum TagFilterMode {
     /// Filter is a match if any tag is present.
     Any,
     /// Filter is a match if and onlt if all tags are present.
     All,
+}
+
+/// Wrapper for tag storage.
+#[derive(Debug, Clone, Default, Deref)]
+#[deref(forward)]
+pub struct TagStorage {
+    /// Wrapped tag storage.
+    inner: Arc<DashMap<Tag, TagId, FxBuildHasher>>,
+}
+
+impl TagStorage {
+    /// Get the id of a tag.
+    pub fn get_id(&self, tag: &str) -> TagId {
+        if let Some(id) = self.get(tag) {
+            *id
+        } else {
+            *self
+                .entry(Tag {
+                    name: tag.to_owned(),
+                })
+                .or_insert_with(TagId::new)
+        }
+    }
 }
