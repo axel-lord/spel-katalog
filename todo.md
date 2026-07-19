@@ -34,6 +34,7 @@
 - [x] Disable games (shadow lutris but do not show)
 - [ ] Quick tag add
 - [ ] Hidden tags
+- [ ] Use cache for game filters
 
 # Future Goals/Possibilities
 - [x] Run exe files in prefix without lutris
