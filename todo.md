@@ -36,6 +36,10 @@
 - [ ] Hidden tags
 - [ ] Use cache for game filters
 
+# Fixes
+- [ ] Dummy exe of installer not "moved"
+- [ ] Install drive of installer not canonicalized
+
 # Future Goals/Possibilities
 - [x] Run exe files in prefix without lutris
 - [x] Add categories
