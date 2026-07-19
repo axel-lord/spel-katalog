@@ -4,11 +4,16 @@ pub use self::{
     addititional_config::AdditionalConfig,
     bind::{Bind, Symlink},
     daemon::{DaemonRunConfigRequest, DaemonRunResponse},
-    game::{Game, GameId},
+    game::{
+        Game, GameId,
+        common::GameCommon,
+        lutris::{GameLutris, RunnerLutris},
+        native::GameNative,
+    },
     image::Image,
     installer::{ExeChoice, InstallerConfig, InstallerPrepareConfig},
-    lutris_game::{LutrisGame, LutrisRunner},
-    native_game::{NativeGame, NativeRunner, RunMode},
+    native_game_config::{EnvValue, NativeGameConfig, RunMode, RunnerNative},
+    tag::{Tag, TagFilter, TagFilterKind, TagFilterMode, TagId, TagStorage},
     timestamp::{TimeStampParseError, Timestamp, TimestampFromIntError},
 };
 
@@ -18,8 +23,8 @@ mod daemon;
 mod game;
 mod image;
 mod installer;
-mod lutris_game;
-mod native_game;
+mod native_game_config;
+mod tag;
 mod timestamp;
 
 pub mod lutris_config;

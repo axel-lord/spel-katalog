@@ -3,12 +3,12 @@
 use ::std::path::PathBuf;
 
 use ::derive_more::{Display, IsVariant};
-use ::rustc_hash::FxHashMap;
+use ::rustc_hash::{FxHashMap, FxHashSet};
 use ::serde::{Deserialize, Serialize};
 use ::strum::VariantArray;
 use ::unicode_segmentation::UnicodeSegmentation;
 
-use crate::{Bind, GameId, Timestamp};
+use crate::{Bind, GameId, Tag, Timestamp};
 
 /// How to run game.
 #[derive(Debug, Clone, Copy, IsVariant, Serialize, Deserialize)]
@@ -24,7 +24,7 @@ pub enum RunMode {
 /// Loaded game data.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct NativeGame {
+pub struct NativeGameConfig {
     /// Title used for game.
     pub name: String,
 
@@ -35,7 +35,7 @@ pub struct NativeGame {
     pub exe: PathBuf,
 
     /// Runner used for game.
-    pub runner: NativeRunner,
+    pub runner: RunnerNative,
 
     /// This game shadows the given game.
     #[serde(skip_serializing_if = "Option::is_none", default)]
@@ -63,7 +63,7 @@ pub struct NativeGame {
 
     /// Environment variables of game.
     #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
-    pub env: FxHashMap<String, String>,
+    pub env: FxHashMap<String, EnvValue>,
 
     /// Custom attributes for game.
     #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
@@ -88,11 +88,15 @@ pub struct NativeGame {
     /// Additional directories sandbox will be given read access to.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub ro_bind: Vec<Bind>,
+
+    /// Tags assigned to game.
+    #[serde(skip_serializing_if = "FxHashSet::is_empty", default)]
+    pub tags: FxHashSet<Tag>,
 }
 
-impl NativeGame {
+impl NativeGameConfig {
     /// Crate a new native game config.
-    pub fn new(name: String, timestamp: Timestamp, exe: PathBuf, runner: NativeRunner) -> Self {
+    pub fn new(name: String, timestamp: Timestamp, exe: PathBuf, runner: RunnerNative) -> Self {
         Self {
             name,
             timestamp,
@@ -111,6 +115,7 @@ impl NativeGame {
             wt_verb: Default::default(),
             bind: Default::default(),
             ro_bind: Default::default(),
+            tags: Default::default(),
         }
     }
 
@@ -136,16 +141,40 @@ impl NativeGame {
     Deserialize,
     VariantArray,
 )]
-pub enum NativeRunner {
+pub enum RunnerNative {
     /// Game is ran using wine.
     Wine,
     /// Game is ran as a native binary.
     Linux,
 }
 
-impl NativeRunner {
+impl RunnerNative {
     /// Get an array of all variants.
-    pub const fn variants() -> &'static [NativeRunner] {
+    pub const fn variants() -> &'static [RunnerNative] {
         Self::VARIANTS
+    }
+}
+
+/// Value of an environment variable.
+#[derive(
+    Debug, Clone, IsVariant, PartialEq, Eq, PartialOrd, Ord, Hash, Display, Serialize, Deserialize,
+)]
+#[serde(untagged, expecting = "expected a string or a table")]
+pub enum EnvValue {
+    /// Environment variable is a regular `key = value` variable.
+    Value(String),
+    /// Should the variable be unset.
+    Unset {
+        /// If false an earlier unset may be prevented.
+        unset: bool,
+    },
+}
+
+impl<S> From<S> for EnvValue
+where
+    S: Into<String>,
+{
+    fn from(value: S) -> Self {
+        Self::Value(value.into())
     }
 }

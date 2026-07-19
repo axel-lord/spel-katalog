@@ -11,11 +11,11 @@ use ::color_eyre::{Section, eyre::eyre};
 use ::rustc_hash::FxHashMap;
 use ::smol::process::Command;
 use ::spel_katalog_formats::{
-    AdditionalConfig, Bind, GameId, LutrisRunner, NativeGame, NativeRunner, RunMode, Timestamp,
-    lutris_config,
+    AdditionalConfig, Bind, EnvValue, GameId, NativeGameConfig, RunMode, RunnerLutris,
+    RunnerNative, Timestamp, lutris_config,
 };
 use ::spel_katalog_sink::SinkBuilder;
-use ::tap::Pipe;
+use ::tap::{Pipe, Tap};
 
 use crate::{Callback, macros::args};
 
@@ -53,7 +53,7 @@ pub struct NativeUmuCtx<'a> {
     /// Common context.
     pub common: CommonUmuCtx<'a>,
     /// Game config.
-    pub config: NativeGame,
+    pub config: NativeGameConfig,
 }
 
 /// If possible bind user in wine prefix to steamuser in umu prefix.
@@ -78,7 +78,7 @@ async fn init_umu_prefix(
     verbs: &[String],
     drives: &mut (dyn '_ + Send + Sync + Iterator<Item = (char, &Path)>),
     sink_builder: SinkBuilder,
-    envs: &FxHashMap<String, String>,
+    envs: &FxHashMap<String, EnvValue>,
 ) -> ::color_eyre::Result<()> {
     let [stdout, stderr] = sink_builder.build(|| "Init Prefix")?;
     let status = Command::new(umu)
@@ -89,7 +89,20 @@ async fn init_umu_prefix(
                 .into_iter()
                 .chain(verbs.iter().map(String::as_str)),
         )
-        .envs(envs)
+        .tap_mut(|cmd| {
+            for (key, value) in envs {
+                match value {
+                    EnvValue::Value(val) => {
+                        cmd.env(key, val);
+                    }
+                    EnvValue::Unset { unset } => {
+                        if *unset {
+                            cmd.env_remove(key);
+                        }
+                    }
+                }
+            }
+        })
         .env("WINEPREFIX", umu_prefix)
         .kill_on_drop(true)
         .status()
@@ -178,7 +191,7 @@ impl NativeUmuCtx<'_> {
             config,
         } = self;
         ::log::info!("using game config\n{config:#?}");
-        let NativeGame {
+        let NativeGameConfig {
             name,
             timestamp: _,
             exe,
@@ -196,6 +209,7 @@ impl NativeUmuCtx<'_> {
             use_gamescope,
             gamescope_args,
             shadow: _,
+            tags: _,
         } = config;
 
         let use_gamescope = use_gamescope.unwrap_or(global_use_gamescope);
@@ -305,7 +319,16 @@ impl NativeUmuCtx<'_> {
         }
 
         for (key, value) in &env {
-            args.extend(args!["--setenv", key, value]);
+            match value {
+                EnvValue::Value(value) => {
+                    args.extend(args!["--setenv", key, value]);
+                }
+                EnvValue::Unset { unset } => {
+                    if *unset {
+                        args.extend(args!["--unsetenv", key]);
+                    }
+                }
+            }
         }
 
         if let Some(prefix) = prefix.as_deref() {
@@ -385,7 +408,7 @@ pub struct LutrisCtx<'a> {
     /// Name of game.
     pub name: &'a str,
     /// Runner used for game.
-    pub runner: LutrisRunner,
+    pub runner: RunnerLutris,
     /// Wine prefix of game.
     pub wine_prefix: Option<&'a Path>,
     /// Is the game hidden.
@@ -401,7 +424,7 @@ impl<'a> LutrisCtx<'a> {
     ///
     /// # Errors
     /// If lutris context is malformed in some way.
-    pub fn into_native(self) -> ::color_eyre::Result<NativeGame> {
+    pub fn into_native(self) -> ::color_eyre::Result<NativeGameConfig> {
         let Self {
             config,
             exe,
@@ -449,21 +472,26 @@ impl<'a> LutrisCtx<'a> {
             bind.push(home_bind);
         }
 
-        Ok(NativeGame {
+        Ok(NativeGameConfig {
             name: name.to_owned(),
             timestamp: Timestamp::try_from(installed_at)?,
             exe: exe.to_path_buf(),
             runner: match runner {
-                LutrisRunner::Wine => NativeRunner::Wine,
-                LutrisRunner::Linux => NativeRunner::Linux,
-                LutrisRunner::Other(runner) => {
+                RunnerLutris::Wine => RunnerNative::Wine,
+                RunnerLutris::Linux => RunnerNative::Linux,
+                RunnerLutris::Other(runner) => {
                     return Err(eyre!("unknown runner {runner} for {name}"));
                 }
             },
             prefix,
             hidden,
             use_net: None,
-            env: config.system.env.clone(),
+            env: config
+                .system
+                .env
+                .iter()
+                .map(|(key, value)| (key.clone(), EnvValue::Value(value.clone())))
+                .collect(),
             attrs: extra_config
                 .map(|extra| extra.attrs.clone())
                 .unwrap_or_default(),
@@ -475,6 +503,7 @@ impl<'a> LutrisCtx<'a> {
             use_gamescope: None,
             gamescope_args: Vec::new(),
             shadow: Some(id),
+            tags: Default::default(),
         })
     }
 }

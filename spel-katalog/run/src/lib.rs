@@ -8,7 +8,7 @@ use ::std::{
 };
 
 use ::smol::io::{AsyncReadExt, AsyncWriteExt};
-use ::spel_katalog_formats::{NativeGame, RunMode};
+use ::spel_katalog_formats::{NativeGameConfig, RunMode};
 use ::spel_katalog_settings::{
     BubblewrapExe, DllOverrides, GamescopeExe, Network, SandboxExtras, Settings, ShellExe,
     TermCommand, UmuRunExe, UseGamescope,
@@ -134,7 +134,7 @@ async fn sink_proxy(log_dir: &Path, name: &str, sink_builder: SinkBuilder) -> Op
 
 /// Run a native game.
 pub fn run_native_game(
-    game: NativeGame,
+    game: NativeGameConfig,
     run_mode: RunMode,
     settings: &Settings,
     sink_builder: SinkBuilder,

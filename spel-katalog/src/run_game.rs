@@ -1,4 +1,5 @@
 use ::std::{
+    collections::hash_map::Entry,
     ffi::{OsStr, OsString},
     path::Path,
 };
@@ -8,8 +9,8 @@ use ::iced_runtime::Task;
 use ::image::DynamicImage;
 use ::spel_katalog_common::status;
 use ::spel_katalog_formats::{
-    AdditionalConfig, DaemonRunConfigRequest, DaemonRunResponse, Game, GameId, NativeGame, RunMode,
-    lutris_config,
+    AdditionalConfig, DaemonRunConfigRequest, DaemonRunResponse, EnvValue, Game, GameId,
+    NativeGameConfig, RunMode, lutris_config,
 };
 use ::spel_katalog_ipc::http::ResponseCode;
 use ::spel_katalog_run::{
@@ -19,7 +20,7 @@ use ::spel_katalog_run::{
 };
 use ::spel_katalog_settings::{
     BubblewrapExe, FirejailExe, GamescopeExe, LutrisExe, Network, OnRun, SandboxMode, ShellExe,
-    TermCommand, UmuRunExe, UseGamescope, YmlDir,
+    TermCommand, UmuRunExe, UseGamescope, UseWayland, YmlDir,
 };
 use ::spel_katalog_sink::SinkIdentity;
 use ::tap::{Pipe, TapOptional};
@@ -53,12 +54,14 @@ impl App {
     pub fn game_as_native(
         &self,
         game_id: GameId,
-    ) -> Option<impl 'static + Future<Output = Option<(NativeGame, Option<DynamicImage>)>>> {
+    ) -> Option<impl 'static + Future<Output = Option<(NativeGameConfig, Option<DynamicImage>)>>>
+    {
         let Some(game) = self.games.by_id(game_id) else {
             ::log::warn!("could not find game with id {game_id}");
             return None;
         };
         let thumb = game.thumb.clone();
+        let use_wayland = self.settings.get::<UseWayland>().is_enabled();
 
         match &game.game {
             Game::Lutris(game) => {
@@ -96,7 +99,8 @@ impl App {
                     } else {
                         None
                     };
-                    let game = LutrisCtx {
+
+                    let mut game = LutrisCtx {
                         config: &config,
                         exe: &config.game.exe,
                         extra_config: extra_config.as_ref(),
@@ -110,6 +114,13 @@ impl App {
                     .into_native()
                     .map_err(|err| ::log::error!("could not convert game context to native\n{err}"))
                     .ok()?;
+
+                    if use_wayland
+                        && let Entry::Vacant(entry) = game.env.entry(String::from("DISPLAY"))
+                    {
+                        entry.insert(EnvValue::Unset { unset: true });
+                    }
+
                     let name = &game.name;
                     let thumb = thumb.as_ref().and_then(|thumb| match thumb {
                         ::iced_widget::image::Handle::Path(_, path) => ::image::open(path)
@@ -147,9 +158,18 @@ impl App {
     }
 
     /// Run a native game.
-    pub fn run_native_game(&mut self, game: NativeGame, run_mode: RunMode) -> Task<Message> {
+    pub fn run_native_game(
+        &mut self,
+        mut game: NativeGameConfig,
+        run_mode: RunMode,
+    ) -> Task<Message> {
         let settings = self.settings.snapshot();
         let sink_builder = self.sink_builder.clone();
+        if self.settings.get::<UseWayland>().is_enabled()
+            && let Entry::Vacant(entry) = game.env.entry(String::from("DISPLAY"))
+        {
+            entry.insert(EnvValue::Unset { unset: true });
+        };
         let task = async move {
             let conn =
                 ::spel_katalog_ipc::generic::connect(settings.xdg(), "spel-katalog-daemon-ipc")
@@ -236,8 +256,8 @@ impl App {
 
         let game = match &game.game {
             Game::Lutris(lutris_game) => lutris_game,
-            Game::Native { uuid, .. } => {
-                let uuid = *uuid;
+            Game::Native(native_game) => {
+                let uuid = native_game.uuid;
                 let games_db = self.games_db.clone();
                 let run_shell = match safety {
                     Safety::None | Safety::Sandbox => false,

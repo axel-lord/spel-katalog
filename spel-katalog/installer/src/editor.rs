@@ -14,7 +14,7 @@ use ::iced_widget::{
     text_editor::{self, Binding},
 };
 use ::spel_katalog_common::{IntoOrRequest, OrRequest, w};
-use ::spel_katalog_formats::NativeGame;
+use ::spel_katalog_formats::NativeGameConfig;
 use ::spel_katalog_settings::Settings;
 use ::tap::Pipe;
 
@@ -48,7 +48,7 @@ pub struct Editor {
 
 impl Editor {
     /// Construct a new editor.
-    pub fn new(game: &NativeGame) -> Option<Self> {
+    pub fn new(game: &NativeGameConfig) -> Option<Self> {
         let content = ::toml::to_string_pretty(game)
             .map_err(|err| ::log::error!("could not serialize game\n{game:#?}\n{err}"))
             .ok()?;
@@ -117,7 +117,7 @@ impl Editor {
                     .pipe(Task::done)
             }),
             Message::Install => {
-                let Some(config) = ::toml::from_str::<NativeGame>(&self.content.text())
+                let Some(config) = ::toml::from_str::<NativeGameConfig>(&self.content.text())
                     .map_err(|err| ::log::error!("could not deserialize config\n{err}"))
                     .ok()
                 else {

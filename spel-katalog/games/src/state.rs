@@ -20,7 +20,7 @@ use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelItera
 use ::rusqlite::{Connection, Statement, named_params};
 use ::rustc_hash::FxHashSet;
 use ::spel_katalog_common::{IntoOrRequest, OrRequest, StatusSender, async_status, status};
-use ::spel_katalog_formats::{Game, GameId, NativeGame};
+use ::spel_katalog_formats::{Game, GameId, NativeGameConfig, TagStorage};
 use ::spel_katalog_gather::{
     CoverGatherer, CoverGathererOptions, LoadDbError, load_games_from_database,
     load_thumbnail_database,
@@ -81,14 +81,14 @@ pub enum Message {
     /// Add a single game.
     AddNativeGames {
         /// Games to add.
-        games: Vec<(Uuid, NativeGame)>,
+        games: Vec<(Uuid, NativeGameConfig)>,
     },
     /// Add a single game.
     AddNativeGame {
         /// Uuid of game to add.
         uuid: Uuid,
         /// Config of game.
-        config: Box<NativeGame>,
+        config: Box<NativeGameConfig>,
     },
     /// Set thumbnails.
     SetImages {
@@ -319,6 +319,7 @@ impl State {
         settings: &Settings,
         filter: &str,
         game_db: &::spel_katalog_native::Pool,
+        tags: &TagStorage,
     ) -> Task<OrRequest<Message, Request>> {
         match msg {
             Message::Sort => {
@@ -327,8 +328,9 @@ impl State {
             }
             Message::LoadDb { db_path } => {
                 let tx = tx.clone();
+                let tags = TagStorage::clone(tags);
                 Task::future(async move {
-                    match ::smol::unblock(move || load_games_from_database(&db_path)).await {
+                    match ::smol::unblock(move || load_games_from_database(&db_path, &tags)).await {
                         Ok(games) => games
                             .pipe(|games| Message::AddGames { games })
                             .pipe(OrRequest::Message)
@@ -363,12 +365,18 @@ impl State {
                 self.find_cached(settings)
             }
             Message::AddNativeGames { games } => {
-                self.add_games(games.into_iter().map(WithThumb::from), settings, filter);
+                self.add_games(
+                    games
+                        .into_iter()
+                        .map(|(uuid, game)| WithThumb::from_native(uuid, game, tags)),
+                    settings,
+                    filter,
+                );
                 Task::none()
             }
             Message::AddNativeGame { uuid, config } => {
                 self.add_games(
-                    iter::once(WithThumb::from((uuid, *config))),
+                    iter::once(WithThumb::from_native(uuid, *config, tags)),
                     settings,
                     filter,
                 );
@@ -614,7 +622,7 @@ impl State {
         let id = game.id();
         let handle = game.thumb.as_ref().or(game.thumb_thumb.as_ref());
         let selected = self.selected;
-        let name = game.name();
+        let name = game.name.as_str();
 
         fn base(theme: &::iced_core::Theme) -> container::Style {
             let style = container::bordered_box(theme);

@@ -2,7 +2,8 @@
 members = [
 	"spel-katalog",
 	"spel-katalog-daemon",
-	"spel-katalog-install", 
+	"spel-katalog-install",
+	"spel-katalog/cache-queue",
 	"spel-katalog/cli",
 	"spel-katalog/common",
 	"spel-katalog/formats",
@@ -23,6 +24,7 @@ members = [
 	"spel-katalog/settings/traits",
 	"spel-katalog/settings/view",
 	"spel-katalog/sink",
+	"spel-katalog/tag-filter", 
 	"spel-katalog/terminal",
 	"spel-katalog/widget",
 	"test",

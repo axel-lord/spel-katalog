@@ -1,10 +1,14 @@
 //! Any game format.
 
-use ::derive_more::{Display, IsVariant};
+use ::derive_more::{Deref, DerefMut, Display, From, IsVariant};
 use ::serde::{Deserialize, Serialize};
 use ::uuid::Uuid;
 
-use crate::LutrisGame;
+use crate::{GameLutris, GameNative};
+
+pub(crate) mod common;
+pub(crate) mod lutris;
+pub(crate) mod native;
 
 /// Id of a game.
 #[derive(
@@ -19,48 +23,17 @@ pub enum GameId {
 }
 
 /// Game which may be native or lutris.
-#[derive(Debug, IsVariant, Clone)]
+#[derive(Debug, IsVariant, Clone, From, Serialize, Deserialize, PartialEq, Eq, Deref, DerefMut)]
+#[deref(forward)]
+#[deref_mut(forward)]
 pub enum Game {
     /// Game is a lutris game.
-    Lutris(LutrisGame),
+    Lutris(GameLutris),
     /// Game is a native game.
-    Native {
-        /// Name of the game.
-        name: String,
-        /// When was the game installed.
-        installed_at: i64,
-        /// Uuid of game.
-        uuid: Uuid,
-        /// Is the game hidden.
-        hidden: bool,
-    },
+    Native(GameNative),
 }
 
 impl Game {
-    /// Is the game hidden.
-    pub const fn hidden(&self) -> bool {
-        match self {
-            Game::Lutris(lutris_game) => lutris_game.hidden,
-            Game::Native { hidden, .. } => *hidden,
-        }
-    }
-
-    /// When was the game installed.
-    pub const fn installed_at(&self) -> i64 {
-        match self {
-            Game::Lutris(lutris_game) => lutris_game.installed_at,
-            Game::Native { installed_at, .. } => *installed_at,
-        }
-    }
-
-    /// Name of the game.
-    pub fn name(&self) -> &str {
-        match self {
-            Game::Lutris(lutris_game) => &lutris_game.name,
-            Game::Native { name, .. } => name,
-        }
-    }
-
     /// Get slug of game if available.
     pub fn slug(&self) -> Option<&str> {
         match self {
@@ -73,7 +46,7 @@ impl Game {
     pub const fn id(&self) -> GameId {
         match self {
             Self::Lutris(lutris_game) => GameId::Lutris(lutris_game.id),
-            Self::Native { uuid, .. } => GameId::Native(*uuid),
+            Self::Native(native_game) => GameId::Native(native_game.uuid),
         }
     }
 }

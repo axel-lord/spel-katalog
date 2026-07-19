@@ -1118,6 +1118,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "dashmap"
+version = "6.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6361d5c062261c78a176addb82d4c821ae42bed6089de0e12603cd25de2059c"
+dependencies = [
+ "cfg-if",
+ "crossbeam-utils",
+ "hashbrown 0.14.5",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core",
+]
+
+[[package]]
 name = "dav1d"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1926,6 +1940,12 @@ checksum = "43a3c133739dddd0d2990f9a4bdf8eb4b21ef50e4851ca85ab661199821d510e"
 dependencies = [
  "ahash",
 ]
+
+[[package]]
+name = "hashbrown"
+version = "0.14.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
 
 [[package]]
 name = "hashbrown"
@@ -4441,6 +4461,7 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "color-eyre",
+ "dashmap",
  "derive_more",
  "env_logger",
  "flume",
@@ -4485,6 +4506,7 @@ dependencies = [
  "spel-katalog-settings-build",
  "spel-katalog-settings-view",
  "spel-katalog-sink",
+ "spel-katalog-tag-filter",
  "spel-katalog-terminal",
  "spel-katalog-widget",
  "strsim",
@@ -4497,6 +4519,10 @@ dependencies = [
  "xdg",
  "yaml-rust2",
 ]
+
+[[package]]
+name = "spel-katalog-cache-queue"
+version = "0.1.0"
 
 [[package]]
 name = "spel-katalog-cli"
@@ -4556,6 +4582,7 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "chrono",
+ "dashmap",
  "derive_more",
  "image",
  "indexmap",
@@ -4575,6 +4602,7 @@ name = "spel-katalog-games"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "dashmap",
  "derive_more",
  "iced_aw",
  "iced_core",
@@ -4609,6 +4637,7 @@ dependencies = [
 name = "spel-katalog-gather"
 version = "0.1.0"
 dependencies = [
+ "dashmap",
  "flume",
  "futures",
  "image",
@@ -4883,6 +4912,23 @@ dependencies = [
  "flume",
  "pin-project",
  "smol",
+ "tap",
+]
+
+[[package]]
+name = "spel-katalog-tag-filter"
+version = "0.1.0"
+dependencies = [
+ "iced_core",
+ "iced_highlighter",
+ "iced_runtime",
+ "iced_widget",
+ "itertools 0.15.0",
+ "log",
+ "rustc-hash 2.1.2",
+ "spel-katalog-common",
+ "spel-katalog-formats",
+ "spel-katalog-widget",
  "tap",
 ]
 

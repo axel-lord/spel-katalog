@@ -4,7 +4,7 @@ use ::std::path::Path;
 
 use ::rusqlite::{Connection, OpenFlags};
 use ::rustc_hash::{FxHashMap, FxHashSet};
-use ::spel_katalog_formats::{Game, LutrisGame};
+use ::spel_katalog_formats::{Game, GameCommon, GameLutris, TagStorage};
 
 use crate::LoadDbError;
 
@@ -12,7 +12,10 @@ use crate::LoadDbError;
 ///
 /// # Errors
 /// If games cannot be loaded from database.
-pub fn load_games_from_database(db_path: &Path) -> Result<Vec<Game>, LoadDbError> {
+pub fn load_games_from_database(
+    db_path: &Path,
+    tags: &TagStorage,
+) -> Result<Vec<Game>, LoadDbError> {
     let db = Connection::open_with_flags(
         db_path,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -20,15 +23,9 @@ pub fn load_games_from_database(db_path: &Path) -> Result<Vec<Game>, LoadDbError
 
     let categories = db
         .prepare_cached("SELECT id, name FROM categories")?
-        .query_map([], |row| Ok((row.get("name")?, row.get("id")?)))?
-        .collect::<Result<FxHashMap<String, i64>, ::rusqlite::Error>>();
-
-    let hidden_category = categories
-        .as_ref()
-        .as_ref()
-        .ok()
-        .and_then(|categories| categories.get(".hidden").copied())
-        .unwrap_or(i64::MAX);
+        .query_map([], |row| Ok((row.get("id")?, row.get("name")?)))?
+        .collect::<Result<FxHashMap<i64, String>, ::rusqlite::Error>>()
+        .unwrap_or_default();
 
     let game_categories = db
         .prepare_cached("SELECT game_id, category_id FROM games_categories")?
@@ -53,7 +50,7 @@ pub fn load_games_from_database(db_path: &Path) -> Result<Vec<Game>, LoadDbError
     let mut games = Vec::new();
 
     while let Some(row) = rows.next()? {
-        fn game_from_row(row: &::rusqlite::Row) -> Option<LutrisGame> {
+        fn game_from_row(row: &::rusqlite::Row) -> Option<GameLutris> {
             let slug = row
                 .get("slug")
                 .map_err(|err| ::log::error!("could not read slug of row\n{err}"))
@@ -83,14 +80,17 @@ pub fn load_games_from_database(db_path: &Path) -> Result<Vec<Game>, LoadDbError
                 .map_err(|err| ::log::error!("could not read installed_at of row\n{err}"))
                 .ok()?;
 
-            Some(LutrisGame {
+            Some(GameLutris {
                 slug,
                 id,
-                name,
                 runner,
                 configpath,
-                installed_at,
-                hidden: false,
+                common: GameCommon {
+                    name,
+                    installed_at,
+                    hidden: false,
+                    tags: Default::default(),
+                },
             })
         }
 
@@ -98,15 +98,26 @@ pub fn load_games_from_database(db_path: &Path) -> Result<Vec<Game>, LoadDbError
             continue;
         };
 
-        if let Some(categories) = game_categories.get(&game.id)
-            && categories.contains(&hidden_category)
-        {
-            game.hidden = true;
+        if let Some(game_categories) = game_categories.get(&game.id) {
+            for category in game_categories {
+                let Some(name) = categories.get(category) else {
+                    ::log::warn!("unknown lutris category with id: {category}");
+                    continue;
+                };
+                if name == ".hidden" {
+                    game.hidden = true;
+                    continue;
+                }
+
+                game.tags.insert(tags.get_id(name));
+            }
         }
+
+        game.tags.insert(tags.get_id("lutris"));
 
         games.push(Game::Lutris(game));
     }
 
-    games.sort_by_key(|game| -game.installed_at());
+    games.sort_by_key(|game| -game.installed_at);
     Ok(games)
 }

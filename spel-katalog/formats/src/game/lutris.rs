@@ -2,33 +2,34 @@
 
 use ::core::{convert::Infallible, str::FromStr};
 
-use ::derive_more::{Display, IsVariant};
+use ::derive_more::{Deref, DerefMut, Display, IsVariant};
 use ::serde::{Deserialize, Serialize};
 
+use crate::GameCommon;
+
 /// Loaded lutris game data.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct LutrisGame {
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Deref, DerefMut)]
+pub struct GameLutris {
     /// Slug assinged in lutris.
     pub slug: String,
     /// Numeric id of game.
     pub id: i64,
-    /// Title used for game.
-    pub name: String,
     /// Runner in use.
-    pub runner: LutrisRunner,
+    pub runner: RunnerLutris,
     /// Path to lutris yml for game.
     pub configpath: String,
-    /// Is the game hidden.
-    pub hidden: bool,
-    /// When was the game installed.
-    pub installed_at: i64,
+    /// Common game fields.
+    #[serde(flatten)]
+    #[deref]
+    #[deref_mut]
+    pub common: GameCommon,
 }
 
 /// Runner used by a game profile.
 #[derive(
     Debug, Clone, IsVariant, PartialEq, Eq, PartialOrd, Ord, Hash, Display, Serialize, Deserialize,
 )]
-pub enum LutrisRunner {
+pub enum RunnerLutris {
     /// Game uses wine.
     #[display("wine")]
     Wine,
@@ -40,7 +41,7 @@ pub enum LutrisRunner {
     Other(String),
 }
 
-impl From<&str> for LutrisRunner {
+impl From<&str> for RunnerLutris {
     fn from(value: &str) -> Self {
         if value
             .chars()
@@ -60,7 +61,7 @@ impl From<&str> for LutrisRunner {
     }
 }
 
-impl FromStr for LutrisRunner {
+impl FromStr for RunnerLutris {
     type Err = Infallible;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -68,12 +69,12 @@ impl FromStr for LutrisRunner {
     }
 }
 
-impl AsRef<str> for LutrisRunner {
+impl AsRef<str> for RunnerLutris {
     fn as_ref(&self) -> &str {
         match self {
-            LutrisRunner::Wine => "wine",
-            LutrisRunner::Linux => "linux",
-            LutrisRunner::Other(other) => other,
+            RunnerLutris::Wine => "wine",
+            RunnerLutris::Linux => "linux",
+            RunnerLutris::Other(other) => other,
         }
     }
 }

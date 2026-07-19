@@ -6,7 +6,9 @@ use ::iced_runtime::Task;
 use ::image::DynamicImage;
 use ::rustix::process::{Pid, RawPid};
 use ::spel_katalog_common::{IntoOrRequest, OrRequest};
-use ::spel_katalog_formats::{InstallerConfig, InstallerPrepareConfig, NativeGame, RunMode};
+use ::spel_katalog_formats::{
+    InstallerConfig, InstallerPrepareConfig, NativeGameConfig, RunMode, TagId,
+};
 use ::spel_katalog_games::SelDir;
 use ::spel_katalog_settings::{
     FilterMode, Load, LutrisDb, Network, Settings, Show, TrustedVariants,
@@ -14,7 +16,10 @@ use ::spel_katalog_settings::{
 use ::tap::Pipe;
 use ::uuid::Uuid;
 
-use crate::{App, Message, QuickMessage, Safety, app::WindowType};
+use crate::{
+    App, Message, QuickMessage, Safety,
+    app::{Popup, WindowType},
+};
 
 #[derive(Default)]
 #[non_exhaustive]
@@ -62,7 +67,7 @@ impl App {
         }
     }
 
-    fn convert_all(&self) -> impl 'static + Future<Output = Vec<(Uuid, NativeGame)>> {
+    fn convert_all(&self) -> impl 'static + Future<Output = Vec<(Uuid, NativeGameConfig)>> {
         let game_db = self.games_db.clone();
         let futures = self
             .games
@@ -86,9 +91,9 @@ impl App {
 
     async fn convert_game(
         game_db: ::spel_katalog_native::Pool,
-        game: NativeGame,
+        game: NativeGameConfig,
         thumb: Option<DynamicImage>,
-    ) -> Option<(Uuid, NativeGame)> {
+    ) -> Option<(Uuid, NativeGameConfig)> {
         ::smol::unblock(move || {
             let name = &game.name;
             let uuid = Uuid::now_v7();
@@ -176,7 +181,8 @@ impl App {
         match msg {
             QuickMessage::Debug => {
                 ::log::info!("debug action activated");
-                return self.quick_update(QuickMessage::OpenInstaller);
+                ::log::info!("tags: {:#?}", self.tags);
+                ::log::info!("tag filter: {:#?}", self.games.current_tag_filter());
             }
             QuickMessage::OpenInstaller => {
                 return self.open_installer(None);
@@ -341,6 +347,21 @@ impl App {
             QuickMessage::ToggleGameInfo => {
                 self.view.toggle_displayed(crate::view::Displayed::GameInfo);
             }
+            QuickMessage::ShowWelcome => {
+                self.popup = Some(Popup::Welcome);
+            }
+            QuickMessage::ShowTagFilter => {
+                self.popup = Some(Popup::TagFilter);
+            }
+            QuickMessage::EscapeOne => {
+                if self.popup.is_some() {
+                    self.popup = None;
+                } else if self.view.info_shown() {
+                    self.view.hide_info();
+                } else if self.games.selected().is_some() {
+                    self.games.select(SelDir::None);
+                }
+            }
         }
         Task::none()
     }
@@ -445,6 +466,15 @@ impl App {
                 ::spel_katalog_info::NativeRequest::RunInit(game) => {
                     self.run_native_game(*game, RunMode::Init)
                 }
+                ::spel_katalog_info::NativeRequest::UpdateTags { uuid, tags } => {
+                    if let Some(game) = self.games.by_uuid_mut(uuid) {
+                        game.tags = tags
+                            .into_iter()
+                            .map(|tag| *self.tags.entry(tag).or_insert_with(TagId::new))
+                            .collect();
+                    }
+                    Task::none()
+                }
             },
             ::spel_katalog_info::Request::RemoveImage { slug } => self
                 .games
@@ -454,6 +484,7 @@ impl App {
                     &self.settings,
                     &self.filter,
                     &self.games_db,
+                    &self.tags,
                 )
                 .map(Message::Games),
             ::spel_katalog_info::Request::SetImage { slug, image } => self
@@ -468,6 +499,7 @@ impl App {
                     &self.settings,
                     &self.filter,
                     &self.games_db,
+                    &self.tags,
                 )
                 .map(Message::Games),
             ::spel_katalog_info::Request::RunGame { id, sandbox } => {
@@ -495,10 +527,10 @@ impl App {
 
     async fn install_game_(
         game_db: ::spel_katalog_native::Pool,
-        config: Box<NativeGame>,
+        config: Box<NativeGameConfig>,
         thumbnail: Option<::spel_katalog_formats::Image>,
         move_dir: Option<(PathBuf, PathBuf)>,
-    ) -> Option<(Uuid, Box<NativeGame>)> {
+    ) -> Option<(Uuid, Box<NativeGameConfig>)> {
         let uuid = Uuid::now_v7();
         game_db
             .insert_game(uuid)
@@ -536,7 +568,7 @@ impl App {
     pub fn install_game(
         &mut self,
         id: window::Id,
-        config: Box<NativeGame>,
+        config: Box<NativeGameConfig>,
         thumbnail: Option<::spel_katalog_formats::Image>,
         move_dir: Option<(PathBuf, PathBuf)>,
     ) -> Task<Message> {
@@ -588,6 +620,7 @@ impl App {
                             &self.settings,
                             &self.filter,
                             &self.games_db,
+                            &self.tags,
                         )
                         .map(Message::Games);
                 }
@@ -692,6 +725,20 @@ impl App {
             Message::RunShellNative(game) => {
                 return self.run_native_game(*game, RunMode::Shell);
             }
+            Message::TagFilter(or_request) => match or_request {
+                OrRequest::Message(message) => {
+                    let Self {
+                        tag_filter, tags, ..
+                    } = self;
+                    return tag_filter.update(message, tags).map(Message::TagFilter);
+                }
+                OrRequest::Request(req) => match req {
+                    ::spel_katalog_tag_filter::Request::SetFilter(tag_filters) => {
+                        self.games.set_tag_filter(tag_filters);
+                        self.games.sort(&self.settings, &self.filter);
+                    }
+                },
+            },
         }
         Task::none()
     }

@@ -4,7 +4,7 @@ use ::std::path::PathBuf;
 
 use ::serde::{Deserialize, Serialize};
 
-use crate::{NativeGame, RunMode};
+use crate::{NativeGameConfig, RunMode};
 
 /// Response returned when running a game on a daemon.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -22,7 +22,7 @@ pub enum DaemonRunResponse {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DaemonRunConfigRequest<S> {
     /// Config of game to run.
-    pub config: NativeGame,
+    pub config: NativeGameConfig,
     /// How to run game.
     pub run_mode: RunMode,
     /// Settings to use when running game.

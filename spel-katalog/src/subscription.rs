@@ -8,16 +8,84 @@ use ::tap::Pipe;
 
 use crate::{App, Message, QuickMessage};
 
+fn sel(sel_dir: SelDir) -> Option<Message> {
+    sel_dir
+        .pipe(::spel_katalog_games::Message::Select)
+        .pipe(OrRequest::Message)
+        .pipe(Message::Games)
+        .pipe(Some)
+}
+
+fn unmodified_chr_key(chr: &str) -> Option<Message> {
+    Some(Message::Quick(match chr {
+        "q" => QuickMessage::ClosePane,
+        "h" => QuickMessage::CycleHidden,
+        "f" => QuickMessage::CycleFilter,
+        "n" => QuickMessage::ToggleNetwork,
+        _ => return None,
+    }))
+}
+
+fn unmodified_named_key(named: Named) -> Option<Message> {
+    Some(Message::Quick(match named {
+        Named::ArrowRight => return sel(SelDir::Right),
+        Named::ArrowLeft => return sel(SelDir::Left),
+        Named::ArrowUp => return sel(SelDir::Up),
+        Named::ArrowDown => return sel(SelDir::Down),
+
+        Named::Tab => QuickMessage::Next,
+        Named::Enter | Named::Space => QuickMessage::RunSelected,
+        Named::F2 => QuickMessage::ToggleSettings,
+        Named::F3 => QuickMessage::ToggleMain,
+        Named::F5 => QuickMessage::ToggleGameInfo,
+        Named::F7 => QuickMessage::ToggleProcessInfo,
+        Named::Escape => QuickMessage::EscapeOne,
+        _ => return None,
+    }))
+}
+
+fn shift_named_key(named: Named) -> Option<Message> {
+    Some(Message::Quick(match named {
+        Named::Tab => QuickMessage::Prev,
+        _ => return None,
+    }))
+}
+
+fn ctrl_chr_key(chr: &str) -> Option<Message> {
+    Some(Message::Quick(match chr {
+        "q" => QuickMessage::CloseAll,
+        _ => return None,
+    }))
+}
+
+fn ctrl_shift_chr_key(chr: &str) -> Option<Message> {
+    Some(Message::Quick(match chr {
+        "m" => QuickMessage::ToggleMain,
+        "s" => QuickMessage::ToggleSettings,
+        "p" => QuickMessage::ToggleProcessInfo,
+        "g" => QuickMessage::ToggleGameInfo,
+        "d" => QuickMessage::Debug,
+        "w" => QuickMessage::ShowWelcome,
+        "t" => QuickMessage::ShowTagFilter,
+        _ => return None,
+    }))
+}
+
+fn key_to_message(key: keyboard::Key<&str>, modifiers: Modifiers) -> Option<Message> {
+    match key {
+        keyboard::Key::Named(named) if modifiers.is_empty() => unmodified_named_key(named),
+        keyboard::Key::Named(named) if modifiers == Modifiers::SHIFT => shift_named_key(named),
+        keyboard::Key::Character(chr) if modifiers.is_empty() => unmodified_chr_key(chr),
+        keyboard::Key::Character(chr) if modifiers == Modifiers::CTRL => ctrl_chr_key(chr),
+        keyboard::Key::Character(chr) if modifiers == Modifiers::CTRL | Modifiers::SHIFT => {
+            ctrl_shift_chr_key(chr)
+        }
+        _ => None,
+    }
+}
+
 impl App {
     pub fn subscription(&self) -> Subscription<Message> {
-        fn sel(sel_dir: SelDir) -> Option<Message> {
-            sel_dir
-                .pipe(::spel_katalog_games::Message::Select)
-                .pipe(OrRequest::Message)
-                .pipe(Message::Games)
-                .pipe(Some)
-        }
-
         let key_event = ::iced::keyboard::listen().filter_map(|event| match event {
             keyboard::Event::KeyPressed {
                 key,
@@ -27,59 +95,7 @@ impl App {
                 modifiers,
                 text: _,
                 repeat: _,
-            } => Some(Message::Quick(if modifiers.is_empty() {
-                match key.as_ref() {
-                    keyboard::Key::Character(chr) => match chr {
-                        "q" => QuickMessage::ClosePane,
-                        "h" => QuickMessage::CycleHidden,
-                        "f" => QuickMessage::CycleFilter,
-                        "n" => QuickMessage::ToggleNetwork,
-                        _ => return None,
-                    },
-                    keyboard::Key::Named(named) => match named {
-                        Named::ArrowRight if modifiers.is_empty() => return sel(SelDir::Right),
-                        Named::ArrowLeft if modifiers.is_empty() => return sel(SelDir::Left),
-                        Named::ArrowUp if modifiers.is_empty() => return sel(SelDir::Up),
-                        Named::ArrowDown if modifiers.is_empty() => return sel(SelDir::Down),
-
-                        Named::Tab => QuickMessage::Next,
-                        Named::Enter | Named::Space => QuickMessage::RunSelected,
-                        Named::F2 => QuickMessage::ToggleSettings,
-                        Named::F3 => QuickMessage::ToggleMain,
-                        Named::F5 => QuickMessage::ToggleGameInfo,
-                        Named::F7 => QuickMessage::ToggleProcessInfo,
-                        _ => return None,
-                    },
-                    _ => return None,
-                }
-            } else if modifiers == Modifiers::SHIFT | Modifiers::CTRL {
-                let keyboard::Key::Character(chr) = key.as_ref() else {
-                    return None;
-                };
-                match chr {
-                    "m" => QuickMessage::ToggleMain,
-                    "s" => QuickMessage::ToggleSettings,
-                    "p" => QuickMessage::ToggleProcessInfo,
-                    "g" => QuickMessage::ToggleGameInfo,
-                    "d" => QuickMessage::Debug,
-                    _ => return None,
-                }
-            } else if modifiers == Modifiers::SHIFT {
-                let keyboard::Key::Named(Named::Tab) = key else {
-                    return None;
-                };
-                QuickMessage::Prev
-            } else if modifiers == Modifiers::CTRL {
-                if let keyboard::Key::Character(chr) = key.as_ref()
-                    && chr == "q"
-                {
-                    QuickMessage::CloseAll
-                } else {
-                    return None;
-                }
-            } else {
-                return None;
-            })),
+            } => key_to_message(key.as_ref(), modifiers),
             _ => None,
         });
 

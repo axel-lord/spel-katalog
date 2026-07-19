@@ -20,7 +20,9 @@ use ::open::that;
 use ::spel_katalog_common::{
     OrRequest, StatusSender, async_status, in_place::PushMaybe as _, status, styling, w,
 };
-use ::spel_katalog_formats::{AdditionalConfig, Game, GameId, NativeGame, lutris_config};
+use ::spel_katalog_formats::{
+    AdditionalConfig, Game, GameCommon, GameId, GameNative, NativeGameConfig, lutris_config,
+};
 use ::spel_katalog_native::Pool;
 use ::spel_katalog_settings::{CoverartDir, Settings, YmlDir};
 use ::tap::Pipe;
@@ -85,7 +87,7 @@ pub enum GameContent {
         /// Id of game to verify match.
         uuid: Uuid,
         /// Loaded game data.
-        config: Box<NativeGame>,
+        config: Box<NativeGameConfig>,
     },
 }
 
@@ -256,12 +258,16 @@ impl State {
                 })
                 .then(identity)
             }
-            Game::Native {
-                name: _,
-                installed_at: _,
+            Game::Native(GameNative {
                 uuid,
-                hidden: _,
-            } => {
+                common:
+                    GameCommon {
+                        name: _,
+                        installed_at: _,
+                        hidden: _,
+                        tags: _,
+                    },
+            }) => {
                 let games_db = games_db.clone();
                 let uuid = *uuid;
                 Task::future(::smol::unblock(move || {
@@ -815,7 +821,7 @@ impl State {
                 w::col()
                     .push(
                         w::row()
-                            .push(widget::text(game.name()).width(Fill).align_x(Center))
+                            .push(widget::text(&game.name).width(Fill).align_x(Center))
                             .push(buttons),
                     )
                     .push(spel_katalog_widget::rule::horizontal())

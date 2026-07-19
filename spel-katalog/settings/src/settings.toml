@@ -88,6 +88,11 @@ help = "Should network be enabled"
 variants = ["Disabled", "Enabled"]
 default = "Disabled"
 
+[UseWayland]
+help = "Should wayland be used"
+variants = ["Disabled" ,"Enabled"]
+default = "Disabled"
+
 [LutrisExe]
 title = "Lutris Executable"
 help = "Path to lutris executable"
