@@ -1,36 +1,36 @@
 [workspace]
 members = [
-	"spel-katalog",
-	"spel-katalog-daemon",
-	"spel-katalog-install",
-	"spel-katalog/cache-queue",
-	"spel-katalog/cli",
-	"spel-katalog/common",
-	"spel-katalog/formats",
-	"spel-katalog/games",
-	"spel-katalog/gather",
-	"spel-katalog/info",
-	"spel-katalog/installer",
-	"spel-katalog/ipc",
-	"spel-katalog/lazy",
-	"spel-katalog/log",
-	"spel-katalog/log/view",
-	"spel-katalog/native",
-	"spel-katalog/profiler",
-	"spel-katalog/run",
-	"spel-katalog/settings/build",
-	"spel-katalog/settings/derive",
-	"spel-katalog/settings/derive-lib",
-	"spel-katalog/settings/traits",
-	"spel-katalog/settings/view",
-	"spel-katalog/sink",
-	"spel-katalog/tag-filter", 
-	"spel-katalog/terminal",
-	"spel-katalog/widget",
+	"crates/spel-katalog",
+	"crates/spel-katalog-cache-queue",
+	"crates/spel-katalog-common",
+	"crates/spel-katalog-daemon",
+	"crates/spel-katalog-formats",
+	"crates/spel-katalog-install",
+	"crates/spel-katalog-ipc",
+	"crates/spel-katalog-lazy",
+	"crates/spel-katalog-log",
+	"crates/spel-katalog-log/crates/view",
+	"crates/spel-katalog-profiler",
+	"crates/spel-katalog-widget",
+	"crates/spel-katalog/crates/cli",
+	"crates/spel-katalog/crates/games",
+	"crates/spel-katalog/crates/gather",
+	"crates/spel-katalog/crates/info",
+	"crates/spel-katalog/crates/installer",
+	"crates/spel-katalog/crates/native",
+	"crates/spel-katalog/crates/run",
+	"crates/spel-katalog/crates/settings/crates/build",
+	"crates/spel-katalog/crates/settings/crates/derive",
+	"crates/spel-katalog/crates/settings/crates/derive-lib",
+	"crates/spel-katalog/crates/settings/crates/traits",
+	"crates/spel-katalog/crates/settings/crates/view",
+	"crates/spel-katalog/crates/sink",
+	"crates/spel-katalog/crates/tag-filter", 
+	"crates/spel-katalog/crates/terminal",
 	"test",
 ]
 resolver = "2"
-default-members = ["spel-katalog"]
+default-members = ["crates/spel-katalog"]
 
 [workspace.package]
 edition = "2024"
@@ -131,30 +131,31 @@ shell-words = "1.1.1"
 smallvec = "1.15.2"
 smol = "2.0.2"
 smol-hyper = "0.1.1"
-spel-katalog-cli = { path = "spel-katalog/cli" }
-spel-katalog-common = { path = "spel-katalog/common" }
-spel-katalog-formats = { path = "spel-katalog/formats" }
-spel-katalog-games = { path = "spel-katalog/games" }
-spel-katalog-gather = { path = "spel-katalog/gather" }
-spel-katalog-info = { path = "spel-katalog/info" }
-spel-katalog-install = { path = "spel-katalog-install" }
-spel-katalog-installer = { path = "spel-katalog/installer" }
-spel-katalog-ipc = { path = "spel-katalog/ipc" }
-spel-katalog-lazy = { path = "spel-katalog/lazy" }
-spel-katalog-log = { path = "spel-katalog/log" }
-spel-katalog-log-view = { path = "spel-katalog/log/view" }
-spel-katalog-native = { path = "spel-katalog/native" }
-spel-katalog-profiler = { path = "spel-katalog/profiler" }
-spel-katalog-run = { path = "spel-katalog/run" }
-spel-katalog-settings = { path = "spel-katalog/settings" }
-spel-katalog-settings-build = { path = "spel-katalog/settings/build" }
-spel-katalog-settings-derive = { path = "spel-katalog/settings/derive" }
-spel-katalog-settings-derive-lib = { path = "spel-katalog/settings/derive-lib" }
-spel-katalog-settings-traits = { path = "spel-katalog/settings/traits" }
-spel-katalog-settings-view = { path = "spel-katalog/settings/view" }
-spel-katalog-sink = { path = "spel-katalog/sink" }
-spel-katalog-terminal = { path = "spel-katalog/terminal" }
-spel-katalog-widget = { path = "spel-katalog/widget" }
+spel-katalog-cli = { path = "crates/spel-katalog/crates/cli" }
+spel-katalog-common = { path = "crates/spel-katalog-common" }
+spel-katalog-formats = { path = "crates/spel-katalog-formats" }
+spel-katalog-games = { path = "crates/spel-katalog/crates/games" }
+spel-katalog-gather = { path = "crates/spel-katalog/crates/gather" }
+spel-katalog-info = { path = "crates/spel-katalog/crates/info" }
+spel-katalog-install = { path = "crates/spel-katalog-install" }
+spel-katalog-installer = { path = "crates/spel-katalog/crates/installer" }
+spel-katalog-ipc = { path = "crates/spel-katalog-ipc" }
+spel-katalog-lazy = { path = "crates/spel-katalog-lazy" }
+spel-katalog-log = { path = "crates/spel-katalog-log" }
+spel-katalog-log-view = { path = "crates/spel-katalog-log/crates/view" }
+spel-katalog-native = { path = "crates/spel-katalog/crates/native" }
+spel-katalog-profiler = { path = "crates/spel-katalog-profiler" }
+spel-katalog-run = { path = "crates/spel-katalog/crates/run" }
+spel-katalog-settings = { path = "crates/spel-katalog/crates/settings" }
+spel-katalog-settings-build = { path = "crates/spel-katalog/crates/settings/crates/build" }
+spel-katalog-settings-derive = { path = "crates/spel-katalog/crates/settings/crates/derive" }
+spel-katalog-settings-derive-lib = { path = "crates/spel-katalog/crates/settings/crates/derive-lib" }
+spel-katalog-settings-traits = { path = "crates/spel-katalog/crates/settings/crates/traits" }
+spel-katalog-settings-view = { path = "crates/spel-katalog/crates/settings/crates/view" }
+spel-katalog-sink = { path = "crates/spel-katalog/crates/sink" }
+spel-katalog-tag-filter = { path = "crates/spel-katalog/crates/tag-filter" }
+spel-katalog-terminal = { path = "crates/spel-katalog/crates/terminal" }
+spel-katalog-widget = { path = "crates/spel-katalog-widget" }
 strsim = "0.11.1"
 strum = "0.28.0"
 syn = { version = "2.0.118", default-features = false, features = ["full", "parsing", "printing"] }
@@ -170,4 +171,3 @@ vte = "0.15.0"
 whoami = { version = "2.1.2", default-features = false }
 xdg = "3.0.0"
 yaml-rust2 = "0.11.0"
-spel-katalog-tag-filter = { path = "spel-katalog/tag-filter" }
