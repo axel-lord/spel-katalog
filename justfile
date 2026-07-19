@@ -50,7 +50,7 @@ sanity: autoinherit fmt test-all
 
 # Install a crate by path.
 install-crate CRATE:
-	cargo +nightly install --path {{CRATE}} -Z build-std=std,panic_abort -Z build-std-features="optimize_for_size"
+	cargo +nightly install --path crates/{{CRATE}} -Z build-std=std,panic_abort -Z build-std-features="optimize_for_size"
 
 # Build crate by name.
 build-crate CRATE *EXTRA:

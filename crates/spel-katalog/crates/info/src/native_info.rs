@@ -332,10 +332,10 @@ impl State {
                 }),
                 QuickMessage::Run => self.with_content(|game| {
                     if !game.disabled {
-                    Box::new(game)
-                        .pipe(Request::RunGame)
-                        .pipe(OrRequest::Request)
-                        .pipe(Some)
+                        Box::new(game)
+                            .pipe(Request::RunGame)
+                            .pipe(OrRequest::Request)
+                            .pipe(Some)
                     } else {
                         ::log::warn!("run not available for disabled games");
                         None
@@ -343,10 +343,10 @@ impl State {
                 }),
                 QuickMessage::Shell => self.with_content(|game| {
                     if !game.disabled {
-                    Box::new(game)
-                        .pipe(Request::RunShell)
-                        .pipe(OrRequest::Request)
-                        .pipe(Some)
+                        Box::new(game)
+                            .pipe(Request::RunShell)
+                            .pipe(OrRequest::Request)
+                            .pipe(Some)
                     } else {
                         ::log::warn!("shell not available for disabled games");
                         None
