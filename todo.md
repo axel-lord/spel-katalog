@@ -38,6 +38,7 @@
 - [ ] Multiple tag filter layers (ui, backend already finished)
 - [ ] Game info in terminal window (with setting)
 - [ ] Panes for terminal window (perhaps unify terminal and main window)
+- [ ] Show module path in log view
 
 # Fixes
 - [ ] Dummy exe of installer not "moved"
