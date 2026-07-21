@@ -54,6 +54,13 @@ impl InstallGame {
             installer_dir,
             dummy,
         } = self;
+        let installer_dir = installer_dir.map(|path| match path.canonicalize() {
+            Ok(path) => path,
+            Err(err) => {
+                ::log::warn!("could not canonicalize {path:?}\n{err}");
+                path
+            }
+        });
         let base_dirs = ::xdg::BaseDirectories::with_prefix("spel-katalog");
         let drives = installer_dir
             .as_ref()
@@ -66,7 +73,13 @@ impl InstallGame {
             .canonicalize()
             .map_err(|err| eyre!(err).note(format!("is {game:?} a valid path?")))?;
         let exe = if !dummy {
-            exe
+            exe.map(|exe| match exe.canonicalize() {
+                Ok(exe) => exe,
+                Err(err) => {
+                    ::log::warn!("could not canonicalize {exe:?}\n{err}");
+                    exe
+                }
+            })
         } else {
             Some(game_dir.join("dummy.exe"))
         };

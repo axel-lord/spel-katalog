@@ -1,5 +1,6 @@
 //! Preparation screen.
 
+use ::core::mem;
 use ::std::{
     borrow::Cow,
     path::{Path, PathBuf},
@@ -221,6 +222,15 @@ fn list_placeholder<M>(text: &str) -> widget::Container<'_, M> {
         .style(widget::container::rounded_box)
 }
 
+/// If old parent is the parent of path replace it with new parent
+fn reparent(path: PathBuf, old_parent: &Path, new_parent: &Path) -> PathBuf {
+    if let Ok(path) = path.strip_prefix(old_parent) {
+        new_parent.join(path)
+    } else {
+        path
+    }
+}
+
 impl Prepare {
     /// Construct a new instance.
     pub fn new(
@@ -328,6 +338,17 @@ impl Prepare {
             tools.pipe(Message::AddCompTools).pipe(Some)
         });
 
+        let choice = match choice {
+            ExeChoice::Value(single) => ExeChoice::Value(
+                if let Ok(single) = Path::new(&single).strip_prefix(&parent) {
+                    single.to_string_lossy().into_owned()
+                } else {
+                    single
+                },
+            ),
+            choice @ ExeChoice::List(..) => choice,
+        };
+
         (
             Self {
                 title: parent
@@ -369,9 +390,15 @@ impl Prepare {
         let Extra {
             mut drives,
             mut bind,
-            ro_bind,
+            mut ro_bind,
             mut env,
         } = self.extra.clone();
+
+        bind.iter_mut()
+            .chain(&mut ro_bind)
+            .flatten()
+            .chain(drives.values_mut())
+            .for_each(|path| *path = reparent(mem::take(path), self.parent(), &parent));
 
         if !self.locale.is_empty() {
             env.insert("LANG".to_owned(), self.locale.clone());

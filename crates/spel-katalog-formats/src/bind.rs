@@ -1,6 +1,7 @@
 //! [Bind] and [Symlink] impls.
 #![allow(clippy::missing_docs_in_private_items)]
 
+use ::core::{iter, option};
 use ::std::path::{Path, PathBuf};
 
 use ::serde::{Deserialize, Serialize};
@@ -35,6 +36,52 @@ impl Bind {
             dest: Some(dest),
         }
     }
+
+    /// Returns an iterator over `src` and optionally `dest`.
+    pub fn iter(&self) -> BindIter<&'_ Path> {
+        self.into_iter()
+    }
+
+    /// Returns an iterator over `src` and optionally `dest` as mutable.
+    pub fn iter_mut(&mut self) -> BindIter<&'_ mut PathBuf> {
+        self.into_iter()
+    }
+}
+
+/// Iterator used to iterate bind.
+type BindIter<T> = iter::Chain<iter::Once<T>, option::IntoIter<T>>;
+
+impl<'a> IntoIterator for &'a mut Bind {
+    type Item = &'a mut PathBuf;
+
+    type IntoIter = BindIter<&'a mut PathBuf>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let Bind { src, dest } = self;
+        iter::once(src).chain(dest.as_mut())
+    }
+}
+
+impl<'a> IntoIterator for &'a Bind {
+    type Item = &'a Path;
+
+    type IntoIter = BindIter<&'a Path>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let Bind { src, dest } = self;
+        iter::once(src.as_path()).chain(dest.as_deref())
+    }
+}
+
+impl IntoIterator for Bind {
+    type Item = PathBuf;
+
+    type IntoIter = BindIter<PathBuf>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let Bind { src, dest } = self;
+        iter::once(src).chain(dest)
+    }
 }
 
 /// Representation of a symlink.
@@ -51,5 +98,51 @@ impl Symlink {
     pub fn normalize(&self) -> [&Path; 2] {
         let Self { src, dest } = self;
         [src, dest]
+    }
+
+    /// Iterator over `src` and `dest`.
+    pub fn iter(&self) -> SymlinkIter<&'_ Path> {
+        self.into_iter()
+    }
+
+    /// Iterator over `src` and `dest` as mutable.
+    pub fn iter_mut(&mut self) -> SymlinkIter<&'_ mut PathBuf> {
+        self.into_iter()
+    }
+}
+
+/// Iterator used to iterate symlink.
+type SymlinkIter<T> = ::core::array::IntoIter<T, 2>;
+
+impl IntoIterator for Symlink {
+    type Item = PathBuf;
+
+    type IntoIter = SymlinkIter<PathBuf>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let Self { src, dest } = self;
+        [src, dest].into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a Symlink {
+    type Item = &'a Path;
+
+    type IntoIter = SymlinkIter<&'a Path>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let Symlink { src, dest } = self;
+        [src.as_path(), dest.as_path()].into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a mut Symlink {
+    type Item = &'a mut PathBuf;
+
+    type IntoIter = SymlinkIter<&'a mut PathBuf>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let Symlink { src, dest } = self;
+        [src, dest].into_iter()
     }
 }

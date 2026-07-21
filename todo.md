@@ -41,8 +41,8 @@
 - [ ] Show module path in log view
 
 # Fixes
-- [ ] Dummy exe of installer not "moved"
-- [ ] Install drive of installer not canonicalized
+- [x] Dummy exe of installer not "moved"
+- [x] Install drive of installer not canonicalized
 
 # Future Goals/Possibilities
 - [x] Run exe files in prefix without lutris
