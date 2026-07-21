@@ -1,7 +1,7 @@
 //! Setting viewer helpers.
 
 use ::iced_core::{Alignment, Element};
-use ::iced_widget::{self as widget, Column, Row, container, pick_list, text_input, tooltip};
+use ::iced_widget::{Column, Row, container, pick_list, text_input, tooltip};
 use ::tap::Pipe;
 use spel_katalog_common::w;
 
@@ -11,14 +11,7 @@ use ::spel_katalog_settings_traits::{DefaultStr, Help, Title, TrustedVariants};
 fn with_tooltip<'a, T: Help, M: 'a>(
     elem: impl Into<Element<'a, M, ::iced_core::Theme, ::iced_renderer::Renderer>>,
 ) -> tooltip::Tooltip<'a, M> {
-    tooltip(
-        elem,
-        container(widget::text(<T>::help()).wrapping(widget::text::Wrapping::WordOrGlyph))
-            .max_width(300)
-            .padding(4)
-            .style(container::bordered_box),
-        tooltip::Position::FollowCursor,
-    )
+    ::spel_katalog_widget::with_tooltip(elem, <T>::help())
 }
 
 /// Create a choice widget for a setting.

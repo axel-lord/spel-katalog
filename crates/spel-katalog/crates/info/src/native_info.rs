@@ -20,14 +20,15 @@ use ::iced_widget::{
 use ::image::ImageFormat;
 use ::rfd::AsyncFileDialog;
 use ::smol::unblock;
+use ::spel_katalog_assets as assets;
 use ::spel_katalog_common::{IntoOrRequest, OrRequest, in_place::PushMaybe as _, w};
 use ::spel_katalog_formats::{GameId, NativeGameConfig, Tag};
 use ::spel_katalog_native::Pool;
+use ::spel_katalog_settings::Settings;
 use ::spel_katalog_settings::{CompToolsDir, ThmubnailSource};
-use ::spel_katalog_widget::monospace;
+use ::spel_katalog_widget::{WithTooltip as _, icon, monospace};
 use ::tap::{Pipe, TapOptional};
 use ::uuid::Uuid;
-use spel_katalog_settings::Settings;
 
 use crate::{Element, native_table::InfoTable};
 
@@ -708,45 +709,48 @@ impl State {
                 widget::Row::new()
                     .spacing(3)
                     .push(
-                        widget::button("Run")
-                            .on_press_with(|| QuickMessage::Run)
-                            .padding(3)
-                            .style(widget::button::success),
+                        icon::Icon::new(assets::run())
+                            .into_button_with_outline(|theme| theme.palette().success)
+                            .on_press(QuickMessage::Run)
+                            .with_tooltip("Run Game"),
                     )
                     .push(
-                        widget::button("Shell")
-                            .on_press_with(|| QuickMessage::Shell)
-                            .padding(3),
+                        icon::Icon::new(assets::term())
+                            .into_button_with_outline(|theme| theme.palette().primary)
+                            .on_press(QuickMessage::Shell)
+                            .with_tooltip("Launch a shell in game environment"),
                     )
                     .push(
-                        widget::button("Init")
-                            .on_press_with(|| QuickMessage::Init)
-                            .padding(3),
+                        icon::Icon::new(assets::spanner())
+                            .into_button_with_outline(|theme| theme.palette().primary)
+                            .on_press(QuickMessage::Init)
+                            .with_tooltip("Initialize game prefix"),
                     )
                     .push(widget::space().width(Length::Fill))
                     .push(
-                        widget::button("Open")
-                            .on_press_with(|| QuickMessage::Open)
-                            .padding(3),
+                        icon::Icon::new(assets::folder())
+                            .into_button_with_outline(|theme| theme.palette().primary)
+                            .on_press(QuickMessage::Open)
+                            .with_tooltip("Open game root directory"),
                     )
                     .push(
-                        widget::button("Discard")
+                        icon::Icon::new(assets::restore())
+                            .into_button_with_outline(|theme| theme.palette().danger)
                             .on_press_maybe(
                                 self.history
                                     .is_empty()
                                     .not()
                                     .then_some(QuickMessage::Discard),
                             )
-                            .padding(3)
-                            .style(widget::button::danger),
+                            .with_tooltip("Discard unsaved edits"),
                     )
                     .push(
-                        widget::button("Save")
+                        icon::Icon::new(assets::save())
+                            .into_button_with_outline(|theme| theme.palette().success)
                             .on_press_maybe(
                                 self.history.is_empty().not().then_some(QuickMessage::Save),
                             )
-                            .padding(3)
-                            .style(widget::button::success),
+                            .with_tooltip("Save config to database"),
                     )
                     .pipe(Element::from)
                     .map(Message::Quick)

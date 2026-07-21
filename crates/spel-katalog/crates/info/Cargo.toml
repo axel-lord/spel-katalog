@@ -12,7 +12,7 @@ iced_core.workspace = true
 iced_highlighter.workspace = true
 iced_renderer.workspace = true
 iced_runtime.workspace = true
-iced_widget.workspace = true
+iced_widget = { workspace = true, features = ["svg"] }
 image.workspace = true
 log.workspace = true
 open.workspace = true
@@ -29,6 +29,7 @@ spel-katalog-native.workspace = true
 spel-katalog-settings.workspace = true
 spel-katalog-settings-view.workspace = true
 spel-katalog-widget.workspace = true
+spel-katalog-assets.workspace = true
 tabled = { workspace = true, features = ["std"] }
 tap.workspace = true
 thiserror.workspace = true

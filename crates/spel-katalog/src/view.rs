@@ -1,6 +1,7 @@
 use ::std::cell::Cell;
 
 use ::derive_more::{Display, From, IsVariant};
+use ::iced::Alignment::Center;
 use ::iced_core::{
     Alignment, Color,
     Length::Fill,
@@ -10,6 +11,7 @@ use ::iced_runtime::Task;
 use ::iced_widget::{self as widget, pane_grid};
 use ::spel_katalog_common::styling;
 use ::spel_katalog_settings::Settings;
+use ::spel_katalog_widget::icon;
 use ::tap::Pipe;
 
 use crate::{Element, process_info::ProcessInfo};
@@ -117,6 +119,7 @@ impl State {
     fn buttons<'a>(&'a self) -> Element<'a, crate::Message> {
         widget::Row::new()
             .spacing(3)
+            .align_y(Center)
             .push(
                 widget::pick_list(
                     [Displayed::GameInfo, Displayed::Processes],
@@ -125,12 +128,7 @@ impl State {
                 )
                 .padding(3),
             )
-            .push(
-                widget::button("Close")
-                    .padding(3)
-                    .style(widget::button::danger)
-                    .on_press_with(|| Message::Close),
-            )
+            .push(icon::minimize().on_press_with(|| Message::Close))
             .pipe(Element::from)
             .map(crate::Message::from)
     }

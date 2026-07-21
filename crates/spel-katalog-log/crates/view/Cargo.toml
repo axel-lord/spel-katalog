@@ -12,6 +12,7 @@ flume.workspace = true
 iced_core.workspace = true
 iced_runtime.workspace = true
 iced_widget.workspace = true
+iced_aw = { workspace = true, features = ["menu"] }
 log.workspace = true
 smol.workspace = true
 spel-katalog-log.workspace = true
