@@ -51,5 +51,6 @@
 
 # Passive
 - [ ] More context menus
+- [ ] Icons where appropriate
 - [ ] Decouple from lutris
 - [ ] Split up spel-katalog more
