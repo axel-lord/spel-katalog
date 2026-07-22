@@ -4897,6 +4897,7 @@ dependencies = [
  "iced_widget",
  "log",
  "smol",
+ "spel-katalog-assets",
  "spel-katalog-log",
  "spel-katalog-widget",
  "tap",

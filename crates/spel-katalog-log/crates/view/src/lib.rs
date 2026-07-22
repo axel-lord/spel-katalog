@@ -4,9 +4,11 @@ use ::bytes::Bytes;
 use ::derive_more::{Deref, DerefMut};
 use ::iced_core::{Alignment::Center, Border, Element, Font, Length::Fill, Theme};
 use ::iced_runtime::{Task, futures::Subscription};
-use ::iced_widget as widget;
+use ::iced_widget::{self as widget};
 use ::smol::stream::StreamExt;
+use ::spel_katalog_assets as assets;
 use ::spel_katalog_log::{OwnedRecord, RecordMessage};
+use ::spel_katalog_widget::icon;
 use ::tap::Pipe;
 
 /// Message used by [LogView].
@@ -85,10 +87,29 @@ impl RecordContent {
 }
 
 /// Log view.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct LogView {
     /// Stored records.
     records: Vec<RecordContent>,
+    /// Font size of view.
+    font_size: u32,
+}
+
+impl Default for LogView {
+    fn default() -> Self {
+        Self {
+            records: Default::default(),
+            font_size: 13,
+        }
+    }
+}
+
+/// Calculate icon size from font size.
+fn icon_size(font_size: u32) -> u32 {
+    font_size
+        .checked_mul(3)
+        .and_then(|size| size.checked_div(4))
+        .unwrap_or(4)
 }
 
 impl LogView {
@@ -120,8 +141,8 @@ impl LogView {
 
     /// View widget.
     pub fn view(&self) -> Element<'_, Message, ::iced_core::Theme, ::iced_widget::Renderer> {
-        fn badge<'a>(level: ::log::Level) -> widget::Container<'a, Message> {
-            widget::text(match level {
+        fn badge<'a>(record: &'a OwnedRecord, font_size: u32) -> widget::Container<'a, Message> {
+            widget::text(match record.level {
                 ::log::Level::Error => "Error",
                 ::log::Level::Warn => "Warning",
                 ::log::Level::Info => "Info",
@@ -129,13 +150,14 @@ impl LogView {
                 ::log::Level::Trace => "Trace",
             })
             .font(Font::MONOSPACE)
+            .size(font_size)
             .pipe(widget::container)
             .padding(3)
             .style(move |theme: &Theme| {
                 let palette = theme.palette();
                 widget::container::rounded_box(theme).border(
                     Border::default()
-                        .color(match level {
+                        .color(match record.level {
                             ::log::Level::Error => palette.danger,
                             ::log::Level::Warn => palette.warning,
                             ::log::Level::Info => palette.success,
@@ -147,6 +169,15 @@ impl LogView {
                 )
             })
         }
+        fn module<'a>(record: &'a OwnedRecord, font_size: u32) -> widget::Container<'a, Message> {
+            let module = String::from_utf8_lossy(&record.module);
+            widget::text(module)
+                .font(Font::MONOSPACE)
+                .size(font_size)
+                .pipe(widget::container)
+                .style(widget::container::rounded_box)
+                .padding(3)
+        }
         self.records
             .iter()
             .enumerate()
@@ -157,13 +188,25 @@ impl LogView {
                             widget::Row::new()
                                 .align_y(Center)
                                 .spacing(3)
-                                .push(widget::text("+").font(Font::MONOSPACE))
-                                .push(badge(record.level))
+                                .push(
+                                    icon::Icon::new(assets::plus()).size(icon_size(self.font_size)),
+                                )
+                                .push(badge(record, self.font_size))
+                                .push(module(record, self.font_size))
                                 .push(
                                     String::from_utf8_lossy(short)
                                         .pipe(widget::text)
                                         .font(Font::MONOSPACE)
+                                        .size(self.font_size)
                                         .pipe(widget::container)
+                                        .padding(3),
+                                )
+                                .push(
+                                    widget::text("...")
+                                        .font(Font::MONOSPACE)
+                                        .size(self.font_size)
+                                        .pipe(widget::container)
+                                        .style(widget::container::rounded_box)
                                         .padding(3),
                                 )
                                 .pipe(widget::button)
@@ -178,13 +221,18 @@ impl LogView {
                                     widget::Row::new()
                                         .spacing(3)
                                         .align_y(Center)
-                                        .push(widget::text("-").font(Font::MONOSPACE))
-                                        .push(badge(record.level)),
+                                        .push(
+                                            icon::Icon::new(assets::minus())
+                                                .size(icon_size(self.font_size)),
+                                        )
+                                        .push(badge(record, self.font_size))
+                                        .push(module(record, self.font_size)),
                                 )
                                 .push(
                                     String::from_utf8_lossy(&record.message)
                                         .pipe(widget::text)
                                         .font(Font::MONOSPACE)
+                                        .size(self.font_size)
                                         .pipe(widget::container)
                                         .style(widget::container::rounded_box)
                                         .padding(3),
@@ -200,11 +248,13 @@ impl LogView {
                         widget::Row::new()
                             .align_y(Center)
                             .spacing(3)
-                            .push(badge(record.level))
+                            .push(badge(record, self.font_size))
+                            .push(module(record, self.font_size))
                             .push(
                                 String::from_utf8_lossy(&record.message)
                                     .pipe(widget::text)
-                                    .font(Font::MONOSPACE),
+                                    .font(Font::MONOSPACE)
+                                    .size(self.font_size),
                             ),
                     )
                 }

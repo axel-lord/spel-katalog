@@ -9,7 +9,7 @@ use ::spel_katalog_settings_traits::{DefaultStr, Help, Title, TrustedVariants};
 
 /// Display element with help tooltip.
 fn with_tooltip<'a, T: Help, M: 'a>(
-    elem: impl Into<Element<'a, M, ::iced_core::Theme, ::iced_renderer::Renderer>>,
+    elem: impl 'a + Into<Element<'a, M, ::iced_core::Theme, ::iced_renderer::Renderer>>,
 ) -> tooltip::Tooltip<'a, M> {
     ::spel_katalog_widget::with_tooltip(elem, <T>::help())
 }

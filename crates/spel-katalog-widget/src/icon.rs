@@ -33,22 +33,7 @@ pub fn minimize<'a, M: 'a>() -> Button<'a, M, Theme, Renderer> {
 
 impl<'a, M: 'a> From<Icon<'a>> for Element<'a, M, Theme, Renderer> {
     fn from(value: Icon<'a>) -> Self {
-        let Icon {
-            handle,
-            size,
-            style,
-        } = value;
-        let svg = ::iced_widget::Svg::new(handle.clone())
-            .width(size)
-            .height(size);
-        if let Some(style) = style {
-            svg.style(move |theme: &Theme, _| ::iced_widget::svg::Style {
-                color: Some(style(theme)),
-            })
-        } else {
-            svg
-        }
-        .into()
+        value.into_svg().into()
     }
 }
 
@@ -57,7 +42,7 @@ impl<'a> Icon<'a> {
     pub fn new(handle: &'a ::iced_core::svg::Handle) -> Self {
         Self {
             handle,
-            size: 24,
+            size: 26,
             style: None,
         }
     }
@@ -75,9 +60,30 @@ impl<'a> Icon<'a> {
         Self { size, ..self }
     }
 
+    /// Create a simple icon.
+    pub fn into_svg(self) -> ::iced_widget::svg::Svg<'a, Theme> {
+        let Icon {
+            handle,
+            size,
+            style,
+        } = self;
+        let svg = ::iced_widget::Svg::new(handle.clone())
+            .width(size)
+            .height(size);
+        if let Some(style) = style {
+            svg.style(move |theme: &Theme, _| ::iced_widget::svg::Style {
+                color: Some(style(theme)),
+            })
+        } else {
+            svg.style(|theme: &Theme, _| ::iced_widget::svg::Style {
+                color: Some(theme.palette().text),
+            })
+        }
+    }
+
     /// Create a button from icon.
     pub fn into_button<M: 'a>(self) -> Button<'a, M, Theme, Renderer> {
-        button(Element::from(self)).padding(3)
+        button(self.into_svg()).padding(3)
     }
 
     /// Create a button from icon.
@@ -85,7 +91,7 @@ impl<'a> Icon<'a> {
         self,
         outline: fn(&Theme) -> Color,
     ) -> Button<'a, M, Theme, Renderer> {
-        button(Element::from(self))
+        button(self.into_svg())
             .style(move |theme, status| {
                 let mut base = button::background(theme, status);
                 base.border.width = 1.5;
