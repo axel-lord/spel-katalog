@@ -9,6 +9,7 @@ pub use self::{
     vertical_list_menu::VerticalListMenu,
 };
 
+pub mod button;
 pub mod icon;
 pub mod rule;
 
