@@ -19,8 +19,11 @@ use ::unicode_segmentation::UnicodeSegmentation;
 
 use crate::run_umu::{CommonUmuCtx, NativeUmuCtx};
 
+mod id_channel;
 mod macros;
 pub mod run_umu;
+
+pub use crate::id_channel::{IdReceiver, IdSender, id_channel};
 
 /// Get log directory if available.
 fn log_dir(xdg: &::xdg::BaseDirectories) -> Option<PathBuf> {

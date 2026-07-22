@@ -374,15 +374,17 @@ impl NativeUmuCtx<'_> {
         let process_path = term_path.unwrap_or_else(|| bwrap.to_path_buf());
         ::log::info!("running {process_path:?} with args\n{args:#?}");
         let [stdout, stderr] = sink_builder.build(|| name.clone())?;
-        let cmd = Command::new(process_path)
+        let mut cmd = Command::new(process_path)
             .args(args)
             .stdout(stdout)
             .stderr(stderr)
-            .status();
+            .spawn()?;
 
         send_open.call();
 
-        let status = cmd.await.map_err(|err| {
+        let id = cmd.id();
+
+        let status = cmd.status().await.map_err(|err| {
             ::log::error!("could not run {name}\n{err}");
             eyre!("could not run {name}")
         })?;
