@@ -2,7 +2,9 @@
 
 use ::bytes::Bytes;
 use ::derive_more::{Deref, DerefMut};
-use ::iced_core::{Alignment::Center, Border, Element, Font, Length::Fill, Theme};
+use ::iced_core::{
+    Alignment::Center, Border, Element, Font, Length::Fill, Theme, text::IntoFragment,
+};
 use ::iced_runtime::{Task, futures::Subscription};
 use ::iced_widget::{self as widget};
 use ::smol::stream::StreamExt;
@@ -139,45 +141,69 @@ impl LogView {
         }
     }
 
-    /// View widget.
-    pub fn view(&self) -> Element<'_, Message, ::iced_core::Theme, ::iced_widget::Renderer> {
-        fn badge<'a>(record: &'a OwnedRecord, font_size: u32) -> widget::Container<'a, Message> {
-            widget::text(match record.level {
-                ::log::Level::Error => "Error",
-                ::log::Level::Warn => "Warning",
-                ::log::Level::Info => "Info",
-                ::log::Level::Debug => "Debug",
-                ::log::Level::Trace => "Trace",
-            })
+    /// Create a container with monospace text of
+    /// standardized padding and font size
+    fn text_container<'a>(
+        &self,
+        text: impl 'a + IntoFragment<'a>,
+    ) -> widget::Container<'a, Message> {
+        widget::text(text)
             .font(Font::MONOSPACE)
-            .size(font_size)
+            .size(self.font_size)
             .pipe(widget::container)
             .padding(3)
-            .style(move |theme: &Theme| {
-                let palette = theme.palette();
-                widget::container::rounded_box(theme).border(
-                    Border::default()
-                        .color(match record.level {
-                            ::log::Level::Error => palette.danger,
-                            ::log::Level::Warn => palette.warning,
-                            ::log::Level::Info => palette.success,
-                            ::log::Level::Debug => palette.primary,
-                            ::log::Level::Trace => palette.background,
-                        })
-                        .width(1.5)
-                        .rounded(3),
-                )
-            })
-        }
-        fn module<'a>(record: &'a OwnedRecord, font_size: u32) -> widget::Container<'a, Message> {
-            let module = String::from_utf8_lossy(&record.module);
-            widget::text(module)
-                .font(Font::MONOSPACE)
-                .size(font_size)
-                .pipe(widget::container)
-                .style(widget::container::rounded_box)
-                .padding(3)
-        }
+    }
+
+    /// Crate a box with monospace text of
+    /// standardized padding and font size
+    fn text_box<'a>(&self, text: impl 'a + IntoFragment<'a>) -> widget::Container<'a, Message> {
+        self.text_container(text)
+            .style(widget::container::rounded_box)
+    }
+
+    /// View a log badge.
+    fn badge<'a>(&'a self, record: &'a OwnedRecord) -> widget::Container<'a, Message> {
+        self.text_container(match record.level {
+            ::log::Level::Error => "Error",
+            ::log::Level::Warn => "Warning",
+            ::log::Level::Info => "Info",
+            ::log::Level::Debug => "Debug",
+            ::log::Level::Trace => "Trace",
+        })
+        .style(move |theme: &Theme| {
+            let palette = theme.palette();
+            widget::container::rounded_box(theme).border(
+                Border::default()
+                    .color(match record.level {
+                        ::log::Level::Error => palette.danger,
+                        ::log::Level::Warn => palette.warning,
+                        ::log::Level::Info => palette.success,
+                        ::log::Level::Debug => palette.primary,
+                        ::log::Level::Trace => palette.background,
+                    })
+                    .width(1.5)
+                    .rounded(3),
+            )
+        })
+    }
+
+    /// View module text.
+    fn module<'a>(&'a self, record: &'a OwnedRecord) -> widget::Container<'a, Message> {
+        let module = String::from_utf8_lossy(&record.module);
+        self.text_box(module)
+    }
+
+    /// View record prefix.
+    pub fn record_prefix<'a>(
+        &'a self,
+        record: &'a OwnedRecord,
+        row: widget::Row<'a, Message>,
+    ) -> widget::Row<'a, Message> {
+        row.push(self.badge(record)).push(self.module(record))
+    }
+
+    /// View widget.
+    pub fn view(&self) -> Element<'_, Message, ::iced_core::Theme, ::iced_widget::Renderer> {
         self.records
             .iter()
             .enumerate()
@@ -191,24 +217,9 @@ impl LogView {
                                 .push(
                                     icon::Icon::new(assets::plus()).size(icon_size(self.font_size)),
                                 )
-                                .push(badge(record, self.font_size))
-                                .push(module(record, self.font_size))
-                                .push(
-                                    String::from_utf8_lossy(short)
-                                        .pipe(widget::text)
-                                        .font(Font::MONOSPACE)
-                                        .size(self.font_size)
-                                        .pipe(widget::container)
-                                        .padding(3),
-                                )
-                                .push(
-                                    widget::text("...")
-                                        .font(Font::MONOSPACE)
-                                        .size(self.font_size)
-                                        .pipe(widget::container)
-                                        .style(widget::container::rounded_box)
-                                        .padding(3),
-                                )
+                                .pipe(|row| self.record_prefix(record, row))
+                                .push(self.text_container(String::from_utf8_lossy(short)))
+                                .push(self.text_box("..."))
                                 .pipe(widget::button)
                                 .style(widget::button::text)
                                 .padding(0)
@@ -225,18 +236,9 @@ impl LogView {
                                             icon::Icon::new(assets::minus())
                                                 .size(icon_size(self.font_size)),
                                         )
-                                        .push(badge(record, self.font_size))
-                                        .push(module(record, self.font_size)),
+                                        .pipe(|row| self.record_prefix(record, row)),
                                 )
-                                .push(
-                                    String::from_utf8_lossy(&record.message)
-                                        .pipe(widget::text)
-                                        .font(Font::MONOSPACE)
-                                        .size(self.font_size)
-                                        .pipe(widget::container)
-                                        .style(widget::container::rounded_box)
-                                        .padding(3),
-                                )
+                                .push(self.text_box(String::from_utf8_lossy(&record.message)))
                                 .pipe(widget::button)
                                 .style(widget::button::text)
                                 .padding(0)
@@ -248,14 +250,8 @@ impl LogView {
                         widget::Row::new()
                             .align_y(Center)
                             .spacing(3)
-                            .push(badge(record, self.font_size))
-                            .push(module(record, self.font_size))
-                            .push(
-                                String::from_utf8_lossy(&record.message)
-                                    .pipe(widget::text)
-                                    .font(Font::MONOSPACE)
-                                    .size(self.font_size),
-                            ),
+                            .pipe(|row| self.record_prefix(record, row))
+                            .push(self.text_container(String::from_utf8_lossy(&record.message))),
                     )
                 }
             })
