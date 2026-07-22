@@ -10,8 +10,12 @@ use ::iced_widget::{self as widget};
 use ::smol::stream::StreamExt;
 use ::spel_katalog_assets as assets;
 use ::spel_katalog_log::{OwnedRecord, RecordMessage};
-use ::spel_katalog_widget::icon;
+use ::spel_katalog_widget::{WithTooltip, icon};
 use ::tap::Pipe;
+
+use crate::record::Record;
+
+mod record;
 
 /// Message used by [LogView].
 #[derive(Debug, Clone)]
@@ -30,7 +34,7 @@ enum RecordContent {
         /// Record of content.
         #[deref]
         #[deref_mut]
-        record: OwnedRecord,
+        record: Record,
         /// Short representation of record.
         short: Bytes,
     },
@@ -39,35 +43,35 @@ enum RecordContent {
         /// Record of content.
         #[deref]
         #[deref_mut]
-        record: OwnedRecord,
+        record: Record,
     },
 }
 
 impl RecordContent {
-    /// Create open variant from a record.
-    pub const fn new_open(record: OwnedRecord) -> Self {
-        Self::Open { record }
-    }
-
     /// Create closed variant from a record.
-    pub fn new_closed(record: OwnedRecord) -> Self {
+    pub fn new(record: OwnedRecord) -> Self {
         Self::Closed {
             short: record.first_line(),
-            record,
+            record: Record::new(record),
         }
     }
 
     /// Convert to [RecordContent::Open].
     pub fn open(&mut self) {
         if let Self::Closed { record, .. } = self {
-            *self = Self::new_open(record.clone())
+            *self = Self::Open {
+                record: record.clone(),
+            }
         }
     }
 
     /// Convert to [RecordContent::Closed].
     pub fn close(&mut self) {
         if let Self::Open { record, .. } = self {
-            *self = Self::new_closed(record.clone())
+            *self = Self::Closed {
+                record: record.clone(),
+                short: record.first_line(),
+            }
         }
     }
 
@@ -82,7 +86,9 @@ impl RecordContent {
     /// Is shortened.
     pub const fn is_shortened(&self) -> bool {
         match self {
-            RecordContent::Closed { record, short } => short.len() != record.message.len(),
+            RecordContent::Closed { record, short } => {
+                short.len() != record.as_owned_record().message.len()
+            }
             RecordContent::Open { .. } => true,
         }
     }
@@ -129,7 +135,7 @@ impl LogView {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::RecvRecord(record) => {
-                self.records.push(RecordContent::new_closed(record.into()));
+                self.records.push(RecordContent::new(record.into()));
                 Task::none()
             }
             Message::Toggle(idx) => {
@@ -162,7 +168,7 @@ impl LogView {
     }
 
     /// View a log badge.
-    fn badge<'a>(&'a self, record: &'a OwnedRecord) -> widget::Container<'a, Message> {
+    fn badge<'a>(&'a self, record: &'a Record) -> widget::Container<'a, Message> {
         self.text_container(match record.level {
             ::log::Level::Error => "Error",
             ::log::Level::Warn => "Warning",
@@ -188,7 +194,7 @@ impl LogView {
     }
 
     /// View module text.
-    fn module<'a>(&'a self, record: &'a OwnedRecord) -> widget::Container<'a, Message> {
+    fn module<'a>(&'a self, record: &'a Record) -> widget::Container<'a, Message> {
         let module = String::from_utf8_lossy(&record.module);
         self.text_box(module)
     }
@@ -196,10 +202,15 @@ impl LogView {
     /// View record prefix.
     pub fn record_prefix<'a>(
         &'a self,
-        record: &'a OwnedRecord,
+        record: &'a Record,
         row: widget::Row<'a, Message>,
     ) -> widget::Row<'a, Message> {
-        row.push(self.badge(record)).push(self.module(record))
+        row.push(self.badge(record))
+            .push(
+                self.text_container(record.clock_str())
+                    .with_tooltip(record.timestamp_str()),
+            )
+            .push(self.module(record))
     }
 
     /// View widget.
@@ -259,6 +270,7 @@ impl LogView {
             .pipe(::spel_katalog_widget::xy_scrollable)
             .anchor_bottom()
             .width(Fill)
+            .height(Fill)
             .pipe(widget::container)
             .style(widget::container::bordered_box)
             .padding(3)

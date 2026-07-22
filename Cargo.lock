@@ -4898,6 +4898,7 @@ dependencies = [
  "log",
  "smol",
  "spel-katalog-assets",
+ "spel-katalog-formats",
  "spel-katalog-log",
  "spel-katalog-widget",
  "tap",

@@ -18,6 +18,7 @@ smol.workspace = true
 spel-katalog-log.workspace = true
 spel-katalog-widget.workspace = true
 spel-katalog-assets.workspace = true
+spel-katalog-formats.workspace = true
 tap.workspace = true
 
 [lints]

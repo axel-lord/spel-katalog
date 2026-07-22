@@ -14,7 +14,7 @@ pub use self::{
     installer::{ExeChoice, InstallerConfig, InstallerPrepareConfig},
     native_game_config::{EnvValue, NativeGameConfig, RunMode, RunnerNative},
     tag::{Tag, TagFilter, TagFilterKind, TagFilterMode, TagId, TagStorage},
-    timestamp::{TimeStampParseError, Timestamp, TimestampFromIntError},
+    timestamp::{Timestamp, TimestampFromIntError, TimestampParseError},
 };
 
 mod addititional_config;

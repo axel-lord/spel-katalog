@@ -9,6 +9,9 @@ use ::serde::{Deserialize, Serialize, de};
 /// Time format.
 const FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 
+/// Time format, without date.
+const CLOCK_FORMAT: &str = "%H:%M:%S";
+
 /// Timestamp in given locale.
 #[derive(
     Debug,
@@ -35,11 +38,16 @@ impl Timestamp {
     pub fn now() -> Self {
         Self(::chrono::Local::now())
     }
+
+    /// Get formatted clock time (no date).
+    pub fn clock(this: &Timestamp) -> String {
+        this.0.format(CLOCK_FORMAT).to_string()
+    }
 }
 
 /// Error representing an error when parsing a timestamp.
 #[derive(Debug, ::thiserror::Error)]
-pub enum TimeStampParseError {
+pub enum TimestampParseError {
     /// Timestamp could not be parsed.
     #[error(transparent)]
     Parse(#[from] ::chrono::format::ParseError),
@@ -58,16 +66,16 @@ pub struct TimestampFromIntError {
 }
 
 impl FromStr for Timestamp {
-    type Err = TimeStampParseError;
+    type Err = TimestampParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         NaiveDateTime::parse_from_str(s, FORMAT)
-            .map_err(TimeStampParseError::Parse)
+            .map_err(TimestampParseError::Parse)
             .and_then(|dt| {
                 Local
                     .from_local_datetime(&dt)
                     .latest()
-                    .ok_or(TimeStampParseError::Invalid)
+                    .ok_or(TimestampParseError::Invalid)
             })
             .map(Self)
     }
