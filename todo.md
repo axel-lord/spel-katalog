@@ -30,7 +30,7 @@
 # QoL
 - [ ] Log filtering
 - [ ] Process info in terminal window
-- [ ] Process info for daemon run games
+- [x] Process info for daemon run games
 - [x] Disable games (shadow lutris but do not show)
 - [ ] Quick tag add
 - [ ] Hidden tags
