@@ -11,11 +11,12 @@ use ::smol::{
     future::FutureExt,
     io::{AsyncReadExt, AsyncWriteExt},
 };
-use ::spel_katalog_formats::DaemonRunConfigRequest;
+use ::spel_katalog_formats::{DaemonRunConfigRequest, DaemonRunResponse};
 use ::spel_katalog_ipc::{
     generic::listen,
     http::{HttpResponse, ResponseCode},
 };
+use ::spel_katalog_run::id_channel;
 use ::spel_katalog_settings::Settings;
 use ::spel_katalog_sink::SinkBuilder;
 use ::tinyvec::ArrayVec;
@@ -132,6 +133,8 @@ impl RunDaemon {
                                 }
                             })?;
 
+                        let (tx, rx) = id_channel();
+
                         ::std::thread::Builder::new()
                             .name(format!("spel-katalog-run-[{trunc_name}]"))
                             .spawn(move || {
@@ -140,6 +143,7 @@ impl RunDaemon {
                                     run_mode,
                                     &settings,
                                     sink_builder,
+                                    tx,
                                 )
                                 .and_then(::smol::block_on)
                                 {
@@ -147,12 +151,18 @@ impl RunDaemon {
                                 };
                             })?;
 
-                        let response = ::serde_json::to_vec(
-                            &::spel_katalog_formats::DaemonRunResponse::CreatedPipe {
+                        let pid = rx.recv().await;
+                        let response = if let Some(pid) = pid {
+                            DaemonRunResponse::CreatedPipe {
                                 name: trunc_name,
                                 path: fifo_path,
-                            },
-                        )?;
+                                pid: pid.into(),
+                            }
+                        } else {
+                            DaemonRunResponse::CouldNotRun { name: trunc_name }
+                        };
+
+                        let response = ::serde_json::to_vec(&response)?;
 
                         Ok(Bytes::from_owner(response))
                     }

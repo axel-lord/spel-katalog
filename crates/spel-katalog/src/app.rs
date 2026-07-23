@@ -6,7 +6,7 @@ use ::iced::Font;
 use ::iced_core::{Alignment::Center, Length::Fill, font, window};
 use ::iced_runtime::Task;
 use ::iced_widget::{self as widget, Column, Container, Row, text, text_input, toggler, value};
-use ::rustc_hash::FxHashMap;
+use ::rustc_hash::{FxHashMap, FxHashSet};
 use ::spel_katalog_cli::Run;
 use ::spel_katalog_common::{OrRequest, StatusSender, w};
 use ::spel_katalog_formats::TagStorage;
@@ -57,6 +57,7 @@ pub(crate) struct App {
     pub tags: TagStorage,
     pub tag_filter: TagFilterDialog,
     pub popup: Option<Popup>,
+    pub additional_roots: Arc<FxHashSet<i64>>,
 }
 
 /// Initial state created by new.
@@ -118,6 +119,7 @@ impl Initial {
         let tags = TagStorage::default();
         let popup = None;
         let tag_filter = TagFilterDialog::new();
+        let additional_roots = Arc::default();
 
         let app = App {
             filter,
@@ -136,6 +138,7 @@ impl Initial {
             tags,
             popup,
             tag_filter,
+            additional_roots,
         };
 
         Ok(Self {
@@ -233,8 +236,8 @@ impl App {
         .map_err(|err| ::color_eyre::eyre::eyre!(err))
     }
 
-    pub async fn collect_process_info() -> Option<Message> {
-        match process_info::ProcessInfo::open().await {
+    pub async fn collect_process_info(additional_roots: &FxHashSet<i64>) -> Option<Message> {
+        match process_info::ProcessInfo::open(additional_roots).await {
             Ok(summary) => Some(Message::ProcessInfo(summary)),
             Err(err) => {
                 ::log::error!("whilst collecting info\n{err}");

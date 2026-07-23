@@ -3,7 +3,7 @@ use ::iced_core::window;
 use ::spel_katalog_common::OrRequest;
 use ::spel_katalog_formats::NativeGameConfig;
 
-use crate::{app::WindowType, process_info, view};
+use crate::{app::WindowType, process_info::CollectedInfo, view};
 
 #[derive(Debug, Clone, Copy, Default, IsVariant, PartialEq, Eq, Hash)]
 pub enum Safety {
@@ -63,9 +63,15 @@ pub enum Message {
     Info(OrRequest<::spel_katalog_info::Message, ::spel_katalog_info::Request>),
     #[from]
     Quick(QuickMessage),
-    ProcessInfo(Vec<process_info::ProcessInfo>),
-    Kill {
+    ProcessInfo(CollectedInfo),
+    ViewProcess {
+        /// Pid of process to add to view set.
         pid: i64,
+    },
+    Kill {
+        /// Pid of process to kill.
+        pid: i64,
+        /// Should the process be terminated.
         terminate: bool,
     },
     OpenWindow(window::Id, WindowType),

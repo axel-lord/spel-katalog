@@ -73,6 +73,9 @@ build *EXTRA: autoinherit fmt (build-crate crate EXTRA)
 # Run project.
 run *EXTRA: autoinherit fmt (run-crate crate EXTRA)
 
+# Run daemon.
+run-daemon *EXTRA: autoinherit fmt (run-crate daemon_crate EXTRA)
+
 # Run project with profiling.
 profile *EXTRA:
 	cargo run -p {{crate}} -F profiling

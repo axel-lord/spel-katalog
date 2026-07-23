@@ -14,7 +14,7 @@ use ::spel_katalog_formats::{
 };
 use ::spel_katalog_ipc::http::ResponseCode;
 use ::spel_katalog_run::{
-    Callback, dll_overrides,
+    Callback, dll_overrides, id_channel,
     run_umu::{CommonUmuCtx, LutrisCtx, LutrisUmuCtx},
     sandbox_ro_dirs,
 };
@@ -221,35 +221,51 @@ impl App {
                         })
                         .ok()?;
 
-                    match response {
-                        DaemonRunResponse::CreatedPipe { name, path } => async move {
+                    ::log::info!("received run game response: {response:#?}");
+                    let message = match response {
+                        DaemonRunResponse::CreatedPipe { name, path, pid } => async move {
                             let fifo = ::smol::fs::File::open(&path).await?;
                             let [stdout, _] = sink_builder.writers(|| name)?;
                             let writer = stdout.into_async();
-                            ::smol::io::copy(fifo, writer).await?;
-                            Ok(())
+                            Ok(Task::batch([
+                                Task::done(Message::ViewProcess { pid }),
+                                Task::future(::smol::io::copy(fifo, writer)).discard(),
+                            ]))
                         }
                         .await
                         .map_err(|err: ::smol::io::Error| {
                             ::log::error!("error while reading fifo\n{err}")
                         })
                         .ok()?,
+                        DaemonRunResponse::CouldNotRun { name } => {
+                            ::log::error!("could not run {name}");
+                            return None;
+                        }
                     };
-                    None
+                    Some(message)
                 }
                 Err(err) => {
                     ::log::error!(
                         "could not connect to daemon ipc socket, running game from main\n{err}"
                     );
 
-                    ::spel_katalog_run::run_native_game(game, run_mode, &settings, sink_builder)?
-                        .await
-                        .map(Message::from)
+                    let (tx, _) = id_channel();
+
+                    ::spel_katalog_run::run_native_game(
+                        game,
+                        run_mode,
+                        &settings,
+                        sink_builder,
+                        tx,
+                    )?
+                    .await
+                    .map(Message::from)
+                    .map(Task::done)
                 }
             }
         };
 
-        Task::future(task).and_then(Task::done)
+        Task::future(task).and_then(::core::convert::identity)
     }
 
     pub fn run_game(&mut self, id: GameId, safety: Safety, no_game: bool) -> Task<Message> {
@@ -444,10 +460,12 @@ impl App {
                         },
                     };
 
+                    let (tx, _) = id_channel();
+
                     return if safety.is_sandbox_shell() {
-                        ctx.run_shell().await.into()
+                        ctx.run_shell(tx).await.into()
                     } else {
-                        ctx.run().await.into()
+                        ctx.run(tx).await.into()
                     };
                 }
             };

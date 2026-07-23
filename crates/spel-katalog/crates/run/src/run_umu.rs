@@ -17,7 +17,7 @@ use ::spel_katalog_formats::{
 use ::spel_katalog_sink::SinkBuilder;
 use ::tap::{Pipe, Tap};
 
-use crate::{Callback, macros::args};
+use crate::{Callback, IdSender, macros::args};
 
 /// Context needed to run game with bubblewrap and umu.
 #[derive(Debug)]
@@ -148,31 +148,31 @@ impl NativeUmuCtx<'_> {
     ///
     /// # Errors
     /// If context cannot run shell.
-    pub async fn run_shell(self) -> ::color_eyre::Result<String> {
-        self.run(RunMode::Shell).await
+    pub async fn run_shell(self, on_run: IdSender) -> ::color_eyre::Result<String> {
+        self.run(RunMode::Shell, on_run).await
     }
 
     /// Run game.
     ///
     /// # Errors
     /// If context cannot run.
-    pub async fn run_game(self) -> ::color_eyre::Result<String> {
-        self.run(RunMode::Exe).await
+    pub async fn run_game(self, on_run: IdSender) -> ::color_eyre::Result<String> {
+        self.run(RunMode::Exe, on_run).await
     }
 
     /// Initizlize prefix.
     ///
     /// # Errors
     /// If context cannot initialize prefix.
-    pub async fn run_init(self) -> ::color_eyre::Result<String> {
-        self.run(RunMode::Init).await
+    pub async fn run_init(self, on_run: IdSender) -> ::color_eyre::Result<String> {
+        self.run(RunMode::Init, on_run).await
     }
 
     /// Run context.
     ///
     /// # Errors
     /// If context cannot run given mode.
-    pub async fn run(self, run_mode: RunMode) -> ::color_eyre::Result<String> {
+    pub async fn run(self, run_mode: RunMode, on_run: IdSender) -> ::color_eyre::Result<String> {
         if self.config.disabled {
             return Err(eyre!("not running disabled game"));
         }
@@ -382,7 +382,7 @@ impl NativeUmuCtx<'_> {
 
         send_open.call();
 
-        let id = cmd.id();
+        on_run.send(cmd.id());
 
         let status = cmd.status().await.map_err(|err| {
             ::log::error!("could not run {name}\n{err}");
@@ -520,16 +520,16 @@ impl<'a> LutrisUmuCtx<'a> {
     ///
     /// # Errors
     /// If context cannot run shell.
-    pub async fn run_shell(self) -> ::color_eyre::Result<String> {
-        self.into_native()?.run_shell().await
+    pub async fn run_shell(self, on_run: IdSender) -> ::color_eyre::Result<String> {
+        self.into_native()?.run_shell(on_run).await
     }
 
     /// Run game.
     ///
     /// # Errors
     /// If context cannot run.
-    pub async fn run(self) -> ::color_eyre::Result<String> {
-        self.into_native()?.run_game().await
+    pub async fn run(self, on_run: IdSender) -> ::color_eyre::Result<String> {
+        self.into_native()?.run_game(on_run).await
     }
 
     /// Convert into a native game run context.

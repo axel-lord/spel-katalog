@@ -141,6 +141,7 @@ pub fn run_native_game(
     run_mode: RunMode,
     settings: &Settings,
     sink_builder: SinkBuilder,
+    on_run: IdSender,
 ) -> Option<impl 'static + Future<Output = Option<String>>> {
     let bwrap = settings.get::<BubblewrapExe>().clone();
     let umu = settings.get::<UmuRunExe>().clone();
@@ -174,7 +175,7 @@ pub fn run_native_game(
             config: game,
         };
 
-        ctx.run(run_mode)
+        ctx.run(run_mode, on_run)
             .await
             .map_err(|err| ::log::error!("could not run game {name}\n{err}"))
             .ok()

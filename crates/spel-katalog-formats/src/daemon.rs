@@ -11,10 +11,17 @@ use crate::{NativeGameConfig, RunMode};
 pub enum DaemonRunResponse {
     /// A Pipe was created.
     CreatedPipe {
-        /// Name of pipe.
+        /// Name of game.
         name: String,
         /// Path of pipe.
         path: PathBuf,
+        /// Pid of process.
+        pid: i64,
+    },
+    /// Could not run game config.
+    CouldNotRun {
+        /// Name of game.
+        name: String,
     },
 }
 
