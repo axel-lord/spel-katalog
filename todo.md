@@ -39,6 +39,9 @@
 - [ ] Game info in terminal window (with setting)
 - [ ] Panes for terminal window (perhaps unify terminal and main window)
 - [x] Show module path in log view
+- [ ] Split of process view to crate
+- [ ] Simplified/collapsed process view tree
+- [ ] So not log no such directory as an error in process open (as it is expected after the process is closed)
 
 # Fixes
 - [x] Dummy exe of installer not "moved"
