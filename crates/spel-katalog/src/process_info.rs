@@ -12,11 +12,9 @@ use ::iced_widget::{self as widget, button, container, opaque, text, value};
 use ::rustc_hash::FxHashSet;
 use ::rustix::process::{Pid, RawPid, Signal, kill_process};
 use ::smol::{fs, lock::Semaphore, stream::StreamExt, unblock};
-use ::spel_katalog_common::in_place::PushMaybe as _;
-use ::spel_katalog_common::{styling, w};
+use ::spel_katalog_common::{in_place::PushMaybe as _, styling, w};
+use ::spel_katalog_widget::Element;
 use ::tap::Pipe;
-
-use crate::Element;
 
 /// Send given signal to process.
 async fn signal_process(pid: i64, signal: Signal) {

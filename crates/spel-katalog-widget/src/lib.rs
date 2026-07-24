@@ -1,6 +1,6 @@
 //! Widgets with application defaults.
 
-use ::iced_core::{Element, Font, text::IntoFragment};
+use ::iced_core::{Font, text::IntoFragment};
 use ::iced_widget::{self as widget, text::Rich};
 
 pub use self::{
@@ -18,6 +18,10 @@ mod scrollable;
 mod vertical_list_menu;
 
 pub use scrollable::y_scrollable as scrollable;
+
+/// Alias to element with defaults for renderer and theme.
+pub type Element<'a, M, Theme = ::iced_core::Theme, Renderer = ::iced_widget::Renderer> =
+    ::iced_core::Element<'a, M, Theme, Renderer>;
 
 /// Display monospace text.
 pub fn monospace<'a, Theme, Renderer>(
