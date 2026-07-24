@@ -60,6 +60,8 @@ pub enum Message {
         /// Process to terminate.
         pid: i64,
     },
+    /// Copy process command line.
+    Copy(String),
 }
 /// Display a process tree.
 #[derive(Debug)]
@@ -134,6 +136,7 @@ impl ProcessView {
             Message::Refresh => self.refresh(),
             Message::Kill { pid } => Task::future(signal_process(pid, Signal::KILL)).discard(),
             Message::Terminate { pid } => Task::future(signal_process(pid, Signal::TERM)).discard(),
+            Message::Copy(contents) => ::iced_runtime::clipboard::write(contents),
         }
     }
 

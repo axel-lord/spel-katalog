@@ -208,7 +208,7 @@ impl LogView {
         row.push(self.badge(record))
             .push(
                 self.text_container(record.clock_str())
-                    .with_tooltip(record.timestamp_str()),
+                    .with_text_tooltip(record.timestamp_str()),
             )
             .push(self.module(record))
     }

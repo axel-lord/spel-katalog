@@ -2,6 +2,7 @@
 
 use ::iced_core::{Alignment, Element};
 use ::iced_widget::{Column, Row, container, pick_list, text_input, tooltip};
+use ::spel_katalog_widget::WithTooltip;
 use ::tap::Pipe;
 use spel_katalog_common::w;
 
@@ -11,7 +12,7 @@ use ::spel_katalog_settings_traits::{DefaultStr, Help, Title, TrustedVariants};
 fn with_tooltip<'a, T: Help, M: 'a>(
     elem: impl 'a + Into<Element<'a, M, ::iced_core::Theme, ::iced_renderer::Renderer>>,
 ) -> tooltip::Tooltip<'a, M> {
-    ::spel_katalog_widget::with_tooltip(elem, <T>::help())
+    elem.with_text_tooltip(<T>::help())
 }
 
 /// Create a choice widget for a setting.

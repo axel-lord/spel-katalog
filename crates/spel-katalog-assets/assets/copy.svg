@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="48" height="48" version="1.1" viewBox="0 0 12.7 12.7" xmlns="http://www.w3.org/2000/svg">
+ <g fill="#fff" stroke-dasharray="7.27485, 2.42495" stroke-linejoin="round" stroke-width="2.425">
+  <path d="m3.175-9.5274e-8v2.1167h-2.1167v7.4083h7.4083v-9.525h-4.2333zm1.0583 1.0583h3.175v7.4083h-5.2917v-5.2917h2.1167zm-1.0583 3.175v1.0583h3.175v-1.0583zm0 2.1167v1.0583h3.175v-1.0583z"/>
+  <path d="m4.2333 12.7v-2.1167h1.0583v1.0583h5.2917v-7.4083h-1.0583v-1.0583l2.1167 3e-7v9.525z"/>
+ </g>
+</svg>

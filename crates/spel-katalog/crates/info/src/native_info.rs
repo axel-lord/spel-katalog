@@ -712,26 +712,26 @@ impl State {
                         icon::Icon::new(assets::run())
                             .into_button_with_outline(|theme| theme.palette().success)
                             .on_press(QuickMessage::Run)
-                            .with_tooltip("Run Game"),
+                            .with_text_tooltip("Run Game"),
                     )
                     .push(
                         icon::Icon::new(assets::term())
                             .into_button_with_outline(|theme| theme.palette().primary)
                             .on_press(QuickMessage::Shell)
-                            .with_tooltip("Launch a shell in game environment"),
+                            .with_text_tooltip("Launch a shell in game environment"),
                     )
                     .push(
                         icon::Icon::new(assets::spanner())
                             .into_button_with_outline(|theme| theme.palette().primary)
                             .on_press(QuickMessage::Init)
-                            .with_tooltip("Initialize game prefix"),
+                            .with_text_tooltip("Initialize game prefix"),
                     )
                     .push(widget::space().width(Length::Fill))
                     .push(
                         icon::Icon::new(assets::folder())
                             .into_button_with_outline(|theme| theme.palette().primary)
                             .on_press(QuickMessage::Open)
-                            .with_tooltip("Open game root directory"),
+                            .with_text_tooltip("Open game root directory"),
                     )
                     .push(
                         icon::Icon::new(assets::restore())
@@ -742,7 +742,7 @@ impl State {
                                     .not()
                                     .then_some(QuickMessage::Discard),
                             )
-                            .with_tooltip("Discard unsaved edits"),
+                            .with_text_tooltip("Discard unsaved edits"),
                     )
                     .push(
                         icon::Icon::new(assets::save())
@@ -750,7 +750,7 @@ impl State {
                             .on_press_maybe(
                                 self.history.is_empty().not().then_some(QuickMessage::Save),
                             )
-                            .with_tooltip("Save config to database"),
+                            .with_text_tooltip("Save config to database"),
                     )
                     .pipe(Element::from)
                     .map(Message::Quick)

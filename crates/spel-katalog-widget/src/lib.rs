@@ -36,11 +36,12 @@ where
 }
 
 /// Display element with a tooltip.
+#[deprecated(note = "Use extension trait WithToolTip")]
 pub fn with_tooltip<'a, M: 'a>(
     elem: impl 'a + Into<Element<'a, M, ::iced_core::Theme, ::iced_widget::Renderer>>,
     text: impl IntoFragment<'a>,
 ) -> widget::tooltip::Tooltip<'a, M> {
-    elem.with_tooltip(text)
+    elem.with_text_tooltip(text)
 }
 
 /// Create an svg icon widget from a handle reference.
@@ -55,14 +56,28 @@ pub fn svg_icon(handle: &::iced_core::svg::Handle) -> ::iced_widget::Svg<'_> {
 }
 
 /// Add a tooltip to an element.
-pub trait WithTooltip<'a, M>: Sized {
+pub trait WithTooltip<'a, M: 'a>: Sized {
     /// Add given tooltip to element.
-    fn with_tooltip(self, tooltip: impl IntoFragment<'a>) -> widget::tooltip::Tooltip<'a, M>;
+    fn with_text_tooltip(self, tooltip: impl IntoFragment<'a>) -> widget::tooltip::Tooltip<'a, M> {
+        self.with_tooltip(
+            widget::text(tooltip).wrapping(widget::text::Wrapping::WordOrGlyph),
+            300,
+        )
+    }
 
     /// Add given rich tooltip to element.
     fn with_rich_tooltip<L: Clone>(
         self,
         tooltip: Rich<'a, L, M, ::iced_core::Theme, ::iced_widget::Renderer>,
+    ) -> widget::tooltip::Tooltip<'a, M> {
+        self.with_tooltip(tooltip.wrapping(widget::text::Wrapping::WordOrGlyph), 300)
+    }
+
+    /// Add given alement as a tooltip.
+    fn with_tooltip(
+        self,
+        tooltip: impl Into<Element<'a, M>>,
+        max_width: u32,
     ) -> widget::tooltip::Tooltip<'a, M>;
 }
 
@@ -70,25 +85,15 @@ impl<'a, T: 'a, M: 'a> WithTooltip<'a, M> for T
 where
     T: Into<Element<'a, M, ::iced_core::Theme, ::iced_widget::Renderer>>,
 {
-    fn with_tooltip(self, tooltip: impl IntoFragment<'a>) -> widget::tooltip::Tooltip<'a, M> {
-        widget::tooltip(
-            self,
-            widget::container(widget::text(tooltip).wrapping(widget::text::Wrapping::WordOrGlyph))
-                .max_width(300)
-                .padding(4)
-                .style(widget::container::bordered_box),
-            widget::tooltip::Position::FollowCursor,
-        )
-    }
-
-    fn with_rich_tooltip<L: Clone>(
+    fn with_tooltip(
         self,
-        tooltip: Rich<'a, L, M, ::iced_core::Theme, ::iced_widget::Renderer>,
-    ) -> widget::tooltip::Tooltip<'a, M> {
+        tooltip: impl Into<Element<'a, M>>,
+        max_width: u32,
+    ) -> iced_widget::tooltip::Tooltip<'a, M> {
         widget::tooltip(
             self,
-            widget::container(tooltip.wrapping(widget::text::Wrapping::WordOrGlyph))
-                .max_width(300)
+            widget::container(tooltip)
+                .max_width(max_width)
                 .padding(4)
                 .style(widget::container::bordered_box),
             widget::tooltip::Position::FollowCursor,

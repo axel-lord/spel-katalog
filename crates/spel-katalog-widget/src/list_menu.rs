@@ -95,16 +95,6 @@ impl<'a, Message, Theme, Renderer> ListMenu<'a, Message, Theme, Renderer> {
         self
     }
 
-    /// Insert a label.
-    pub fn label(self, label: &'a str) -> Self
-    where
-        Message: 'a,
-        Renderer: 'a + ::iced_core::Renderer + ::iced_core::text::Renderer,
-        Theme: 'a + ::iced_widget::container::Catalog + ::iced_widget::text::Catalog,
-    {
-        self.element(::iced_widget::center_x(::iced_widget::text(label)).padding(3))
-    }
-
     /// Insert a separator.
     pub fn separator(self) -> Self
     where
@@ -120,6 +110,16 @@ impl<'a, Message> ListMenu<'a, Message, ::iced_core::Theme, ::iced_widget::Rende
 where
     Message: 'a + Clone,
 {
+    /// Insert a label.
+    pub fn label(self, label: &'a str) -> Self {
+        self.element(
+            ::iced_widget::center_x(
+                ::iced_widget::text(label).style(::iced_widget::text::secondary),
+            )
+            .padding(3),
+        )
+    }
+
     /// Insert a button.
     pub fn button(
         self,
