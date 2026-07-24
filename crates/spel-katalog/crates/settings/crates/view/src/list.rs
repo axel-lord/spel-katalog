@@ -2,7 +2,7 @@
 
 use ::iced_core::{Alignment, Element};
 use ::iced_widget::{Column, Row, container, pick_list, text_input, tooltip};
-use ::spel_katalog_widget::WithTooltip;
+use ::spel_katalog_widget::WidgetExt;
 use ::tap::Pipe;
 use spel_katalog_common::w;
 

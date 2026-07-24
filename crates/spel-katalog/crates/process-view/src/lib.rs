@@ -3,7 +3,8 @@
 use ::core::time::Duration;
 use ::std::sync::Arc;
 
-use ::iced_core::{Color, Length::Fill, alignment::Horizontal::Left};
+use ::iced_aw::ContextMenu;
+use ::iced_core::{Border, Color, Length::Fill, alignment::Horizontal::Left};
 use ::iced_futures::{Subscription, backend::default::time::every};
 use ::iced_runtime::Task;
 use ::iced_widget::{container, opaque};
@@ -11,7 +12,7 @@ use ::rustc_hash::FxHashSet;
 use ::rustix::process::{Pid, RawPid, Signal, kill_process};
 use ::smol::{lock::Semaphore, unblock};
 use ::spel_katalog_common::w;
-use ::spel_katalog_widget::Element;
+use ::spel_katalog_widget::{Element, ListMenu, WidgetExt};
 use ::tap::Pipe;
 
 use crate::info::{CollectedInfo, ProcessInfo};
@@ -62,6 +63,10 @@ pub enum Message {
     },
     /// Copy process command line.
     Copy(String),
+    /// Pause view.
+    Pause,
+    /// Unpause view
+    Unpause,
 }
 /// Display a process tree.
 #[derive(Debug)]
@@ -73,6 +78,8 @@ pub struct ProcessView {
     /// Semaophore used to ensure only one
     /// refresh is happening at a time.
     refresh_semaphore: Arc<Semaphore>,
+    /// Is the view currently frozen.
+    is_frozen: bool,
 }
 
 impl Default for ProcessView {
@@ -81,6 +88,7 @@ impl Default for ProcessView {
             list: Vec::new(),
             additional: Arc::new(FxHashSet::default()),
             refresh_semaphore: Arc::new(Semaphore::new(1)),
+            is_frozen: false,
         }
     }
 }
@@ -103,14 +111,8 @@ impl ProcessView {
             Task::future(async move {
                 let result = CollectedInfo::new(&additional).await;
                 drop(guard);
-                result
-                    .map_err(|err| {
-                        ::log::error!("error occured trying to collect process info\n{err}")
-                    })
-                    .ok()
-                    .map(Message::Collected)
+                Message::Collected(result)
             })
-            .and_then(Task::done)
         } else {
             Task::none()
         }
@@ -118,7 +120,11 @@ impl ProcessView {
 
     /// Subscribe to refresh messages.
     pub fn subscription(&self) -> Subscription<Message> {
-        every(Duration::from_millis(500)).map(|_| Message::Refresh)
+        if !self.is_frozen {
+            every(Duration::from_millis(500)).map(|_| Message::Refresh)
+        } else {
+            Subscription::none()
+        }
     }
 
     /// Update state using message
@@ -126,7 +132,9 @@ impl ProcessView {
         match message {
             Message::Collected(collected_info) => {
                 let CollectedInfo { info, failed } = collected_info;
-                self.list = info;
+                if self.list != info {
+                    self.list = info;
+                }
                 let additional = Arc::make_mut(&mut self.additional);
                 for failed in failed {
                     additional.remove(&failed);
@@ -137,6 +145,15 @@ impl ProcessView {
             Message::Kill { pid } => Task::future(signal_process(pid, Signal::KILL)).discard(),
             Message::Terminate { pid } => Task::future(signal_process(pid, Signal::TERM)).discard(),
             Message::Copy(contents) => ::iced_runtime::clipboard::write(contents),
+            Message::Pause => {
+                self.is_frozen = true;
+                Task::none()
+            }
+            Message::Unpause => {
+                self.is_frozen = false;
+                // Immediate refresh on unpause.
+                self.refresh()
+            }
         }
     }
 
@@ -147,11 +164,26 @@ impl ProcessView {
                 .extend(self.list.iter().map(|info| info.view()))
                 .align_x(Left)
                 .padding(3)
-                .pipe(spel_katalog_widget::xy_scrollable)
+                .pipe(spel_katalog_widget::y_scrollable)
                 .width(Fill)
                 .height(Fill),
         )
-        .style(|_theme| container::background(Color::from_rgba8(0, 0, 0, 0.7)))
+        .style(|theme| {
+            container::background(Color::from_rgba8(0, 0, 0, 0.7)).border(
+                Border::default()
+                    .color(theme.extended_palette().warning.base.color)
+                    .width(if self.is_frozen { 1.5 } else { 0.0 })
+                    .rounded(3),
+            )
+        })
+        .with_wrapper(ContextMenu::new, || {
+            ListMenu::new()
+                .label("Process List")
+                .separator()
+                .button_if(!self.is_frozen, "Pause", || Message::Pause)
+                .button_if(self.is_frozen, "Unpause", || Message::Unpause)
+                .into()
+        })
         .pipe(opaque)
     }
 }

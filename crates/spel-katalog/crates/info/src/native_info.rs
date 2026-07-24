@@ -26,7 +26,7 @@ use ::spel_katalog_formats::{GameId, NativeGameConfig, Tag};
 use ::spel_katalog_native::Pool;
 use ::spel_katalog_settings::Settings;
 use ::spel_katalog_settings::{CompToolsDir, ThmubnailSource};
-use ::spel_katalog_widget::{WithTooltip as _, icon, monospace};
+use ::spel_katalog_widget::{WidgetExt as _, icon, monospace};
 use ::tap::{Pipe, TapOptional};
 use ::uuid::Uuid;
 

@@ -1,20 +1,19 @@
 //! Gather process info.
 
 use ::core::{cell::OnceCell, ops::Mul};
-use ::std::{ffi::OsStr, io, os::unix::ffi::OsStrExt, path::PathBuf};
-
-use ::iced_core::{
-    Alignment::Center,
-    Color,
-    Length::{self},
-    text::Span,
+use ::std::{
+    ffi::OsStr,
+    os::unix::ffi::OsStrExt,
+    path::{Path, PathBuf},
 };
+
+use ::iced_core::{Alignment::Center, Color, Length};
 use ::iced_widget::{self as widget, text, value};
 use ::rustc_hash::FxHashSet;
 use ::smol::{fs, stream::StreamExt};
 use ::spel_katalog_assets as assets;
 use ::spel_katalog_common::in_place::PushMaybe as _;
-use ::spel_katalog_widget::{Element, WithTooltip, icon};
+use ::spel_katalog_widget::{Element, WidgetExt, icon};
 use ::tap::Pipe;
 
 use crate::Message;
@@ -43,6 +42,17 @@ pub struct ProcessInfo {
     split: OnceCell<Option<Vec<String>>>,
 }
 
+impl PartialEq for ProcessInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.level == other.level
+            && self.pid == other.pid
+            && self.name == other.name
+            && self.cmdline == other.cmdline
+    }
+}
+
+impl Eq for ProcessInfo {}
+
 impl ProcessInfo {
     /// Construct a process info from a pid and level.
     async fn new(process: Process, stack: &mut Vec<Process>) -> Option<Self> {
@@ -67,7 +77,9 @@ impl ProcessInfo {
                 name
             }
             Err(err) => {
-                ::log::error!("while reading {status:?}\n{err}");
+                if !matches!(err.kind(), ::std::io::ErrorKind::NotFound) {
+                    ::log::error!("while reading {status:?}\n{err}");
+                }
                 None
             }
         };
@@ -76,7 +88,11 @@ impl ProcessInfo {
 
         let mut cmdline = fs::read(&cmdline)
             .await
-            .map_err(|err| ::log::error!("while reading {cmdline:?}\n{err}"))
+            .map_err(|err| {
+                if !matches!(err.kind(), ::std::io::ErrorKind::NotFound) {
+                    ::log::error!("while reading {cmdline:?}\n{err}");
+                }
+            })
             .ok()?;
 
         let next_level = level.saturating_add(1);
@@ -93,7 +109,11 @@ impl ProcessInfo {
         let tasks = proc.join("task");
         let tasks = fs::read_dir(&tasks)
             .await
-            .map_err(|err| ::log::error!("reading directory {tasks:?}\n{err}"))
+            .map_err(|err| {
+                if !matches!(err.kind(), ::std::io::ErrorKind::NotFound) {
+                    ::log::error!("reading directory {tasks:?}\n{err}");
+                }
+            })
             .ok()?;
 
         tasks
@@ -103,7 +123,9 @@ impl ProcessInfo {
                 let task_children = match fs::read_to_string(&path).await {
                     Ok(task_children) => task_children,
                     Err(err) => {
-                        ::log::error!("reading path {path:?}\n{err}");
+                        if !matches!(err.kind(), ::std::io::ErrorKind::NotFound) {
+                            ::log::error!("reading path {path:?}\n{err}");
+                        }
                         return None;
                     }
                 };
@@ -162,28 +184,24 @@ impl ProcessInfo {
                 .with_text_tooltip("Copy Command Line"),
         )
         .push(
-            if cmdline.len() > 42 {
-                let cmdline_trunc = &cmdline[..cmdline.floor_char_boundary(40)];
-                widget::rich_text![Span::new(cmdline_trunc), Span::new("...")]
-                    .on_link_click(::iced_core::never)
-                    .size(14)
-                    .pipe(widget::container)
-            } else {
-                widget::text(cmdline).size(14).pipe(widget::container)
-            }
-            .padding(3)
-            .style(widget::container::rounded_box)
-            .with_tooltip(
-                if let Some(cmd) = self.split_cmdline() {
-                    Element::from(cmd.iter().fold(
-                        ::iced_aw::Wrap::new().line_spacing(0).spacing(6),
-                        |col, arg| col.push(widget::text(arg)),
-                    ))
-                } else {
-                    Element::from(widget::text(cmdline))
-                },
-                600,
-            ),
+            widget::text(cmdline)
+                .size(14)
+                .wrapping(text::Wrapping::None)
+                .pipe(widget::container)
+                .style(widget::container::rounded_box)
+                .padding(3)
+                .clip(true)
+                .with_tooltip(
+                    if let Some(cmd) = self.split_cmdline() {
+                        Element::from(cmd.iter().fold(
+                            ::iced_aw::Wrap::new().line_spacing(0).spacing(6),
+                            |col, arg| col.push(widget::text(arg)),
+                        ))
+                    } else {
+                        Element::from(widget::text(cmdline))
+                    },
+                    600,
+                ),
         )
     }
 
@@ -244,45 +262,49 @@ pub struct CollectedInfo {
 
 impl CollectedInfo {
     /// Collect info.
-    ///
-    /// # Errors
-    /// If children of self cannot be gathered.
-    pub async fn new(additional_roots: &FxHashSet<i64>) -> io::Result<CollectedInfo> {
+    pub async fn new(additional_roots: &FxHashSet<i64>) -> CollectedInfo {
         let mut stack = Vec::<Process>::new();
-        fs::read_dir("/proc/self/task/")
-            .await?
-            .filter_map(|entry| entry.ok())
-            .then(|entry| async move {
-                let path = entry.path().join("children");
-                let task_children = match fs::read_to_string(&path).await {
-                    Ok(task_children) => task_children,
-                    Err(err) => {
-                        ::log::error!("reading path {path:?}\n{err}");
-                        return None;
-                    }
-                };
+        let task_dir = Path::new("/proc/self/task/");
+        match fs::read_dir(task_dir).await {
+            Ok(read_self) => {
+                read_self
+                    .filter_map(|entry| entry.ok())
+                    .then(|entry| async move {
+                        let path = entry.path().join("children");
+                        let task_children = match fs::read_to_string(&path).await {
+                            Ok(task_children) => task_children,
+                            Err(err) => {
+                                ::log::error!("reading path {path:?}\n{err}");
+                                return None;
+                            }
+                        };
 
-                Some(task_children)
-            })
-            .for_each(|task_children| {
-                let Some(task_children) = task_children else {
-                    return;
-                };
-                for line in task_children.lines() {
-                    let line = line.trim();
-                    if line.is_empty() {
-                        continue;
-                    }
-                    let Ok(pid) = line.parse::<i64>() else {
-                        continue;
-                    };
+                        Some(task_children)
+                    })
+                    .for_each(|task_children| {
+                        let Some(task_children) = task_children else {
+                            return;
+                        };
+                        for line in task_children.lines() {
+                            let line = line.trim();
+                            if line.is_empty() {
+                                continue;
+                            }
+                            let Ok(pid) = line.parse::<i64>() else {
+                                continue;
+                            };
 
-                    if !additional_roots.contains(&pid) {
-                        stack.push(Process { level: 0, pid });
-                    }
-                }
-            })
-            .await;
+                            if !additional_roots.contains(&pid) {
+                                stack.push(Process { level: 0, pid });
+                            }
+                        }
+                    })
+                    .await;
+            }
+            Err(err) => {
+                ::log::error!("could not read directory {task_dir:?}\n{err}");
+            }
+        }
 
         for root in additional_roots {
             stack.push(Process {
@@ -301,6 +323,6 @@ impl CollectedInfo {
             }
         }
 
-        Ok(CollectedInfo { info, failed })
+        CollectedInfo { info, failed }
     }
 }

@@ -41,7 +41,7 @@
 - [x] Show module path in log view
 - [x] Split of process view to crate
 - [x] Simplified/collapsed process view tree
-- [ ] So not log no such directory as an error in process open (as it is expected after the process is closed)
+- [x] Do not log no such directory as an error in process open (as it is expected after the process is closed)
 
 # Fixes
 - [x] Dummy exe of installer not "moved"

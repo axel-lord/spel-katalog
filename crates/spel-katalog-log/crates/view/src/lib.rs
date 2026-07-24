@@ -10,7 +10,7 @@ use ::iced_widget::{self as widget};
 use ::smol::stream::StreamExt;
 use ::spel_katalog_assets as assets;
 use ::spel_katalog_log::{OwnedRecord, RecordMessage};
-use ::spel_katalog_widget::{WithTooltip, icon};
+use ::spel_katalog_widget::{WidgetExt, icon};
 use ::tap::Pipe;
 
 use crate::record::Record;

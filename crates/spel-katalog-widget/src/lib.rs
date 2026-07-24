@@ -35,15 +35,6 @@ where
     widget::text(text).font(Font::MONOSPACE)
 }
 
-/// Display element with a tooltip.
-#[deprecated(note = "Use extension trait WithToolTip")]
-pub fn with_tooltip<'a, M: 'a>(
-    elem: impl 'a + Into<Element<'a, M, ::iced_core::Theme, ::iced_widget::Renderer>>,
-    text: impl IntoFragment<'a>,
-) -> widget::tooltip::Tooltip<'a, M> {
-    elem.with_text_tooltip(text)
-}
-
 /// Create an svg icon widget from a handle reference.
 pub fn svg_icon(handle: &::iced_core::svg::Handle) -> ::iced_widget::Svg<'_> {
     const DIM: u32 = 24;
@@ -56,7 +47,9 @@ pub fn svg_icon(handle: &::iced_core::svg::Handle) -> ::iced_widget::Svg<'_> {
 }
 
 /// Add a tooltip to an element.
-pub trait WithTooltip<'a, M: 'a>: Sized {
+pub trait WidgetExt<'a, M: 'a>:
+    Sized + Into<Element<'a, M, ::iced_core::Theme, ::iced_widget::Renderer>>
+{
     /// Add given tooltip to element.
     fn with_text_tooltip(self, tooltip: impl IntoFragment<'a>) -> widget::tooltip::Tooltip<'a, M> {
         self.with_tooltip(
@@ -78,18 +71,7 @@ pub trait WithTooltip<'a, M: 'a>: Sized {
         self,
         tooltip: impl Into<Element<'a, M>>,
         max_width: u32,
-    ) -> widget::tooltip::Tooltip<'a, M>;
-}
-
-impl<'a, T: 'a, M: 'a> WithTooltip<'a, M> for T
-where
-    T: Into<Element<'a, M, ::iced_core::Theme, ::iced_widget::Renderer>>,
-{
-    fn with_tooltip(
-        self,
-        tooltip: impl Into<Element<'a, M>>,
-        max_width: u32,
-    ) -> iced_widget::tooltip::Tooltip<'a, M> {
+    ) -> widget::tooltip::Tooltip<'a, M> {
         widget::tooltip(
             self,
             widget::container(tooltip)
@@ -99,4 +81,17 @@ where
             widget::tooltip::Position::FollowCursor,
         )
     }
+
+    /// Wrap element with given wrapper accepting a second argument.
+    fn with_wrapper<W, A, E>(self, wrapper: W, arg: A) -> E
+    where
+        W: FnOnce(Self, A) -> E,
+    {
+        wrapper(self, arg)
+    }
+}
+
+impl<'a, T: 'a, M: 'a> WidgetExt<'a, M> for T where
+    T: Into<Element<'a, M, ::iced_core::Theme, ::iced_widget::Renderer>>
+{
 }
