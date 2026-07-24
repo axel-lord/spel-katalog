@@ -144,12 +144,11 @@ impl ProcessView {
                 .push("Process Tree")
                 .extend(self.list.iter().map(|info| info.view()))
                 .align_x(Left)
-                .pipe(spel_katalog_widget::scrollable)
-                .pipe(container)
-                .style(container::bordered_box)
-                .padding(3),
+                .padding(3)
+                .pipe(spel_katalog_widget::xy_scrollable)
+                .width(Fill)
+                .height(Fill),
         )
-        .center(Fill)
         .style(|_theme| container::background(Color::from_rgba8(0, 0, 0, 0.7)))
         .pipe(opaque)
     }
