@@ -10,6 +10,7 @@ use ::iced_core::{
 use ::iced_runtime::Task;
 use ::iced_widget::{self as widget, pane_grid};
 use ::spel_katalog_common::styling;
+use ::spel_katalog_process_view::ProcessView;
 use ::spel_katalog_settings::Settings;
 use ::spel_katalog_widget::icon;
 use ::tap::Pipe;
@@ -171,7 +172,7 @@ impl State {
         games: &'app ::spel_katalog_games::State,
         settings: &'app Settings,
         info: &'app ::spel_katalog_info::State,
-        process_view: &'app crate::process_info::ProcessView,
+        process_view: &'app ProcessView,
     ) -> Element<'app, crate::Message> {
         let style = |t: &_| styling::box_border(t).background(Color::WHITE.scale_alpha(0.025));
         match self.displayed {
@@ -225,7 +226,7 @@ impl State {
         games: &'app ::spel_katalog_games::State,
         info: &'app spel_katalog_info::State,
         settings: &'app Settings,
-        process_view: &'app crate::process_info::ProcessView,
+        process_view: &'app ProcessView,
     ) -> Element<'app, crate::Message> {
         widget::responsive(move |size| {
             self.aspect_ratio.set(size.width / size.height);

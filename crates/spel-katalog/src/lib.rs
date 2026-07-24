@@ -13,7 +13,6 @@ pub(crate) use self::{
 mod app;
 mod exit_channel;
 mod message;
-mod process_info;
 mod run_game;
 mod subscription;
 mod update;

@@ -83,7 +83,7 @@ pub enum Message {
     #[from]
     TagFilter(OrRequest<::spel_katalog_tag_filter::Message, ::spel_katalog_tag_filter::Request>),
     #[from]
-    ProcessView(crate::process_info::Message),
+    ProcessView(::spel_katalog_process_view::Message),
 }
 
 impl<T, E> From<Result<T, E>> for Message

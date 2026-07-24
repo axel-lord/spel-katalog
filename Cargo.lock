@@ -4613,6 +4613,7 @@ dependencies = [
  "spel-katalog-ipc",
  "spel-katalog-log",
  "spel-katalog-native",
+ "spel-katalog-process-view",
  "spel-katalog-profiler",
  "spel-katalog-run",
  "spel-katalog-settings",
@@ -4925,6 +4926,25 @@ dependencies = [
  "thiserror 2.0.18",
  "toml 1.1.2+spec-1.1.0",
  "uuid",
+]
+
+[[package]]
+name = "spel-katalog-process-view"
+version = "0.1.0"
+dependencies = [
+ "iced_aw",
+ "iced_core",
+ "iced_futures",
+ "iced_runtime",
+ "iced_widget",
+ "log",
+ "rustc-hash 2.1.2",
+ "rustix 1.1.4",
+ "shell-words",
+ "smol",
+ "spel-katalog-common",
+ "spel-katalog-widget",
+ "tap",
 ]
 
 [[package]]

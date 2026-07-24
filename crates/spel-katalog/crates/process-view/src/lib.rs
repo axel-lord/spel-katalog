@@ -1,13 +1,15 @@
-use ::core::time::Duration;
-use ::std::{ffi::OsStr, io, ops::Mul, os::unix::ffi::OsStrExt, path::PathBuf, sync::Arc};
+//! View processes.
 
-use ::iced::{Subscription, Task};
+use ::core::{ops::Mul, time::Duration};
+use ::std::{ffi::OsStr, io, os::unix::ffi::OsStrExt, path::PathBuf, sync::Arc};
+
 use ::iced_core::{
     Color,
     Length::{self, Fill},
     alignment::Horizontal::Left,
 };
-use ::iced_futures::backend::default::time::every;
+use ::iced_futures::{Subscription, backend::default::time::every};
+use ::iced_runtime::Task;
 use ::iced_widget::{self as widget, button, container, opaque, text, value};
 use ::rustc_hash::FxHashSet;
 use ::rustix::process::{Pid, RawPid, Signal, kill_process};
@@ -154,11 +156,16 @@ pub enum Message {
     },
 }
 
+/// Info of a process in process tree.
 #[derive(Debug, Clone)]
 pub struct ProcessInfo {
+    /// Level of process.
     level: usize,
+    /// Pid of process.
     pid: i64,
+    /// Name of process.
     name: Option<String>,
+    /// Command line of process.
     cmdline: String,
 }
 
@@ -174,6 +181,9 @@ pub struct CollectedInfo {
 
 impl CollectedInfo {
     /// Collect info.
+    ///
+    /// # Errors
+    /// If children of self cannot be gathered.
     pub async fn new(additional_roots: &FxHashSet<i64>) -> io::Result<CollectedInfo> {
         let mut stack = Vec::<Process>::new();
         fs::read_dir("/proc/self/task/")
@@ -232,9 +242,12 @@ impl CollectedInfo {
     }
 }
 
+/// Level and pid of a process to gather info for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct Process {
+    /// Level of process in tree.
     level: usize,
+    /// Pid of process.
     pid: i64,
 }
 

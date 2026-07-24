@@ -19,6 +19,7 @@ members = [
 	"crates/spel-katalog/crates/info",
 	"crates/spel-katalog/crates/installer",
 	"crates/spel-katalog/crates/native",
+	"crates/spel-katalog/crates/process-view",
 	"crates/spel-katalog/crates/run",
 	"crates/spel-katalog/crates/settings/crates/build",
 	"crates/spel-katalog/crates/settings/crates/derive",
@@ -27,7 +28,7 @@ members = [
 	"crates/spel-katalog/crates/settings/crates/view",
 	"crates/spel-katalog/crates/sink",
 	"crates/spel-katalog/crates/tag-filter", 
-	"crates/spel-katalog/crates/terminal",
+	"crates/spel-katalog/crates/terminal", 
 	"test",
 ]
 resolver = "2"
@@ -173,3 +174,4 @@ whoami = { version = "2.1.2", default-features = false }
 xdg = "3.0.0"
 yaml-rust2 = "0.11.0"
 spel-katalog-assets = { path = "crates/spel-katalog-assets" }
+spel-katalog-process-view = { path = "crates/spel-katalog/crates/process-view" }
