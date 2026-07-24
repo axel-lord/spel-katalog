@@ -595,7 +595,7 @@ impl Prepare {
                         ),
                     || {
                         ListMenu::new()
-                            .push(widget::text("title"))
+                            .label("title")
                             .separator()
                             .button("Copy", || {
                                 Message::CopyTitle.conv::<super::Message>().into_message()
@@ -794,7 +794,7 @@ impl Prepare {
                             .padding(3),
                             || {
                                 ListMenu::new()
-                                    .push(widget::text("Locale"))
+                                    .label("Locale")
                                     .separator()
                                     .button("To Default", || {
                                         Message::DefaultLocale
@@ -826,7 +826,7 @@ impl Prepare {
                             .convene(),
                             || {
                                 ListMenu::new()
-                                    .push(widget::text("Thumbnail"))
+                                    .label("Thumbnail")
                                     .separator()
                                     .button("Replace", || {
                                         Message::OpenThumb

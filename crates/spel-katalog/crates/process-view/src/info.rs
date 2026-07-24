@@ -5,7 +5,7 @@ use ::std::{ffi::OsStr, io, os::unix::ffi::OsStrExt, path::PathBuf};
 
 use ::iced_core::{
     Alignment::Center,
-    Color, Font,
+    Color,
     Length::{self},
     text::Span,
 };
@@ -13,7 +13,7 @@ use ::iced_widget::{self as widget, text, value};
 use ::rustc_hash::FxHashSet;
 use ::smol::{fs, stream::StreamExt};
 use ::spel_katalog_assets as assets;
-use ::spel_katalog_common::{in_place::PushMaybe as _, styling};
+use ::spel_katalog_common::in_place::PushMaybe as _;
 use ::spel_katalog_widget::{Element, WithTooltip, icon};
 use ::tap::Pipe;
 

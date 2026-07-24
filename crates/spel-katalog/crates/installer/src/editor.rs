@@ -196,7 +196,7 @@ impl Editor {
                 ),
             || {
                 ::spel_katalog_widget::ListMenu::new()
-                    .push(widget::text("Config"))
+                    .label("Config")
                     .separator()
                     .button("Copy", || Message::Copy)
                     .button("Paste", || Message::Paste)

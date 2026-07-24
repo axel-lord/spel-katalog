@@ -87,16 +87,6 @@ impl<'a, Message, Theme, Renderer> ListMenu<'a, Message, Theme, Renderer> {
     }
 
     /// Insert an element.
-    #[deprecated(note = "Use element or label instead")]
-    pub fn push(
-        mut self,
-        element: impl Into<::iced_core::Element<'a, Message, Theme, Renderer>>,
-    ) -> Self {
-        self.inner.push(MenuItem::Element(element.into()));
-        self
-    }
-
-    /// Insert an element.
     pub fn element(
         mut self,
         element: impl Into<::iced_core::Element<'a, Message, Theme, Renderer>>,
@@ -122,7 +112,7 @@ impl<'a, Message, Theme, Renderer> ListMenu<'a, Message, Theme, Renderer> {
         Renderer: 'a + ::iced_core::Renderer,
         Message: 'a,
     {
-        self.push(crate::rule::horizontal())
+        self.element(crate::rule::horizontal())
     }
 }
 
@@ -136,7 +126,7 @@ where
         content: impl IntoFragment<'a>,
         on_press: impl 'a + Fn() -> Message,
     ) -> Self {
-        self.push(menu_button(content).on_press_with(on_press))
+        self.element(menu_button(content).on_press_with(on_press))
     }
 
     /// Insert a button. If the condition holds true  it is enabled.
@@ -152,7 +142,7 @@ where
         } else {
             button
         };
-        self.push(button)
+        self.element(button)
     }
 }
 

@@ -683,11 +683,11 @@ impl State {
 
         let element = ContextMenu::new(element, move || {
             ::spel_katalog_widget::ListMenu::new()
-                .push("Spel Katalog")
+                .label("Spel Katalog")
                 .separator()
                 .button("Install Game", || Request::InstallGame.into_request())
                 .separator()
-                .push("Game")
+                .label("Game")
                 .separator()
                 .button("Run", move || {
                     Request::Run { id, sandbox: true }.into_request()

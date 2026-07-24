@@ -651,7 +651,7 @@ impl State {
                                         widget::image(thumb).width(DIM).height(DIM),
                                         || {
                                             ::spel_katalog_widget::ListMenu::new()
-                                                .push(widget::text("Thumbnail"))
+                                                .label("Thumbnail")
                                                 .separator()
                                                 .button("Replace", || QuickMessage::AddThumb)
                                                 .button("Remove", || QuickMessage::RemoveThumb)
@@ -678,7 +678,7 @@ impl State {
     /// Create context menu widget for editor.
     fn context_menu(&self) -> Element<'_, OrRequest<Message, crate::Request>> {
         ::spel_katalog_widget::ListMenu::new()
-            .push(widget::text("Config"))
+            .label("Config")
             .separator()
             .button_if(self.conf_view.selection().is_some(), "Copy", || {
                 QuickMessage::Copy

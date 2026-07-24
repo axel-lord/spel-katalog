@@ -261,7 +261,7 @@ impl App {
     /// View the main column of content.
     pub fn main_column(&self) -> Column<'_, Message> {
         fn with_global_context(menu: ListMenu<'_, Message>) -> ListMenu<'_, Message> {
-            menu.push(widget::text("Spel Katalog"))
+            menu.label("Spel Katalog")
                 .separator()
                 .button("Install Game", || {
                     Message::Quick(QuickMessage::OpenInstaller)
@@ -290,7 +290,7 @@ impl App {
                 .pipe(|element| {
                     ::iced_aw::ContextMenu::new(element, || {
                         ListMenu::new()
-                            .push(widget::text("Filter"))
+                            .label("Filter")
                             .separator()
                             .button("Copy", || Message::Quick(QuickMessage::CopyFilter))
                             .button("Paste", || Message::Quick(QuickMessage::PasteFilter))
