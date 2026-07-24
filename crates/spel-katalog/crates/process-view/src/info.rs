@@ -3,12 +3,18 @@
 use ::core::ops::Mul;
 use ::std::{ffi::OsStr, io, os::unix::ffi::OsStrExt, path::PathBuf};
 
-use ::iced_core::Length::{self};
-use ::iced_widget::{self as widget, button, text, value};
+use ::iced_core::{
+    Alignment::Center,
+    Color, Font,
+    Length::{self},
+    text::Span,
+};
+use ::iced_widget::{self as widget, text, value};
 use ::rustc_hash::FxHashSet;
 use ::smol::{fs, stream::StreamExt};
-use ::spel_katalog_common::{in_place::PushMaybe as _, styling, w};
-use ::spel_katalog_widget::Element;
+use ::spel_katalog_assets as assets;
+use ::spel_katalog_common::{in_place::PushMaybe as _, styling};
+use ::spel_katalog_widget::{Element, WithTooltip, icon};
 use ::tap::Pipe;
 
 use crate::Message;
@@ -199,40 +205,58 @@ impl ProcessInfo {
         })
     }
 
+    /// Add command line items to row.
+    fn add_cmdline<'a>(&'a self, row: widget::Row<'a, Message>) -> widget::Row<'a, Message> {
+        let Self { cmdline, .. } = self;
+
+        row.push(
+            if cmdline.len() > 32 {
+                let cmdline_trunc = &cmdline[..cmdline.floor_char_boundary(30)];
+                widget::rich_text![Span::new(cmdline_trunc), Span::new("...")]
+                    .on_link_click(::iced_core::never)
+                    .size(14)
+                    .pipe(widget::container)
+            } else {
+                widget::text(cmdline).size(14).pipe(widget::container)
+            }
+            .padding(3)
+            .style(widget::container::rounded_box)
+            .with_tooltip(cmdline),
+        )
+    }
+
     /// View a single process info item
     pub fn view(&self) -> Element<'_, Message> {
         let Self {
             level,
             pid,
             name,
-            cmdline,
+            cmdline: _,
         } = self;
         let pid = *pid;
         let level = *level;
 
-        w::row()
+        widget::Row::new()
             .spacing(6)
+            .align_y(Center)
             .push(widget::space::horizontal().width(Length::Fixed(level.min(24).mul(12) as f32)))
             .push(
-                button("X")
-                    .padding(3)
-                    .style(button::danger)
-                    .on_press(Message::Terminate { pid }),
+                icon::Icon::new(assets::minus())
+                    .size(14)
+                    .into_button_with_outline(|theme| theme.extended_palette().danger.base.color)
+                    .on_press(Message::Terminate { pid })
+                    .with_tooltip("Request Termination of Process"),
             )
             .push(
-                button("K")
-                    .padding(3)
-                    .style(button::secondary)
-                    .on_press(Message::Kill { pid }),
+                icon::Icon::new(assets::cross())
+                    .size(14)
+                    .into_button_with_outline(|_| Color::BLACK)
+                    .on_press(Message::Kill { pid })
+                    .with_tooltip("Force Kill Process"),
             )
-            .push(value(pid))
-            .push_maybe(name.as_ref().map(text))
-            .push(
-                text(cmdline)
-                    .pipe(widget::container)
-                    .padding(3)
-                    .style(|t| styling::box_border(t).background(t.palette().background)),
-            )
+            .push(value(pid).size(14))
+            .push_maybe(name.as_ref().map(text).map(|t| t.size(14)))
+            .pipe(|row| self.add_cmdline(row))
             .pipe(Element::from)
             .map(Into::into)
     }

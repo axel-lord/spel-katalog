@@ -141,7 +141,6 @@ impl ProcessView {
     pub fn view(&self) -> Element<'_, Message> {
         container(
             w::col()
-                .push("Process Tree")
                 .extend(self.list.iter().map(|info| info.view()))
                 .align_x(Left)
                 .padding(3)

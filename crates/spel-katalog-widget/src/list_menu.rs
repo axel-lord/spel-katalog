@@ -87,12 +87,32 @@ impl<'a, Message, Theme, Renderer> ListMenu<'a, Message, Theme, Renderer> {
     }
 
     /// Insert an element.
+    #[deprecated(note = "Use element or label instead")]
     pub fn push(
         mut self,
         element: impl Into<::iced_core::Element<'a, Message, Theme, Renderer>>,
     ) -> Self {
         self.inner.push(MenuItem::Element(element.into()));
         self
+    }
+
+    /// Insert an element.
+    pub fn element(
+        mut self,
+        element: impl Into<::iced_core::Element<'a, Message, Theme, Renderer>>,
+    ) -> Self {
+        self.inner.push(MenuItem::Element(element.into()));
+        self
+    }
+
+    /// Insert a label.
+    pub fn label(self, label: &'a str) -> Self
+    where
+        Message: 'a,
+        Renderer: 'a + ::iced_core::Renderer + ::iced_core::text::Renderer,
+        Theme: 'a + ::iced_widget::container::Catalog + ::iced_widget::text::Catalog,
+    {
+        self.element(::iced_widget::center_x(::iced_widget::text(label)).padding(3))
     }
 
     /// Insert a separator.

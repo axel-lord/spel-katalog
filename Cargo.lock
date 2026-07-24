@@ -4942,6 +4942,7 @@ dependencies = [
  "rustix 1.1.4",
  "shell-words",
  "smol",
+ "spel-katalog-assets",
  "spel-katalog-common",
  "spel-katalog-widget",
  "tap",
