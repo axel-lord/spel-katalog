@@ -115,10 +115,15 @@ impl App {
                     .map_err(|err| ::log::error!("could not convert game context to native\n{err}"))
                     .ok()?;
 
-                    if use_wayland
-                        && let Entry::Vacant(entry) = game.env.entry(String::from("DISPLAY"))
-                    {
-                        entry.insert(EnvValue::Unset { unset: true });
+                    if use_wayland {
+                        if let Entry::Vacant(entry) = game.env.entry(String::from("DISPLAY")) {
+                            entry.insert(EnvValue::Unset { unset: true });
+                        }
+                        if let Entry::Vacant(entry) =
+                            game.env.entry(String::from("PROTON_ENABLE_WAYLAND"))
+                        {
+                            entry.insert(EnvValue::Value(String::from("1")));
+                        }
                     }
 
                     let name = &game.name;
