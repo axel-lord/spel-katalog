@@ -14,7 +14,7 @@ use ::spel_katalog_settings::Settings;
 use ::spel_katalog_widget::icon;
 use ::tap::Pipe;
 
-use crate::{Element, process_info::ProcessInfo};
+use crate::Element;
 
 #[derive(Debug, Default, Clone, Copy, Display, PartialEq, Eq, IsVariant, Hash)]
 pub enum Pane {
@@ -170,8 +170,8 @@ impl State {
         &'app self,
         games: &'app ::spel_katalog_games::State,
         settings: &'app Settings,
-        info: &'app spel_katalog_info::State,
-        process_info: &'app [ProcessInfo],
+        info: &'app ::spel_katalog_info::State,
+        process_view: &'app crate::process_info::ProcessView,
     ) -> Element<'app, crate::Message> {
         let style = |t: &_| styling::box_border(t).background(Color::WHITE.scale_alpha(0.025));
         match self.displayed {
@@ -211,7 +211,7 @@ impl State {
             Displayed::Processes => widget::Column::new()
                 .push(self.auto_titlebar())
                 .push(spel_katalog_widget::rule::horizontal())
-                .push(ProcessInfo::view_list(process_info))
+                .push(process_view.view().map(crate::Message::ProcessView))
                 .padding(5)
                 .spacing(3)
                 .pipe(widget::container)
@@ -224,8 +224,8 @@ impl State {
         &'app self,
         games: &'app ::spel_katalog_games::State,
         info: &'app spel_katalog_info::State,
-        process_info: &'app [ProcessInfo],
         settings: &'app Settings,
+        process_view: &'app crate::process_info::ProcessView,
     ) -> Element<'app, crate::Message> {
         widget::responsive(move |size| {
             self.aspect_ratio.set(size.width / size.height);
@@ -234,7 +234,7 @@ impl State {
                 pane_grid::Content::new(
                     match state {
                         Pane::Games => games.view(settings).map(crate::Message::from),
-                        Pane::GameInfo => self.view_info(games, settings, info, process_info),
+                        Pane::GameInfo => self.view_info(games, settings, info, process_view),
                     }
                     .pipe(widget::container),
                 )

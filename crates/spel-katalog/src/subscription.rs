@@ -1,5 +1,3 @@
-use ::std::time::Duration;
-
 use ::iced_core::keyboard::{self, Modifiers, key::Named};
 use ::iced_futures::Subscription;
 use ::spel_katalog_common::OrRequest;
@@ -100,8 +98,7 @@ impl App {
         });
 
         let refresh = if self.view.displayed.is_processes() {
-            ::iced_futures::backend::default::time::every(Duration::from_millis(500))
-                .map(|_| Message::Quick(QuickMessage::RefreshProcessInfo))
+            self.process_view.subscription().map(Message::ProcessView)
         } else {
             Subscription::none()
         };

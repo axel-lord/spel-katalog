@@ -1,4 +1,4 @@
-use ::std::{convert::identity, io::PipeReader, sync::Arc};
+use ::std::{convert::identity, io::PipeReader};
 
 use ::color_eyre::{Section, eyre::eyre};
 use ::derive_more::IsVariant;
@@ -6,7 +6,7 @@ use ::iced::Font;
 use ::iced_core::{Alignment::Center, Length::Fill, font, window};
 use ::iced_runtime::Task;
 use ::iced_widget::{self as widget, Column, Container, Row, text, text_input, toggler, value};
-use ::rustc_hash::{FxHashMap, FxHashSet};
+use ::rustc_hash::FxHashMap;
 use ::spel_katalog_cli::Run;
 use ::spel_katalog_common::{OrRequest, StatusSender, w};
 use ::spel_katalog_formats::TagStorage;
@@ -17,7 +17,9 @@ use ::spel_katalog_tag_filter::TagFilterDialog;
 use ::spel_katalog_widget::ListMenu;
 use ::tap::Pipe;
 
-use crate::{Element, ExitReceiver, Message, QuickMessage, get_settings, process_info, view};
+use crate::{
+    Element, ExitReceiver, Message, QuickMessage, get_settings, process_info::ProcessView, view,
+};
 
 /// Specific kind of window.
 #[derive(Debug, IsVariant, Clone)]
@@ -48,16 +50,14 @@ pub(crate) struct App {
     pub view: view::State,
     pub info: ::spel_katalog_info::State,
     pub sender: StatusSender,
-    pub process_list: Vec<process_info::ProcessInfo>,
     pub sink_builder: SinkBuilder,
     pub windows: FxHashMap<window::Id, WindowType>,
     pub terminal: ::spel_katalog_terminal::Terminal,
-    pub process_view_semaphore: Arc<::smol::lock::Semaphore>,
     pub games_db: ::spel_katalog_native::Pool,
     pub tags: TagStorage,
     pub tag_filter: TagFilterDialog,
     pub popup: Option<Popup>,
-    pub additional_roots: Arc<FxHashSet<i64>>,
+    pub process_view: ProcessView,
 }
 
 /// Initial state created by new.
@@ -99,10 +99,8 @@ impl Initial {
         let games = ::spel_katalog_games::State::default();
         let info = ::spel_katalog_info::State::default();
         let sender = status_tx.into();
-        let process_list = Vec::new();
         let windows = FxHashMap::default();
         let terminal = ::spel_katalog_terminal::Terminal::default().with_limit(256);
-        let process_view_semaphore = Arc::new(::smol::lock::Semaphore::new(1));
         let games_db = ::spel_katalog_native::Pool::new(
             &settings
                 .xdg()
@@ -119,13 +117,12 @@ impl Initial {
         let tags = TagStorage::default();
         let popup = None;
         let tag_filter = TagFilterDialog::new();
-        let additional_roots = Arc::default();
+        let process_view = ProcessView::default();
 
         let app = App {
             filter,
             games,
             info,
-            process_list,
             sender,
             settings,
             sink_builder,
@@ -133,12 +130,11 @@ impl Initial {
             terminal,
             view,
             windows,
-            process_view_semaphore,
             games_db,
             tags,
             popup,
             tag_filter,
-            additional_roots,
+            process_view,
         };
 
         Ok(Self {
@@ -236,16 +232,6 @@ impl App {
         .map_err(|err| ::color_eyre::eyre::eyre!(err))
     }
 
-    pub async fn collect_process_info(additional_roots: &FxHashSet<i64>) -> Option<Message> {
-        match process_info::ProcessInfo::open(additional_roots).await {
-            Ok(summary) => Some(Message::ProcessInfo(summary)),
-            Err(err) => {
-                ::log::error!("whilst collecting info\n{err}");
-                None
-            }
-        }
-    }
-
     pub fn sort_games(&mut self) {
         self.games.sort(&self.settings, &self.filter);
     }
@@ -319,7 +305,7 @@ impl App {
             .push(widget::space::vertical().height(5))
             .push(
                 self.view
-                    .view(&self.games, &self.info, &self.process_list, &self.settings),
+                    .view(&self.games, &self.info, &self.settings, &self.process_view),
             )
             .push(widget::space::vertical().height(3))
             .push(spel_katalog_widget::rule::horizontal())

@@ -1,10 +1,9 @@
 use ::core::convert::identity;
-use ::std::{path::PathBuf, sync::Arc};
+use ::std::path::PathBuf;
 
 use ::iced_core::{Size, window};
 use ::iced_runtime::Task;
 use ::image::DynamicImage;
-use ::rustix::process::{Pid, RawPid};
 use ::spel_katalog_common::{IntoOrRequest, OrRequest};
 use ::spel_katalog_formats::{
     InstallerConfig, InstallerPrepareConfig, NativeGameConfig, RunMode, TagId,
@@ -19,7 +18,6 @@ use ::uuid::Uuid;
 use crate::{
     App, Message, QuickMessage, Safety,
     app::{Popup, WindowType},
-    process_info::CollectedInfo,
 };
 
 #[derive(Default)]
@@ -184,7 +182,10 @@ impl App {
                 ::log::info!("debug action activated");
                 ::log::info!("tags: {:#?}", self.tags);
                 ::log::info!("tag filter: {:#?}", self.games.current_tag_filter());
-                ::log::info!("additional viewed processes: {:#?}", *self.additional_roots);
+                ::log::info!(
+                    "additional viewed processes: {:#?}",
+                    self.process_view.additional()
+                );
             }
             QuickMessage::OpenInstaller => {
                 return self.open_installer(None);
@@ -296,19 +297,6 @@ impl App {
                 self.settings.apply_from(next);
                 self.set_status(format!("toggled network to {next}"));
                 self.sort_games();
-            }
-            QuickMessage::RefreshProcessInfo => {
-                if self.view.displayed.is_processes()
-                    && let Some(guard) = self.process_view_semaphore.try_acquire_arc()
-                {
-                    let additional_roots = self.additional_roots.clone();
-                    return Task::future(async move {
-                        let value = Self::collect_process_info(&additional_roots).await;
-                        drop(guard);
-                        value
-                    })
-                    .then(|msg| msg.map_or_else(Task::none, Task::done));
-                }
             }
             QuickMessage::Next => return ::iced::widget::operation::focus_next(),
             QuickMessage::Prev => return ::iced::widget::operation::focus_previous(),
@@ -656,50 +644,9 @@ impl App {
                 OrRequest::Request(request) => return self.info_request(request),
             },
 
-            Message::ProcessInfo(collected) => {
-                let CollectedInfo { info, failed } = collected;
-                self.process_list = info;
-                let additional_roots = Arc::make_mut(&mut self.additional_roots);
-                for failed in failed {
-                    additional_roots.remove(&failed);
-                }
-            }
-            Message::Kill { pid, terminate } => {
-                let Ok(pid) = RawPid::try_from(pid) else {
-                    return Task::none();
-                };
-                let Some(pid) = Pid::from_raw(pid) else {
-                    return Task::none();
-                };
-
-                return Task::future(async move {
-                    let result = ::smol::unblock(move || {
-                        ::rustix::process::kill_process(
-                            pid,
-                            if terminate {
-                                ::rustix::process::Signal::TERM
-                            } else {
-                                ::rustix::process::Signal::KILL
-                            },
-                        )
-                    })
-                    .await;
-                    match result {
-                        Ok(_) => ::log::info!(
-                            "sent TERM to process {pid}",
-                            pid = pid.as_raw_nonzero().get()
-                        ),
-                        Err(err) => ::log::error!(
-                            "could not kill process {pid}\n{err}",
-                            pid = pid.as_raw_nonzero().get()
-                        ),
-                    };
-                })
-                .then(|_| Task::none());
-            }
             Message::ViewProcess { pid } => {
                 ::log::info!("viewing process: {pid}");
-                Arc::make_mut(&mut self.additional_roots).insert(pid);
+                self.process_view.add_pid(pid);
             }
             Message::OpenWindow(id, window_type) => {
                 self.windows.insert(id, window_type);
@@ -761,6 +708,9 @@ impl App {
                     }
                 },
             },
+            Message::ProcessView(message) => {
+                return self.process_view.update(message).map(Message::ProcessView);
+            }
         }
         Task::none()
     }
