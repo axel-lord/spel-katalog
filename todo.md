@@ -42,6 +42,7 @@
 - [x] Split of process view to crate
 - [x] Simplified/collapsed process view tree
 - [x] Do not log no such directory as an error in process open (as it is expected after the process is closed)
+- [ ] Aquire old running process ids on startup.
 
 # Fixes
 - [x] Dummy exe of installer not "moved"
