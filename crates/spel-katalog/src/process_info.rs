@@ -158,10 +158,10 @@ pub enum Message {
 
 #[derive(Debug, Clone)]
 pub struct ProcessInfo {
-    pub(crate) level: usize,
-    pub(crate) pid: i64,
-    pub(crate) name: Option<String>,
-    pub(crate) cmdline: String,
+    level: usize,
+    pid: i64,
+    name: Option<String>,
+    cmdline: String,
 }
 
 /// Collected process info and a list
