@@ -3,7 +3,7 @@
 pub use self::{
     addititional_config::AdditionalConfig,
     bind::{Bind, Symlink},
-    daemon::{DaemonRunConfigRequest, DaemonRunResponse},
+    daemon::{DaemonChildrenResponse, DaemonRunConfigRequest, DaemonRunResponse},
     game::{
         Game, GameId,
         common::GameCommon,

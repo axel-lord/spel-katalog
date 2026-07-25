@@ -2,6 +2,7 @@
 
 use ::std::path::PathBuf;
 
+use ::derive_more::{Deref, DerefMut};
 use ::serde::{Deserialize, Serialize};
 
 use crate::{NativeGameConfig, RunMode};
@@ -34,4 +35,26 @@ pub struct DaemonRunConfigRequest<S> {
     pub run_mode: RunMode,
     /// Settings to use when running game.
     pub settings: S,
+}
+
+/// Response returned when asking for children of daemon.
+#[derive(
+    Debug,
+    Clone,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Deserialize,
+    Serialize,
+    Deref,
+    DerefMut,
+)]
+pub struct DaemonChildrenResponse {
+    /// List of current children.
+    #[deref]
+    #[deref_mut]
+    pub children: Vec<i64>,
 }

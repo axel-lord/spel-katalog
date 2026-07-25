@@ -5,7 +5,7 @@ use ::core::fmt::Display;
 use ::bytes::Bytes;
 use ::http_body_util::Full;
 use ::hyper::{Method, Response, StatusCode};
-use ::tap::{Conv, Pipe};
+use ::tap::Conv;
 
 use crate::http::private::Private;
 
@@ -58,7 +58,7 @@ where
 {
     /// Convert any display implementor to the [ErrorResponse::Internal] variant.
     fn from(value: E) -> Self {
-        let body = value.to_string().pipe(Bytes::from_owner);
+        let body = Bytes::from_owner(format!("{value:#}"));
         HttpResponse {
             kind: ResponseCode::Internal,
             body,
