@@ -161,7 +161,13 @@ where
     T: Serialize + DeserializeOwned,
 {
     let message = ::serde_json::to_vec(&message).map_err(PostError::Serialize)?;
-    let response = send(stream, M::URI, Bytes::from_owner(message), HttpMethod::Post).await?;
+    let response = send(
+        stream,
+        &M::safe_uri(),
+        Bytes::from_owner(message),
+        HttpMethod::Post,
+    )
+    .await?;
     let code = response.code();
     let body = response.body().await?;
 
@@ -211,7 +217,7 @@ pub async fn get<T>(stream: UnixStream) -> Result<T, GetError>
 where
     T: Exchange<Method = Get>,
 {
-    let response = send(stream, T::URI, Bytes::new(), HttpMethod::Get).await?;
+    let response = send(stream, &T::safe_uri(), Bytes::new(), HttpMethod::Get).await?;
     let code = response.code();
     let body = response.body().await?;
 

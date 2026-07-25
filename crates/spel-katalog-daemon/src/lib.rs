@@ -30,13 +30,17 @@ impl RunDaemon {
         listen(&xdg, "spel-katalog-daemon-ipc", |incoming| async move {
             if incoming.method().is_post() {
                 match incoming.uri_path() {
-                    "run" => crate::run::run(incoming).await,
-                    _ => ResponseCode::NotFound.into(),
+                    "/run" => crate::run::run(incoming).await,
+                    uri => ResponseCode::NotFound
+                        .with_err(format!("post uri {uri:?}"))
+                        .into(),
                 }
             } else if incoming.method().is_get() {
                 match incoming.uri_path() {
-                    "children" => crate::children::children().await,
-                    _ => ResponseCode::NotFound.into(),
+                    "/children" => crate::children::children().await,
+                    uri => ResponseCode::NotFound
+                        .with_err(format!("get uri {uri:?}"))
+                        .into(),
                 }
             } else {
                 ResponseCode::MethodNotAllowed.into()

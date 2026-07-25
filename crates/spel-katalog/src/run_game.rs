@@ -4,14 +4,12 @@ use ::std::{
     path::Path,
 };
 
-use ::bytes::Bytes;
 use ::iced_runtime::Task;
 use ::image::DynamicImage;
 use ::spel_katalog_common::status;
 use ::spel_katalog_formats::{
     AdditionalConfig, EnvValue, Game, GameId, NativeGameConfig, RunMode, daemon, lutris_config,
 };
-use ::spel_katalog_ipc::http::{HttpMethod, ResponseCode};
 use ::spel_katalog_run::{
     Callback, dll_overrides, id_channel,
     run_umu::{CommonUmuCtx, LutrisCtx, LutrisUmuCtx},
@@ -185,49 +183,17 @@ impl App {
 
             match conn {
                 Ok(conn) => {
-                    let message = ::serde_json::to_vec(&daemon::request::RunConfig {
+                    let message = daemon::request::RunConfig {
                         config: game,
                         run_mode,
                         settings,
-                    })
-                    .map_err(|err| ::log::error!("could not create daemon request for game\n{err}"))
-                    .ok()?
-                    .pipe(Bytes::from_owner);
-
-                    let response =
-                        ::spel_katalog_ipc::generic::send(conn, "/run", message, HttpMethod::Post)
-                            .await
-                            .map_err(|err| {
-                                ::log::error!("failed to send run config to daemon\n{err}")
-                            })
-                            .ok()?;
-
-                    let code = response.code();
-                    let body = response
-                        .body()
+                    };
+                    let response = ::spel_katalog_ipc::typed::post(conn, message)
                         .await
                         .map_err(|err| {
-                            ::log::error!(
-                                "could not collect response body for response with code {}\n{err}",
-                                code.display()
-                            )
+                            ::log::error!("could not send ipc request to run game config\n{err}")
                         })
                         .ok()?;
-
-                    if code != ResponseCode::Ok {
-                        ::log::error!(
-                            "response from daemon was {}, expected Ok\n{body:?}",
-                            code.display(),
-                        );
-                        return None;
-                    }
-
-                    let response = ::serde_json::from_slice::<daemon::response::Run>(&body)
-                        .map_err(|err| {
-                            ::log::error!("could not deserialize daemon response\n{err}")
-                        })
-                        .ok()?;
-
                     ::log::info!("received run game response: {response:#?}");
                     let message = match response {
                         daemon::response::Run::CreatedPipe { name, path, pid } => async move {

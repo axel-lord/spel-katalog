@@ -1,6 +1,7 @@
 //! Formats used for communication with daemon.
 
 use ::core::{convert::Infallible, marker::PhantomData};
+use ::std::borrow::Cow;
 
 use ::serde::{Serialize, de::DeserializeOwned};
 
@@ -28,6 +29,20 @@ pub trait Exchange: Serialize + DeserializeOwned {
 
     /// Uri of the request.
     const URI: &str;
+
+    /// Get a uri with en ensured leading `/`.
+    fn safe_uri() -> Cow<'static, str> {
+        if Self::URI.starts_with('/') {
+            Cow::Borrowed(Self::URI)
+        } else {
+            ::log::warn!(
+                "type {} is missing a leading slash in URI {:?}",
+                ::core::any::type_name::<Self>(),
+                Self::URI
+            );
+            Cow::Owned(format!("/{}", Self::URI))
+        }
+    }
 }
 
 /// A get request, has no body.
@@ -102,7 +117,7 @@ pub mod response {
 
     impl Exchange for Children {
         type Method = Get;
-        const URI: &str = "children";
+        const URI: &str = "/children";
     }
 }
 
@@ -130,6 +145,6 @@ pub mod request {
     impl<S: Serialize + DeserializeOwned> Exchange for RunConfig<S> {
         type Method = Post<response::Run>;
 
-        const URI: &str = "run";
+        const URI: &str = "/run";
     }
 }

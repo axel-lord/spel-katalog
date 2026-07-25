@@ -29,7 +29,7 @@ pub fn listen(
         async move {
             if incoming.method().is_post() {
                 match incoming.uri_path() {
-                    "v1" => {
+                    "/v1" => {
                         let body = incoming.body().await?;
 
                         let message = ::serde_json::from_slice::<Message>(&body)

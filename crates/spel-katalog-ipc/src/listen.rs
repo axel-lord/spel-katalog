@@ -110,10 +110,10 @@ impl IncomingRequest {
         Ok(self.inner.into_body().collect().await?.to_bytes())
     }
 
-    /// Get uri path. Any trailing or leading slashes
+    /// Get uri path. Any trailing slashes
     /// are trimmed.
     pub fn uri_path(&self) -> &str {
-        self.inner.uri().path().trim_matches('/')
+        self.inner.uri().path().trim_end_matches('/')
     }
 
     /// Get method used.
