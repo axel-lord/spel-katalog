@@ -11,7 +11,7 @@ use ::spel_katalog_common::status;
 use ::spel_katalog_formats::{
     AdditionalConfig, EnvValue, Game, GameId, NativeGameConfig, RunMode, daemon, lutris_config,
 };
-use ::spel_katalog_ipc::http::ResponseCode;
+use ::spel_katalog_ipc::http::{HttpMethod, ResponseCode};
 use ::spel_katalog_run::{
     Callback, dll_overrides, id_channel,
     run_umu::{CommonUmuCtx, LutrisCtx, LutrisUmuCtx},
@@ -194,10 +194,13 @@ impl App {
                     .ok()?
                     .pipe(Bytes::from_owner);
 
-                    let response = ::spel_katalog_ipc::generic::send(conn, "/run", message)
-                        .await
-                        .map_err(|err| ::log::error!("failed to send run config to daemon\n{err}"))
-                        .ok()?;
+                    let response =
+                        ::spel_katalog_ipc::generic::send(conn, "/run", message, HttpMethod::Post)
+                            .await
+                            .map_err(|err| {
+                                ::log::error!("failed to send run config to daemon\n{err}")
+                            })
+                            .ok()?;
 
                     let code = response.code();
                     let body = response

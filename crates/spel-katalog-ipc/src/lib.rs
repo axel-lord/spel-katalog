@@ -2,7 +2,7 @@
 
 use ::bytes::Bytes;
 
-use crate::http::ResponseCode;
+use crate::http::{HttpMethod, ResponseCode};
 pub use crate::{
     listen::IncomingRequest,
     send::{IncomingResponse, SendError},
@@ -60,7 +60,7 @@ pub fn send(xdg: &::xdg::BaseDirectories, message: Message) -> Result<(), SendEr
         let message =
             Bytes::from_owner(::serde_json::to_string(&message).map_err(SendError::Serialize)?);
         let socket = crate::send::connect(xdg, NAME).await?;
-        let response = crate::send::send(socket, "/v1", message).await?;
+        let response = crate::send::send(socket, "/v1", message, HttpMethod::Post).await?;
 
         let status = response.code();
         let body = response.body().await?;
