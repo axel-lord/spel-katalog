@@ -3,7 +3,6 @@
 pub use self::{
     addititional_config::AdditionalConfig,
     bind::{Bind, Symlink},
-    daemon::{DaemonChildrenResponse, DaemonRunConfigRequest, DaemonRunResponse},
     game::{
         Game, GameId,
         common::GameCommon,
@@ -19,7 +18,6 @@ pub use self::{
 
 mod addititional_config;
 mod bind;
-mod daemon;
 mod game;
 mod image;
 mod installer;
@@ -27,4 +25,5 @@ mod native_game_config;
 mod tag;
 mod timestamp;
 
+pub mod daemon;
 pub mod lutris_config;

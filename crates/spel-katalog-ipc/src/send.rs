@@ -3,8 +3,10 @@
 use ::bytes::Bytes;
 use ::http_body_util::{BodyExt, Full};
 use ::hyper::{Method, Request, Response, body::Incoming, client::conn::http1};
+use ::serde::{Serialize, de::DeserializeOwned};
 use ::smol::{future::FutureExt, net::unix::UnixStream};
 use ::smol_hyper::rt::FuturesIo;
+use ::spel_katalog_formats::daemon::{Exchange, Get, Post};
 use ::xdg::BaseDirectories;
 
 use crate::http::ResponseCode;
@@ -85,15 +87,16 @@ impl IncomingResponse {
     }
 }
 
-/// Send a message to the given writer, only returning the
-/// writer and response body if the message was sent successfully.
+/// Send a message to the given writer
+/// consuming it and returning the response
+/// if any.
 ///
 /// # Errors
 /// If the message cannot be sent.
 pub async fn send(
     mut stream: UnixStream,
-    message: Bytes,
     uri: &str,
+    message: Bytes,
 ) -> Result<IncomingResponse, SendError> {
     let io = FuturesIo::new(&mut stream);
     let (mut sender, conn) = http1::handshake(io).await.map_err(SendError::Handshake)?;
@@ -117,6 +120,59 @@ pub async fn send(
     };
 
     send.or(run).await
+}
+
+/// Error returned when failing to send a typed message.
+#[derive(Debug, ::thiserror::Error)]
+pub enum PostError {
+    /// Error occurred when sending message or receiving response.
+    #[error(transparent)]
+    SendError(#[from] SendError),
+    /// Error occurred trying to deserialize the response.
+    #[error("could not deserialize response\n{0}")]
+    Deserialize(::serde_json::Error),
+    /// Error occurred trying to serialize the request.
+    #[error("could not serialize request\n{0}")]
+    Serialize(::serde_json::Error),
+}
+
+/// Send a typed message which has a body for both the request and response.
+///
+/// # Errors
+/// If the message cannot be serialized.
+/// Or if the message cannot be sent.
+/// Or if an error response was received.
+/// Or if the response cannot be deserialized.
+pub fn post<M, T>(mut stream: UnixStream, message: M) -> Result<T, PostError>
+where
+    M: Exchange<Method = Post<T>>,
+    T: Serialize + DeserializeOwned,
+{
+    todo!()
+}
+
+/// Error returned when failing to send a typed message.
+#[derive(Debug, ::thiserror::Error)]
+pub enum GetError {
+    /// Error occurred when sending message or receiving response.
+    #[error(transparent)]
+    SendError(#[from] SendError),
+    /// Error occurred trying to deserialize the response.
+    #[error("could not deserialize response\n{0}")]
+    Deserialize(::serde_json::Error),
+}
+
+/// Send a typed get request, which has a body for the response but not the request.
+///
+/// # Errors
+/// If the requestrequest  cannot be sent.
+/// Or if an error response was received.
+/// Or if the response cannot be deserialized.
+pub fn get<T>(mut stream: UnixStream) -> Result<T, GetError>
+where
+    T: Exchange<Method = Get>,
+{
+    todo!()
 }
 
 /// Connect to an ipc socket.

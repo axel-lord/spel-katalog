@@ -60,7 +60,7 @@ pub fn send(xdg: &::xdg::BaseDirectories, message: Message) -> Result<(), SendEr
         let message =
             Bytes::from_owner(::serde_json::to_string(&message).map_err(SendError::Serialize)?);
         let socket = crate::send::connect(xdg, NAME).await?;
-        let response = crate::send::send(socket, message, "/v1").await?;
+        let response = crate::send::send(socket, "/v1", message).await?;
 
         let status = response.code();
         let body = response.body().await?;
@@ -89,6 +89,12 @@ pub mod generic {
         listen::listen,
         send::{connect, send},
     };
+}
+
+pub mod typed {
+    //! Typed ipc.
+
+    pub use crate::send::{GetError, PostError, get, post};
 }
 
 pub mod http;

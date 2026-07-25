@@ -11,7 +11,7 @@ use ::smol::{
     future::{self, FutureExt},
     io::{self, AsyncReadExt, AsyncWriteExt},
 };
-use ::spel_katalog_formats::{DaemonRunConfigRequest, DaemonRunResponse};
+use ::spel_katalog_formats::daemon;
 use ::spel_katalog_ipc::{IncomingRequest, http::HttpResponse};
 use ::spel_katalog_run::id_channel;
 use ::spel_katalog_settings::Settings;
@@ -25,11 +25,11 @@ use ::uuid::Uuid;
 /// If the request is invalid, or fails to run.
 pub async fn run(incoming: IncomingRequest) -> Result<Bytes, HttpResponse> {
     let body = incoming.body().await?;
-    let DaemonRunConfigRequest {
+    let daemon::request::RunConfig {
         config,
         run_mode,
         settings,
-    } = ::serde_json::from_slice::<DaemonRunConfigRequest<Settings>>(&body)?;
+    } = ::serde_json::from_slice::<daemon::request::RunConfig<Settings>>(&body)?;
 
     let fifo_path = settings
         .xdg()
@@ -123,13 +123,13 @@ pub async fn run(incoming: IncomingRequest) -> Result<Bytes, HttpResponse> {
 
     let pid = rx.recv().await;
     let response = if let Some(pid) = pid {
-        DaemonRunResponse::CreatedPipe {
+        daemon::response::Run::CreatedPipe {
             name: trunc_name,
             path: fifo_path,
             pid: pid.into(),
         }
     } else {
-        DaemonRunResponse::CouldNotRun { name: trunc_name }
+        daemon::response::Run::CouldNotRun { name: trunc_name }
     };
 
     let response = ::serde_json::to_vec(&response)?;

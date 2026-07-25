@@ -9,8 +9,7 @@ use ::iced_runtime::Task;
 use ::image::DynamicImage;
 use ::spel_katalog_common::status;
 use ::spel_katalog_formats::{
-    AdditionalConfig, DaemonRunConfigRequest, DaemonRunResponse, EnvValue, Game, GameId,
-    NativeGameConfig, RunMode, lutris_config,
+    AdditionalConfig, EnvValue, Game, GameId, NativeGameConfig, RunMode, daemon, lutris_config,
 };
 use ::spel_katalog_ipc::http::ResponseCode;
 use ::spel_katalog_run::{
@@ -186,7 +185,7 @@ impl App {
 
             match conn {
                 Ok(conn) => {
-                    let message = ::serde_json::to_vec(&DaemonRunConfigRequest {
+                    let message = ::serde_json::to_vec(&daemon::request::RunConfig {
                         config: game,
                         run_mode,
                         settings,
@@ -195,7 +194,7 @@ impl App {
                     .ok()?
                     .pipe(Bytes::from_owner);
 
-                    let response = ::spel_katalog_ipc::generic::send(conn, message, "/run")
+                    let response = ::spel_katalog_ipc::generic::send(conn, "/run", message)
                         .await
                         .map_err(|err| ::log::error!("failed to send run config to daemon\n{err}"))
                         .ok()?;
@@ -220,7 +219,7 @@ impl App {
                         return None;
                     }
 
-                    let response = ::serde_json::from_slice::<DaemonRunResponse>(&body)
+                    let response = ::serde_json::from_slice::<daemon::response::Run>(&body)
                         .map_err(|err| {
                             ::log::error!("could not deserialize daemon response\n{err}")
                         })
@@ -228,7 +227,7 @@ impl App {
 
                     ::log::info!("received run game response: {response:#?}");
                     let message = match response {
-                        DaemonRunResponse::CreatedPipe { name, path, pid } => async move {
+                        daemon::response::Run::CreatedPipe { name, path, pid } => async move {
                             let fifo = ::smol::fs::File::open(&path).await?;
                             let [stdout, _] = sink_builder.writers(|| name)?;
                             let writer = stdout.into_async();
@@ -242,7 +241,7 @@ impl App {
                             ::log::error!("error while reading fifo\n{err}")
                         })
                         .ok()?,
-                        DaemonRunResponse::CouldNotRun { name } => {
+                        daemon::response::Run::CouldNotRun { name } => {
                             ::log::error!("could not run {name}");
                             return None;
                         }

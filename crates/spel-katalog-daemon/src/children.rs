@@ -5,7 +5,7 @@ use ::std::path::Path;
 use ::bytes::Bytes;
 use ::color_eyre::eyre::Context;
 use ::smol::{fs, stream::StreamExt};
-use ::spel_katalog_formats::DaemonChildrenResponse;
+use ::spel_katalog_formats::daemon;
 use ::spel_katalog_ipc::http::HttpResponse;
 
 /// Get child processes.
@@ -18,7 +18,7 @@ pub async fn children() -> Result<Bytes, HttpResponse> {
         .await
         .wrap_err_with(|| format!("could not read directory {task_dir:?}"))?;
 
-    let mut response = DaemonChildrenResponse::default();
+    let mut response = daemon::response::Children::default();
     while let Some(entry) = read_dir.next().await {
         let entry = match entry {
             Ok(entry) => entry,
