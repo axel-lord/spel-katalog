@@ -19,7 +19,8 @@ use crate::http::{HttpMethod, HttpResponse};
 pub mod typed;
 
 /// Listen for connections using given runtime dir.
-/// Returns a stream of received messages.
+///
+/// If successfull returns a handle to the listener thread.
 pub fn listen<
     H: 'static + Send + Fn(IncomingRequest) -> F,
     F: Future<Output = Result<Bytes, HttpResponse>>,
@@ -100,7 +101,7 @@ async fn request_handler<
 #[derive(Debug)]
 pub struct IncomingRequest {
     /// Wrapped incoming body.
-    inner: Request<Incoming>,
+    pub(crate) inner: Request<Incoming>,
 }
 
 impl IncomingRequest {

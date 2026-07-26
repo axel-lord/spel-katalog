@@ -117,7 +117,7 @@ pub mod typed {
     use ::spel_katalog_formats::daemon::{self, Exchange};
 
     pub use crate::{
-        listen::typed::{Layer, Listener},
+        listen::typed::{Layer, Listener, ListenerError},
         send::typed::{GetError, PostError, get, post},
     };
 }
