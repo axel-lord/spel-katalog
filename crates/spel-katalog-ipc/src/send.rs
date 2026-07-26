@@ -3,13 +3,13 @@
 use ::bytes::Bytes;
 use ::http_body_util::{BodyExt, Full};
 use ::hyper::{Request, Response, body::Incoming, client::conn::http1};
-use ::serde::{Serialize, de::DeserializeOwned};
 use ::smol::{future::FutureExt, net::unix::UnixStream};
 use ::smol_hyper::rt::FuturesIo;
-use ::spel_katalog_formats::daemon::{Exchange, Get, Post};
 use ::xdg::BaseDirectories;
 
 use crate::http::{HttpMethod, ResponseCode};
+
+pub mod typed;
 
 /// Error returned when failing to send a message.
 #[derive(Debug, thiserror::Error)]
@@ -121,118 +121,6 @@ pub async fn send(
     };
 
     send.or(run).await
-}
-
-/// Error returned when failing to send a typed message.
-#[derive(Debug, ::thiserror::Error)]
-pub enum PostError {
-    /// Error occurred when sending message or receiving response.
-    #[error(transparent)]
-    SendError(#[from] SendError),
-    /// Error occurred trying to deserialize the response.
-    #[error("could not deserialize response\n{0}")]
-    Deserialize(::serde_json::Error),
-    /// Error occurred trying to serialize the request.
-    #[error("could not serialize request\n{0}")]
-    Serialize(::serde_json::Error),
-    /// Non [Ok][ResponseCode::Ok] response code.
-    #[error("non Ok response code, {0:?}")]
-    ResponseCode(ResponseCode),
-    /// Non [Ok][ResponseCode::Ok] response code, with message body.
-    #[error("non Ok response code, {code:?}\n{body}")]
-    ResponseBody {
-        /// Response code.
-        code: ResponseCode,
-        /// Body of response.
-        body: String,
-    },
-}
-
-/// Send a typed message which has a body for both the request and response.
-///
-/// # Errors
-/// If the message cannot be serialized.
-/// Or if the message cannot be sent.
-/// Or if an error response was received.
-/// Or if the response cannot be deserialized.
-pub async fn post<M, T>(stream: UnixStream, message: M) -> Result<T, PostError>
-where
-    M: Exchange<Method = Post<T>>,
-    T: Serialize + DeserializeOwned,
-{
-    let message = ::serde_json::to_vec(&message).map_err(PostError::Serialize)?;
-    let response = send(
-        stream,
-        &M::safe_uri(),
-        Bytes::from_owner(message),
-        HttpMethod::Post,
-    )
-    .await?;
-    let code = response.code();
-    let body = response.body().await?;
-
-    if code != ResponseCode::Ok {
-        return Err(if body.is_empty() {
-            PostError::ResponseCode(code)
-        } else {
-            PostError::ResponseBody {
-                code,
-                body: String::from_utf8_lossy(&body).into_owned(),
-            }
-        });
-    }
-
-    ::serde_json::from_slice::<T>(&body).map_err(PostError::Deserialize)
-}
-
-/// Error returned when failing to send a typed message.
-#[derive(Debug, ::thiserror::Error)]
-pub enum GetError {
-    /// Error occurred when sending message or receiving response.
-    #[error(transparent)]
-    SendError(#[from] SendError),
-    /// Error occurred trying to deserialize the response.
-    #[error("could not deserialize response\n{0}")]
-    Deserialize(::serde_json::Error),
-    /// Non [Ok][ResponseCode::Ok] response code.
-    #[error("non Ok response code, {0:?}")]
-    ResponseCode(ResponseCode),
-    /// Non [Ok][ResponseCode::Ok] response code, with message body.
-    #[error("non Ok response code, {code:?}\n{body}")]
-    ResponseBody {
-        /// Response code.
-        code: ResponseCode,
-        /// Body of response.
-        body: String,
-    },
-}
-
-/// Send a typed get request, which has a body for the response but not the request.
-///
-/// # Errors
-/// If the requestrequest  cannot be sent.
-/// Or if an error response was received.
-/// Or if the response cannot be deserialized.
-pub async fn get<T>(stream: UnixStream) -> Result<T, GetError>
-where
-    T: Exchange<Method = Get>,
-{
-    let response = send(stream, &T::safe_uri(), Bytes::new(), HttpMethod::Get).await?;
-    let code = response.code();
-    let body = response.body().await?;
-
-    if code != ResponseCode::Ok {
-        return Err(if body.is_empty() {
-            GetError::ResponseCode(code)
-        } else {
-            GetError::ResponseBody {
-                code,
-                body: String::from_utf8_lossy(&body).into_owned(),
-            }
-        });
-    }
-
-    ::serde_json::from_slice::<T>(&body).map_err(GetError::Deserialize)
 }
 
 /// Connect to an ipc socket.

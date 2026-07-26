@@ -56,7 +56,7 @@ impl<E> From<E> for HttpResponse
 where
     E: Display,
 {
-    /// Convert any display implementor to the [ErrorResponse::Internal] variant.
+    /// Convert any display implementor to the [ResponseCode::Internal] variant.
     fn from(value: E) -> Self {
         let body = Bytes::from_owner(format!("{value:#}"));
         HttpResponse {

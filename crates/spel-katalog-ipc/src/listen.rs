@@ -1,6 +1,6 @@
 //! Server component.
 
-use ::core::convert::Infallible;
+use ::core::{convert::Infallible, fmt::Debug};
 use ::std::{path::Path, rc::Rc, thread::JoinHandle};
 
 use ::bytes::Bytes;
@@ -15,6 +15,8 @@ use ::uuid::Uuid;
 use ::xdg::BaseDirectories;
 
 use crate::http::{HttpMethod, HttpResponse};
+
+pub mod typed;
 
 /// Listen for connections using given runtime dir.
 /// Returns a stream of received messages.

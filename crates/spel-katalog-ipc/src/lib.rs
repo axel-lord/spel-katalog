@@ -94,7 +94,32 @@ pub mod generic {
 pub mod typed {
     //! Typed ipc.
 
-    pub use crate::send::{GetError, PostError, get, post};
+    /// Trait implemented for post exchanges.
+    pub trait Post: Exchange {
+        /// Response to post.
+        type Response: Serialize + DeserializeOwned;
+    }
+
+    impl<M, T> Post for M
+    where
+        M: daemon::Exchange<Method = daemon::Post<T>>,
+        T: Serialize + DeserializeOwned,
+    {
+        type Response = T;
+    }
+
+    /// Trait implemented for get exchanges.
+    pub trait Get: Exchange {}
+
+    impl<T> Get for T where T: daemon::Exchange<Method = daemon::Get> {}
+
+    use ::serde::{Serialize, de::DeserializeOwned};
+    use ::spel_katalog_formats::daemon::{self, Exchange};
+
+    pub use crate::{
+        listen::typed::{Layer, Listener},
+        send::typed::{GetError, PostError, get, post},
+    };
 }
 
 pub mod http;
