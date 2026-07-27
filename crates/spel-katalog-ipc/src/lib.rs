@@ -94,6 +94,12 @@ pub mod generic {
 pub mod typed {
     //! Typed ipc.
 
+    mod chain;
+    mod error;
+    mod layer;
+    mod listen;
+    mod send;
+
     /// Trait implemented for post exchanges.
     pub trait Post: Exchange {
         /// Response to post.
@@ -116,9 +122,11 @@ pub mod typed {
     use ::serde::{Serialize, de::DeserializeOwned};
     use ::spel_katalog_formats::daemon::{self, Exchange};
 
-    pub use crate::{
-        listen::typed::{Layer, Listener, ListenerError},
-        send::typed::{GetError, PostError, get, post},
+    pub use crate::typed::{
+        error::ListenerError,
+        layer::Layer,
+        listen::Listener,
+        send::{GetError, PostError, get, post},
     };
 }
 

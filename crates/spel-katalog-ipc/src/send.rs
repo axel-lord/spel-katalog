@@ -9,8 +9,6 @@ use ::xdg::BaseDirectories;
 
 use crate::http::{HttpMethod, ResponseCode};
 
-pub mod typed;
-
 /// Error returned when failing to send a message.
 #[derive(Debug, thiserror::Error)]
 pub enum SendError {

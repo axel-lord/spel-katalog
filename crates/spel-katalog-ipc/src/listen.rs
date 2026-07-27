@@ -16,8 +16,6 @@ use ::xdg::BaseDirectories;
 
 use crate::http::{HttpMethod, HttpResponse};
 
-pub mod typed;
-
 /// Listen for connections using given runtime dir.
 ///
 /// If successfull returns a handle to the listener thread.
