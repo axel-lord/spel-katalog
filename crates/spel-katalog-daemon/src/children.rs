@@ -2,7 +2,6 @@
 
 use ::std::path::Path;
 
-use ::bytes::Bytes;
 use ::color_eyre::eyre::Context;
 use ::smol::{fs, stream::StreamExt};
 use ::spel_katalog_formats::daemon;
@@ -12,7 +11,7 @@ use ::spel_katalog_ipc::http::HttpResponse;
 ///
 /// # Errors
 /// If the processes cannot be collected.
-pub async fn children() -> Result<Bytes, HttpResponse> {
+pub async fn children() -> Result<daemon::response::Children, HttpResponse> {
     let task_dir = Path::new("/proc/self/task/");
     let mut read_dir = fs::read_dir(task_dir)
         .await
@@ -47,9 +46,5 @@ pub async fn children() -> Result<Bytes, HttpResponse> {
 
         response.push(pid);
     }
-
-    let response = ::serde_json::to_vec(&response)
-        .wrap_err("could not serialize response for children request")?;
-
-    Ok(Bytes::from_owner(response))
+    Ok(response)
 }

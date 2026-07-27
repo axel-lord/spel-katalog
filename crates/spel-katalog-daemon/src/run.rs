@@ -3,7 +3,6 @@
 use ::core::time::Duration;
 use ::std::os::fd::OwnedFd;
 
-use ::bytes::Bytes;
 use ::flume::unbounded;
 use ::rustix::fs::Mode;
 use ::smol::{
@@ -12,7 +11,7 @@ use ::smol::{
     io::{self, AsyncReadExt, AsyncWriteExt},
 };
 use ::spel_katalog_formats::daemon;
-use ::spel_katalog_ipc::{IncomingRequest, http::HttpResponse};
+use ::spel_katalog_ipc::http::HttpResponse;
 use ::spel_katalog_run::id_channel;
 use ::spel_katalog_settings::Settings;
 use ::spel_katalog_sink::SinkBuilder;
@@ -23,14 +22,14 @@ use ::uuid::Uuid;
 ///
 /// # Errors
 /// If the request is invalid, or fails to run.
-pub async fn run(incoming: IncomingRequest) -> Result<Bytes, HttpResponse> {
-    let body = incoming.body().await?;
+pub async fn run(
+    incoming: daemon::request::RunConfig<Settings>,
+) -> Result<daemon::response::Run, HttpResponse> {
     let daemon::request::RunConfig {
         config,
         run_mode,
         settings,
-    } = ::serde_json::from_slice::<daemon::request::RunConfig<Settings>>(&body)?;
-
+    } = incoming;
     let fifo_path = settings
         .xdg()
         .get_runtime_file(format!("pipe/{}", Uuid::now_v7()))?;
@@ -132,7 +131,5 @@ pub async fn run(incoming: IncomingRequest) -> Result<Bytes, HttpResponse> {
         daemon::response::Run::CouldNotRun { name: trunc_name }
     };
 
-    let response = ::serde_json::to_vec(&response)?;
-
-    Ok(Bytes::from_owner(response))
+    Ok(response)
 }

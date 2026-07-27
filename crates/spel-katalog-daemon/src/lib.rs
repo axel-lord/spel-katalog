@@ -1,8 +1,7 @@
 //! Application daemon library.
 
 use ::clap::{Args, Parser};
-use ::color_eyre::eyre::eyre;
-use ::spel_katalog_ipc::{generic::listen, http::ResponseCode};
+use ::spel_katalog_ipc::typed::{MethodResolver, create_socket, listen};
 
 /// Daemon responsible for starting games.
 #[derive(Debug, Parser)]
@@ -27,27 +26,20 @@ impl RunDaemon {
     pub fn run(self) -> ::color_eyre::Result<()> {
         let xdg = ::xdg::BaseDirectories::with_prefix("spel-katalog");
 
-        listen(&xdg, "spel-katalog-daemon-ipc", |incoming| async move {
-            if incoming.method().is_post() {
-                match incoming.uri_path() {
-                    "/run" => crate::run::run(incoming).await,
-                    uri => ResponseCode::NotFound
-                        .with_err(format!("post uri {uri:?}"))
-                        .into(),
-                }
-            } else if incoming.method().is_get() {
-                match incoming.uri_path() {
-                    "/children" => crate::children::children().await,
-                    uri => ResponseCode::NotFound
-                        .with_err(format!("get uri {uri:?}"))
-                        .into(),
-                }
-            } else {
-                ResponseCode::MethodNotAllowed.into()
-            }
+        ::smol::block_on(async {
+            let socket = create_socket("spel-katalog-daemon-ipc", &xdg).await?;
+
+            listen(socket, async |incoming| {
+                MethodResolver::new(incoming)
+                    .post(async |post| post.resource(run::run).await)
+                    .await
+                    .get(async |get| get.resource(children::children).await)
+                    .await
+                    .finish()
+                    .await
+            })
+            .await?;
+            Ok(())
         })
-        .ok_or_else(|| eyre!("could not start listener thread"))?
-        .join()
-        .map_err(|payload| ::std::panic::resume_unwind(payload))
     }
 }
