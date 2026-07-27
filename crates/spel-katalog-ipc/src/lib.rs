@@ -94,10 +94,9 @@ pub mod generic {
 pub mod typed {
     //! Typed ipc.
 
-    mod chain;
     mod error;
-    mod layer;
     mod listen;
+    mod resolver;
     mod send;
 
     /// Trait implemented for post exchanges.
@@ -122,10 +121,13 @@ pub mod typed {
     use ::serde::{Serialize, de::DeserializeOwned};
     use ::spel_katalog_formats::daemon::{self, Exchange};
 
+    /// Type alias to allow naming of method resolvers.
+    pub type MethodResolver = Resolver<crate::typed::resolver::kind::Method>;
+
     pub use crate::typed::{
         error::ListenerError,
-        layer::Layer,
-        listen::Listener,
+        listen::{create_socket, listen},
+        resolver::Resolver,
         send::{GetError, PostError, get, post},
     };
 }
