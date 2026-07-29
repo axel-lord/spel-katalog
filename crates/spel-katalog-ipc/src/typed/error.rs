@@ -54,4 +54,15 @@ pub enum ListenerError {
         /// New name.
         to: PathBuf,
     },
+    /// Error returned if socket file cannot be opened for nlink monitoring.
+    #[error("could not open socket file {path:?}\n{err}")]
+    OpenSocketAsFile {
+        /// Reson file could not be opened.
+        err: ::smol::io::Error,
+        /// Path of socket file.
+        path: PathBuf,
+    },
+    /// Error returned if socket is unlinked/replaced.
+    #[error("socket of ipc listener was unlinked")]
+    SocketUnlinked,
 }

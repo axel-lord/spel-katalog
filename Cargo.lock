@@ -4857,6 +4857,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "log",
+ "rustix 1.1.4",
  "serde",
  "serde_json",
  "smol",

@@ -126,7 +126,7 @@ pub mod typed {
 
     pub use crate::typed::{
         error::ListenerError,
-        listen::{create_socket, listen},
+        listen::IpcListener,
         resolver::Resolver,
         send::{GetError, PostError, get, post},
     };

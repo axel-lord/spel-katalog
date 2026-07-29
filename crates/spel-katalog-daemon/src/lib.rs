@@ -1,7 +1,7 @@
 //! Application daemon library.
 
 use ::clap::{Args, Parser};
-use ::spel_katalog_ipc::typed::{MethodResolver, create_socket, listen};
+use ::spel_katalog_ipc::typed::{IpcListener, MethodResolver};
 
 /// Daemon responsible for starting games.
 #[derive(Debug, Parser)]
@@ -27,18 +27,18 @@ impl RunDaemon {
         let xdg = ::xdg::BaseDirectories::with_prefix("spel-katalog");
 
         ::smol::block_on(async {
-            let socket = create_socket("spel-katalog-daemon-ipc", &xdg).await?;
-
-            listen(socket, async |incoming| {
-                MethodResolver::new(incoming)
-                    .post(async |post| post.resource(run::run).await)
-                    .await
-                    .get(async |get| get.resource(children::children).await)
-                    .await
-                    .finish()
-                    .await
-            })
-            .await?;
+            IpcListener::create("spel-katalog-daemon-ipc", &xdg)
+                .await?
+                .listen(async |incoming| {
+                    MethodResolver::new(incoming)
+                        .post(async |post| post.resource(run::run).await)
+                        .await
+                        .get(async |get| get.resource(children::children).await)
+                        .await
+                        .finish()
+                        .await
+                })
+                .await?;
             Ok(())
         })
     }
