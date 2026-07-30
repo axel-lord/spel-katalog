@@ -86,7 +86,8 @@ async fn resolve_post<M: typed::Post>(
     resolver: impl AsyncFnOnce(M) -> Result<M::Response, HttpResponse>,
 ) -> Result<Bytes, HttpResponse> {
     let body = incoming.body().await?;
-    let message = ::serde_json::from_slice::<M>(&body)?;
+    let message = ::serde_json::from_slice::<M>(&body)
+        .map_err(|err| ResponseCode::BadRequest.with_err(err))?;
     let response = resolver(message).await?;
     ::serde_json::to_vec(&response)?
         .pipe(Bytes::from_owner)
