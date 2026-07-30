@@ -77,7 +77,7 @@ pub enum Message {
     #[from]
     ShowInfo(crate::view::Displayed),
     #[from]
-    Ipc(::spel_katalog_ipc::Message),
+    Ipc(::spel_katalog_formats::InstallerConfig),
     RunGameNative(Box<NativeGameConfig>),
     RunShellNative(Box<NativeGameConfig>),
     #[from]

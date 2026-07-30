@@ -678,12 +678,10 @@ impl App {
                     };
                 }
             }
-            Message::Ipc(message) => match message {
-                ::spel_katalog_ipc::Message::InstallGame(config) => {
-                    return Task::future(Self::prefill_installer(self.settings.snapshot(), config))
-                        .and_then(identity);
-                }
-            },
+            Message::Ipc(config) => {
+                return Task::future(Self::prefill_installer(self.settings.snapshot(), config))
+                    .and_then(identity);
+            }
             Message::ShowInfo(displayed) => {
                 self.view.displayed = displayed;
                 self.view.show_info();

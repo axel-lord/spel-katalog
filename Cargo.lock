@@ -4815,6 +4815,7 @@ dependencies = [
  "color-eyre",
  "env_logger",
  "log",
+ "smol",
  "spel-katalog-formats",
  "spel-katalog-ipc",
  "xdg",

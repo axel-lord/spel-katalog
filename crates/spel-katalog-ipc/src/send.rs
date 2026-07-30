@@ -1,13 +1,13 @@
 //! Client component.
 
 use ::bytes::Bytes;
-use ::http_body_util::{BodyExt, Full};
-use ::hyper::{Request, Response, body::Incoming, client::conn::http1};
+use ::http_body_util::Full;
+use ::hyper::{Request, client::conn::http1};
 use ::smol::{future::FutureExt, net::unix::UnixStream};
 use ::smol_hyper::rt::FuturesIo;
 use ::xdg::BaseDirectories;
 
-use crate::http::{HttpMethod, ResponseCode};
+use crate::{IncomingResponse, http::HttpMethod};
 
 /// Error returned when failing to send a message.
 #[derive(Debug, thiserror::Error)]
@@ -55,33 +55,6 @@ impl SendError {
         } else {
             false
         }
-    }
-}
-
-/// An incoming http response.
-#[derive(Debug)]
-pub struct IncomingResponse {
-    /// Wrapped incoming body.
-    inner: Response<Incoming>,
-}
-impl IncomingResponse {
-    /// Convert into body of incoming message.
-    ///
-    /// # Errors
-    /// If the body cannot be collected.
-    pub async fn body(self) -> Result<Bytes, SendError> {
-        Ok(self
-            .inner
-            .into_body()
-            .collect()
-            .await
-            .map_err(SendError::CollectResponse)?
-            .to_bytes())
-    }
-
-    /// Get response code of response.
-    pub fn code(&self) -> ResponseCode {
-        self.inner.status().into()
     }
 }
 

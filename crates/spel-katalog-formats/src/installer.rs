@@ -8,7 +8,10 @@ use ::std::{
 use ::rustc_hash::FxHashMap;
 use ::serde::{Deserialize, Serialize};
 
-use crate::Bind;
+use crate::{
+    Bind,
+    daemon::{Exchange, Post},
+};
 
 /// Arguments passed to installer prefill.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,6 +42,11 @@ pub struct InstallerConfig {
     /// Environment variables of game.
     #[serde(skip_serializing_if = "FxHashMap::is_empty", default)]
     pub env: FxHashMap<String, String>,
+}
+
+impl Exchange for InstallerConfig {
+    type Method = Post<()>;
+    const URI: &str = "/v1/install";
 }
 
 impl InstallerConfig {

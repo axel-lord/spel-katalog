@@ -7,11 +7,12 @@ license.workspace = true
 
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
-spel-katalog-ipc.workspace = true
-spel-katalog-formats.workspace = true
-log.workspace = true
-env_logger.workspace = true
 color-eyre.workspace = true
+env_logger.workspace = true
+log.workspace = true
+smol.workspace = true
+spel-katalog-formats.workspace = true
+spel-katalog-ipc.workspace = true
 xdg.workspace = true
 
 [lints]

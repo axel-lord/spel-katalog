@@ -56,7 +56,7 @@ where
     let code = response.code();
     let body = response.body().await?;
 
-    if code != ResponseCode::Ok {
+    if !code.is_success() {
         return Err(if body.is_empty() {
             PostError::ResponseCode(code)
         } else {
@@ -106,7 +106,7 @@ where
     let code = response.code();
     let body = response.body().await?;
 
-    if code != ResponseCode::Ok {
+    if !code.is_success() {
         return Err(if body.is_empty() {
             GetError::ResponseCode(code)
         } else {

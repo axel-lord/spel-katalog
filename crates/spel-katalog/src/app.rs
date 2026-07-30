@@ -184,8 +184,56 @@ impl App {
             .pipe(Message::Quick)
             .pipe(Task::done);
 
-        let listen_ipc =
-            Task::stream(::spel_katalog_ipc::listen(app.settings.xdg())).map(Message::from);
+        let (tx, rx) = ::flume::unbounded::<Message>();
+        let xdg = app.settings.xdg().clone();
+
+        let thread = ::std::thread::Builder::new()
+            .name(String::from("spel-katalog-ipc-listener"))
+            .spawn(move || {
+                ::smol::block_on(async move {
+                    let listener = match ::spel_katalog_ipc::typed::IpcListener::create(
+                        "spel-katalog-ipc",
+                        &xdg,
+                    )
+                    .await
+                    {
+                        Ok(listener) => listener,
+                        Err(err) => {
+                            ::log::error!("could not create ipc listener\n{err}");
+                            return;
+                        }
+                    };
+
+                    let Err(err) = listener
+                        .listen(async move |incoming| {
+                            ::spel_katalog_ipc::typed::Resolver::new(incoming)
+                                .post(async |resolver| {
+                                    resolver.resource(
+                                        async |message: ::spel_katalog_formats::InstallerConfig| {
+
+
+                                            tx.send_async(Message::Ipc(message)).await?;
+
+                                            Ok(())
+                                        },
+                                    ).await
+                                })
+                                .await
+                                .finish()
+                                .await
+                        })
+                        .await;
+
+                    ::log::error!("ipc error\n{err}");
+                })
+            });
+
+        let listen_ipc = if let Err(err) = thread {
+            ::log::error!("could not create ipc thread\n{err}");
+            Task::none()
+        } else {
+            Task::stream(rx.into_stream())
+        };
 
         let batch = Task::batch([
             receive_status,

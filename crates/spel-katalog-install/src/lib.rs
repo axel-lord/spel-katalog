@@ -84,28 +84,33 @@ impl InstallGame {
             Some(game_dir.join("dummy.exe"))
         };
 
-        if let Err(err) = ::spel_katalog_ipc::send(
-            &base_dirs,
-            ::spel_katalog_ipc::Message::InstallGame(InstallerConfig {
-                game_dir,
-                exe,
-                hidden: Some(hidden),
-                thumbnail: thumbnail
-                    .map(|t| {
-                        t.canonicalize()
-                            .map_err(|err| eyre!(err).note(format!("is {t:?} a valid path?")))
-                    })
-                    .transpose()?,
-                move_game: Some(!no_move),
-                drives,
-                bind: Default::default(),
-                ro_bind,
-                env: Default::default(),
-            }),
-        ) {
-            Err(eyre!(err).note("is the application open?"))
-        } else {
+        ::smol::block_on(async move {
+            let channel = ::spel_katalog_ipc::generic::connect(&base_dirs, "spel-katalog-ipc")
+                .await
+                .map_err(|err| eyre!(err).note("is the application running?"))?;
+
+            ::spel_katalog_ipc::typed::post(
+                channel,
+                InstallerConfig {
+                    game_dir,
+                    exe,
+                    hidden: Some(hidden),
+                    thumbnail: thumbnail
+                        .map(|t| {
+                            t.canonicalize()
+                                .map_err(|err| eyre!(err).note(format!("is {t:?} a valid path?")))
+                        })
+                        .transpose()?,
+                    move_game: Some(!no_move),
+                    drives,
+                    bind: Default::default(),
+                    ro_bind,
+                    env: Default::default(),
+                },
+            )
+            .await?;
+
             Ok(())
-        }
+        })
     }
 }
