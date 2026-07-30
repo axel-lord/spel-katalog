@@ -85,13 +85,10 @@ impl InstallGame {
         };
 
         ::smol::block_on(async move {
-            let channel = ::spel_katalog_ipc::generic::connect(&base_dirs, "spel-katalog-ipc")
+            ::spel_katalog_ipc::IpcSender::connect(&base_dirs, "spel-katalog-ipc")
                 .await
-                .map_err(|err| eyre!(err).note("is the application running?"))?;
-
-            ::spel_katalog_ipc::typed::post(
-                channel,
-                InstallerConfig {
+                .map_err(|err| eyre!(err).note("is the application running?"))?
+                .post(InstallerConfig {
                     game_dir,
                     exe,
                     hidden: Some(hidden),
@@ -106,9 +103,8 @@ impl InstallGame {
                     bind: Default::default(),
                     ro_bind,
                     env: Default::default(),
-                },
-            )
-            .await?;
+                })
+                .await?;
 
             Ok(())
         })

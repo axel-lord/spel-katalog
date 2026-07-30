@@ -9,6 +9,7 @@ use ::iced_widget::{self as widget, Column, Container, Row, text, text_input, to
 use ::rustc_hash::FxHashMap;
 use ::spel_katalog_cli::Run;
 use ::spel_katalog_common::{OrRequest, StatusSender, w};
+use ::spel_katalog_enthread::enthread;
 use ::spel_katalog_formats::TagStorage;
 use ::spel_katalog_installer::Installer;
 use ::spel_katalog_process_view::ProcessView;
@@ -187,46 +188,33 @@ impl App {
         let (tx, rx) = ::flume::unbounded::<Message>();
         let xdg = app.settings.xdg().clone();
 
-        let thread = ::std::thread::Builder::new()
-            .name(String::from("spel-katalog-ipc-listener"))
-            .spawn(move || {
-                ::smol::block_on(async move {
-                    let listener = match ::spel_katalog_ipc::typed::IpcListener::create(
-                        "spel-katalog-ipc",
-                        &xdg,
-                    )
-                    .await
-                    {
-                        Ok(listener) => listener,
-                        Err(err) => {
-                            ::log::error!("could not create ipc listener\n{err}");
-                            return;
-                        }
-                    };
+        let thread = enthread("spel-katalog-ipc-listener", async move || {
+            let listener =
+                match ::spel_katalog_ipc::IpcListener::create("spel-katalog-ipc", &xdg).await {
+                    Ok(listener) => listener,
+                    Err(err) => {
+                        ::log::error!("could not create ipc listener\n{err}");
+                        return;
+                    }
+                };
 
-                    let Err(err) = listener
-                        .listen(async move |incoming| {
-                            ::spel_katalog_ipc::typed::Resolver::new(incoming)
-                                .post(async |resolver| {
-                                    resolver.resource(
-                                        async |message: ::spel_katalog_formats::InstallerConfig| {
-
-
-                                            tx.send_async(Message::Ipc(message)).await?;
-
-                                            Ok(())
-                                        },
-                                    ).await
+            let Err(err) = listener
+                .resolve(async |resolver| {
+                    resolver
+                        .post(async |resolver| {
+                            resolver
+                                .resource(async |message| {
+                                    tx.send_async(Message::Ipc(message)).await?;
+                                    Ok(())
                                 })
                                 .await
-                                .finish()
-                                .await
                         })
-                        .await;
-
-                    ::log::error!("ipc error\n{err}");
+                        .await
                 })
-            });
+                .await;
+
+            ::log::error!("ipc error\n{err}");
+        });
 
         let listen_ipc = if let Err(err) = thread {
             ::log::error!("could not create ipc thread\n{err}");

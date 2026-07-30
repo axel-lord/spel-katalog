@@ -1,7 +1,7 @@
 //! Application daemon library.
 
 use ::clap::{Args, Parser};
-use ::spel_katalog_ipc::typed::{IpcListener, MethodResolver};
+use ::spel_katalog_ipc::IpcListener;
 
 /// Daemon responsible for starting games.
 #[derive(Debug, Parser)]
@@ -29,13 +29,11 @@ impl RunDaemon {
         ::smol::block_on(async {
             IpcListener::create("spel-katalog-daemon-ipc", &xdg)
                 .await?
-                .listen(async |incoming| {
-                    MethodResolver::new(incoming)
+                .resolve(async |resolver| {
+                    resolver
                         .post(async |post| post.resource(run::run).await)
                         .await
                         .get(async |get| get.resource(children::children).await)
-                        .await
-                        .finish()
                         .await
                 })
                 .await?;

@@ -5,11 +5,7 @@ use ::core::marker::PhantomData;
 use ::bytes::Bytes;
 use ::tap::Pipe;
 
-use crate::{
-    IncomingRequest,
-    http::{HttpResponse, ResponseCode},
-    typed,
-};
+use crate::http::{HttpResponse, IncomingRequest, ResponseCode};
 
 pub mod kind {
     //! Resolver kinds.
@@ -81,7 +77,7 @@ impl<T> Resolver<T> {
 }
 
 /// Resolve a post request.
-async fn resolve_post<M: typed::Post>(
+async fn resolve_post<M: crate::Post>(
     incoming: IncomingRequest,
     resolver: impl AsyncFnOnce(M) -> Result<M::Response, HttpResponse>,
 ) -> Result<Bytes, HttpResponse> {
@@ -95,7 +91,7 @@ async fn resolve_post<M: typed::Post>(
 }
 
 /// Resolve a get request.
-async fn resolve_get<T: typed::Get>(
+async fn resolve_get<T: crate::Get>(
     resolver: impl AsyncFnOnce() -> Result<T, HttpResponse>,
 ) -> Result<Bytes, HttpResponse> {
     let response = resolver().await?;
@@ -111,7 +107,7 @@ impl Resolver<kind::Post> {
         resolver: impl AsyncFnOnce(M) -> Result<M::Response, HttpResponse>,
     ) -> Self
     where
-        M: typed::Post,
+        M: crate::Post,
     {
         match self.inner {
             Resolver_::Active { incoming } if incoming.uri_path() == M::safe_uri() => {
@@ -126,7 +122,7 @@ impl Resolver<kind::Get> {
     /// Add resource to get resolver.
     pub async fn resource<T>(self, resolver: impl AsyncFnOnce() -> Result<T, HttpResponse>) -> Self
     where
-        T: typed::Get,
+        T: crate::Get,
     {
         match self.inner {
             Resolver_::Active { incoming } if incoming.uri_path() == T::safe_uri() => {

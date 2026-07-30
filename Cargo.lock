@@ -4604,6 +4604,7 @@ dependencies = [
  "smol",
  "spel-katalog-cli",
  "spel-katalog-common",
+ "spel-katalog-enthread",
  "spel-katalog-formats",
  "spel-katalog-games",
  "spel-katalog-gather",
@@ -4695,6 +4696,13 @@ dependencies = [
  "tinyvec",
  "uuid",
  "xdg",
+]
+
+[[package]]
+name = "spel-katalog-enthread"
+version = "0.1.0"
+dependencies = [
+ "smol",
 ]
 
 [[package]]

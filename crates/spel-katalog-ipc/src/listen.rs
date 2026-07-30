@@ -17,7 +17,11 @@ use ::smol::{
 use ::smol_hyper::rt::FuturesIo;
 use ::uuid::Uuid;
 
-use crate::{IncomingRequest, http::HttpResponse, typed::error::ListenerError};
+use crate::{
+    MethodResolver,
+    error::ListenerError,
+    http::{HttpResponse, IncomingRequest},
+};
 
 /// A listener used to listen for and respond to
 /// ipc messages.
@@ -137,6 +141,21 @@ impl IpcListener {
         let ex = LocalExecutor::new();
         ex.run(listen_(&self.socket, &response, &ex, &semaphore).race(self.wait_for_unlink()))
             .await
+    }
+
+    /// Resolve requests on socket using `resolve`.
+    ///
+    /// # Errors
+    /// On fatal listener errors they are returned.
+    #[expect(clippy::future_not_send, reason = "intended to run on a single thread")]
+    pub async fn resolve(
+        self,
+        resolve: impl AsyncFn(MethodResolver) -> MethodResolver,
+    ) -> Result<Infallible, ListenerError> {
+        self.listen(async move |incoming| {
+            resolve(MethodResolver::new(incoming)).await.finish().await
+        })
+        .await
     }
 }
 

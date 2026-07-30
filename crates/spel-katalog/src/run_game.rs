@@ -178,17 +178,17 @@ impl App {
         };
         let task = async move {
             let conn =
-                ::spel_katalog_ipc::generic::connect(settings.xdg(), "spel-katalog-daemon-ipc")
+                ::spel_katalog_ipc::IpcSender::connect(settings.xdg(), "spel-katalog-daemon-ipc")
                     .await;
 
             match conn {
                 Ok(conn) => {
-                    let message = daemon::request::RunConfig {
-                        config: game,
-                        run_mode,
-                        settings,
-                    };
-                    let response = ::spel_katalog_ipc::typed::post(conn, message)
+                    let response = conn
+                        .post(daemon::request::RunConfig {
+                            config: game,
+                            run_mode,
+                            settings,
+                        })
                         .await
                         .map_err(|err| {
                             ::log::error!("could not send ipc request to run game config\n{err}")
