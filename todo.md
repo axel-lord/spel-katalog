@@ -26,6 +26,7 @@
 - [x] Logging in terminal window
 - [ ] To top button on games view
 - [ ] Options for native games, gamescope, proton, etc.
+- [ ] Move database access to daemon
 
 # QoL
 - [ ] Log filtering
