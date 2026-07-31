@@ -36,7 +36,7 @@
 - [ ] Quick tag add
 - [ ] Hidden tags
 - [ ] Use cache for game filters
-- [ ] Multiple tag filter layers (ui, backend already finished)
+- [x] Multiple tag filter layers (ui, backend already finished)
 - [ ] Game info in terminal window (with setting)
 - [ ] Panes for terminal window (perhaps unify terminal and main window)
 - [x] Show module path in log view

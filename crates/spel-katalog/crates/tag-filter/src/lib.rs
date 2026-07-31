@@ -2,7 +2,8 @@
 
 use ::std::collections::BTreeMap;
 
-use ::iced_core::{Alignment::Center, Border, Element};
+use ::iced_aw::{sidebar::TabLabel, widget::Sidebar};
+use ::iced_core::{Alignment::Center, Border, Element, Length::Shrink};
 use ::iced_runtime::Task;
 use ::iced_widget as widget;
 use ::itertools::Itertools;
@@ -15,6 +16,8 @@ use ::tap::Pipe;
 /// A single filter layer.
 #[derive(Debug, Clone)]
 struct Layer {
+    /// Name of layer.
+    name: String,
     /// Filter mode for exclusion.
     incl_mode: TagFilterMode,
     /// Filter mode for inclusion.
@@ -25,14 +28,15 @@ struct Layer {
 
 impl Default for Layer {
     fn default() -> Self {
-        Self::new()
+        Self::new(String::from("#0"))
     }
 }
 
 impl Layer {
     /// Construct a new layer.
-    const fn new() -> Self {
+    const fn new(name: String) -> Self {
         Self {
+            name,
             incl_mode: TagFilterMode::All,
             excl_mode: TagFilterMode::Any,
             tags: BTreeMap::new(),
@@ -69,6 +73,14 @@ impl Layer {
 /// Tag filter view messages.
 #[derive(Debug, Clone)]
 pub enum Message {
+    /// A tab was selected.
+    TabSelected(usize),
+    /// Add a layer.
+    AddLayer,
+    /// Remove selected layer.
+    RemoveLayer,
+    /// Sort layers.
+    SortLayers,
     /// Set the value of a tag.
     SetTag {
         /// Layer to set tag in.
@@ -102,6 +114,8 @@ pub enum Request {
 pub struct TagFilterDialog {
     /// Layers of filter.
     layers: Vec<Layer>,
+    /// Selected layer.
+    selected: usize,
 }
 
 impl Default for TagFilterDialog {
@@ -114,7 +128,8 @@ impl TagFilterDialog {
     /// Create a new tag filter dialog.
     pub fn new() -> Self {
         TagFilterDialog {
-            layers: vec![Layer::new()],
+            layers: vec![Layer::default()],
+            selected: 0,
         }
     }
 
@@ -148,6 +163,21 @@ impl TagFilterDialog {
         }
     }
 
+    /// Get a new free layer name.
+    fn new_layer_name(&self) -> String {
+        let mut counter = 0usize;
+        'outer: loop {
+            let name = format!("#{counter}");
+            counter += 1;
+            for layer in &self.layers {
+                if layer.name == name {
+                    continue 'outer;
+                }
+            }
+            return name;
+        }
+    }
+
     /// Update state.
     pub fn update(
         &mut self,
@@ -169,6 +199,46 @@ impl TagFilterDialog {
                     .into_request()
                     .pipe(Task::done)
             }
+            Message::TabSelected(id) => {
+                self.selected = self.layers.len().saturating_sub(1).min(id);
+                Task::none()
+            }
+            Message::AddLayer => {
+                let name = self.new_layer_name();
+                self.layers
+                    .insert(self.selected.max(self.layers.len()), Layer::new(name));
+                Task::none()
+            }
+            Message::RemoveLayer => {
+                if self.layers.len() > 1 {
+                    self.layers.remove(self.selected);
+                    self.selected = self.layers.len().saturating_sub(1).min(self.selected);
+                }
+                Task::none()
+            }
+            Message::SortLayers => {
+                let current = self
+                    .layers
+                    .get(self.selected)
+                    .map(|layer| layer.name.clone());
+                self.layers.sort_by_key(|layer| {
+                    layer
+                        .name
+                        .get(1..)
+                        .and_then(|name| name.parse::<usize>().ok())
+                        .unwrap_or(0)
+                });
+                if let Some(current) = current
+                    && let Some((idx, _)) = self
+                        .layers
+                        .iter()
+                        .enumerate()
+                        .find(|(_, layer)| layer.name == current)
+                {
+                    self.selected = idx;
+                }
+                Task::none()
+            }
         }
     }
 
@@ -177,12 +247,47 @@ impl TagFilterDialog {
         &self,
         tags: &TagStorage,
     ) -> Element<'_, Message, ::iced_core::Theme, widget::Renderer> {
+        match self.layers.as_slice() {
+            [] | [_] => self.view_layer(tags, 0).into(),
+            layers @ [_, _, ..] => widget::Row::new()
+                .spacing(6)
+                .push(
+                    layers
+                        .iter()
+                        .enumerate()
+                        .fold(
+                            Sidebar::new(Message::TabSelected).height(Shrink),
+                            |sidebar, (idx, layer)| {
+                                sidebar.push(idx, TabLabel::Text(layer.name.clone()))
+                            },
+                        )
+                        .set_active_tab(&self.selected),
+                )
+                .push(self.view_layer(tags, self.selected))
+                .height(Shrink)
+                .into(),
+        }
+    }
+
+    /// View dialog layer state.
+    fn view_layer(&self, tags: &TagStorage, idx: usize) -> widget::Column<'_, Message> {
         widget::Column::new()
             .spacing(5)
             .align_x(Center)
-            .push(widget::text("Tag Filter"))
+            .push(::iced_aw::widget::ContextMenu::new(
+                widget::text("Tag Filter").width(360).center(),
+                || {
+                    ::spel_katalog_widget::ListMenu::new()
+                        .label("Layers")
+                        .separator()
+                        .button("Add New", || Message::AddLayer)
+                        .button_if(self.layers.len() > 1, "Remove", || Message::RemoveLayer)
+                        .button_if(self.layers.len() > 1, "Sort", || Message::SortLayers)
+                        .into()
+                },
+            ))
             .push(rule::horizontal().pipe(widget::container).width(360))
-            .push_maybe(self.layers.first().map(|layer| {
+            .push_maybe(self.layers.get(idx).map(move |layer| {
                 tags.iter().chunks(5).into_iter().fold(
                     widget::Column::new()
                         .spacing(3)
@@ -196,8 +301,8 @@ impl TagFilterDialog {
                                     widget::pick_list(
                                         [TagFilterMode::Any, TagFilterMode::All],
                                         Some(layer.incl_mode),
-                                        |mode| Message::SetMode {
-                                            layer: 0,
+                                        move |mode| Message::SetMode {
+                                            layer: idx,
                                             kind: TagFilterKind::Include,
                                             mode,
                                         },
@@ -209,8 +314,8 @@ impl TagFilterDialog {
                                     widget::pick_list(
                                         [TagFilterMode::Any, TagFilterMode::All],
                                         Some(layer.excl_mode),
-                                        |mode| Message::SetMode {
-                                            layer: 0,
+                                        move |mode| Message::SetMode {
+                                            layer: idx,
                                             kind: TagFilterKind::Exclude,
                                             mode,
                                         },
@@ -261,7 +366,7 @@ impl TagFilterDialog {
                                         .on_press({
                                             let tag = tag.clone();
                                             Message::SetTag {
-                                                layer: 0,
+                                                layer: idx,
                                                 tag,
                                                 kind: match kind {
                                                     Some(TagFilterKind::Include) => {
@@ -277,7 +382,7 @@ impl TagFilterDialog {
                                         .on_right_press({
                                             let tag = tag.clone();
                                             Message::SetTag {
-                                                layer: 0,
+                                                layer: idx,
                                                 tag,
                                                 kind: match kind {
                                                     Some(TagFilterKind::Include) => None,
@@ -289,7 +394,7 @@ impl TagFilterDialog {
                                             }
                                         })
                                         .on_middle_press(Message::SetTag {
-                                            layer: 0,
+                                            layer: idx,
                                             tag,
                                             kind: None,
                                         }),
@@ -299,6 +404,5 @@ impl TagFilterDialog {
                     },
                 )
             }))
-            .into()
     }
 }
