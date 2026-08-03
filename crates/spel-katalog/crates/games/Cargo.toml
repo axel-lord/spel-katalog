@@ -35,7 +35,9 @@ spel-katalog-settings.workspace = true
 spel-katalog-widget.workspace = true
 spel-katalog-native.workspace = true
 spel-katalog-profiler.workspace = true
+spel-katalog-color.path = "../../../spel-katalog-color/"
 strsim.workspace = true
 tap.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
+palette = { workspace = true, features = ["serde"] }

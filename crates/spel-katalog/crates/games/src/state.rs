@@ -9,16 +9,18 @@ use ::std::{
 
 use ::derive_more::{Deref, DerefMut, IsVariant};
 use ::iced_aw::ContextMenu;
-use ::iced_core::{Border, Length::Fill, text::Wrapping};
+use ::iced_core::{Color, Length::Fill, Shadow, Vector, text::Wrapping};
 use ::iced_futures::Subscription;
 use ::iced_runtime::Task;
 use ::iced_widget::{self as widget, Sensor, container, stack};
 use ::image::{ImageFormat, RgbaImage};
 use ::itertools::Itertools;
+use ::palette::Mix;
 use ::parking_lot::Mutex;
 use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use ::rusqlite::{Connection, Statement, named_params};
 use ::rustc_hash::FxHashSet;
+use ::spel_katalog_color::HslaConv;
 use ::spel_katalog_common::{IntoOrRequest, OrRequest, StatusSender, async_status, status};
 use ::spel_katalog_formats::{Game, GameId, NativeGameConfig, TagStorage};
 use ::spel_katalog_gather::{
@@ -626,15 +628,23 @@ impl State {
 
         fn base(theme: &::iced_core::Theme) -> container::Style {
             let style = container::bordered_box(theme);
-            style.border(Border {
-                radius: 0.into(),
-                ..style.border
-            })
+            style
+                .border(style.border.rounded(2).width(0))
+                .shadow(Shadow {
+                    color: Color::BLACK,
+                    offset: Vector::ZERO,
+                    blur_radius: 3.0,
+                })
         }
 
         fn batch_and_select(theme: &::iced_core::Theme) -> container::Style {
-            let style = select(theme);
-            style.border(style.border.color(theme.palette().danger))
+            base(theme).background(::iced_core::Color::from_hsla(
+                theme
+                    .palette()
+                    .primary
+                    .into_hsla()
+                    .mix(theme.palette().danger.into_hsla(), 0.3),
+            ))
         }
 
         fn select(theme: &::iced_core::Theme) -> container::Style {

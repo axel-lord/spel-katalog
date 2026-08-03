@@ -30,6 +30,7 @@ members = [
 	"crates/spel-katalog/crates/sink",
 	"crates/spel-katalog/crates/tag-filter", 
 	"crates/spel-katalog/crates/terminal",
+	"crates/spel-katalog-color",
 	"test",
 ]
 resolver = "2"
@@ -177,3 +178,4 @@ yaml-rust2 = "0.11.0"
 spel-katalog-assets = { path = "crates/spel-katalog-assets" }
 spel-katalog-process-view = { path = "crates/spel-katalog/crates/process-view" }
 spel-katalog-enthread = { path = "crates/spel-katalog-enthread" }
+palette = "0.7.7"
