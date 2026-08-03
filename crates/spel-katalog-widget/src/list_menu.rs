@@ -1,30 +1,42 @@
 //! [ListMenu] impl.
 
-use ::core::fmt::Debug;
+use ::core::{
+    fmt::{self, Debug},
+    mem,
+};
 
-use ::iced_core::{Background, Element, text::IntoFragment};
+use ::iced_core::{
+    Background, Color, Element, Length::Fill, Shadow, Theme, Vector, text::IntoFragment,
+};
+use ::iced_widget::{self as widget, Column, Renderer};
+use ::tap::Pipe;
 
 /// Button style with defined background while hovered.
 pub fn hover_background_text_button(
-    theme: &::iced_core::Theme,
-    status: ::iced_widget::button::Status,
-) -> ::iced_widget::button::Style {
-    let ::iced_widget::button::Style {
+    theme: &Theme,
+    status: widget::button::Status,
+) -> widget::button::Style {
+    let widget::button::Style {
         background,
         text_color,
         border,
         shadow,
         snap,
-    } = ::iced_widget::button::text(theme, status);
+    } = widget::button::text(theme, status);
 
-    let background = match status {
-        ::iced_widget::button::Status::Hovered | ::iced_widget::button::Status::Pressed => {
-            Some(Background::Color(theme.palette().background))
-        }
-        _ => background,
+    let (background, text_color) = match status {
+        widget::button::Status::Hovered | widget::button::Status::Pressed => (
+            Some(Background::Color(
+                theme.extended_palette().primary.base.color,
+            )),
+            theme.extended_palette().primary.base.text,
+        ),
+        _ => (background, text_color),
     };
 
-    ::iced_widget::button::Style {
+    let border = border.rounded(4);
+
+    widget::button::Style {
         background,
         text_color,
         border,
@@ -34,98 +46,127 @@ pub fn hover_background_text_button(
 }
 
 /// Create a menu button.
-pub fn menu_button<'a, M>(content: impl IntoFragment<'a>) -> ::iced_widget::Button<'a, M> {
-    ::iced_widget::button(::iced_widget::text(content))
-        .width(::iced_core::Length::Fill)
-        .padding(3)
+pub fn menu_button<'a, M>(content: impl IntoFragment<'a>) -> widget::Button<'a, M> {
+    widget::button(widget::text(content))
+        .width(Fill)
+        .padding(2)
         .style(hover_background_text_button)
 }
 
 /// A single menu item.
-enum MenuItem<'a, Message, Theme = ::iced_core::Theme, Renderer = ::iced_widget::Renderer> {
+enum MenuItem<'a, Message> {
     /// Item is an element.
     Element(Element<'a, Message, Theme, Renderer>),
+    /// Separator between elements.
+    Separator,
+    /// A label.
+    Label(&'a str),
 }
 
 /// List menu element.
-pub struct ListMenu<'a, Message, Theme = ::iced_core::Theme, Renderer = ::iced_widget::Renderer> {
+pub struct ListMenu<'a, Message> {
     /// Wrapped column.
-    inner: Vec<MenuItem<'a, Message, Theme, Renderer>>,
+    inner: Vec<MenuItem<'a, Message>>,
+    /// Width of list.
+    width: u32,
 }
 
-impl<'a, Message, Renderer> From<ListMenu<'a, Message, ::iced_core::Theme, Renderer>>
-    for ::iced_core::Element<'a, Message, ::iced_core::Theme, Renderer>
+impl<'a, Message> From<ListMenu<'a, Message>> for Element<'a, Message, Theme, Renderer>
 where
-    Renderer: 'a + ::iced_core::Renderer,
     Message: 'a,
 {
-    fn from(value: ListMenu<'a, Message, ::iced_core::Theme, Renderer>) -> Self {
-        ::iced_widget::container(
-            ::iced_widget::column(value.inner.into_iter().map(|item| match item {
-                MenuItem::Element(element) => element,
-            }))
-            .spacing(0)
-            .padding(3)
-            .width(130)
-            .align_x(::iced_core::Alignment::Center),
+    fn from(value: ListMenu<'a, Message>) -> Self {
+        let width = value.width;
+        let mut outer = Vec::<Element<'a, Message, Theme, Renderer>>::new();
+        let mut inner = Vec::<Element<'a, Message, Theme, Renderer>>::new();
+
+        for item in value.inner {
+            match item {
+                MenuItem::Separator => {
+                    if !inner.is_empty() {
+                        outer.push(Column::from_vec(mem::take(&mut inner)).width(Fill).into());
+                    }
+                    outer.push(crate::rule::horizontal().into());
+                }
+                MenuItem::Element(element) => inner.push(element),
+                MenuItem::Label(label) => inner.push(
+                    widget::text(label)
+                        .style(widget::text::secondary)
+                        .pipe(widget::center_x)
+                        .padding(2)
+                        .into(),
+                ),
+            }
+        }
+        if !inner.is_empty() {
+            outer.push(Column::from_vec(inner).width(Fill).into());
+        }
+
+        widget::container(
+            Column::from_vec(outer)
+                .spacing(2)
+                .padding(4)
+                .width(width)
+                .align_x(::iced_core::Alignment::Center),
         )
-        .style(::iced_widget::container::bordered_box)
+        .style(|theme| {
+            widget::container::rounded_box(theme).shadow(Shadow {
+                color: Color::BLACK,
+                offset: Vector::ZERO,
+                blur_radius: 5.0,
+            })
+        })
         .into()
     }
 }
 
-impl<'a, Message, Theme, Renderer> Default for ListMenu<'a, Message, Theme, Renderer> {
+impl<'a, Message> Default for ListMenu<'a, Message> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<'a, Message, Theme, Renderer> ListMenu<'a, Message, Theme, Renderer> {
+impl<'a, Message> ListMenu<'a, Message> {
     /// Construct a new list menu.
     pub const fn new() -> Self {
-        Self { inner: Vec::new() }
+        Self {
+            inner: Vec::new(),
+            width: 130,
+        }
     }
 
-    /// Insert an element.
-    pub fn element(
-        mut self,
-        element: impl Into<::iced_core::Element<'a, Message, Theme, Renderer>>,
-    ) -> Self {
-        self.inner.push(MenuItem::Element(element.into()));
+    /// Set menu width.
+    pub const fn width(mut self, width: u32) -> Self {
+        self.width = width;
         self
     }
 
-    /// Insert a separator.
-    pub fn separator(self) -> Self
-    where
-        Theme: 'a + ::iced_widget::rule::Catalog,
-        Renderer: 'a + ::iced_core::Renderer,
-        Message: 'a,
-    {
-        self.element(crate::rule::horizontal())
+    /// Update inner.
+    fn push(mut self, item: MenuItem<'a, Message>) -> Self {
+        self.inner.push(item);
+        self
     }
-}
 
-impl<'a, Message> ListMenu<'a, Message, ::iced_core::Theme, ::iced_widget::Renderer>
-where
-    Message: 'a + Clone,
-{
+    /// Insert an element.
+    pub fn element(self, element: impl Into<Element<'a, Message, Theme, Renderer>>) -> Self {
+        self.push(MenuItem::Element(element.into()))
+    }
+
+    /// Insert a separator.
+    pub fn separator(self) -> Self {
+        self.push(MenuItem::Separator)
+    }
+
     /// Insert a label.
     pub fn label(self, label: &'a str) -> Self {
-        self.element(
-            ::iced_widget::center_x(
-                ::iced_widget::text(label).style(::iced_widget::text::secondary),
-            )
-            .padding(3),
-        )
+        self.push(MenuItem::Label(label))
     }
 
     /// Insert a button.
-    pub fn button(
-        self,
-        content: impl IntoFragment<'a>,
-        on_press: impl 'a + Fn() -> Message,
-    ) -> Self {
+    pub fn button(self, content: impl IntoFragment<'a>, on_press: impl 'a + Fn() -> Message) -> Self
+    where
+        Message: 'a + Clone,
+    {
         self.element(menu_button(content).on_press_with(on_press))
     }
 
@@ -135,7 +176,10 @@ where
         condition: bool,
         content: impl IntoFragment<'a>,
         on_press: impl 'a + Fn() -> Message,
-    ) -> Self {
+    ) -> Self
+    where
+        Message: 'a + Clone,
+    {
         let button = menu_button(content);
         let button = if condition {
             button.on_press_with(on_press)
@@ -146,21 +190,19 @@ where
     }
 }
 
-impl<'a, Message, Theme, Renderer> Debug for MenuItem<'a, Message, Theme, Renderer>
-where
-    Element<'a, Message, Theme, Renderer>: Debug,
-{
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+impl<'a, Message> ListMenu<'a, Message> where Message: 'a + Clone {}
+
+impl<'a, Message> Debug for MenuItem<'a, Message> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            MenuItem::Element(element) => f.debug_tuple("Element").field(element).finish(),
+            MenuItem::Element(..) => f.debug_tuple("Element").finish_non_exhaustive(),
+            MenuItem::Separator => f.write_str("Separator"),
+            MenuItem::Label(label) => f.debug_tuple("Label").field(label).finish(),
         }
     }
 }
-impl<'a, Message, Theme, Renderer> Debug for ListMenu<'a, Message, Theme, Renderer>
-where
-    Element<'a, Message, Theme, Renderer>: Debug,
-{
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+impl<'a, Message> Debug for ListMenu<'a, Message> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ListMenu")
             .field("inner", &self.inner)
             .finish()
