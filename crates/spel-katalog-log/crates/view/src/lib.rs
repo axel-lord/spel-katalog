@@ -1,21 +1,20 @@
 //! View of log.
 
-use ::bytes::Bytes;
-use ::derive_more::{Deref, DerefMut};
 use ::iced_core::{
     Alignment::Center, Border, Element, Font, Length::Fill, Theme, text::IntoFragment,
 };
 use ::iced_runtime::{Task, futures::Subscription};
-use ::iced_widget::{self as widget};
+use ::iced_widget::{self as widget, Column};
 use ::smol::stream::StreamExt;
 use ::spel_katalog_assets as assets;
-use ::spel_katalog_log::{OwnedRecord, RecordMessage};
+use ::spel_katalog_log::RecordMessage;
 use ::spel_katalog_widget::{WidgetExt, icon};
 use ::tap::Pipe;
 
-use crate::record::Record;
+use crate::{record::Record, record_conent::RecordContent};
 
 mod record;
+mod record_conent;
 
 /// Message used by [LogView].
 #[derive(Debug, Clone)]
@@ -24,74 +23,8 @@ pub enum Message {
     RecvRecord(RecordMessage),
     /// Toggle log view.
     Toggle(usize),
-}
-
-/// Content to display for a record.
-#[derive(Debug, Clone, Deref, DerefMut)]
-enum RecordContent {
-    /// Record is closed.
-    Closed {
-        /// Record of content.
-        #[deref]
-        #[deref_mut]
-        record: Record,
-        /// Short representation of record.
-        short: Bytes,
-    },
-    /// Record is open.
-    Open {
-        /// Record of content.
-        #[deref]
-        #[deref_mut]
-        record: Record,
-    },
-}
-
-impl RecordContent {
-    /// Create closed variant from a record.
-    pub fn new(record: OwnedRecord) -> Self {
-        Self::Closed {
-            short: record.first_line(),
-            record: Record::new(record),
-        }
-    }
-
-    /// Convert to [RecordContent::Open].
-    pub fn open(&mut self) {
-        if let Self::Closed { record, .. } = self {
-            *self = Self::Open {
-                record: record.clone(),
-            }
-        }
-    }
-
-    /// Convert to [RecordContent::Closed].
-    pub fn close(&mut self) {
-        if let Self::Open { record, .. } = self {
-            *self = Self::Closed {
-                record: record.clone(),
-                short: record.first_line(),
-            }
-        }
-    }
-
-    /// Toggle state.
-    pub fn toggle(&mut self) {
-        match self {
-            Self::Open { .. } => self.close(),
-            Self::Closed { .. } => self.open(),
-        }
-    }
-
-    /// Is shortened.
-    pub const fn is_shortened(&self) -> bool {
-        match self {
-            RecordContent::Closed { record, short } => {
-                short.len() != record.as_owned_record().message.len()
-            }
-            RecordContent::Open { .. } => true,
-        }
-    }
+    /// Set regex filter.
+    Filter(String),
 }
 
 /// Log view.
@@ -101,6 +34,10 @@ pub struct LogView {
     records: Vec<RecordContent>,
     /// Font size of view.
     font_size: u32,
+    /// String value of filter.
+    filter: String,
+    /// Current regex in use.
+    regex: Option<::regex::bytes::Regex>,
 }
 
 impl Default for LogView {
@@ -108,6 +45,8 @@ impl Default for LogView {
         Self {
             records: Default::default(),
             font_size: 13,
+            filter: String::new(),
+            regex: None,
         }
     }
 }
@@ -142,6 +81,20 @@ impl LogView {
                 if let Some(record) = self.records.get_mut(idx) {
                     record.toggle();
                 }
+                Task::none()
+            }
+            Message::Filter(matcher) => {
+                if matcher.is_empty() {
+                    self.regex = None;
+                } else if let Ok(re) = ::regex::bytes::RegexBuilder::new(&matcher)
+                    .case_insensitive(true)
+                    .multi_line(true)
+                    .build()
+                {
+                    self.regex = Some(re);
+                }
+                self.filter = matcher;
+
                 Task::none()
             }
         }
@@ -213,64 +166,96 @@ impl LogView {
             .push(self.module(record))
     }
 
+    /// Add record to column.
+    fn add_record<'a>(
+        &'a self,
+        col: widget::Column<'a, Message>,
+        record: &'a RecordContent,
+        idx: usize,
+    ) -> widget::Column<'a, Message> {
+        if record.is_shortened() {
+            match record {
+                RecordContent::Closed { record, short } => col.push(
+                    widget::Row::new()
+                        .align_y(Center)
+                        .spacing(3)
+                        .push(icon::Icon::new(assets::plus()).size(icon_size(self.font_size)))
+                        .pipe(|row| self.record_prefix(record, row))
+                        .push(self.text_container(String::from_utf8_lossy(short)))
+                        .push(self.text_box("..."))
+                        .pipe(widget::button)
+                        .style(widget::button::text)
+                        .padding(0)
+                        .on_press(Message::Toggle(idx)),
+                ),
+                RecordContent::Open { record } => col.push(
+                    widget::Row::new()
+                        .spacing(3)
+                        .push(
+                            widget::Row::new()
+                                .spacing(3)
+                                .align_y(Center)
+                                .push(
+                                    icon::Icon::new(assets::minus())
+                                        .size(icon_size(self.font_size)),
+                                )
+                                .pipe(|row| self.record_prefix(record, row)),
+                        )
+                        .push(self.text_box(String::from_utf8_lossy(&record.message)))
+                        .pipe(widget::button)
+                        .style(widget::button::text)
+                        .padding(0)
+                        .on_press(Message::Toggle(idx)),
+                ),
+            }
+        } else {
+            col.push(
+                widget::Row::new()
+                    .align_y(Center)
+                    .spacing(3)
+                    .pipe(|row| self.record_prefix(record, row))
+                    .push(self.text_container(String::from_utf8_lossy(&record.message))),
+            )
+        }
+    }
+
+    /// View records column.
+    fn view_records(&self) -> Column<'_, Message> {
+        if let Some(re) = &self.regex {
+            self.records
+                .iter()
+                .filter(|record| re.is_match(&record.message))
+                .enumerate()
+                .fold(widget::Column::new(), |col, (idx, record)| {
+                    self.add_record(col, record, idx)
+                })
+        } else {
+            self.records
+                .iter()
+                .enumerate()
+                .fold(widget::Column::new(), |col, (idx, record)| {
+                    self.add_record(col, record, idx)
+                })
+        }
+        .spacing(3)
+    }
+
     /// View widget.
     pub fn view(&self) -> Element<'_, Message, ::iced_core::Theme, ::iced_widget::Renderer> {
-        self.records
-            .iter()
-            .enumerate()
-            .fold(widget::Column::new(), |col, (idx, record)| {
-                if record.is_shortened() {
-                    match record {
-                        RecordContent::Closed { record, short } => col.push(
-                            widget::Row::new()
-                                .align_y(Center)
-                                .spacing(3)
-                                .push(
-                                    icon::Icon::new(assets::plus()).size(icon_size(self.font_size)),
-                                )
-                                .pipe(|row| self.record_prefix(record, row))
-                                .push(self.text_container(String::from_utf8_lossy(short)))
-                                .push(self.text_box("..."))
-                                .pipe(widget::button)
-                                .style(widget::button::text)
-                                .padding(0)
-                                .on_press(Message::Toggle(idx)),
-                        ),
-                        RecordContent::Open { record } => col.push(
-                            widget::Row::new()
-                                .spacing(3)
-                                .push(
-                                    widget::Row::new()
-                                        .spacing(3)
-                                        .align_y(Center)
-                                        .push(
-                                            icon::Icon::new(assets::minus())
-                                                .size(icon_size(self.font_size)),
-                                        )
-                                        .pipe(|row| self.record_prefix(record, row)),
-                                )
-                                .push(self.text_box(String::from_utf8_lossy(&record.message)))
-                                .pipe(widget::button)
-                                .style(widget::button::text)
-                                .padding(0)
-                                .on_press(Message::Toggle(idx)),
-                        ),
-                    }
-                } else {
-                    col.push(
-                        widget::Row::new()
-                            .align_y(Center)
-                            .spacing(3)
-                            .pipe(|row| self.record_prefix(record, row))
-                            .push(self.text_container(String::from_utf8_lossy(&record.message))),
-                    )
-                }
-            })
+        Column::new()
             .spacing(3)
-            .pipe(::spel_katalog_widget::xy_scrollable)
-            .anchor_bottom()
-            .width(Fill)
-            .height(Fill)
+            .push(
+                widget::text_input("filter...", &self.filter)
+                    .on_input(Message::Filter)
+                    .padding(3),
+            )
+            .push(
+                self.view_records()
+                    .pipe(::spel_katalog_widget::xy_scrollable)
+                    .anchor_bottom()
+                    .width(Fill)
+                    .height(Fill),
+            )
             .pipe(widget::container)
             .style(widget::container::bordered_box)
             .padding(3)

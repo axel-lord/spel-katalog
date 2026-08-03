@@ -4907,6 +4907,7 @@ dependencies = [
  "iced_runtime",
  "iced_widget",
  "log",
+ "regex",
  "smol",
  "spel-katalog-assets",
  "spel-katalog-formats",
