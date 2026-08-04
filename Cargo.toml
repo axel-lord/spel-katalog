@@ -179,3 +179,4 @@ spel-katalog-assets = { path = "crates/spel-katalog-assets" }
 spel-katalog-process-view = { path = "crates/spel-katalog/crates/process-view" }
 spel-katalog-enthread = { path = "crates/spel-katalog-enthread" }
 palette = "0.7.7"
+spel-katalog-color = { path = "crates/spel-katalog-color" }
