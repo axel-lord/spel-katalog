@@ -9,7 +9,7 @@ license.workspace = true
 bytes.workspace = true
 derive_more = { workspace = true, features = ["deref", "deref_mut"] }
 flume.workspace = true
-iced_aw = { workspace = true, features = ["menu"] }
+iced_aw = { workspace = true, features = ["context_menu"] }
 iced_core.workspace = true
 iced_runtime.workspace = true
 iced_widget.workspace = true
@@ -20,6 +20,7 @@ spel-katalog-assets.workspace = true
 spel-katalog-formats.workspace = true
 spel-katalog-log.workspace = true
 spel-katalog-widget.workspace = true
+spel-katalog-fold-with.workspace = true
 tap.workspace = true
 
 [lints]

@@ -4778,6 +4778,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "spel-katalog-fold-with"
+version = "0.1.0"
+
+[[package]]
 name = "spel-katalog-formats"
 version = "0.1.0"
 dependencies = [
@@ -4984,6 +4988,7 @@ dependencies = [
  "regex",
  "smol",
  "spel-katalog-assets",
+ "spel-katalog-fold-with",
  "spel-katalog-formats",
  "spel-katalog-log",
  "spel-katalog-widget",

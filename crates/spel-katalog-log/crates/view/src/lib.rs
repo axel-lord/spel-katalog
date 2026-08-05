@@ -1,20 +1,86 @@
 //! View of log.
 
+use ::iced_aw::widget::ContextMenu;
 use ::iced_core::{
-    Alignment::Center, Border, Element, Font, Length::Fill, Theme, text::IntoFragment,
+    Alignment::Center, Border, Element, Font, Function, Length::Fill, Theme, text::IntoFragment,
 };
 use ::iced_runtime::{Task, futures::Subscription};
 use ::iced_widget::{self as widget, Column};
+use ::log::Level;
 use ::smol::stream::StreamExt;
 use ::spel_katalog_assets as assets;
+use ::spel_katalog_fold_with::Fold;
 use ::spel_katalog_log::RecordMessage;
-use ::spel_katalog_widget::{WidgetExt, icon};
+use ::spel_katalog_widget::{ListMenu, WidgetExt, icon};
 use ::tap::Pipe;
 
 use crate::{record::Record, record_conent::RecordContent};
 
 mod record;
 mod record_conent;
+
+/// Currently visible log levels.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct VisibleLevels {
+    /// Are info logs viewed.
+    info: bool,
+    /// Are warning logs viewed.
+    warning: bool,
+    /// Are error logs viewed.
+    error: bool,
+}
+
+impl Default for VisibleLevels {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl VisibleLevels {
+    /// Construct a new set of visible levels.
+    const fn new() -> Self {
+        Self {
+            info: true,
+            warning: true,
+            error: true,
+        }
+    }
+
+    /// Set visibility status of level.
+    const fn set(&mut self, level: Level, state: bool) {
+        match level {
+            Level::Info => self.info = state,
+            Level::Warn => self.warning = state,
+            Level::Error => self.error = state,
+            _ => {}
+        }
+    }
+
+    /// Is a level visible.
+    const fn is_visible(&self, level: Level) -> bool {
+        match level {
+            Level::Error => self.error,
+            Level::Warn => self.warning,
+            Level::Info => self.info,
+            _ => true,
+        }
+    }
+
+    /// Get checkboxes.
+    fn checkboxes(&self) -> impl '_ + IntoIterator<Item = widget::Checkbox<'_, Message>> {
+        [
+            widget::checkbox(self.error)
+                .on_toggle(Message::SetLevelVisibility.with(Level::Error))
+                .label("Error"),
+            widget::checkbox(self.warning)
+                .on_toggle(Message::SetLevelVisibility.with(Level::Warn))
+                .label("Warning"),
+            widget::checkbox(self.info)
+                .on_toggle(Message::SetLevelVisibility.with(Level::Info))
+                .label("Info"),
+        ]
+    }
+}
 
 /// Message used by [LogView].
 #[derive(Debug, Clone)]
@@ -25,6 +91,8 @@ pub enum Message {
     Toggle(usize),
     /// Set regex filter.
     Filter(String),
+    /// Set log level visibility.
+    SetLevelVisibility(Level, bool),
 }
 
 /// Log view.
@@ -38,6 +106,8 @@ pub struct LogView {
     filter: String,
     /// Current regex in use.
     regex: Option<::regex::bytes::Regex>,
+    /// Visible messages.
+    visible: VisibleLevels,
 }
 
 impl Default for LogView {
@@ -47,6 +117,7 @@ impl Default for LogView {
             font_size: 13,
             filter: String::new(),
             regex: None,
+            visible: VisibleLevels::new(),
         }
     }
 }
@@ -97,6 +168,10 @@ impl LogView {
 
                 Task::none()
             }
+            Message::SetLevelVisibility(level, state) => {
+                self.visible.set(level, state);
+                Task::none()
+            }
         }
     }
 
@@ -123,22 +198,22 @@ impl LogView {
     /// View a log badge.
     fn badge<'a>(&'a self, record: &'a Record) -> widget::Container<'a, Message> {
         self.text_container(match record.level {
-            ::log::Level::Error => "Error",
-            ::log::Level::Warn => "Warning",
-            ::log::Level::Info => "Info",
-            ::log::Level::Debug => "Debug",
-            ::log::Level::Trace => "Trace",
+            Level::Error => "Error",
+            Level::Warn => "Warning",
+            Level::Info => "Info",
+            Level::Debug => "Debug",
+            Level::Trace => "Trace",
         })
         .style(move |theme: &Theme| {
             let palette = theme.palette();
             widget::container::rounded_box(theme).border(
                 Border::default()
                     .color(match record.level {
-                        ::log::Level::Error => palette.danger,
-                        ::log::Level::Warn => palette.warning,
-                        ::log::Level::Info => palette.success,
-                        ::log::Level::Debug => palette.primary,
-                        ::log::Level::Trace => palette.background,
+                        Level::Error => palette.danger,
+                        Level::Warn => palette.warning,
+                        Level::Info => palette.success,
+                        Level::Debug => palette.primary,
+                        Level::Trace => palette.background,
                     })
                     .width(1.5)
                     .rounded(3),
@@ -221,18 +296,18 @@ impl LogView {
 
     /// View records column.
     fn view_records(&self) -> Column<'_, Message> {
+        let iter = self
+            .records
+            .iter()
+            .filter(|record| self.visible.is_visible(record.level));
         if let Some(re) = &self.regex {
-            self.records
-                .iter()
-                .filter(|record| re.is_match(&record.message))
+            iter.filter(|record| re.is_match(&record.message))
                 .enumerate()
                 .fold(widget::Column::new(), |col, (idx, record)| {
                     self.add_record(col, record, idx)
                 })
         } else {
-            self.records
-                .iter()
-                .enumerate()
+            iter.enumerate()
                 .fold(widget::Column::new(), |col, (idx, record)| {
                     self.add_record(col, record, idx)
                 })
@@ -249,13 +324,20 @@ impl LogView {
                     .on_input(Message::Filter)
                     .padding(3),
             )
-            .push(
+            .push(ContextMenu::new(
                 self.view_records()
                     .pipe(::spel_katalog_widget::xy_scrollable)
                     .anchor_bottom()
                     .width(Fill)
                     .height(Fill),
-            )
+                || {
+                    ListMenu::new()
+                        .label("Levels")
+                        .separator()
+                        .fold_with(self.visible.checkboxes(), ListMenu::element)
+                        .into()
+                },
+            ))
             .pipe(widget::container)
             .style(widget::container::bordered_box)
             .padding(3)

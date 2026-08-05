@@ -3,9 +3,11 @@ members = [
 	"crates/spel-katalog",
 	"crates/spel-katalog-assets",
 	"crates/spel-katalog-cache-queue",
+	"crates/spel-katalog-color",
 	"crates/spel-katalog-common",
 	"crates/spel-katalog-daemon",
 	"crates/spel-katalog-enthread", 
+	"crates/spel-katalog-fold-with",
 	"crates/spel-katalog-formats",
 	"crates/spel-katalog-install",
 	"crates/spel-katalog-ipc",
@@ -30,7 +32,6 @@ members = [
 	"crates/spel-katalog/crates/sink",
 	"crates/spel-katalog/crates/tag-filter", 
 	"crates/spel-katalog/crates/terminal",
-	"crates/spel-katalog-color",
 	"test",
 ]
 resolver = "2"
@@ -180,3 +181,4 @@ spel-katalog-process-view = { path = "crates/spel-katalog/crates/process-view" }
 spel-katalog-enthread = { path = "crates/spel-katalog-enthread" }
 palette = "0.7.7"
 spel-katalog-color = { path = "crates/spel-katalog-color" }
+spel-katalog-fold-with = { path = "crates/spel-katalog-fold-with" }

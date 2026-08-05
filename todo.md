@@ -29,7 +29,7 @@
 - [ ] Move database access to daemon
 
 # QoL
-- [ ] Log filtering
+- [x] Log filtering
 - [ ] Process info in terminal window
 - [x] Process info for daemon run games
 - [x] Disable games (shadow lutris but do not show)
