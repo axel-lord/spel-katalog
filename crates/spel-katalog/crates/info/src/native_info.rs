@@ -710,32 +710,33 @@ impl State {
                     .spacing(3)
                     .push(
                         icon::Icon::new(assets::run())
-                            .into_button_with_outline(|theme| theme.palette().success)
+                            .into_outline_button(icon::outline::success)
                             .on_press(QuickMessage::Run)
                             .with_text_tooltip("Run Game"),
                     )
                     .push(
                         icon::Icon::new(assets::term())
-                            .into_button_with_outline(|theme| theme.palette().primary)
+                            .into_outline_button(icon::outline::primary)
                             .on_press(QuickMessage::Shell)
                             .with_text_tooltip("Launch a shell in game environment"),
                     )
                     .push(
                         icon::Icon::new(assets::spanner())
-                            .into_button_with_outline(|theme| theme.palette().primary)
+                            .into_outline_button(icon::outline::primary)
                             .on_press(QuickMessage::Init)
                             .with_text_tooltip("Initialize game prefix"),
                     )
                     .push(widget::space().width(Length::Fill))
                     .push(
                         icon::Icon::new(assets::folder())
-                            .into_button_with_outline(|theme| theme.palette().primary)
+                            .into_outline_button(icon::outline::primary)
                             .on_press(QuickMessage::Open)
                             .with_text_tooltip("Open game root directory"),
                     )
                     .push(
                         icon::Icon::new(assets::restore())
-                            .into_button_with_outline(|theme| theme.palette().danger)
+                            .enabled(!self.history.is_empty())
+                            .into_outline_button(icon::outline::danger)
                             .on_press_maybe(
                                 self.history
                                     .is_empty()
@@ -746,7 +747,8 @@ impl State {
                     )
                     .push(
                         icon::Icon::new(assets::save())
-                            .into_button_with_outline(|theme| theme.palette().success)
+                            .enabled(!self.history.is_empty())
+                            .into_outline_button(icon::outline::success)
                             .on_press_maybe(
                                 self.history.is_empty().not().then_some(QuickMessage::Save),
                             )

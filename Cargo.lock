@@ -5213,6 +5213,7 @@ dependencies = [
  "iced_core",
  "iced_widget",
  "spel-katalog-assets",
+ "spel-katalog-color",
  "tap",
 ]
 

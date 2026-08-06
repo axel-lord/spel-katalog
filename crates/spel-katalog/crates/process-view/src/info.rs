@@ -179,7 +179,7 @@ impl ProcessInfo {
         row.push(
             icon::Icon::new(assets::copy())
                 .size(14)
-                .into_button_with_outline(|theme| theme.extended_palette().success.base.color)
+                .into_outline_button(icon::outline::success)
                 .on_press_with(|| Message::Copy(cmdline.clone()))
                 .with_text_tooltip("Copy Command Line"),
         )
@@ -224,21 +224,21 @@ impl ProcessInfo {
             .push(
                 icon::Icon::new(assets::minus())
                     .size(14)
-                    .into_button_with_outline(|theme| theme.extended_palette().danger.base.color)
+                    .into_outline_button(icon::outline::danger)
                     .on_press(Message::Terminate { pid })
                     .with_text_tooltip("Request Termination of Process"),
             )
             .push(
                 icon::Icon::new(assets::cross())
                     .size(14)
-                    .into_button_with_outline(|_| Color::BLACK)
+                    .into_outline_button(|_, _| Color::BLACK)
                     .on_press(Message::Kill { pid })
                     .with_text_tooltip("Force Kill Process"),
             )
             .push(
                 icon::Icon::new(assets::copy())
                     .size(14)
-                    .into_button_with_outline(|theme| theme.extended_palette().success.base.color)
+                    .into_outline_button(icon::outline::success)
                     .on_press_with(move || Message::Copy(pid.to_string()))
                     .with_text_tooltip("Copy Process Id"),
             )

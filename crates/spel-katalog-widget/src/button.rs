@@ -8,7 +8,7 @@ pub fn with_color(color: Color) -> impl Fn(&Theme, button::Status) -> button::St
     move |theme, status| {
         let mut base = button::background(theme, status);
         base.border.width = 1.5;
-        base.border.color(color);
+        base.border.color = color;
         base
     }
 }

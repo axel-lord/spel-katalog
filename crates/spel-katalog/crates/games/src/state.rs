@@ -20,7 +20,7 @@ use ::parking_lot::Mutex;
 use ::rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use ::rusqlite::{Connection, Statement, named_params};
 use ::rustc_hash::FxHashSet;
-use ::spel_katalog_color::HslaConv;
+use ::spel_katalog_color::HsluvaConv;
 use ::spel_katalog_common::{IntoOrRequest, OrRequest, StatusSender, async_status, status};
 use ::spel_katalog_formats::{Game, GameId, NativeGameConfig, TagStorage};
 use ::spel_katalog_gather::{
@@ -638,12 +638,12 @@ impl State {
         }
 
         fn batch_and_select(theme: &::iced_core::Theme) -> container::Style {
-            base(theme).background(::iced_core::Color::from_hsla(
+            base(theme).background(::iced_core::Color::from_hsluva(
                 theme
                     .palette()
                     .primary
-                    .into_hsla()
-                    .mix(theme.palette().danger.into_hsla(), 0.3),
+                    .into_hsluva()
+                    .mix(theme.palette().danger.into_hsluva(), 0.3),
             ))
         }
 

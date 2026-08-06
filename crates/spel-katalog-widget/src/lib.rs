@@ -1,6 +1,6 @@
 //! Widgets with application defaults.
 
-use ::iced_core::{Font, text::IntoFragment};
+use ::iced_core::{Color, Font, Shadow, Vector, text::IntoFragment};
 use ::iced_widget::{self as widget, text::Rich};
 
 pub use self::{
@@ -75,7 +75,13 @@ pub trait WidgetExt<'a, M: 'a>:
             widget::container(tooltip)
                 .max_width(max_width)
                 .padding(4)
-                .style(widget::container::bordered_box),
+                .style(|theme| {
+                    widget::container::rounded_box(theme).shadow(Shadow {
+                        color: Color::BLACK,
+                        offset: Vector::ZERO,
+                        blur_radius: 3.0,
+                    })
+                }),
             widget::tooltip::Position::FollowCursor,
         )
     }
