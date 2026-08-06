@@ -7,7 +7,6 @@ license.workspace = true
 
 [dependencies]
 bytes.workspace = true
-flume = { workspace = true, features = ["async"] }
 http-body-util.workspace = true
 hyper = { workspace = true, features = ["client", "http1", "server"] }
 log.workspace = true

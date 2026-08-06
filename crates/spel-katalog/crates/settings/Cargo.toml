@@ -7,14 +7,12 @@ license.workspace = true
 
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
-derive_more = { workspace = true, features = ["from", "is_variant", "display", "into_iterator", "as_ref", "deref", "into", "deref_mut"] }
 log.workspace = true
 rustix.workspace = true
 serde = { workspace = true, features = ["derive"] }
 smol.workspace = true
 spel-katalog-settings-traits.workspace = true
 spel-katalog-lazy.workspace = true
-tap.workspace = true
 toml.workspace = true
 whoami = { workspace = true }
 xdg = {workspace = true, features = ["serde"] }

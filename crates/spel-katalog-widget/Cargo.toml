@@ -8,7 +8,6 @@ license.workspace = true
 [dependencies]
 iced_core.workspace = true
 iced_widget =  { workspace = true, features = ["svg"] }
-iced_aw = { workspace = true, features = ["wrap"] }
 spel-katalog-assets.workspace = true
 spel-katalog-color.workspace = true
 derive_more = { workspace = true, features = ["from", "into", "deref", "deref_mut"]}

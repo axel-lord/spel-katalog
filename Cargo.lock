@@ -4324,16 +4324,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_bytes"
-version = "0.11.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5d440709e79d88e51ac01c4b72fc6cb7314017bb7da9eeff678aa94c10e3ea8"
-dependencies = [
- "serde",
- "serde_core",
-]
-
-[[package]]
 name = "serde_core"
 version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4656,7 +4646,6 @@ dependencies = [
  "mimalloc",
  "open",
  "parking_lot",
- "paste",
  "rayon",
  "regex",
  "rfd",
@@ -4791,11 +4780,9 @@ dependencies = [
  "dashmap",
  "derive_more",
  "image",
- "indexmap",
  "log",
  "rustc-hash 2.1.2",
  "serde",
- "serde_bytes",
  "strum",
  "thiserror 2.0.18",
  "unicode-segmentation",
@@ -4944,7 +4931,6 @@ name = "spel-katalog-ipc"
 version = "0.1.0"
 dependencies = [
  "bytes",
- "flume",
  "http-body-util",
  "hyper",
  "log",
@@ -4984,7 +4970,6 @@ dependencies = [
  "memchr",
  "serde",
  "spel-katalog-formats",
- "tap",
 ]
 
 [[package]]
@@ -5019,15 +5004,12 @@ dependencies = [
  "bytes",
  "derive_more",
  "flate2",
- "flume",
  "image",
  "log",
  "r2d2",
  "r2d2_sqlite",
  "rusqlite",
- "smol",
  "spel-katalog-formats",
- "tap",
  "thiserror 2.0.18",
  "toml 1.1.2+spec-1.1.0",
  "uuid",
@@ -5086,7 +5068,6 @@ name = "spel-katalog-settings"
 version = "0.1.0"
 dependencies = [
  "clap",
- "derive_more",
  "log",
  "rustix 1.1.4",
  "serde",
@@ -5094,7 +5075,6 @@ dependencies = [
  "spel-katalog-lazy",
  "spel-katalog-settings-build",
  "spel-katalog-settings-traits",
- "tap",
  "toml 1.1.2+spec-1.1.0",
  "whoami",
  "xdg",
@@ -5172,7 +5152,6 @@ version = "0.1.0"
 dependencies = [
  "iced_aw",
  "iced_core",
- "iced_highlighter",
  "iced_runtime",
  "iced_widget",
  "itertools 0.15.0",
@@ -5226,7 +5205,6 @@ name = "spel-katalog-widget"
 version = "0.1.0"
 dependencies = [
  "derive_more",
- "iced_aw",
  "iced_core",
  "iced_widget",
  "spel-katalog-assets",
