@@ -23,6 +23,7 @@ use ::smol::unblock;
 use ::spel_katalog_assets as assets;
 use ::spel_katalog_common::{IntoOrRequest, OrRequest, in_place::PushMaybe as _, w};
 use ::spel_katalog_formats::{GameId, NativeGameConfig, Tag};
+use ::spel_katalog_list_menu::ListMenu;
 use ::spel_katalog_native::Pool;
 use ::spel_katalog_settings::Settings;
 use ::spel_katalog_settings::{CompToolsDir, ThmubnailSource};
@@ -650,7 +651,7 @@ impl State {
                                     ::iced_aw::widget::ContextMenu::new(
                                         widget::image(thumb).width(DIM).height(DIM),
                                         || {
-                                            ::spel_katalog_widget::ListMenu::new()
+                                            ListMenu::new()
                                                 .label("Thumbnail")
                                                 .separator()
                                                 .button("Replace", || QuickMessage::AddThumb)
@@ -677,7 +678,7 @@ impl State {
 
     /// Create context menu widget for editor.
     fn context_menu(&self) -> Element<'_, OrRequest<Message, crate::Request>> {
-        ::spel_katalog_widget::ListMenu::new()
+        ListMenu::new()
             .label("Config")
             .separator()
             .button_if(self.conf_view.selection().is_some(), "Copy", || {

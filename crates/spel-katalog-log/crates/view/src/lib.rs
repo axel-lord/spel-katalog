@@ -10,8 +10,9 @@ use ::log::Level;
 use ::smol::stream::StreamExt;
 use ::spel_katalog_assets as assets;
 use ::spel_katalog_fold_with::Fold;
+use ::spel_katalog_list_menu::ListMenu;
 use ::spel_katalog_log::RecordMessage;
-use ::spel_katalog_widget::{ListMenu, WidgetExt, icon};
+use ::spel_katalog_widget::{WidgetExt, icon};
 use ::tap::Pipe;
 
 use crate::{record::Record, record_conent::RecordContent};

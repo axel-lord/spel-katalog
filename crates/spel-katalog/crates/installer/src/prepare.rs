@@ -22,10 +22,11 @@ use ::spel_katalog_common::{
 use ::spel_katalog_formats::{
     Bind, EnvValue, ExeChoice, InstallerPrepareConfig, NativeGameConfig, RunnerNative, Timestamp,
 };
+use ::spel_katalog_list_menu::ListMenu;
 use ::spel_katalog_settings::{
     CompToolDefault, CompToolsDir, InstallLocale, InstallLocation, Settings, Show, ThmubnailSource,
 };
-use ::spel_katalog_widget::{ListMenu, rule};
+use ::spel_katalog_widget::rule;
 use ::tap::{Conv, Pipe, TapOptional};
 
 /// Preparation messages.

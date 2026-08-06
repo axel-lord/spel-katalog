@@ -27,6 +27,7 @@ use ::spel_katalog_gather::{
     CoverGatherer, CoverGathererOptions, LoadDbError, load_games_from_database,
     load_thumbnail_database,
 };
+use ::spel_katalog_list_menu::ListMenu;
 use ::spel_katalog_profiler as timing;
 use ::spel_katalog_settings::{CoverartDir, Settings, UnloadThumbnails};
 use ::tap::{Conv, Pipe};
@@ -692,7 +693,7 @@ impl State {
         .map(OrRequest::<Message, Request>::from);
 
         let element = ContextMenu::new(element, move || {
-            ::spel_katalog_widget::ListMenu::new()
+            ListMenu::new()
                 .label("Spel Katalog")
                 .separator()
                 .button("Install Game", || Request::InstallGame.into_request())

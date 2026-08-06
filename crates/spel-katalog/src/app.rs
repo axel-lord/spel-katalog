@@ -12,11 +12,11 @@ use ::spel_katalog_common::{OrRequest, StatusSender, w};
 use ::spel_katalog_enthread::enthread;
 use ::spel_katalog_formats::TagStorage;
 use ::spel_katalog_installer::Installer;
+use ::spel_katalog_list_menu::ListMenu;
 use ::spel_katalog_process_view::ProcessView;
 use ::spel_katalog_settings::{FilterMode, Network, Theme, UseWayland};
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::spel_katalog_tag_filter::TagFilterDialog;
-use ::spel_katalog_widget::ListMenu;
 use ::tap::Pipe;
 
 use crate::{Element, ExitReceiver, Message, QuickMessage, get_settings, view};

@@ -1,4 +1,4 @@
-//! [ListMenu] impl.
+//! List menu to be used for context menus.
 
 use ::core::{
     fmt::{self, Debug},
@@ -9,6 +9,7 @@ use ::iced_core::{
     Background, Color, Element, Length::Fill, Shadow, Theme, Vector, text::IntoFragment,
 };
 use ::iced_widget::{self as widget, Column, Renderer};
+use ::spel_katalog_widget::rule;
 use ::tap::Pipe;
 
 /// Button style with defined background while hovered.
@@ -46,7 +47,7 @@ pub fn hover_background_text_button(
 }
 
 /// Create a menu button.
-pub fn menu_button<'a, M>(content: impl IntoFragment<'a>) -> widget::Button<'a, M> {
+fn menu_button<'a, M>(content: impl IntoFragment<'a>) -> widget::Button<'a, M> {
     widget::button(widget::text(content))
         .width(Fill)
         .padding(2)
@@ -86,7 +87,7 @@ where
                     if !inner.is_empty() {
                         outer.push(Column::from_vec(mem::take(&mut inner)).width(Fill).into());
                     }
-                    outer.push(crate::rule::horizontal().into());
+                    outer.push(rule::horizontal().into());
                 }
                 MenuItem::Element(element) => inner.push(element),
                 MenuItem::Label(label) => inner.push(

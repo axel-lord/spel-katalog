@@ -21,6 +21,7 @@ spel-katalog-formats.workspace = true
 spel-katalog-log.workspace = true
 spel-katalog-widget.workspace = true
 spel-katalog-fold-with.workspace = true
+spel-katalog-list-menu.workspace = true
 tap.workspace = true
 
 [lints]

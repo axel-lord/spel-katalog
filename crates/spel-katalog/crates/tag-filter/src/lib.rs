@@ -10,6 +10,7 @@ use ::itertools::Itertools;
 use ::rustc_hash::FxHashSet;
 use ::spel_katalog_common::{IntoOrRequest, OrRequest, in_place::PushMaybe};
 use ::spel_katalog_formats::{Tag, TagFilter, TagFilterKind, TagFilterMode, TagId, TagStorage};
+use ::spel_katalog_list_menu::ListMenu;
 use ::spel_katalog_widget::rule;
 use ::tap::Pipe;
 
@@ -277,7 +278,7 @@ impl TagFilterDialog {
             .push(::iced_aw::widget::ContextMenu::new(
                 widget::text("Tag Filter").width(360).center(),
                 || {
-                    ::spel_katalog_widget::ListMenu::new()
+                    ListMenu::new()
                         .label("Layers")
                         .separator()
                         .button("Add New", || Message::AddLayer)

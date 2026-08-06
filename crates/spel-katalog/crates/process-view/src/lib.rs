@@ -12,7 +12,8 @@ use ::rustc_hash::FxHashSet;
 use ::rustix::process::{Pid, RawPid, Signal, kill_process};
 use ::smol::{lock::Semaphore, unblock};
 use ::spel_katalog_common::w;
-use ::spel_katalog_widget::{Element, ListMenu, WidgetExt};
+use ::spel_katalog_list_menu::ListMenu;
+use ::spel_katalog_widget::{Element, WidgetExt};
 use ::tap::Pipe;
 
 use crate::info::{CollectedInfo, ProcessInfo};

@@ -36,6 +36,7 @@ spel-katalog-widget.workspace = true
 spel-katalog-native.workspace = true
 spel-katalog-profiler.workspace = true
 spel-katalog-color.workspace = true
+spel-katalog-list-menu.workspace = true
 strsim.workspace = true
 tap.workspace = true
 thiserror.workspace = true

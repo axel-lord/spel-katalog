@@ -30,6 +30,7 @@ spel-katalog-settings.workspace = true
 spel-katalog-settings-view.workspace = true
 spel-katalog-widget.workspace = true
 spel-katalog-assets.workspace = true
+spel-katalog-list-menu.workspace = true
 tabled = { workspace = true, features = ["std"] }
 tap.workspace = true
 thiserror.workspace = true

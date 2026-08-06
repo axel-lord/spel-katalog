@@ -4676,6 +4676,7 @@ dependencies = [
  "spel-katalog-install",
  "spel-katalog-installer",
  "spel-katalog-ipc",
+ "spel-katalog-list-menu",
  "spel-katalog-log",
  "spel-katalog-native",
  "spel-katalog-process-view",
@@ -4830,6 +4831,7 @@ dependencies = [
  "spel-katalog-common",
  "spel-katalog-formats",
  "spel-katalog-gather",
+ "spel-katalog-list-menu",
  "spel-katalog-native",
  "spel-katalog-profiler",
  "spel-katalog-settings",
@@ -4881,6 +4883,7 @@ dependencies = [
  "spel-katalog-common",
  "spel-katalog-formats",
  "spel-katalog-gather",
+ "spel-katalog-list-menu",
  "spel-katalog-native",
  "spel-katalog-settings",
  "spel-katalog-settings-view",
@@ -4926,6 +4929,7 @@ dependencies = [
  "smol",
  "spel-katalog-common",
  "spel-katalog-formats",
+ "spel-katalog-list-menu",
  "spel-katalog-native",
  "spel-katalog-settings",
  "spel-katalog-settings-view",
@@ -4961,6 +4965,16 @@ name = "spel-katalog-lazy"
 version = "0.1.0"
 
 [[package]]
+name = "spel-katalog-list-menu"
+version = "0.1.0"
+dependencies = [
+ "iced_core",
+ "iced_widget",
+ "spel-katalog-widget",
+ "tap",
+]
+
+[[package]]
 name = "spel-katalog-log"
 version = "0.1.0"
 dependencies = [
@@ -4990,6 +5004,7 @@ dependencies = [
  "spel-katalog-assets",
  "spel-katalog-fold-with",
  "spel-katalog-formats",
+ "spel-katalog-list-menu",
  "spel-katalog-log",
  "spel-katalog-widget",
  "tap",
@@ -5034,6 +5049,7 @@ dependencies = [
  "smol",
  "spel-katalog-assets",
  "spel-katalog-common",
+ "spel-katalog-list-menu",
  "spel-katalog-widget",
  "tap",
 ]
@@ -5164,6 +5180,7 @@ dependencies = [
  "rustc-hash 2.1.2",
  "spel-katalog-common",
  "spel-katalog-formats",
+ "spel-katalog-list-menu",
  "spel-katalog-widget",
  "tap",
 ]

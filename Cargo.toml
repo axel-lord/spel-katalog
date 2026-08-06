@@ -16,6 +16,7 @@ members = [
 	"crates/spel-katalog-log/crates/view",
 	"crates/spel-katalog-profiler",
 	"crates/spel-katalog-widget",
+	"crates/spel-katalog-widget/crates/list-menu",
 	"crates/spel-katalog/crates/cli",
 	"crates/spel-katalog/crates/games",
 	"crates/spel-katalog/crates/gather",
@@ -182,3 +183,4 @@ spel-katalog-enthread = { path = "crates/spel-katalog-enthread" }
 palette = "0.7.7"
 spel-katalog-color = { path = "crates/spel-katalog-color" }
 spel-katalog-fold-with = { path = "crates/spel-katalog-fold-with" }
+spel-katalog-list-menu = { path = "crates/spel-katalog-widget/crates/list-menu" }

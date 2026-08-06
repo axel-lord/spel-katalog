@@ -25,6 +25,7 @@ spel-katalog-native.workspace = true
 spel-katalog-settings.workspace = true
 spel-katalog-settings-view.workspace = true
 spel-katalog-widget.workspace = true
+spel-katalog-list-menu.workspace = true
 tap.workspace = true
 toml.workspace = true
 uuid.workspace = true

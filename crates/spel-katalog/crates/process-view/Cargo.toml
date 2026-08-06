@@ -19,6 +19,7 @@ smol.workspace = true
 spel-katalog-assets.workspace = true
 spel-katalog-common.workspace = true
 spel-katalog-widget.workspace = true
+spel-katalog-list-menu.workspace = true
 tap.workspace = true
 
 [lints]

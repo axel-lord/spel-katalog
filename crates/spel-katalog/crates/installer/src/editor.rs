@@ -15,6 +15,7 @@ use ::iced_widget::{
 };
 use ::spel_katalog_common::{IntoOrRequest, OrRequest, w};
 use ::spel_katalog_formats::NativeGameConfig;
+use ::spel_katalog_list_menu::ListMenu;
 use ::spel_katalog_settings::Settings;
 use ::tap::Pipe;
 
@@ -195,7 +196,7 @@ impl Editor {
                     |h, _| h.to_format(),
                 ),
             || {
-                ::spel_katalog_widget::ListMenu::new()
+                ListMenu::new()
                     .label("Config")
                     .separator()
                     .button("Copy", || Message::Copy)
