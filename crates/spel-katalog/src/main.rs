@@ -1,3 +1,5 @@
+//! Main entrypoint of application.
+
 use ::std::io::{IsTerminal, Read};
 
 use ::log::LevelFilter;
@@ -6,9 +8,12 @@ use ::spel_katalog::run as run_app;
 use ::spel_katalog_cli::{Cli, Subcmd, SubcmdCallbacks};
 use ::spel_katalog_sink::SinkBuilder;
 
+/// Global allocator in use.
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
+/// Run application with given cli.
+#[expect(clippy::print_stdout, reason = "no logging framework setup properly")]
 fn run(cli: ::spel_katalog_cli::Run) -> ::color_eyre::Result<()> {
     let keep_terminal = cli.keep_terminal;
     run_app(cli, SinkBuilder::Inherit, None)?;

@@ -1,4 +1,7 @@
-use ::std::{convert::identity, io::PipeReader};
+//! Application state implementation.
+
+use ::core::convert::identity;
+use ::std::io::PipeReader;
 
 use ::color_eyre::{Section, eyre::eyre};
 use ::derive_more::IsVariant;
@@ -37,35 +40,57 @@ pub enum WindowType {
 /// Currently viewed popup.
 #[derive(Debug, IsVariant)]
 pub enum Popup {
+    /// Welcome popup.
     Welcome,
+    /// Tag filter popup.
     TagFilter,
 }
 
+/// Application state.
 #[derive(Debug)]
 pub(crate) struct App {
+    /// Settings state.
     pub settings: ::spel_katalog_settings_view::State,
+    /// Games view state.
     pub games: ::spel_katalog_games::State,
+    /// Current status message.
     pub status: String,
+    /// Current filter.
     pub filter: String,
+    /// View state.
     pub view: view::State,
+    /// Info panel state.
     pub info: ::spel_katalog_info::State,
+    /// Sender for status messages.
     pub sender: StatusSender,
+    /// Sink builder for output.
     pub sink_builder: SinkBuilder,
+    /// Current windows.
     pub windows: FxHashMap<window::Id, WindowType>,
+    /// Terminal pane state.
     pub terminal: ::spel_katalog_terminal::Terminal,
+    /// Database connection.
     pub games_db: ::spel_katalog_native::Pool,
+    /// Tags in use.
     pub tags: TagStorage,
+    /// Tag filter applied.
     pub tag_filter: TagFilterDialog,
+    /// Current popup (if any).
     pub popup: Option<Popup>,
+    /// Process view panel state.
     pub process_view: ProcessView,
 }
 
 /// Initial state created by new.
 #[derive(Debug)]
 struct Initial {
+    /// Application state to use.
     app: App,
+    /// Status receiver.
     status_rx: ::flume::Receiver<String>,
+    /// Terminal receiver (if any).
     terminal_rx: Option<::flume::Receiver<(PipeReader, SinkIdentity)>>,
+    /// Should settings be shown.
     show_settings: bool,
 }
 
@@ -79,6 +104,7 @@ pub struct Flags {
 }
 
 impl Initial {
+    /// Create new initial state.
     fn new(run: Run, sink_builder: SinkBuilder) -> ::color_eyre::Result<Self> {
         let Run {
             config,
@@ -147,6 +173,7 @@ impl Initial {
 }
 
 impl App {
+    /// Create new application state.
     fn new(
         Flags {
             initial:
@@ -236,6 +263,7 @@ impl App {
         (app, batch)
     }
 
+    /// Run application.
     pub fn run(
         run: Run,
         sink_builder: SinkBuilder,
@@ -267,16 +295,19 @@ impl App {
         .map_err(|err| ::color_eyre::eyre::eyre!(err))
     }
 
+    /// Sort games.
     pub fn sort_games(&mut self) {
         self.games.sort(&self.settings, &self.filter);
     }
 
+    /// Set status message and log it.
     pub fn set_status(&mut self, status: impl Into<String>) {
         let status = status.into();
         ::log::info!("status: {status}");
         self.status = status;
     }
 
+    /// View application ui.
     pub fn view(&self, id: window::Id) -> Element<'_, Message> {
         let Some(ty) = self.windows.get(&id) else {
             return widget::container("No Window Type").center(Fill).into();
@@ -392,6 +423,7 @@ impl App {
             )
     }
 
+    /// View welcome popup.
     pub fn view_welcome(&self) -> Container<'_, Message> {
         widget::Column::new()
             .push(widget::text("Welcome to spel-katalog!"))
@@ -402,6 +434,7 @@ impl App {
             .padding(30)
     }
 
+    /// View tag filter popup.
     pub fn view_tag_filter(&self) -> Container<'_, Message> {
         self.tag_filter
             .view(&self.tags)
@@ -412,6 +445,7 @@ impl App {
             .padding(10)
     }
 
+    /// View main window.
     pub fn view_main(&self) -> Element<'_, Message> {
         let main_column = self.main_column();
         if let Some(popup) = &self.popup {

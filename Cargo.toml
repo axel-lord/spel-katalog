@@ -1,6 +1,7 @@
 [workspace]
 members = [
 	"crates/spel-katalog",
+	"crates/spel-katalog-api",
 	"crates/spel-katalog-assets",
 	"crates/spel-katalog-cache-queue",
 	"crates/spel-katalog-color",

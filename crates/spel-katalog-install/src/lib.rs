@@ -85,10 +85,8 @@ impl InstallGame {
         };
 
         ::smol::block_on(async move {
-            ::spel_katalog_ipc::IpcSender::connect(&base_dirs, "spel-katalog-ipc")
-                .await
-                .map_err(|err| eyre!(err).note("is the application running?"))?
-                .post(InstallerConfig {
+            ::spel_katalog_api::install_game(
+                InstallerConfig {
                     game_dir,
                     exe,
                     hidden: Some(hidden),
@@ -103,8 +101,10 @@ impl InstallGame {
                     bind: Default::default(),
                     ro_bind,
                     env: Default::default(),
-                })
-                .await?;
+                },
+                &base_dirs,
+            )
+            .await?;
 
             Ok(())
         })

@@ -1,3 +1,6 @@
+//! Message definitions.
+#![allow(clippy::missing_docs_in_private_items, reason = "todo")]
+
 use ::derive_more::{From, IsVariant};
 use ::iced_core::window;
 use ::spel_katalog_common::OrRequest;
@@ -5,11 +8,15 @@ use ::spel_katalog_formats::NativeGameConfig;
 
 use crate::{app::WindowType, view};
 
+/// Safety to use when running games.
 #[derive(Debug, Clone, Copy, Default, IsVariant, PartialEq, Eq, Hash)]
 pub enum Safety {
+    /// Use no sandboxing.
     None,
+    /// Sandbox game.
     #[default]
     Sandbox,
+    /// Run a sandboxed shell.
     SandboxShell,
 }
 
@@ -19,6 +26,7 @@ impl From<bool> for Safety {
     }
 }
 
+/// Small message which may be copied.
 #[derive(Debug, IsVariant, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum QuickMessage {
     CloseAll,

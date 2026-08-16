@@ -73,11 +73,5 @@ yaml-rust2.workspace = true
 [build-dependencies]
 spel-katalog-settings-build.workspace = true
 
-[lints.rust]
-missing_debug_implementations = "warn"
-
-[lints.clippy]
-allow_attributes = "warn"
-missing_panics_doc = "warn"
-missing_safety_doc = "warn"
-future_not_send = "warn"
+[lints]
+workspace = true

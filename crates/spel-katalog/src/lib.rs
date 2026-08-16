@@ -1,3 +1,6 @@
+#![allow(clippy::missing_docs_in_private_items, reason = "too heavy for now")]
+//! Main application library.
+
 use ::std::path::Path;
 
 use ::spel_katalog_cli::Run;
@@ -32,6 +35,9 @@ pub fn get_settings(
 }
 
 /// Run application.
+///
+/// # Errors
+/// If the application cannot be ran.
 pub fn run(
     run: Run,
     sink_builder: SinkBuilder,

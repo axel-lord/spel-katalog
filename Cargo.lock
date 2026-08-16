@@ -4690,6 +4690,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "spel-katalog-api"
+version = "0.1.0"
+dependencies = [
+ "spel-katalog-formats",
+ "spel-katalog-ipc",
+ "thiserror 2.0.18",
+ "xdg",
+]
+
+[[package]]
 name = "spel-katalog-assets"
 version = "0.1.0"
 dependencies = [
@@ -4892,8 +4902,8 @@ dependencies = [
  "env_logger",
  "log",
  "smol",
+ "spel-katalog-api",
  "spel-katalog-formats",
- "spel-katalog-ipc",
  "xdg",
 ]
 

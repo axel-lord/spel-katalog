@@ -27,6 +27,8 @@
 - [ ] To top button on games view
 - [ ] Options for native games, gamescope, proton, etc.
 - [ ] Move database access to daemon
+- [ ] Remove usage of settings from as many places as possible
+- [ ] Comment main crate
 
 # QoL
 - [x] Log filtering

@@ -1,3 +1,5 @@
+//! Request game be ran.
+
 use ::std::{
     collections::hash_map::Entry,
     ffi::{OsStr, OsString},
@@ -183,6 +185,7 @@ impl App {
 
             match conn {
                 Ok(conn) => {
+                    ::log::info!("posting game run ipc request\n{game:#?}");
                     let response = conn
                         .post(daemon::request::RunConfig {
                             config: game,

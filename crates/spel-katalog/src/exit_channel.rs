@@ -1,3 +1,5 @@
+//! Oneshot channel used for exiting application.
+
 use ::iced_futures::futures::channel::oneshot::{Canceled, Receiver, Sender};
 
 /// Sender for sending exit messages.
@@ -5,6 +7,7 @@ use ::iced_futures::futures::channel::oneshot::{Canceled, Receiver, Sender};
 pub struct ExitSender(Sender<()>);
 
 impl ExitSender {
+    /// Send exit messages.
     pub fn send(self) {
         let Self(sender) = self;
         _ = sender.send(());
@@ -16,6 +19,7 @@ impl ExitSender {
 pub struct ExitReceiver(Receiver<()>);
 
 impl ExitReceiver {
+    /// Receive exit messages.
     pub(crate) async fn recv(self) -> Result<(), Canceled> {
         let Self(recv) = self;
         recv.await

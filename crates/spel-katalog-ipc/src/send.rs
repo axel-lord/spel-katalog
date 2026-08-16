@@ -78,6 +78,7 @@ impl IpcSender {
     /// Or if the message cannot be sent.
     /// Or if an error response was received.
     /// Or if the response cannot be deserialized.
+    #[expect(clippy::disallowed_methods, reason = "intended replacement")]
     pub async fn post<M>(self, message: M) -> Result<M::Response, PostError>
     where
         M: crate::Post,
@@ -109,6 +110,7 @@ impl IpcSender {
     /// If the requestrequest  cannot be sent.
     /// Or if an error response was received.
     /// Or if the response cannot be deserialized.
+    #[expect(clippy::disallowed_methods, reason = "intended replacement")]
     pub async fn get<T>(self) -> Result<T, GetError>
     where
         T: crate::Get,
