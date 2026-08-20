@@ -185,3 +185,4 @@ palette = "0.7.7"
 spel-katalog-color = { path = "crates/spel-katalog-color" }
 spel-katalog-fold-with = { path = "crates/spel-katalog-fold-with" }
 spel-katalog-list-menu = { path = "crates/spel-katalog-widget/crates/list-menu" }
+spel-katalog-api = { path = "crates/spel-katalog-api" }

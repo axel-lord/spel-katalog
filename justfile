@@ -34,7 +34,7 @@ test-miri *EXTRA:
 	cargo miri test {{EXTRA}}
 
 # Format crates.
-fmt:
+fmt: autoinherit
 	cargo fmt --all
 
 # Check all features and targets
@@ -46,7 +46,7 @@ autoinherit:
 	cargo autoinherit --prefer-simple-dotted
 
 # Sanity and format check
-sanity: autoinherit fmt test-all
+sanity: fmt test-all
 
 # Install a crate by path.
 install-crate CRATE:

@@ -12,7 +12,7 @@ env_logger.workspace = true
 log.workspace = true
 smol.workspace = true
 spel-katalog-formats.workspace = true
-spel-katalog-api.path = "../spel-katalog-api/"
+spel-katalog-api.workspace = true
 xdg.workspace = true
 
 [lints]
