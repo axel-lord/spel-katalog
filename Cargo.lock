@@ -4655,6 +4655,7 @@ dependencies = [
  "serde_json",
  "shell-words",
  "smol",
+ "spel-katalog-api",
  "spel-katalog-cli",
  "spel-katalog-common",
  "spel-katalog-enthread",

@@ -38,6 +38,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 shell-words.workspace = true
 smol.workspace = true
+spel-katalog-api.workspace = true
 spel-katalog-cli.workspace = true
 spel-katalog-common.workspace = true
 spel-katalog-enthread.workspace = true

@@ -2,8 +2,11 @@
 
 use ::core::fmt::{Debug, Display};
 
-use ::spel_katalog_formats::InstallerConfig;
-use ::spel_katalog_ipc::error::{PostError, SendError};
+use ::spel_katalog_formats::{InstallerConfig, daemon::response::Children};
+use ::spel_katalog_ipc::{
+    IpcSender,
+    error::{GetError, PostError, SendError},
+};
 use ::xdg::BaseDirectories;
 
 /// Connection failed.
@@ -21,6 +24,13 @@ impl<T> ConnectError<Box<T>> {
             err,
             payload: Box::new(payload),
         }
+    }
+}
+
+impl ConnectError<()> {
+    /// Create a new empty connect error
+    pub const fn new_empty(err: SendError) -> Self {
+        Self { err, payload: () }
     }
 }
 
@@ -69,8 +79,35 @@ pub async fn install_game(
     config: InstallerConfig,
     xdg: &BaseDirectories,
 ) -> Result<(), InstallError> {
-    match ::spel_katalog_ipc::IpcSender::connect(xdg, "spel-katalog-ipc").await {
+    match IpcSender::connect(xdg, "spel-katalog-ipc").await {
         Ok(conn) => conn.post(config).await.map_err(InstallError::Post),
         Err(err) => Err(InstallError::Connect(ConnectError::new_boxed(err, config))),
     }
+}
+
+/// Could not get ids of running games.
+#[derive(Debug, ::thiserror::Error)]
+pub enum GetRunningError {
+    /// Could not connect to ipc channel.
+    #[error(transparent)]
+    Connect(ConnectError<()>),
+    /// Could not send id request.
+    #[error(transparent)]
+    Get(GetError),
+}
+
+/// Get process ids of running games.
+///
+/// # Errors
+/// If the daemon is not running
+/// or the message cannot be successfully sent.
+#[expect(clippy::disallowed_methods, reason = "is to be used instead")]
+pub async fn get_running_games(xdg: &BaseDirectories) -> Result<Children, GetRunningError> {
+    IpcSender::connect(xdg, "spel-katalog-daemon-ipc")
+        .await
+        .map_err(ConnectError::new_empty)
+        .map_err(GetRunningError::Connect)?
+        .get()
+        .await
+        .map_err(GetRunningError::Get)
 }

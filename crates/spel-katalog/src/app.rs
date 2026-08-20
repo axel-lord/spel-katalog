@@ -250,6 +250,22 @@ impl App {
             Task::stream(rx.into_stream())
         };
 
+        let xdg = app.settings.xdg().clone();
+        let receive_ids = Task::future(
+            async move { ::spel_katalog_api::get_running_games(&xdg).await },
+        )
+        .then(|children| match children {
+            Ok(::spel_katalog_formats::daemon::response::Children { children }) => children
+                .into_iter()
+                .map(|pid| Message::ViewProcess { pid })
+                .pipe(::smol::stream::iter)
+                .pipe(Task::stream),
+            Err(err) => {
+                ::log::error!("could not get running game process ids\n{err}");
+                Task::none()
+            }
+        });
+
         let batch = Task::batch([
             receive_status,
             load_db,
@@ -258,6 +274,7 @@ impl App {
             window_recv,
             show_settings,
             listen_ipc,
+            receive_ids,
         ]);
 
         (app, batch)

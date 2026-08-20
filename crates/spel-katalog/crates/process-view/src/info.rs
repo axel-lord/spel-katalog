@@ -93,7 +93,8 @@ impl ProcessInfo {
                     ::log::error!("while reading {cmdline:?}\n{err}");
                 }
             })
-            .ok()?;
+            .ok()
+            .unwrap_or_default();
 
         let next_level = level.saturating_add(1);
 
@@ -133,7 +134,7 @@ impl ProcessInfo {
             })
             .for_each(|task_children| {
                 if let Some(task_children) = task_children {
-                    stack.extend(task_children.lines().flat_map(|line| {
+                    stack.extend(task_children.split_ascii_whitespace().flat_map(|line| {
                         let line = line.trim();
                         if line.is_empty() {
                             None
@@ -285,7 +286,7 @@ impl CollectedInfo {
                         let Some(task_children) = task_children else {
                             return;
                         };
-                        for line in task_children.lines() {
+                        for line in task_children.split_ascii_whitespace() {
                             let line = line.trim();
                             if line.is_empty() {
                                 continue;

@@ -1,4 +1,4 @@
-use ::std::cell::Cell;
+use ::core::cell::Cell;
 
 use ::derive_more::{Display, From, IsVariant};
 use ::iced::Alignment::Center;
@@ -49,7 +49,7 @@ pub enum Message {
 }
 
 impl State {
-    pub fn info_shown(&self) -> bool {
+    pub const fn info_shown(&self) -> bool {
         self.info.is_some()
     }
 

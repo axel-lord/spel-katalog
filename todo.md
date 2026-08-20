@@ -32,20 +32,22 @@
 
 # QoL
 - [x] Log filtering
-- [ ] Process info in terminal window
 - [x] Process info for daemon run games
 - [x] Disable games (shadow lutris but do not show)
 - [ ] Quick tag add
 - [ ] Hidden tags
-- [ ] Use cache for game filters
+- [ ] ~Use cache for game filters~
 - [x] Multiple tag filter layers (ui, backend already finished)
-- [ ] Game info in terminal window (with setting)
-- [ ] Panes for terminal window (perhaps unify terminal and main window)
 - [x] Show module path in log view
 - [x] Split of process view to crate
 - [x] Simplified/collapsed process view tree
 - [x] Do not log no such directory as an error in process open (as it is expected after the process is closed)
-- [ ] Aquire old running process ids on startup.
+- [x] Aquire old running process ids on startup.
+
+# Ui Modularity
+- [ ] Process info in terminal window
+- [ ] Panes for terminal window (perhaps unify terminal and main window)
+- [ ] Game info in terminal window (with setting)
 
 # Fixes
 - [x] Dummy exe of installer not "moved"

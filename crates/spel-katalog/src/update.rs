@@ -515,7 +515,7 @@ impl App {
         }
     }
 
-    fn should_re_sort(msg: &::spel_katalog_settings_view::Message) -> bool {
+    const fn should_re_sort(msg: &::spel_katalog_settings_view::Message) -> bool {
         use ::spel_katalog_settings::Delta;
         let ::spel_katalog_settings_view::Message::Delta(delta) = msg else {
             return false;

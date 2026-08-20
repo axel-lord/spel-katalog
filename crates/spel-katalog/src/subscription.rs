@@ -42,7 +42,7 @@ fn unmodified_named_key(named: Named) -> Option<Message> {
     }))
 }
 
-fn shift_named_key(named: Named) -> Option<Message> {
+const fn shift_named_key(named: Named) -> Option<Message> {
     Some(Message::Quick(match named {
         Named::Tab => QuickMessage::Prev,
         _ => return None,
