@@ -43,6 +43,7 @@
 - [x] Simplified/collapsed process view tree
 - [x] Do not log no such directory as an error in process open (as it is expected after the process is closed)
 - [x] Aquire old running process ids on startup.
+- [ ] Minimize to tray
 
 # Ui Modularity
 - [ ] Process info in terminal window
