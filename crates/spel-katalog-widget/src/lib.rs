@@ -42,6 +42,15 @@ pub fn svg_icon(handle: &::iced_core::svg::Handle) -> ::iced_widget::Svg<'_> {
         })
 }
 
+/// Container style with no border, rounded corners and a shadow outline.
+pub fn rounded_shadowed_box(theme: &::iced_core::Theme) -> ::iced_widget::container::Style {
+    widget::container::rounded_box(theme).shadow(Shadow {
+        color: Color::BLACK,
+        offset: Vector::ZERO,
+        blur_radius: 5.0,
+    })
+}
+
 /// Add a tooltip to an element.
 pub trait WidgetExt<'a, M: 'a>:
     Sized + Into<Element<'a, M, ::iced_core::Theme, ::iced_widget::Renderer>>

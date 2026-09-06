@@ -12,7 +12,7 @@ use ::spel_katalog_assets as assets;
 use ::spel_katalog_fold_with::Fold;
 use ::spel_katalog_list_menu::ListMenu;
 use ::spel_katalog_log::RecordMessage;
-use ::spel_katalog_widget::{WidgetExt, icon};
+use ::spel_katalog_widget::{WidgetExt, icon, rounded_shadowed_box};
 use ::tap::Pipe;
 
 use crate::{record::Record, record_conent::RecordContent};
@@ -318,31 +318,40 @@ impl LogView {
 
     /// View widget.
     pub fn view(&self) -> Element<'_, Message, ::iced_core::Theme, ::iced_widget::Renderer> {
-        Column::new()
-            .spacing(3)
-            .push(
-                widget::text_input("filter...", &self.filter)
-                    .on_input(Message::Filter)
-                    .padding(3),
-            )
-            .push(ContextMenu::new(
-                self.view_records()
-                    .pipe(::spel_katalog_widget::xy_scrollable)
-                    .anchor_bottom()
-                    .width(Fill)
-                    .height(Fill),
-                || {
-                    ListMenu::new()
-                        .label("Levels")
-                        .separator()
-                        .fold_with(self.visible.checkboxes(), ListMenu::element)
-                        .into()
-                },
-            ))
-            .pipe(widget::container)
-            .style(widget::container::bordered_box)
-            .padding(3)
-            .height(Fill)
-            .into()
+        if ::spel_katalog_log::is_installed() {
+            Column::new()
+                .spacing(3)
+                .push(
+                    widget::text_input("filter...", &self.filter)
+                        .on_input(Message::Filter)
+                        .padding(3),
+                )
+                .push(ContextMenu::new(
+                    self.view_records()
+                        .pipe(::spel_katalog_widget::xy_scrollable)
+                        .anchor_bottom()
+                        .width(Fill)
+                        .height(Fill),
+                    || {
+                        ListMenu::new()
+                            .label("Levels")
+                            .separator()
+                            .fold_with(self.visible.checkboxes(), ListMenu::element)
+                            .into()
+                    },
+                ))
+                .pipe(widget::container)
+                .style(widget::container::bordered_box)
+                .padding(3)
+                .height(Fill)
+                .into()
+        } else {
+            widget::text("Spel-Katalog logger not in use!")
+                .pipe(widget::container)
+                .padding(10)
+                .style(rounded_shadowed_box)
+                .pipe(widget::center)
+                .into()
+        }
     }
 }

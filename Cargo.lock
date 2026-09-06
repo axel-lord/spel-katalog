@@ -4668,6 +4668,7 @@ dependencies = [
  "spel-katalog-ipc",
  "spel-katalog-list-menu",
  "spel-katalog-log",
+ "spel-katalog-log-view",
  "spel-katalog-native",
  "spel-katalog-process-view",
  "spel-katalog-profiler",

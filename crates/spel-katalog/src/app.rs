@@ -22,7 +22,9 @@ use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
 use ::spel_katalog_tag_filter::TagFilterDialog;
 use ::tap::Pipe;
 
-use crate::{Element, ExitReceiver, Message, QuickMessage, get_settings, view};
+use crate::{
+    Element, ExitReceiver, Message, QuickMessage, get_settings, pane_view::PaneView, view,
+};
 
 /// Specific kind of window.
 #[derive(Debug, IsVariant, Clone)]
@@ -35,6 +37,8 @@ pub enum WindowType {
     Settings,
     /// Show an installer window.
     Installer(Box<Installer>),
+    /// Show a pane view window.
+    PaneView(crate::pane_view::State),
 }
 
 /// Currently viewed popup.
@@ -335,10 +339,19 @@ impl App {
             WindowType::Settings => widget::container(self.settings.view().map(Message::Settings))
                 .padding(5)
                 .into(),
-            WindowType::Term => self.terminal.view().map(From::from),
+            WindowType::Term => self.terminal.view_with_log().map(From::from),
             WindowType::Installer(installer) => installer
                 .view(&self.settings)
                 .map(move |msg| Message::Installer(id, msg)),
+            WindowType::PaneView(state) => PaneView {
+                state,
+                settings: &self.settings,
+                terminal: &self.terminal,
+                process_view: &self.process_view,
+                info: &self.info,
+                games: &self.games,
+            }
+            .view(),
         }
     }
 

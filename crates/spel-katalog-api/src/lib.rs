@@ -9,6 +9,12 @@ use ::spel_katalog_ipc::{
 };
 use ::xdg::BaseDirectories;
 
+/// Name of the ipc channel for the application.
+const CHANNEL_NAME_APP: &str = "spel-katalog-ipc";
+
+/// Name of the ipc channel for the daemon.
+const CHANNEL_NAME_DAEMON: &str = "spel-katalog-daemon-ipc";
+
 /// Connection failed.
 pub struct ConnectError<T> {
     /// Connection error.
@@ -74,12 +80,12 @@ pub enum InstallError {
 /// # Errors
 /// If the application is not running
 /// or the message cannot be successfully sent.
-#[expect(clippy::disallowed_methods, reason = "is to be used instead")]
+#[expect(clippy::disallowed_methods, reason = "is the wrapper")]
 pub async fn install_game(
     config: InstallerConfig,
     xdg: &BaseDirectories,
 ) -> Result<(), InstallError> {
-    match IpcSender::connect(xdg, "spel-katalog-ipc").await {
+    match IpcSender::connect(xdg, CHANNEL_NAME_APP).await {
         Ok(conn) => conn.post(config).await.map_err(InstallError::Post),
         Err(err) => Err(InstallError::Connect(ConnectError::new_boxed(err, config))),
     }
@@ -101,9 +107,9 @@ pub enum GetRunningError {
 /// # Errors
 /// If the daemon is not running
 /// or the message cannot be successfully sent.
-#[expect(clippy::disallowed_methods, reason = "is to be used instead")]
+#[expect(clippy::disallowed_methods, reason = "is the wrapper")]
 pub async fn get_running_games(xdg: &BaseDirectories) -> Result<Children, GetRunningError> {
-    IpcSender::connect(xdg, "spel-katalog-daemon-ipc")
+    IpcSender::connect(xdg, CHANNEL_NAME_DAEMON)
         .await
         .map_err(ConnectError::new_empty)
         .map_err(GetRunningError::Connect)?

@@ -18,6 +18,7 @@ use ::uuid::Uuid;
 use crate::{
     App, Message, QuickMessage, Safety,
     app::{Popup, WindowType},
+    pane_view,
 };
 
 #[derive(Default)]
@@ -186,6 +187,18 @@ impl App {
                     "additional viewed processes: {:#?}",
                     self.process_view.additional()
                 );
+                let (id, task) = ::iced_runtime::window::open(Default::default());
+
+                self.open_window(
+                    id,
+                    WindowType::PaneView(
+                        pane_view::State::builder(pane_view::Pane::Log)
+                            .horizontal(pane_view::Pane::Terminal)
+                            .build(),
+                    ),
+                );
+
+                return task.discard();
             }
             QuickMessage::OpenInstaller => {
                 return self.open_installer(None);
@@ -566,6 +579,11 @@ impl App {
         Some((uuid, config))
     }
 
+    /// Open a window with the given id.
+    pub fn open_window(&mut self, id: ::iced_core::window::Id, window_type: WindowType) {
+        self.windows.insert(id, window_type);
+    }
+
     pub fn install_game(
         &mut self,
         id: window::Id,
@@ -649,7 +667,7 @@ impl App {
                 self.process_view.add_pid(pid);
             }
             Message::OpenWindow(id, window_type) => {
-                self.windows.insert(id, window_type);
+                self.open_window(id, window_type);
             }
             Message::CloseWindow(id) => {
                 let closed = self.windows.remove(&id);

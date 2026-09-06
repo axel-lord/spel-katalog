@@ -1,6 +1,10 @@
 //! Log implementation
 
-use ::core::fmt;
+use ::core::{
+    cell::Cell,
+    fmt,
+    sync::atomic::{AtomicBool, Ordering},
+};
 use ::std::{io::Write as _, sync::LazyLock};
 
 use ::bytes::{Buf, BufMut, Bytes, BytesMut};
@@ -59,6 +63,9 @@ static CHANNEL: LazyLock<(
 /// Stable location of logger.
 static LOGGER: ChannelLog = ChannelLog;
 
+/// Is the logger in use.
+static IN_USE: AtomicBool = AtomicBool::new(false);
+
 /// Initialize log.
 ///
 /// # Panics
@@ -67,6 +74,7 @@ pub fn init() {
     if let Err(err) = ::log::set_logger(&LOGGER) {
         panic!("could not initialize log, {err}")
     } else {
+        IN_USE.store(true, Ordering::Relaxed);
         ::log::set_max_level(::log::LevelFilter::Info);
     };
 }
@@ -79,6 +87,21 @@ pub fn init() {
 pub fn receiver() -> &'static ::flume::Receiver<RecordMessage> {
     let (_, rx) = &*CHANNEL;
     rx
+}
+
+/// Is the custom logger installed.
+pub fn is_installed() -> bool {
+    thread_local! {
+        static IS_INSTALLED: Cell<bool> = Cell::new(IN_USE.load(Ordering::Relaxed));
+    }
+
+    if IS_INSTALLED.get() {
+        true
+    } else {
+        let value = IN_USE.load(Ordering::Relaxed);
+        IS_INSTALLED.set(value);
+        value
+    }
 }
 
 /// Message sent on channel.

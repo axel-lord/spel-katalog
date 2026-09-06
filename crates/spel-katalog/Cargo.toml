@@ -61,6 +61,7 @@ spel-katalog-widget.workspace = true
 spel-katalog-tag-filter.workspace = true
 spel-katalog-process-view.workspace = true
 spel-katalog-list-menu.workspace = true
+spel-katalog-log-view.workspace = true
 strsim.workspace = true
 tap.workspace = true
 thiserror.workspace = true

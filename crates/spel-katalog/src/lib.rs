@@ -22,6 +22,7 @@ mod update;
 mod view;
 
 pub mod oneshot_broadcast;
+pub mod pane_view;
 
 /// Element alias
 type Element<'a, M> = ::iced_core::Element<'a, M, ::iced_core::Theme, ::iced_renderer::Renderer>;
