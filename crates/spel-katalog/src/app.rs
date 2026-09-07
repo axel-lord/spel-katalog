@@ -300,30 +300,7 @@ impl App {
         sink_builder: SinkBuilder,
         _exit_recv: Option<ExitReceiver>,
     ) -> ::color_eyre::Result<()> {
-        ::iced::daemon(
-            move || {
-                Self::new(Flags {
-                    initial: Initial::new(run.clone(), sink_builder.clone())
-                        .expect("should be able to create initial state"),
-                    exit_recv: None,
-                })
-            },
-            Self::update,
-            Self::view,
-        )
-        .title(|_: &Self, _| "Spel-Katalog".to_owned())
-        .subscription(Self::subscription)
-        .default_font(Font {
-            weight: font::Weight::Medium,
-            ..Font::DEFAULT
-        })
-        .theme(|this: &Self, _: window::Id| {
-            Some(::spel_katalog_settings_view::conv_theme(
-                *this.settings.get::<Theme>(),
-            ))
-        })
-        .run()
-        .map_err(|err| ::color_eyre::eyre::eyre!(err))
+        ::iced_winit::run(Program { run, sink_builder }).map_err(|err| eyre!(err))
     }
 
     /// Sort games.
@@ -520,5 +497,75 @@ impl App {
         } else {
             main_column.into()
         }
+    }
+}
+
+#[derive(Debug)]
+struct Program {
+    run: Run,
+    sink_builder: SinkBuilder,
+}
+
+impl ::iced_winit::program::Program for Program {
+    type State = App;
+
+    type Message = Message;
+
+    type Theme = ::iced_core::Theme;
+
+    type Renderer = ::iced_widget::Renderer;
+
+    type Executor = ::iced_futures::backend::native::smol::Executor;
+
+    fn name() -> &'static str {
+        "spel-katalog"
+    }
+
+    fn title(&self, _state: &Self::State, _window: window::Id) -> String {
+        "Spel-Katalog".to_owned()
+    }
+
+    fn subscription(&self, state: &Self::State) -> iced::Subscription<Self::Message> {
+        state.subscription()
+    }
+
+    fn settings(&self) -> ::iced_core::Settings {
+        ::iced_core::Settings {
+            default_font: Font {
+                weight: font::Weight::Medium,
+                ..Font::default()
+            },
+            ..::iced_core::Settings::default()
+        }
+    }
+
+    fn theme(&self, state: &Self::State, _window: window::Id) -> Option<Self::Theme> {
+        Some(::spel_katalog_settings_view::conv_theme(
+            *state.settings.get::<Theme>(),
+        ))
+    }
+
+    fn window(&self) -> Option<window::Settings> {
+        None
+    }
+
+    fn boot(&self) -> (Self::State, Task<Self::Message>) {
+        App::new(Flags {
+            initial: Initial::new(self.run.clone(), self.sink_builder.clone())
+                .expect("should be able to create initial state"),
+            exit_recv: None,
+        })
+    }
+
+    fn update(&self, state: &mut Self::State, message: Self::Message) -> Task<Self::Message> {
+        state.update(message)
+    }
+
+    fn view<'a>(
+        &self,
+        state: &'a Self::State,
+        window: window::Id,
+    ) -> iced_core::Element<'a, Self::Message, Self::Theme, Self::Renderer> {
+        state.view(window)
     }
 }
