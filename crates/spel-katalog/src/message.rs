@@ -92,6 +92,8 @@ pub enum Message {
     TagFilter(OrRequest<::spel_katalog_tag_filter::Message, ::spel_katalog_tag_filter::Request>),
     #[from]
     ProcessView(::spel_katalog_process_view::Message),
+    #[from]
+    LogView(::spel_katalog_log_view::Message),
     PaneView(window::Id, pane_view::Message),
 }
 

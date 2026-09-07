@@ -681,6 +681,9 @@ impl App {
                     return view.update(msg);
                 }
             }
+            Message::LogView(message) => {
+                return self.log_view.update(message).map(Message::LogView);
+            }
             Message::Installer(id, msg) => {
                 if let Some(WindowType::Installer(installer)) = self.windows.get_mut(&id) {
                     return match msg {

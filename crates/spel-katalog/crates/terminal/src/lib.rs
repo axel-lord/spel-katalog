@@ -16,10 +16,9 @@ use ::std::{
 };
 
 use ::iced_core::{Alignment::Center, Length::Fill};
-use ::iced_runtime::{Task, futures::Subscription};
+use ::iced_runtime::Task;
 use ::iced_widget as widget;
 use ::spel_katalog_common::in_place::PushMaybe as _;
-use ::spel_katalog_log_view::LogView;
 use ::spel_katalog_sink::SinkIdentity;
 
 /// Element alias.
@@ -99,8 +98,6 @@ pub enum Message {
     SetLineCount(String),
     /// Set text size.
     SetTextSize(u16),
-    /// Log view message.
-    LogView(::spel_katalog_log_view::Message),
 }
 
 impl Message {
@@ -277,8 +274,6 @@ impl From<Wrap> for widget::text::Wrapping {
 /// Terminal widget/window.
 #[derive(Debug)]
 pub struct Terminal {
-    /// Log view.
-    log_view: LogView,
     /// Received data/pipes.
     pipes: Vec<Pipe>,
     /// Currently displayed lines.
@@ -310,7 +305,6 @@ impl Default for Terminal {
             limit_placeholder: Default::default(),
             current_limit: Default::default(),
             limit_text: Default::default(),
-            log_view: Default::default(),
             text_size: 14,
         }
     }
@@ -324,16 +318,6 @@ impl Terminal {
             limit_placeholder: limit.to_string(),
             ..self
         }
-    }
-
-    /// Get a reference to log view.
-    pub const fn log_view(&self) -> &LogView {
-        &self.log_view
-    }
-
-    /// Widget subscription.
-    pub fn subscription(&self) -> Subscription<Message> {
-        self.log_view.subscription().map(Message::LogView)
     }
 
     /// Update state of terminal.
@@ -419,7 +403,6 @@ impl Terminal {
                 self.text_size = size.clamp(7, 36);
                 Task::none()
             }
-            Message::LogView(msg) => self.log_view.update(msg).map(Message::LogView),
         }
     }
 
@@ -564,114 +547,96 @@ impl Terminal {
         }
     }
 
-    /// Add state to given column.
-    fn view_from_column<'a>(
-        &'a self,
-        col: widget::Column<'a, Message>,
-    ) -> widget::Column<'a, Message> {
-        col.push(widget::themer(
-            Some(::iced_core::Theme::Dark),
-            widget::container(
-                spel_katalog_widget::xy_scrollable(
-                    self.lines
-                        .iter()
-                        .fold(widget::Column::new(), |column, line| {
-                            column.push(
-                                widget::Text::new(line.1.as_str())
-                                    .size(u32::from(self.text_size))
-                                    .font(::iced_core::font::Font::MONOSPACE)
-                                    .wrapping(self.wrap.into()),
-                            )
-                        })
-                        .spacing(3)
-                        .push(widget::space().height(20)),
-                )
-                .width(Fill)
-                .height(Fill)
-                .anchor_bottom(),
-            )
-            .style(widget::container::dark),
-        ))
-        .push(spel_katalog_widget::rule::horizontal())
-        .push(
-            widget::Row::new()
-                .align_y(Center)
-                .spacing(3)
-                .push_maybe((!self.pipes.is_empty()).then(|| {
-                    Element::from(
-                        widget::pick_list(
-                            self.pipes
-                                .iter()
-                                .enumerate()
-                                .map(PipeId::from)
-                                .collect::<Vec<_>>(),
-                            self.current.and_then(|idx| {
-                                let pipe = self.pipes.get(idx)?;
-                                Some(PipeId {
-                                    idx,
-                                    name: &pipe.identity,
-                                    open: pipe.open,
-                                })
-                            }),
-                            |PipeId { idx, .. }| Some(idx),
-                        )
-                        .padding(3),
-                    )
-                    .map(|idx| Message::SetCurrent { idx })
-                }))
-                .push(widget::space::horizontal())
-                .push("Size")
-                .push(
-                    Element::from(
-                        widget::pick_list(
-                            [8, 9, 10, 11, 12, 14, 16, 18, 20],
-                            Some(self.text_size),
-                            convert::identity,
-                        )
-                        .padding(3),
-                    )
-                    .map(Message::SetTextSize),
-                )
-                .push("Wrapping:")
-                .push(
-                    Element::from(
-                        widget::pick_list(
-                            [Wrap::None, Wrap::WordGlyph, Wrap::Word, Wrap::Glyph],
-                            Some(self.wrap),
-                            convert::identity,
-                        )
-                        .padding(3),
-                    )
-                    .map(Message::SetWrap),
-                )
-                .push("Lines:")
-                .push(
-                    Element::from(
-                        widget::text_input(&self.limit_placeholder, &self.limit_text)
-                            .on_input(convert::identity)
-                            .width(50)
-                            .padding(3),
-                    )
-                    .map(Message::SetLineCount),
-                ),
-        )
-    }
-
     /// View terminal
     pub fn view(&self) -> Element<'_, Message> {
-        self.view_from_column(widget::Column::new().spacing(3))
+        widget::Column::new()
+            .spacing(3)
+            .push(widget::themer(
+                Some(::iced_core::Theme::Dark),
+                widget::container(
+                    spel_katalog_widget::xy_scrollable(
+                        self.lines
+                            .iter()
+                            .fold(widget::Column::new(), |column, line| {
+                                column.push(
+                                    widget::Text::new(line.1.as_str())
+                                        .size(u32::from(self.text_size))
+                                        .font(::iced_core::font::Font::MONOSPACE)
+                                        .wrapping(self.wrap.into()),
+                                )
+                            })
+                            .spacing(3)
+                            .push(widget::space().height(20)),
+                    )
+                    .width(Fill)
+                    .height(Fill)
+                    .anchor_bottom(),
+                )
+                .style(widget::container::dark),
+            ))
+            .push(spel_katalog_widget::rule::horizontal())
+            .push(
+                widget::Row::new()
+                    .align_y(Center)
+                    .spacing(3)
+                    .push_maybe((!self.pipes.is_empty()).then(|| {
+                        Element::from(
+                            widget::pick_list(
+                                self.pipes
+                                    .iter()
+                                    .enumerate()
+                                    .map(PipeId::from)
+                                    .collect::<Vec<_>>(),
+                                self.current.and_then(|idx| {
+                                    let pipe = self.pipes.get(idx)?;
+                                    Some(PipeId {
+                                        idx,
+                                        name: &pipe.identity,
+                                        open: pipe.open,
+                                    })
+                                }),
+                                |PipeId { idx, .. }| Some(idx),
+                            )
+                            .padding(3),
+                        )
+                        .map(|idx| Message::SetCurrent { idx })
+                    }))
+                    .push(widget::space::horizontal())
+                    .push("Size")
+                    .push(
+                        Element::from(
+                            widget::pick_list(
+                                [8, 9, 10, 11, 12, 14, 16, 18, 20],
+                                Some(self.text_size),
+                                convert::identity,
+                            )
+                            .padding(3),
+                        )
+                        .map(Message::SetTextSize),
+                    )
+                    .push("Wrapping:")
+                    .push(
+                        Element::from(
+                            widget::pick_list(
+                                [Wrap::None, Wrap::WordGlyph, Wrap::Word, Wrap::Glyph],
+                                Some(self.wrap),
+                                convert::identity,
+                            )
+                            .padding(3),
+                        )
+                        .map(Message::SetWrap),
+                    )
+                    .push("Lines:")
+                    .push(
+                        Element::from(
+                            widget::text_input(&self.limit_placeholder, &self.limit_text)
+                                .on_input(convert::identity)
+                                .width(50)
+                                .padding(3),
+                        )
+                        .map(Message::SetLineCount),
+                    ),
+            )
             .into()
-    }
-
-    /// View terminal and log.
-    pub fn view_with_log(&self) -> Element<'_, Message> {
-        self.view_from_column(
-            widget::Column::new()
-                .padding(3)
-                .spacing(3)
-                .push(self.log_view.view().map(Message::LogView))
-                .push(::spel_katalog_widget::rule::horizontal()),
-        )
-        .into()
     }
 }

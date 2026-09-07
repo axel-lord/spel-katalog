@@ -20,6 +20,8 @@ pub struct PaneView<'a> {
     pub info: &'a ::spel_katalog_info::State,
     /// Reference to games view state.
     pub games: &'a ::spel_katalog_games::State,
+    /// Reference to log state.
+    pub log_view: &'a ::spel_katalog_log_view::LogView,
 }
 
 impl<'a> PaneView<'a> {
@@ -30,12 +32,7 @@ impl<'a> PaneView<'a> {
     ) -> ::iced_core::Element<'a, crate::Message, ::iced_core::Theme, ::iced_widget::Renderer> {
         ::iced_widget::pane_grid(&self.state.panes, |_pane, state, _is_maximized| {
             pane_grid::Content::new(match state {
-                Pane::Log => self
-                    .terminal
-                    .log_view()
-                    .view()
-                    .map(::spel_katalog_terminal::Message::LogView)
-                    .map(crate::Message::Terminal),
+                Pane::Log => self.log_view.view().map(crate::Message::LogView),
                 Pane::Terminal => self.terminal.view().map(crate::Message::Terminal),
                 Pane::Settings => self.settings.view().map(crate::Message::Settings),
                 Pane::Processes => self.process_view.view().map(crate::Message::ProcessView),

@@ -110,8 +110,8 @@ impl App {
             .map(OrRequest::Message)
             .map(Message::Games);
 
-        let terminal = self.terminal.subscription().map(Message::Terminal);
+        let log_view = self.log_view.subscription().map(Message::LogView);
 
-        Subscription::batch([key_event, window_close, refresh, games, terminal])
+        Subscription::batch([key_event, window_close, refresh, games, log_view])
     }
 }

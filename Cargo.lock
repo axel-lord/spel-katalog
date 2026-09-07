@@ -5172,7 +5172,6 @@ dependencies = [
  "memchr",
  "smol",
  "spel-katalog-common",
- "spel-katalog-log-view",
  "spel-katalog-sink",
  "spel-katalog-widget",
  "tap",

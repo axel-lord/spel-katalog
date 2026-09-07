@@ -15,6 +15,7 @@ use ::spel_katalog_enthread::enthread;
 use ::spel_katalog_formats::TagStorage;
 use ::spel_katalog_installer::Installer;
 use ::spel_katalog_list_menu::ListMenu;
+use ::spel_katalog_log_view::LogView;
 use ::spel_katalog_process_view::ProcessView;
 use ::spel_katalog_settings::{FilterMode, Network, Theme, UseWayland};
 use ::spel_katalog_sink::{SinkBuilder, SinkIdentity};
@@ -82,6 +83,8 @@ pub(crate) struct App {
     pub popup: Option<Popup>,
     /// Process view panel state.
     pub process_view: ProcessView,
+    /// Log view state
+    pub log_view: LogView,
 }
 
 /// Initial state created by new.
@@ -147,6 +150,7 @@ impl Initial {
         let popup = None;
         let tag_filter = TagFilterDialog::new();
         let process_view = ProcessView::default();
+        let log_view = LogView::default();
 
         let app = App {
             filter,
@@ -164,6 +168,7 @@ impl Initial {
             popup,
             tag_filter,
             process_view,
+            log_view,
         };
 
         Ok(Self {
@@ -335,6 +340,7 @@ impl App {
                 process_view: &self.process_view,
                 info: &self.info,
                 games: &self.games,
+                log_view: &self.log_view,
             }
             .view(id),
         }
