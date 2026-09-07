@@ -670,9 +670,8 @@ impl App {
                 self.open_window(id, window_type);
             }
             Message::CloseWindow(id) => {
-                let closed = self.windows.remove(&id);
-
-                if self.windows.is_empty() || matches!(closed, Some(WindowType::Term)) {
+                self.windows.remove(&id);
+                if self.windows.is_empty() {
                     self.sink_builder = ::spel_katalog_sink::SinkBuilder::Inherit;
                     return ::iced_runtime::exit();
                 }

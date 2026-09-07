@@ -23,7 +23,9 @@ use ::spel_katalog_tag_filter::TagFilterDialog;
 use ::tap::Pipe;
 
 use crate::{
-    Element, ExitReceiver, Message, QuickMessage, get_settings, pane_view::PaneView, view,
+    Element, ExitReceiver, Message, QuickMessage, get_settings,
+    pane_view::{self, PaneView},
+    view,
 };
 
 /// Specific kind of window.
@@ -31,8 +33,6 @@ use crate::{
 pub enum WindowType {
     /// Window is the main window.
     Main,
-    /// Show terminal.
-    Term,
     /// Show a settings window.
     Settings,
     /// Show an installer window.
@@ -182,7 +182,7 @@ impl App {
         Flags {
             initial:
                 Initial {
-                    app,
+                    mut app,
                     status_rx,
                     terminal_rx,
                     show_settings,
@@ -197,17 +197,27 @@ impl App {
         let exit_recv = exit_recv
             .map(|exit_recv| Task::future(exit_recv.recv()).then(|_| ::iced_runtime::exit()))
             .unwrap_or_else(Task::none);
-        let window_recv = terminal_rx
-            .map(|terminal_rx| {
-                let (_, task) = ::iced_runtime::window::open(Default::default());
-                Task::batch([
-                    ::spel_katalog_terminal::Message::sink_receiver(terminal_rx).map(Message::from),
-                    task.map(|id| Message::OpenWindow(id, WindowType::Term)),
-                ])
-            })
-            .unwrap_or_else(Task::none);
+
+        let open_term = terminal_rx.map_or_default(|terminal_rx| {
+            let (id, open_term) = ::iced_runtime::window::open(Default::default());
+            app.open_window(
+                id,
+                WindowType::PaneView(
+                    pane_view::State::builder(pane_view::Pane::Log)
+                        .horizontal(pane_view::Pane::Terminal)
+                        .build(),
+                ),
+            );
+            Task::batch([
+                open_term.discard(),
+                ::spel_katalog_terminal::Message::sink_receiver(terminal_rx).map(Message::Terminal),
+            ])
+        });
+
         let show_settings = if show_settings {
-            Task::done(Message::Quick(QuickMessage::ToggleSettings))
+            QuickMessage::ToggleSettings
+                .pipe(Message::Quick)
+                .pipe(Task::done)
         } else {
             Task::none()
         };
@@ -275,7 +285,7 @@ impl App {
             load_db,
             main,
             exit_recv,
-            window_recv,
+            open_term,
             show_settings,
             listen_ipc,
             receive_ids,
@@ -339,7 +349,6 @@ impl App {
             WindowType::Settings => widget::container(self.settings.view().map(Message::Settings))
                 .padding(5)
                 .into(),
-            WindowType::Term => self.terminal.view_with_log().map(From::from),
             WindowType::Installer(installer) => installer
                 .view(&self.settings)
                 .map(move |msg| Message::Installer(id, msg)),
