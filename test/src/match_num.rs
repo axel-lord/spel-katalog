@@ -4,15 +4,15 @@ use ::core::time::Duration;
 use ::std::io::Write;
 
 use ::clap::Parser;
-use ::iced::{
-    Element,
-    Length::Fill,
-    Task, Theme,
-    widget::{self, Button, Column, Row, button, text},
-};
+use ::iced_core::{Length::Fill, Theme};
+use ::iced_runtime::Task;
+use ::iced_widget::{self as widget, Button, Column, Row, button, text};
 use ::log::LevelFilter;
 use ::rand::{RngExt as _, seq::SliceRandom};
 use ::tap::Tap;
+
+/// Element type alias.
+type Element<'a, M> = ::iced_core::Element<'a, M, ::iced_core::Theme, ::iced_widget::Renderer>;
 
 /// Cli
 #[derive(Debug, Parser)]
@@ -35,6 +35,8 @@ enum Msg {
     Fill,
     /// Reset board.
     Reset,
+    /// Close the application.
+    Close,
 }
 
 /// A game cell.
@@ -178,6 +180,7 @@ impl State {
                     })
                 }
             }
+            Msg::Close => ::iced_runtime::exit(),
         }
     }
 
@@ -222,6 +225,63 @@ impl State {
     }
 }
 
+/// Program definition.
+#[derive(Debug, Clone, Copy)]
+struct Program;
+
+impl ::iced_winit::program::Program for Program {
+    type State = State;
+
+    type Message = Msg;
+
+    type Theme = Theme;
+
+    type Renderer = ::iced_widget::Renderer;
+
+    type Executor = ::iced_futures::backend::native::smol::Executor;
+
+    fn name() -> &'static str {
+        "match-num"
+    }
+
+    fn settings(&self) -> ::iced_core::Settings {
+        ::iced_core::Settings::default()
+    }
+
+    fn window(&self) -> Option<::iced_core::window::Settings> {
+        None
+    }
+
+    fn subscription(&self, _state: &Self::State) -> iced_futures::Subscription<Self::Message> {
+        ::iced_runtime::window::close_events().map(|_| Msg::Close)
+    }
+
+    fn boot(&self) -> (Self::State, Task<Self::Message>) {
+        let (_, task) = ::iced_runtime::window::open(::iced_core::window::Settings::default());
+        (State::default(), task.discard())
+    }
+
+    fn update(&self, state: &mut Self::State, message: Self::Message) -> Task<Self::Message> {
+        state.update(message)
+    }
+
+    fn theme(&self, _state: &Self::State, _window: iced_core::window::Id) -> Option<Self::Theme> {
+        Some(Theme::Light)
+    }
+
+    fn title(&self, _state: &Self::State, _window: iced_core::window::Id) -> String {
+        "Match Num".to_owned()
+    }
+
+    fn view<'a>(
+        &self,
+        state: &'a Self::State,
+        _window: iced_core::window::Id,
+    ) -> iced_core::Element<'a, Self::Message, Self::Theme, Self::Renderer> {
+        state.view()
+    }
+}
+
 /// Application entry.
 fn main() -> ::color_eyre::Result<()> {
     let Cli {} = Cli::parse();
@@ -232,10 +292,7 @@ fn main() -> ::color_eyre::Result<()> {
         .init();
     ::log::info!("log initialized");
 
-    ::iced::application(State::default, State::update, State::view)
-        .theme(|_: &State| Theme::Light)
-        .title(|_: &State| "Match Num".to_owned())
-        .run()?;
+    ::iced_winit::run(Program)?;
 
     Ok(())
 }

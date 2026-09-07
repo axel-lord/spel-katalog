@@ -1,7 +1,7 @@
 //! Implementation of pane view window.
 
-use ::iced::Task;
 use ::iced_core::window;
+use ::iced_runtime::Task;
 use ::iced_widget::{container, pane_grid, text};
 use ::tap::Pipe;
 
@@ -24,7 +24,10 @@ pub struct PaneView<'a> {
 
 impl<'a> PaneView<'a> {
     /// View panes.
-    pub fn view(self, id: window::Id) -> ::iced::Element<'a, crate::Message> {
+    pub fn view(
+        self,
+        id: window::Id,
+    ) -> ::iced_core::Element<'a, crate::Message, ::iced_core::Theme, ::iced_widget::Renderer> {
         ::iced_widget::pane_grid(&self.state.panes, |_pane, state, _is_maximized| {
             pane_grid::Content::new(match state {
                 Pane::Log => self

@@ -311,8 +311,8 @@ impl App {
                 self.set_status(format!("toggled network to {next}"));
                 self.sort_games();
             }
-            QuickMessage::Next => return ::iced::widget::operation::focus_next(),
-            QuickMessage::Prev => return ::iced::widget::operation::focus_previous(),
+            QuickMessage::Next => return ::iced_runtime::widget::operation::focus_next(),
+            QuickMessage::Prev => return ::iced_runtime::widget::operation::focus_previous(),
             QuickMessage::RunSelected => {
                 if let Some(id) = self.games.selected() {
                     return self.run_game(id, Safety::Sandbox, false);

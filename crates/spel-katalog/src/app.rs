@@ -5,8 +5,7 @@ use ::std::io::PipeReader;
 
 use ::color_eyre::{Section, eyre::eyre};
 use ::derive_more::IsVariant;
-use ::iced::Font;
-use ::iced_core::{Alignment::Center, Length::Fill, font, window};
+use ::iced_core::{Alignment::Center, Font, Length::Fill, font, window};
 use ::iced_runtime::Task;
 use ::iced_widget::{self as widget, Column, Container, Row, text, text_input, toggler, value};
 use ::rustc_hash::FxHashMap;
@@ -525,7 +524,7 @@ impl ::iced_winit::program::Program for Program {
         "Spel-Katalog".to_owned()
     }
 
-    fn subscription(&self, state: &Self::State) -> iced::Subscription<Self::Message> {
+    fn subscription(&self, state: &Self::State) -> ::iced_futures::Subscription<Self::Message> {
         state.subscription()
     }
 

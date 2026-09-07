@@ -84,7 +84,7 @@ fn key_to_message(key: keyboard::Key<&str>, modifiers: Modifiers) -> Option<Mess
 
 impl App {
     pub fn subscription(&self) -> Subscription<Message> {
-        let key_event = ::iced::keyboard::listen().filter_map(|event| match event {
+        let key_event = ::iced_futures::keyboard::listen().filter_map(|event| match event {
             keyboard::Event::KeyPressed {
                 key,
                 modified_key: _,

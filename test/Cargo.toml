@@ -13,11 +13,16 @@ path = "src/match_num.rs"
 clap = { workspace = true, features = ["derive"] }
 color-eyre.workspace = true
 env_logger.workspace = true
-iced.workspace = true
 log.workspace = true
 rand.workspace = true
 smol.workspace = true
 tap.workspace = true
+iced_core.workspace = true
+iced_winit.workspace = true
+iced_runtime.workspace = true
+iced_widget.workspace = true
+iced_futures.workspace = true
+iced_renderer.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace =  true

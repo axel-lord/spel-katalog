@@ -15,7 +15,6 @@ dashmap.workspace = true
 derive_more = { workspace = true, features = ["from", "is_variant", "display", "into_iterator", "as_ref", "deref", "into", "deref_mut"] }
 env_logger.workspace = true
 flume.workspace = true
-iced.workspace = true
 iced_aw = { workspace = true, features = ["context_menu"] }
 iced_core.workspace = true
 iced_futures.workspace = true

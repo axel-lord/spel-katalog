@@ -1,9 +1,9 @@
 use ::core::cell::Cell;
 
 use ::derive_more::{Display, From, IsVariant};
-use ::iced::Alignment::Center;
 use ::iced_core::{
-    Alignment, Color,
+    Alignment::{self, Center},
+    Color,
     Length::Fill,
     alignment::{Horizontal, Vertical},
 };
