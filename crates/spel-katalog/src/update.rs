@@ -677,6 +677,11 @@ impl App {
                     return ::iced_runtime::exit();
                 }
             }
+            Message::PaneView(id, msg) => {
+                if let Some(WindowType::PaneView(view)) = self.windows.get_mut(&id) {
+                    return view.update(msg);
+                }
+            }
             Message::Installer(id, msg) => {
                 if let Some(WindowType::Installer(installer)) = self.windows.get_mut(&id) {
                     return match msg {

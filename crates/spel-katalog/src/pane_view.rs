@@ -1,6 +1,9 @@
 //! Implementation of pane view window.
 
+use ::iced::Task;
+use ::iced_core::window;
 use ::iced_widget::{container, pane_grid, text};
+use ::tap::Pipe;
 
 /// View panes.
 #[derive(Debug, Clone, Copy)]
@@ -21,7 +24,7 @@ pub struct PaneView<'a> {
 
 impl<'a> PaneView<'a> {
     /// View panes.
-    pub fn view(self) -> ::iced::Element<'a, crate::Message> {
+    pub fn view(self, id: window::Id) -> ::iced::Element<'a, crate::Message> {
         ::iced_widget::pane_grid(&self.state.panes, |_pane, state, _is_maximized| {
             pane_grid::Content::new(match state {
                 Pane::Log => self
@@ -56,6 +59,13 @@ impl<'a> PaneView<'a> {
                 }
             })
         })
+        .on_resize(5, move |event| {
+            crate::Message::PaneView(id, Message::Resize(event))
+        })
+        .on_drag(move |event| crate::Message::PaneView(id, Message::Drag(event)))
+        .spacing(3)
+        .pipe(::iced_widget::container)
+        .padding(3)
         .into()
     }
 }
@@ -74,6 +84,24 @@ impl State {
         Builder {
             offset,
             panes: state,
+        }
+    }
+
+    /// Update state.
+    pub fn update(&mut self, message: Message) -> Task<crate::Message> {
+        match message {
+            Message::Resize(pane_grid::ResizeEvent { split, ratio }) => {
+                self.panes.resize(split, ratio);
+                Task::none()
+            }
+            Message::Drag(drag_event) => match drag_event {
+                pane_grid::DragEvent::Dropped { pane, target } => {
+                    self.panes.drop(pane, target);
+                    Task::none()
+                }
+                pane_grid::DragEvent::Canceled { pane: _ }
+                | pane_grid::DragEvent::Picked { pane: _ } => Task::none(),
+            },
         }
     }
 
@@ -132,4 +160,13 @@ pub enum Pane {
     Processes,
     /// Display game info.
     GameInfo,
+}
+
+/// Message produced and consumed by pane view.
+#[derive(Debug, Clone)]
+pub enum Message {
+    /// Pane was resized.
+    Resize(pane_grid::ResizeEvent),
+    /// Pane was dragged.
+    Drag(pane_grid::DragEvent),
 }

@@ -6,7 +6,7 @@ use ::iced_core::window;
 use ::spel_katalog_common::OrRequest;
 use ::spel_katalog_formats::NativeGameConfig;
 
-use crate::{app::WindowType, view};
+use crate::{app::WindowType, pane_view, view};
 
 /// Safety to use when running games.
 #[derive(Debug, Clone, Copy, Default, IsVariant, PartialEq, Eq, Hash)]
@@ -92,6 +92,7 @@ pub enum Message {
     TagFilter(OrRequest<::spel_katalog_tag_filter::Message, ::spel_katalog_tag_filter::Request>),
     #[from]
     ProcessView(::spel_katalog_process_view::Message),
+    PaneView(window::Id, pane_view::Message),
 }
 
 impl<T, E> From<Result<T, E>> for Message

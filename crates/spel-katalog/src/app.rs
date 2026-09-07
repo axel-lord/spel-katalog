@@ -351,7 +351,7 @@ impl App {
                 info: &self.info,
                 games: &self.games,
             }
-            .view(),
+            .view(id),
         }
     }
 
