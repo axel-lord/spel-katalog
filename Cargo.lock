@@ -4639,6 +4639,7 @@ dependencies = [
  "shell-words",
  "smol",
  "spel-katalog-api",
+ "spel-katalog-assets",
  "spel-katalog-cli",
  "spel-katalog-common",
  "spel-katalog-enthread",

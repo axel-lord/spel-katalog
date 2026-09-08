@@ -130,15 +130,22 @@ impl<'a, Message> ListMenu<'a, Message> {
         self
     }
 
+    /// Remove trailing elements.
+    pub fn trunc(mut self, count: usize) -> Self {
+        let offset = self.inner.len().saturating_sub(count);
+        self.inner.truncate(offset);
+        self
+    }
+
     /// Join elements of two list menus.
     pub fn join(self, other: Self) -> Self {
         let width = self.width.max(other.width);
 
         if self.inner.is_empty() {
-            return Self { width, ..other };
+            return other.width(width);
         }
 
-        let mut this = Self { width, ..self };
+        let mut this = self.width(width);
 
         if other.inner.is_empty() {
             return this;
@@ -153,21 +160,30 @@ impl<'a, Message> ListMenu<'a, Message> {
     /// Join elements of two list menus, adding a separator if the first menu is not empty.
     pub fn join_separated(self, other: Self) -> Self {
         let width = self.width.max(other.width);
-
-        if self.inner.is_empty() {
-            return Self { width, ..other };
+        match [self.inner.last(), other.inner.first()] {
+            [Some(MenuItem::Separator), Some(MenuItem::Separator)] => {
+                return self.trunc(1).join(other);
+            }
+            [Some(MenuItem::Separator), _] | [_, Some(MenuItem::Separator)] => {
+                return self.join(other);
+            }
+            [None, _] => {
+                return other.width(width);
+            }
+            [_, None] => {
+                return self.width(width);
+            }
+            _ => {}
         }
 
-        let mut this = Self { width, ..self };
+        let mut this = self.width(width);
 
         if other.inner.is_empty() {
             return this;
         }
 
         this.inner.reserve(other.inner.len() + 1);
-
         this = this.separator();
-
         this.inner.extend(other.inner);
 
         this
@@ -186,6 +202,15 @@ impl<'a, Message> ListMenu<'a, Message> {
     /// Insert a label.
     pub fn label(self, label: &'a str) -> Self {
         self.push(MenuItem::Label(label))
+    }
+
+    /// Insert a title label followed by a separator, if the menu has content that
+    /// is not capped by a separator a separator is added before the label.
+    pub fn title(self, label: &'a str) -> Self {
+        match self.inner.last() {
+            Some(MenuItem::Separator) | None => self.label(label).separator(),
+            _ => self.separator().label(label).separator(),
+        }
     }
 
     /// Insert a button.

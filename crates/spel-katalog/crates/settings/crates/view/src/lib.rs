@@ -129,9 +129,27 @@ impl State {
         crate::list::path_list(view_paths!(self, crate::list::path_input))
     }
 
+    /// View scrollable content.
+    pub fn view_scrollable(&self) -> ::iced_widget::Scrollable<'_, Message> {
+        ::iced_widget::Column::new()
+            .spacing(3)
+            .width(Fill)
+            .push(self.view_enums().map(Message::Delta))
+            .push(spel_katalog_widget::rule::horizontal())
+            .push(
+                self.view_paths()
+                    .push(space())
+                    .pipe(Element::from)
+                    .map(Message::Delta),
+            )
+            .pipe(::spel_katalog_widget::scrollable)
+            .width(Fill)
+    }
+
     /// View settings.
     pub fn view(&self) -> Element<'_, Message, ::iced_core::Theme, ::iced_renderer::Renderer> {
-        w::col()
+        ::iced_widget::Column::new()
+            .spacing(3)
             .align_x(Alignment::Start)
             .width(Fill)
             .push(
@@ -141,19 +159,7 @@ impl State {
                     .push(button("Save").padding(3).on_press(Message::Save)),
             )
             .push(spel_katalog_widget::rule::horizontal())
-            .push(
-                self.view_enums()
-                    .map(Message::Delta)
-                    .pipe(::spel_katalog_widget::scrollable),
-            )
-            .push(spel_katalog_widget::rule::horizontal())
-            .push(
-                self.view_paths()
-                    .push(space())
-                    .pipe(Element::from)
-                    .map(Message::Delta)
-                    .pipe(::spel_katalog_widget::scrollable),
-            )
+            .push(self.view_scrollable())
             .into()
     }
 }

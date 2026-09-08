@@ -822,6 +822,7 @@ impl State {
                 w::col()
                     .push(
                         w::row()
+                            .align_y(Alignment::Start)
                             .push(widget::text(&game.name).width(Fill).align_x(Center))
                             .push(buttons),
                     )

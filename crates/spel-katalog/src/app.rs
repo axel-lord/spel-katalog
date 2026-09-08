@@ -207,8 +207,8 @@ impl App {
             app.open_window(
                 id,
                 WindowType::PaneView(
-                    pane_view::State::builder(pane_view::Pane::Log)
-                        .horizontal(pane_view::Pane::Terminal)
+                    pane_view::State::builder(pane_view::PaneKind::Log.into())
+                        .horizontal(pane_view::PaneKind::Terminal.into())
                         .build(),
                 ),
             );

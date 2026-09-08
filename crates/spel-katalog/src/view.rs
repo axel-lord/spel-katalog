@@ -2,8 +2,7 @@ use ::core::cell::Cell;
 
 use ::derive_more::{Display, From, IsVariant};
 use ::iced_core::{
-    Alignment::{self, Center},
-    Color,
+    Alignment, Color,
     Length::Fill,
     alignment::{Horizontal, Vertical},
 };
@@ -105,7 +104,7 @@ impl State {
     fn buttons<'a>(&'a self) -> Element<'a, crate::Message> {
         widget::Row::new()
             .spacing(3)
-            .align_y(Center)
+            .align_y(Alignment::Start)
             .push(icon::minimize().on_press_with(|| Message::Close))
             .pipe(Element::from)
             .map(crate::Message::from)
@@ -115,7 +114,7 @@ impl State {
     fn titlebar<'app>(&'app self, title: &'app str) -> Element<'app, crate::Message> {
         widget::Row::new()
             .spacing(3)
-            .align_y(Alignment::Center)
+            .align_y(Alignment::Start)
             .push(
                 widget::text(title)
                     .width(Fill)

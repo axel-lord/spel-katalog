@@ -9,7 +9,6 @@ use ::iced_core::{
     Alignment::{self, Center},
     Font,
     Length::{self, Fill},
-    alignment::Vertical,
     keyboard::{Key, Modifiers, key},
 };
 use ::iced_runtime::Task;
@@ -626,7 +625,7 @@ impl State {
                             .align_x(Center),
                     )
                     .push(buttons)
-                    .align_y(Vertical::Center),
+                    .align_y(Alignment::Start),
             )
             .push(spel_katalog_widget::rule::horizontal())
             .push(

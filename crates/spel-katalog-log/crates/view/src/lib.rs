@@ -340,10 +340,6 @@ impl LogView {
                         .width(Fill)
                         .height(Fill),
                 )
-                .pipe(widget::container)
-                .style(widget::container::bordered_box)
-                .padding(3)
-                .height(Fill)
                 .into()
         } else {
             widget::text("Spel-Katalog logger not in use!")

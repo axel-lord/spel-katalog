@@ -84,7 +84,7 @@ pub mod outline {
 /// Get a close button.
 pub fn close<'a, M: 'a>() -> Button<'a, M, Theme, Renderer> {
     Icon::new(assets::cross())
-        .size(20)
+        .size(16)
         .into_button()
         .style(button::danger)
 }
@@ -92,7 +92,7 @@ pub fn close<'a, M: 'a>() -> Button<'a, M, Theme, Renderer> {
 /// Get a minimize button.
 pub fn minimize<'a, M: 'a>() -> Button<'a, M, Theme, Renderer> {
     Icon::new(assets::minimize())
-        .size(20)
+        .size(16)
         .into_button()
         .style(button::danger)
 }
