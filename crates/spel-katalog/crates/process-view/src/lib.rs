@@ -3,17 +3,16 @@
 use ::core::time::Duration;
 use ::std::sync::Arc;
 
-use ::iced_aw::ContextMenu;
 use ::iced_core::{Border, Color, Length::Fill, alignment::Horizontal::Left};
 use ::iced_futures::{Subscription, backend::default::time::every};
 use ::iced_runtime::Task;
-use ::iced_widget::{container, opaque};
+use ::iced_widget::container;
 use ::rustc_hash::FxHashSet;
 use ::rustix::process::{Pid, RawPid, Signal, kill_process};
 use ::smol::{lock::Semaphore, unblock};
 use ::spel_katalog_common::w;
 use ::spel_katalog_list_menu::ListMenu;
-use ::spel_katalog_widget::{Element, WidgetExt};
+use ::spel_katalog_widget::Element;
 use ::tap::Pipe;
 
 use crate::info::{CollectedInfo, ProcessInfo};
@@ -158,6 +157,15 @@ impl ProcessView {
         }
     }
 
+    /// Get context menu of process view.
+    pub fn context_menu(&self) -> ListMenu<'_, Message> {
+        ListMenu::new()
+            .label("Process List")
+            .separator()
+            .button_if(!self.is_frozen, "Pause", || Message::Pause)
+            .button_if(self.is_frozen, "Unpause", || Message::Unpause)
+    }
+
     /// View process info.
     pub fn view(&self) -> Element<'_, Message> {
         container(
@@ -177,14 +185,6 @@ impl ProcessView {
                     .rounded(3),
             )
         })
-        .with_wrapper(ContextMenu::new, || {
-            ListMenu::new()
-                .label("Process List")
-                .separator()
-                .button_if(!self.is_frozen, "Pause", || Message::Pause)
-                .button_if(self.is_frozen, "Unpause", || Message::Unpause)
-                .into()
-        })
-        .pipe(opaque)
+        .into()
     }
 }

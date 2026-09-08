@@ -285,12 +285,7 @@ impl App {
                     self.sort_games();
                 }
             }
-            QuickMessage::OpenProcessInfo => {
-                self.view.displayed = crate::view::Displayed::Processes;
-                self.view.show_info();
-            }
             QuickMessage::OpenGameInfo => {
-                self.view.displayed = crate::view::Displayed::GameInfo;
                 self.view.show_info();
             }
             QuickMessage::CycleHidden => {
@@ -334,10 +329,6 @@ impl App {
                     },
                 );
             }
-            QuickMessage::ToggleProcessInfo => {
-                self.view
-                    .toggle_displayed(crate::view::Displayed::Processes);
-            }
             QuickMessage::ToggleMain => {
                 return self.toggle_window(
                     |t| t.is_main(),
@@ -347,9 +338,6 @@ impl App {
                         ..Default::default()
                     },
                 );
-            }
-            QuickMessage::ToggleGameInfo => {
-                self.view.toggle_displayed(crate::view::Displayed::GameInfo);
             }
             QuickMessage::ShowWelcome => {
                 self.popup = Some(Popup::Welcome);
@@ -366,6 +354,9 @@ impl App {
                     self.games.select(SelDir::None);
                 }
             }
+            QuickMessage::ShowInfo => {
+                self.view.show_info();
+            }
         }
         Task::none()
     }
@@ -381,7 +372,7 @@ impl App {
                     view,
                     ..
                 } = self;
-                if view.info_shown() && view.displayed.is_game_info() && info.id() == Some(id) {
+                if view.info_shown() && info.id() == Some(id) {
                     view.hide_info();
                 } else if let Some(game) = games.by_id(id) {
                     ::log::info!("showing info for {id}");
@@ -390,9 +381,8 @@ impl App {
                         .map(OrRequest::Message)
                         .map(Message::Info)
                         .then(|message| {
-                            Task::done(message).chain(Task::done(Message::ShowInfo(
-                                crate::view::Displayed::GameInfo,
-                            )))
+                            Task::done(message)
+                                .chain(Task::done(Message::Quick(QuickMessage::ShowInfo)))
                         });
                 } else {
                     info.clear();
@@ -410,9 +400,7 @@ impl App {
                 );
             }
             ::spel_katalog_games::Request::CloseInfo => {
-                if self.view.displayed.is_game_info() {
-                    self.view.hide_info();
-                }
+                self.view.hide_info();
                 self.games.select(SelDir::None);
             }
             ::spel_katalog_games::Request::Convert(game_id) => {
@@ -706,10 +694,6 @@ impl App {
             Message::Ipc(config) => {
                 return Task::future(Self::prefill_installer(self.settings.snapshot(), config))
                     .and_then(identity);
-            }
-            Message::ShowInfo(displayed) => {
-                self.view.displayed = displayed;
-                self.view.show_info();
             }
             Message::RunGameNative(game) => {
                 return self.run_native_game(*game, RunMode::Exe);

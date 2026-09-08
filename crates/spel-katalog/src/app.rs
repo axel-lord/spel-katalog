@@ -390,10 +390,7 @@ impl App {
                 }),
             )
             .push(widget::space::vertical().height(5))
-            .push(
-                self.view
-                    .view(&self.games, &self.info, &self.settings, &self.process_view),
-            )
+            .push(self.view.view(&self.games, &self.info, &self.settings))
             .push(widget::space::vertical().height(3))
             .push(spel_katalog_widget::rule::horizontal())
             .push(widget::space::vertical().height(3))

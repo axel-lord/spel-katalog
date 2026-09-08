@@ -35,8 +35,6 @@ fn unmodified_named_key(named: Named) -> Option<Message> {
         Named::Enter | Named::Space => QuickMessage::RunSelected,
         Named::F2 => QuickMessage::ToggleSettings,
         Named::F3 => QuickMessage::ToggleMain,
-        Named::F5 => QuickMessage::ToggleGameInfo,
-        Named::F7 => QuickMessage::ToggleProcessInfo,
         Named::Escape => QuickMessage::EscapeOne,
         _ => return None,
     }))
@@ -60,8 +58,6 @@ fn ctrl_shift_chr_key(chr: &str) -> Option<Message> {
     Some(Message::Quick(match chr {
         "m" => QuickMessage::ToggleMain,
         "s" => QuickMessage::ToggleSettings,
-        "p" => QuickMessage::ToggleProcessInfo,
-        "g" => QuickMessage::ToggleGameInfo,
         "d" => QuickMessage::Debug,
         "w" => QuickMessage::ShowWelcome,
         "t" => QuickMessage::ShowTagFilter,
@@ -97,11 +93,7 @@ impl App {
             _ => None,
         });
 
-        let refresh = if self.view.displayed.is_processes() {
-            self.process_view.subscription().map(Message::ProcessView)
-        } else {
-            Subscription::none()
-        };
+        let refresh = self.process_view.subscription().map(Message::ProcessView);
 
         let window_close = ::iced_runtime::window::close_events().map(Message::CloseWindow);
         let games = self

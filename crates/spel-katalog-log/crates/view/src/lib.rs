@@ -1,6 +1,5 @@
 //! View of log.
 
-use ::iced_aw::widget::ContextMenu;
 use ::iced_core::{
     Alignment::Center, Border, Element, Font, Function, Length::Fill, Theme, text::IntoFragment,
 };
@@ -316,6 +315,14 @@ impl LogView {
         .spacing(3)
     }
 
+    /// Get context menu of log view.
+    pub fn context_menu(&self) -> ListMenu<'_, Message> {
+        ListMenu::new()
+            .label("Levels")
+            .separator()
+            .fold_with(self.visible.checkboxes(), ListMenu::element)
+    }
+
     /// View widget.
     pub fn view(&self) -> Element<'_, Message, ::iced_core::Theme, ::iced_widget::Renderer> {
         if ::spel_katalog_log::is_installed() {
@@ -326,20 +333,13 @@ impl LogView {
                         .on_input(Message::Filter)
                         .padding(3),
                 )
-                .push(ContextMenu::new(
+                .push(
                     self.view_records()
                         .pipe(::spel_katalog_widget::xy_scrollable)
                         .anchor_bottom()
                         .width(Fill)
                         .height(Fill),
-                    || {
-                        ListMenu::new()
-                            .label("Levels")
-                            .separator()
-                            .fold_with(self.visible.checkboxes(), ListMenu::element)
-                            .into()
-                    },
-                ))
+                )
                 .pipe(widget::container)
                 .style(widget::container::bordered_box)
                 .padding(3)

@@ -461,7 +461,10 @@ impl App {
         let open_process_list = Task::future(async move {
             match recv_open.recv_async().await {
                 Some(_) => match to_open {
-                    OnRun::Process => Some(Message::Quick(QuickMessage::OpenProcessInfo)),
+                    OnRun::Process => {
+                        ::log::warn!("OnRun::Process is currently not implemented");
+                        None
+                    }
                     OnRun::Info => Some(Message::Quick(QuickMessage::OpenGameInfo)),
                     OnRun::None => None,
                 },

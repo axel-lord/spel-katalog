@@ -34,14 +34,11 @@ pub enum QuickMessage {
     CycleFilter,
     CycleHidden,
     Next,
-    OpenProcessInfo,
     OpenGameInfo,
     Prev,
     RunSelected,
-    ToggleGameInfo,
     ToggleMain,
     ToggleNetwork,
-    ToggleProcessInfo,
     ToggleSettings,
     Debug,
     ConvertAll,
@@ -53,6 +50,7 @@ pub enum QuickMessage {
     ShowWelcome,
     ShowTagFilter,
     EscapeOne,
+    ShowInfo,
 }
 
 #[derive(Debug, IsVariant, From, Clone)]
@@ -82,8 +80,6 @@ pub enum Message {
     ),
     #[from]
     Terminal(::spel_katalog_terminal::Message),
-    #[from]
-    ShowInfo(crate::view::Displayed),
     #[from]
     Ipc(::spel_katalog_formats::InstallerConfig),
     RunGameNative(Box<NativeGameConfig>),

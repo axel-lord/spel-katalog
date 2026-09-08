@@ -10,7 +10,6 @@ use ::iced_core::{
 use ::iced_runtime::Task;
 use ::iced_widget::{self as widget, pane_grid};
 use ::spel_katalog_common::styling;
-use ::spel_katalog_process_view::ProcessView;
 use ::spel_katalog_settings::Settings;
 use ::spel_katalog_widget::icon;
 use ::tap::Pipe;
@@ -24,20 +23,12 @@ pub enum Pane {
     GameInfo,
 }
 
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, IsVariant, Hash, Default)]
-pub enum Displayed {
-    #[default]
-    GameInfo,
-    Processes,
-}
-
 #[derive(Debug)]
 pub struct State {
     panes: pane_grid::State<Pane>,
     games: pane_grid::Pane,
     info: Option<pane_grid::Pane>,
     aspect_ratio: Cell<f32>,
-    pub displayed: Displayed,
 }
 
 #[derive(Debug, Clone, Copy, From)]
@@ -45,7 +36,6 @@ pub enum Message {
     #[from]
     Resized(pane_grid::ResizeEvent),
     Close,
-    SetDisplayed(Displayed),
 }
 
 impl State {
@@ -58,14 +48,12 @@ impl State {
 
         let info = None;
         let aspect_ratio = Cell::new(16.0 / 9.0);
-        let displayed = Default::default();
 
         Self {
             panes,
             games,
             info,
             aspect_ratio,
-            displayed,
         }
     }
 
@@ -76,9 +64,6 @@ impl State {
             }
             Message::Close => {
                 self.hide_info();
-            }
-            Message::SetDisplayed(displayed) => {
-                self.displayed = displayed;
             }
         };
         Task::none()
@@ -121,27 +106,9 @@ impl State {
         widget::Row::new()
             .spacing(3)
             .align_y(Center)
-            .push(
-                widget::pick_list(
-                    [Displayed::GameInfo, Displayed::Processes],
-                    Some(self.displayed),
-                    Message::SetDisplayed,
-                )
-                .padding(3),
-            )
             .push(icon::minimize().on_press_with(|| Message::Close))
             .pipe(Element::from)
             .map(crate::Message::from)
-    }
-
-    /// Close if displayed matches current otherwise open to displayed.
-    pub fn toggle_displayed(&mut self, displayed: Displayed) {
-        if self.info_shown() && self.displayed == displayed {
-            self.hide_info();
-        } else {
-            self.displayed = displayed;
-            self.show_info();
-        }
     }
 
     /// Create a titlebar.
@@ -161,10 +128,7 @@ impl State {
 
     /// Create a titlebar using currently displayed content.
     fn auto_titlebar<'app>(&'app self) -> Element<'app, crate::Message> {
-        self.titlebar(match self.displayed {
-            Displayed::GameInfo => "No Game Selected",
-            Displayed::Processes => "Processes",
-        })
+        self.titlebar("No Game Selected")
     }
 
     fn view_info<'app>(
@@ -172,52 +136,32 @@ impl State {
         games: &'app ::spel_katalog_games::State,
         settings: &'app Settings,
         info: &'app ::spel_katalog_info::State,
-        process_view: &'app ProcessView,
     ) -> Element<'app, crate::Message> {
         let style = |t: &_| styling::box_border(t).background(Color::WHITE.scale_alpha(0.025));
-        match self.displayed {
-            Displayed::GameInfo => {
-                if let Some((id, game)) = info.id().and_then(|id| Some((id, games.by_id(id)?))) {
-                    widget::Column::new()
-                        .push(info.titlebar(
-                            game,
-                            game.thumb.as_ref(),
-                            id,
-                            game.shadows,
-                            self.buttons(),
-                        ))
-                        .push(spel_katalog_widget::rule::horizontal())
-                        .push(
-                            info.view(game.thumb.is_some(), settings)
-                                .map(crate::Message::from),
-                        )
-                        .spacing(3)
-                        .padding(5)
-                        .pipe(widget::container)
-                        .style(style)
-                        .height(Fill)
-                        .into()
-                } else {
-                    widget::Column::new()
-                        .push(self.auto_titlebar())
-                        .push(spel_katalog_widget::rule::horizontal())
-                        .push(widget::space::vertical())
-                        .padding(5)
-                        .spacing(3)
-                        .pipe(widget::container)
-                        .style(style)
-                        .into()
-                }
-            }
-            Displayed::Processes => widget::Column::new()
+        if let Some((id, game)) = info.id().and_then(|id| Some((id, games.by_id(id)?))) {
+            widget::Column::new()
+                .push(info.titlebar(game, game.thumb.as_ref(), id, game.shadows, self.buttons()))
+                .push(spel_katalog_widget::rule::horizontal())
+                .push(
+                    info.view(game.thumb.is_some(), settings)
+                        .map(crate::Message::from),
+                )
+                .spacing(3)
+                .padding(5)
+                .pipe(widget::container)
+                .style(style)
+                .height(Fill)
+                .into()
+        } else {
+            widget::Column::new()
                 .push(self.auto_titlebar())
                 .push(spel_katalog_widget::rule::horizontal())
-                .push(process_view.view().map(crate::Message::ProcessView))
+                .push(widget::space::vertical())
                 .padding(5)
                 .spacing(3)
                 .pipe(widget::container)
                 .style(style)
-                .into(),
+                .into()
         }
     }
 
@@ -226,7 +170,6 @@ impl State {
         games: &'app ::spel_katalog_games::State,
         info: &'app spel_katalog_info::State,
         settings: &'app Settings,
-        process_view: &'app ProcessView,
     ) -> Element<'app, crate::Message> {
         widget::responsive(move |size| {
             self.aspect_ratio.set(size.width / size.height);
@@ -235,7 +178,7 @@ impl State {
                 pane_grid::Content::new(
                     match state {
                         Pane::Games => games.view(settings).map(crate::Message::from),
-                        Pane::GameInfo => self.view_info(games, settings, info, process_view),
+                        Pane::GameInfo => self.view_info(games, settings, info),
                     }
                     .pipe(widget::container),
                 )

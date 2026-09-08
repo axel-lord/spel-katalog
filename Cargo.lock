@@ -4642,7 +4642,9 @@ dependencies = [
  "spel-katalog-cli",
  "spel-katalog-common",
  "spel-katalog-enthread",
+ "spel-katalog-fold-with",
  "spel-katalog-formats",
+ "spel-katalog-functional",
  "spel-katalog-games",
  "spel-katalog-gather",
  "spel-katalog-info",
@@ -4784,6 +4786,10 @@ dependencies = [
  "uuid",
  "yaml-rust2",
 ]
+
+[[package]]
+name = "spel-katalog-functional"
+version = "0.1.0"
 
 [[package]]
 name = "spel-katalog-games"
@@ -4974,7 +4980,6 @@ dependencies = [
  "bytes",
  "derive_more",
  "flume",
- "iced_aw",
  "iced_core",
  "iced_runtime",
  "iced_widget",
