@@ -42,6 +42,8 @@ pub enum Message {
     SetExe(String),
     /// Set the thumbnail value.
     SetThumb(::spel_katalog_formats::Image),
+    /// Set the display thumbnail.
+    SetDisplayThumb(::spel_katalog_formats::Image),
     /// Remove the thumbnail.
     UnsetThumb,
     /// Add available locales.
@@ -97,6 +99,8 @@ pub struct Prepare {
     column_width: Option<f32>,
     /// Thumbnail to use.
     thumbnail: Option<::spel_katalog_formats::Image>,
+    /// Thumbnail to display.
+    display_thumbnail: Option<::spel_katalog_formats::Image>,
     /// Available locales.
     locales: Vec<String>,
     /// Current locale.
@@ -371,6 +375,7 @@ impl Prepare {
                 hidden: hidden.unwrap_or_else(|| settings.get::<Show>().is_hidden()),
                 column_width: None,
                 thumbnail: None,
+                display_thumbnail: None,
                 locales: Vec::from([String::new()]),
                 locale: settings.get::<InstallLocale>().as_str().to_owned(),
                 comp_tools: Vec::from([String::new()]),
@@ -565,11 +570,25 @@ impl Prepare {
                     .map(super::Message::from)
             }
             Message::SetThumb(thumb) => {
-                self.thumbnail = Some(thumb);
+                self.thumbnail = Some(thumb.clone());
+                Task::future(::smol::unblock(move || {
+                    thumb
+                        .into_image()?
+                        .thumbnail(150, 150)
+                        .pipe(::spel_katalog_formats::Image::from_image)
+                        .pipe(Message::SetDisplayThumb)
+                        .pipe(super::Message::Prepare)
+                        .pipe(Some)
+                }))
+                .and_then(Task::done)
+            }
+            Message::SetDisplayThumb(thumb) => {
+                self.display_thumbnail = Some(thumb);
                 Task::none()
             }
             Message::UnsetThumb => {
                 self.thumbnail = None;
+                self.display_thumbnail = None;
                 Task::none()
             }
             Message::Ok => self
@@ -816,7 +835,7 @@ impl Prepare {
                         .convene(),
                 )
                 .pipe_some(
-                    self.thumbnail.clone(),
+                    self.display_thumbnail.clone(),
                     |col,
                      ::spel_katalog_formats::Image {
                          width,
