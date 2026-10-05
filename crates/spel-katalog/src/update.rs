@@ -3,7 +3,7 @@ use ::std::path::PathBuf;
 
 use ::iced_core::{Size, window};
 use ::iced_runtime::Task;
-use ::image::DynamicImage;
+use ::image::{DynamicImage, imageops::FilterType};
 use ::spel_katalog_common::{IntoOrRequest, OrRequest};
 use ::spel_katalog_formats::{
     InstallerConfig, InstallerPrepareConfig, NativeGameConfig, RunMode, TagId,
@@ -546,10 +546,17 @@ impl App {
             .ok()?;
 
         let thumbnail = thumbnail.and_then(::spel_katalog_formats::Image::into_image);
-        if let Some(thumbnail) = &thumbnail
-            && let Err(err) = game_db.insert_thumb(uuid).insert(thumbnail)
-        {
-            ::log::warn!("could not insert thumbnail for {uuid}\n{err}");
+        if let Some(thumbnail) = &thumbnail {
+            let thumb;
+            let thumbnail = if u32::max(thumbnail.width(), thumbnail.height()) < 230 {
+                thumbnail
+            } else {
+                thumb = thumbnail.resize(200, 200, FilterType::Lanczos3);
+                &thumb
+            };
+            if let Err(err) = game_db.insert_thumb(uuid).insert(thumbnail) {
+                ::log::warn!("could not insert thumbnail for {uuid}\n{err}");
+            }
         }
 
         if let Some((src, dest)) = move_dir
